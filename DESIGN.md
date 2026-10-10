@@ -271,8 +271,8 @@ drawing fails the suite.
 | after (G11) | 360–375 µs | 387–435 µs | 6.76 M (−5.7 %) |
 | ratatui 0.30 (same code, 3 runs each side) | 340–367 → 372–373 µs | 357–396 → 398–403 µs | not measured |
 | polish pass (§12.4, 3 idle runs each side) | 360–363 → 357–361 µs | 384–401 → 375–384 µs | not measured |
-| badge model + workspace layout (§15): tree frame | 442 µs | 477 µs | not measured |
-| badge model + workspace layout (§15): workspace frame (`workspace_frame_bench`) | 552 µs | 606 µs | not measured |
+| badge model + workspace layout (§15): tree frame, same machine and day, before → after | 393 → 426 µs | 432 → 457 µs | not measured |
+| badge model + workspace layout (§15): workspace frame (`workspace_frame_bench`) | 540 µs | 589 µs | not measured |
 
 The ratatui 0.30 row (2026-10-10, `chore: upgrade to ratatui 0.30 …`): three back-to-back runs on each side of the
 upgrade on the same machine; the before runs spread 340–367 µs and the after runs sit at 372 µs, so the difference
@@ -490,7 +490,7 @@ Decisions:
   `b` reads as "board".
 
 **Measured** (`src/ui/fork_bench.rs::workspace_frame_bench`, release, 200×60, 3 projects × 10 sessions, the
-selection alternating between a `⛔` row and a `●` row, a full pane of text, 2,000 frames): **mean 552 µs, p50 562 µs, p95 606 µs, max 799 µs** — under the 2 ms budget with 3× headroom.
-The tree frame on the same machine and run: mean 442 µs, p95 477 µs (the badge derivation per row and the pills' roll-up add a few tens of microseconds to the tree frame of §12.2; still 4× under budget). `workspace_frame_makes_no_tmux_calls` renders the
+selection alternating between a `⛔` row and a `●` row, a full pane of text, 2,000 frames): **mean 540 µs, p50 536 µs, p95 589 µs, max 872 µs** — under the 2 ms budget with 3× headroom.
+The tree frame on the same machine and run: 393 → 426 µs mean, 432 → 457 µs p95 before → after on the same machine (the badge derivation per row and the pills' roll-up cost about 30 µs; still 4× under budget). `workspace_frame_makes_no_tmux_calls` renders the
 layout through a `MockTmuxOps` with no expectations, as the tree test does.
 
