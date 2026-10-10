@@ -327,6 +327,7 @@ summaries). Busy pane = a spinner-like line rewritten every 100 ms.
 4. UI revamp (G11) within its budget ✅, then a performance and obsolete-code pass ✅ (§12.3, 2026-10-10)
 5. Commit to a branch so you can run `/code-review ultra` on it; fix what it finds
 6. G7, then G8
+7. Productivity features P1–P18: see [docs/PRODUCTIVITY_PLAN.md](docs/PRODUCTIVITY_PLAN.md) (sprint order there)
 
 ## 14. OpenCode removal (G12)
 
