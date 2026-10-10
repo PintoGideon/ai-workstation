@@ -1932,6 +1932,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         {
             // FORK: drop/stop sessions whose tmux window closed on its own.
             app.reconcile_vanished_windows();
+            // FORK: re-bind the IPC socket if its file was removed under us.
+            crate::fork::ipc_rebind::rebind_if_vanished(app);
             // Kick off a background refresh only when the previous one has
             // finished; results are applied each tick via poll_session_status_bg.
             if app.session_status_bg.is_none() {

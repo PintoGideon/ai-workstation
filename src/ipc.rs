@@ -47,6 +47,13 @@ pub struct IpcGuard {
     path: PathBuf,
 }
 
+impl IpcGuard {
+    /// FORK: the socket file this guard listens on (see fork::ipc_rebind).
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
 impl Drop for IpcGuard {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.path);
