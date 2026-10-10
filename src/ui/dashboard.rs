@@ -77,22 +77,61 @@ fn pr_triage_badge_span(app: &App, view: &crate::app::ViewState) -> Option<Span<
 }
 
 /// Render a right-aligned row of badge spans flush with the top of `area`.
-fn draw_badge_row(frame: &mut Frame, area: Rect, badge_spans: Vec<Span<'static>>) {
-    if badge_spans.is_empty() {
+///
+/// FORK: the badges have priority over the header text already on that row:
+/// when the full badges do not fit beside it, `compact_spans` (a shorter
+/// wording, or empty for none) are tried, and whatever header text would
+/// still run under the badges is elided with `…` instead of overpainted.
+fn draw_badge_row(
+    frame: &mut Frame,
+    area: Rect,
+    badge_spans: Vec<Span<'static>>,
+    compact_spans: Vec<Span<'static>>,
+) {
+    if badge_spans.is_empty() || area.width == 0 || area.height == 0 {
         return;
     }
-    let total: u16 = badge_spans
-        .iter()
-        .map(|s| s.content.chars().count() as u16)
-        .sum();
-    let label_width = total.min(area.width);
-    let badge_area = Rect::new(
-        area.x + area.width.saturating_sub(label_width),
-        area.y,
-        label_width,
-        1,
-    );
-    frame.render_widget(Paragraph::new(Line::from(badge_spans)), badge_area);
+    let width_of = |spans: &[Span]| spans.iter().map(Span::width).sum::<usize>();
+    let row_width = usize::from(area.width);
+    let buffer = frame.buffer_mut();
+    // Where the header text ends: the last cell on the row that is not blank.
+    let text_end = (0..area.width)
+        .rev()
+        .find(|x| {
+            buffer
+                .cell((area.x + x, area.y))
+                .is_some_and(|cell| cell.symbol() != " " && !cell.symbol().is_empty())
+        })
+        .map_or(0, |x| usize::from(x) + 1);
+    let available = row_width.saturating_sub(text_end + 1);
+    let spans = if width_of(&badge_spans) <= available || compact_spans.is_empty() {
+        badge_spans
+    } else {
+        compact_spans
+    };
+    let label_width = width_of(&spans).min(row_width);
+    let badge_x = row_width - label_width;
+    if text_end + 1 > badge_x && badge_x >= 2 {
+        // `…` and one column of gap, in the header's own style.
+        let cut = badge_x - 2;
+        for x in cut..badge_x {
+            if let Some(cell) = buffer.cell_mut((area.x + x as u16, area.y)) {
+                cell.set_symbol(" ");
+            }
+        }
+        if cut > 0
+            && let Some(before) = buffer.cell_mut((area.x + cut as u16 - 1, area.y))
+            && unicode_width::UnicodeWidthStr::width(before.symbol()) > 1
+        {
+            // A wide glyph would run under the marker.
+            before.set_symbol(" ");
+        }
+        if let Some(cell) = buffer.cell_mut((area.x + cut as u16, area.y)) {
+            cell.set_symbol(super::fork_text::ELLIPSIS);
+        }
+    }
+    let badge_area = Rect::new(area.x + badge_x as u16, area.y, label_width as u16, 1);
+    frame.render_widget(Paragraph::new(Line::from(spans)), badge_area);
 }
 
 /// The embedded view's sidebar content. Assembly lives in
@@ -477,39 +516,46 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             use ratatui::style::{Modifier, Style};
             use ratatui::text::Span;
             let mut badge_spans: Vec<Span> = Vec::new();
+            // FORK: the same badges with the direct-input hint shortened, for
+            // a row too narrow to carry the long wording beside the header.
+            let mut compact_spans: Vec<Span> = Vec::new();
             if view.session_kind == SessionKind::Claude
                 && crate::app::remote_control::detect_remote_control(&app.pane_content).active
             {
-                badge_spans.push(Span::styled(
+                let remote = Span::styled(
                     " [remote ●] ",
                     Style::default()
                         .fg(app.theme.success.to_color())
                         .add_modifier(Modifier::BOLD),
-                ));
+                );
+                badge_spans.push(remote.clone());
+                compact_spans.push(remote);
             }
             if !app.compose_intercept_active(view) {
-                badge_spans.push(Span::styled(
-                    " [direct input — leader+e: compose] ",
-                    Style::default()
-                        .fg(app.theme.warning.to_color())
-                        .add_modifier(Modifier::BOLD),
-                ));
+                let style = Style::default()
+                    .fg(app.theme.warning.to_color())
+                    .add_modifier(Modifier::BOLD);
+                badge_spans.push(Span::styled(" [direct input — leader+e: compose] ", style));
+                compact_spans.push(Span::styled(" [leader+e: compose] ", style));
             }
             if let Some(stash) = &app.pr_review_return
                 && stash.session == view.session
                 && stash.window == view.window
             {
-                badge_spans.push(Span::styled(
+                let back = Span::styled(
                     " [Ctrl+Space P: back to PR Triage] ",
                     Style::default()
                         .fg(app.theme.info.to_color())
                         .add_modifier(Modifier::BOLD),
-                ));
+                );
+                badge_spans.push(back.clone());
+                compact_spans.push(back);
             }
             if let Some(span) = pr_triage_badge_span(app, view) {
-                badge_spans.push(span);
+                badge_spans.push(span.clone());
+                compact_spans.push(span);
             }
-            draw_badge_row(frame, area, badge_spans);
+            draw_badge_row(frame, area, badge_spans, compact_spans);
         }
         super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
@@ -651,7 +697,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             && view.session_kind.is_agent_harness()
             && let Some(span) = pr_triage_badge_span(app, view)
         {
-            draw_badge_row(frame, frame.area(), vec![span]);
+            draw_badge_row(frame, frame.area(), vec![span], Vec::new());
         }
         return;
     }
