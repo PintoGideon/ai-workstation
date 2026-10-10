@@ -159,9 +159,18 @@ impl FsWatcher {
 
         // The thinking and notification dirs may not exist yet; create
         // them so the watches stick (hook scripts create files inside
-        // them later).
-        for root in [&thinking_root, &legacy_thinking_root, &notification_root] {
-            let _ = std::fs::create_dir_all(root);
+        // them later). FORK: the legacy, world-shared `/tmp` dir is only
+        // read, never created: it is watched while it still exists.
+        for (root, create) in [
+            (&thinking_root, true),
+            (&legacy_thinking_root, false),
+            (&notification_root, true),
+        ] {
+            if create {
+                let _ = std::fs::create_dir_all(root);
+            } else if !root.is_dir() {
+                continue;
+            }
             if let Err(e) = watcher.watch(root, RecursiveMode::NonRecursive) {
                 log_to_file(
                     LogLevel::Warn,
