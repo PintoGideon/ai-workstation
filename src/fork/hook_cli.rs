@@ -213,6 +213,29 @@ pub fn run_subagent(event: &str, harness: &str) {
     }
 }
 
+/// `aiw session-context --harness gemini|cursor`: the launch context for
+/// the session named by `AIW_FEATURE_SESSION_ID`, as the harness's
+/// additional-context JSON (item 6). Prints nothing when the setting is off
+/// or the session is unknown.
+pub fn run_session_context(harness: &str) {
+    let _ = stdin_json();
+    if !super::config::current().agent_context_prompt {
+        return;
+    }
+    let env = HookEnv::from_process_env();
+    let Some(session_id) = env.aiw_feature_session_id.as_deref() else {
+        return;
+    };
+    let Some(paragraph) =
+        super::agent_context::paragraph_for_session(&crate::project::db_path(), session_id)
+    else {
+        return;
+    };
+    if let Some(output) = super::agent_context::session_start_json(harness, &paragraph) {
+        println!("{output}");
+    }
+}
+
 /// `aiw permission-request --harness <h> [--event <e>]`.
 pub fn run_permission_request(harness: &str, event: Option<&str>) {
     let Some(harness) = Harness::parse(harness) else {

@@ -73,7 +73,11 @@ type HookSpec = (&'static str, &'static str, &'static [&'static str]);
 pub const EVENTS: &[(&str, &[HookSpec])] = &[
     (
         "SessionStart",
-        &[("aiw-clear-notify", "clear-notify.sh", &[])],
+        &[
+            ("aiw-clear-notify", "clear-notify.sh", &[]),
+            // The launch context as additional context (item 6).
+            ("aiw-session-context", "session-context.sh", &["gemini"]),
+        ],
     ),
     (
         "BeforeAgent",

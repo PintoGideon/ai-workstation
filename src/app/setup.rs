@@ -20,6 +20,7 @@ const PERMISSION_REQUEST_SH: &str = include_str!("../../scripts/permission-reque
 const STATUS_LINE_SH: &str = include_str!("../../scripts/status-line.sh");
 const STOP_HOOK_SH: &str = include_str!("../../scripts/stop-hook.sh");
 const SUBAGENT_SH: &str = include_str!("../../scripts/subagent.sh");
+const SESSION_CONTEXT_SH: &str = include_str!("../../scripts/session-context.sh");
 const CUSTOM_DIFF_REVIEW_SH: &str =
     include_str!("../../plugins/diff-review/scripts/custom-diff-review.sh");
 
@@ -653,6 +654,10 @@ pub fn ensure_notify_scripts() {
     write_executable_if_changed(&claude_hooks_dir.join("status-line.sh"), STATUS_LINE_SH);
     write_executable_if_changed(&claude_hooks_dir.join("stop-hook.sh"), STOP_HOOK_SH);
     write_executable_if_changed(&claude_hooks_dir.join("subagent.sh"), SUBAGENT_SH);
+    write_executable_if_changed(
+        &claude_hooks_dir.join("session-context.sh"),
+        SESSION_CONTEXT_SH,
+    );
     write_executable_if_changed(
         &config_dir.join("codex-diff-review.sh"),
         CODEX_DIFF_REVIEW_SH,

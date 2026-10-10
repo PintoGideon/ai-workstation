@@ -119,29 +119,45 @@ fn write_claude_settings(ctx: &LaunchContext) -> Option<PathBuf> {
 /// Claude's extra arguments for `ctx`: `args` plus `--settings <file>`.
 pub fn claude_launch_args(
     ctx: &LaunchContext,
-    _config: &AiwConfig,
+    config: &AiwConfig,
     mut args: Vec<String>,
 ) -> Vec<String> {
     if let Some(path) = write_claude_settings(ctx) {
         args.push("--settings".to_string());
         args.push(path.to_string_lossy().into_owned());
     }
+    // Unless `agent_context_prompt` is off, the context paragraph goes into
+    // `--append-system-prompt` (after the screenshot evidence text).
+    if config.agent_context_prompt {
+        args = super::agent_context::claude_args(ctx, args);
+    }
     args
 }
 
-/// Codex's extra arguments for `ctx` (nothing yet beyond `args`).
+/// Codex's extra arguments for `ctx`: the context paragraph in
+/// `developer_instructions`, unless `agent_context_prompt` is off.
 pub fn codex_launch_args(
-    _ctx: &LaunchContext,
-    _config: &AiwConfig,
+    ctx: &LaunchContext,
+    config: &AiwConfig,
     args: Vec<String>,
 ) -> Vec<String> {
-    args
+    if config.agent_context_prompt {
+        super::agent_context::codex_args(ctx, args)
+    } else {
+        args
+    }
 }
 
-/// Whether `args` is exactly AIW's `--settings <file>` pair and nothing else
-/// (what a launch with no other flags produces).
+/// Whether `args` is exactly what AIW adds to a launch with no other flags:
+/// `--settings <file>` and the context paragraph.
 pub fn only_settings_flag(args: &[String]) -> bool {
-    args.len() == 2 && args[0] == "--settings" && args[1].ends_with(".json")
+    let settings = args.len() >= 2 && args[0] == "--settings" && args[1].ends_with(".json");
+    let rest = &args[2.min(args.len())..];
+    let context = rest.is_empty()
+        || (rest.len() == 2
+            && rest[0] == "--append-system-prompt"
+            && rest[1].starts_with(super::agent_context::MARKER));
+    settings && context
 }
 
 /// Remove the settings file of a session that is gone.
@@ -175,6 +191,20 @@ mod tests {
         let args = claude_launch_args(&ctx(), &AiwConfig::default(), vec!["--chrome".into()]);
         assert_eq!(args[0], "--chrome");
         assert_eq!(args[1], "--settings");
+        assert_eq!(args[3], "--append-system-prompt");
+        assert!(args[4].starts_with("AIW context:"));
+        let quiet = AiwConfig {
+            agent_context_prompt: false,
+            ..AiwConfig::default()
+        };
+        assert_eq!(claude_launch_args(&ctx(), &quiet, Vec::new()).len(), 2);
+        assert!(only_settings_flag(&args[1..]));
+        assert!(only_settings_flag(&claude_launch_args(
+            &ctx(),
+            &quiet,
+            Vec::new()
+        )));
+        assert!(!only_settings_flag(&args));
         let path = PathBuf::from(&args[2]);
         assert_eq!(path, claude_settings_path("fs-1"));
         let written: Value =
@@ -201,9 +231,18 @@ mod tests {
         assert_eq!(ctx.branch, "feature/hx-12");
         assert_eq!(ctx.workdir, PathBuf::from("/tmp/wt"));
         assert!(ctx.is_worktree);
+        let quiet = AiwConfig {
+            agent_context_prompt: false,
+            ..AiwConfig::default()
+        };
         assert_eq!(
-            codex_launch_args(&ctx, &AiwConfig::default(), vec!["-C".into()]),
+            codex_launch_args(&ctx, &quiet, vec!["-C".into()]),
             vec!["-C"]
+        );
+        assert!(
+            codex_launch_args(&ctx, &AiwConfig::default(), vec!["-C".into()])
+                .iter()
+                .any(|a| a.contains("AIW context:"))
         );
     }
 }

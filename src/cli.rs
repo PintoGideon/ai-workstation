@@ -204,6 +204,14 @@ enum Commands {
         #[arg(long)]
         harness: String,
     },
+    /// Session-start hook: print the session's launch context as the
+    /// harness's additional-context JSON (Gemini, Cursor).
+    #[command(name = "session-context", hide = true)]
+    SessionContext {
+        /// gemini or cursor.
+        #[arg(long)]
+        harness: String,
+    },
     /// Write a custom session status into the AIW database.
     /// Used by hook scripts for custom sessions.
     #[command(name = "set-status", hide = true)]
@@ -554,6 +562,7 @@ pub fn run() -> Result<()> {
                 | Commands::StatusLine
                 | Commands::StopHook { .. }
                 | Commands::Subagent { .. }
+                | Commands::SessionContext { .. }
         )
     ) {
         run_first_run_migration()?;
@@ -574,6 +583,10 @@ pub fn run() -> Result<()> {
     }
     if let Some(Commands::Subagent { event, harness }) = &cli.command {
         crate::fork::hook_cli::run_subagent(event, harness);
+        return Ok(());
+    }
+    if let Some(Commands::SessionContext { harness }) = &cli.command {
+        crate::fork::hook_cli::run_session_context(harness);
         return Ok(());
     }
 

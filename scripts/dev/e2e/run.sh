@@ -335,9 +335,17 @@ cap | grep '▎' | grep -q '1 queued'; check "queue: a queued follow-up survives
 keys e; wait_for 'Queue a follow-up' 3; keys Tab; sleep 0.2; keys d; sleep 0.3; keys Escape; sleep 0.3
 # P5: subagent starts and stops count on the working badge
 keys Tab; sleep 0.3; keys -l '/sub 2'; keys Enter
-wait_for '2 subagents' 8; check "sub: two SubagentStart hooks → row says 2 subagents" $?
-wait_gone '2 subagents' 12; check "sub: SubagentStop hooks and the turn's end clear the count" $?
+for i in $(seq 1 80); do cap | grep '▎' | grep -q '2 subagents' && break; sleep 0.1; done
+cap | grep '▎' | grep -q '2 subagents'; check "sub: two SubagentStart hooks → row says 2 subagents" $?
+for i in $(seq 1 120); do cap | grep '▎' | grep -q 'subagent' || break; sleep 0.1; done
+! cap | grep '▎' | grep -q 'subagent'; check "sub: SubagentStop hooks and the turn's end clear the count" $?
 keys C-q; sleep 0.4
+# item 6: every agent is told its project, feature, branch and AIW session
+grep -q 'AIW context: project alpha, feature' "$S/log/claude.args"; check "ctx-prompt: Claude gets the AIW context paragraph in --append-system-prompt" $?
+grep -q 'developer_instructions=.*AIW context: project' "$S/log/codex.args"; check "ctx-prompt: Codex gets it in developer_instructions" $?
+grep '"event": "SessionStart"' "$S/log/gemini.hooks" | grep -q 'additionalContext.*AIW context: project gamma'; check "ctx-prompt: Gemini's SessionStart hook returns it as additionalContext" $?
+grep '"event": "sessionStart"' "$S/log/cursor-agent.hooks" | grep -q 'additional_context.*AIW context: project plain'; check "ctx-prompt: Cursor's sessionStart hook returns it as additional_context" $?
+grep -q 'Mention the branch name in commit messages and PR titles' "$S/log/claude.args"; check "ctx-prompt: the paragraph asks for the branch name in commits and PR titles" $?
 
 aiw_quit; doctor_clean; check "doctor clean after the adversarial run" $?
 

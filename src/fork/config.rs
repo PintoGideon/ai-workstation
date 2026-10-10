@@ -32,6 +32,9 @@ pub struct AiwConfig {
     /// How long a permission hook waits for an answer from the dashboard
     /// before letting the harness show its own prompt (P6).
     pub permission_wait_seconds: u64,
+    /// Tell each agent its project, feature, branch, worktree and AIW session
+    /// in its system prompt (item 6). On by default.
+    pub agent_context_prompt: bool,
 }
 
 impl Default for AiwConfig {
@@ -42,6 +45,7 @@ impl Default for AiwConfig {
             confirm_quit: false,
             dashboard_layout: DashboardLayout::Workspace,
             permission_wait_seconds: crate::fork::permissions::DEFAULT_WAIT_SECONDS,
+            agent_context_prompt: true,
         }
     }
 }

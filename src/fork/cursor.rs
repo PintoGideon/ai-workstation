@@ -66,7 +66,16 @@ type Step = (&'static str, &'static [&'static str]);
 
 /// `(event, scripts to run in order, JSON to print afterwards)`.
 pub const EVENTS: &[(&str, &[Step], Option<&str>)] = &[
-    ("sessionStart", &[("clear-notify.sh", &[])], None),
+    // The launch context as `additional_context` (item 6): the last script's
+    // stdout is the hook's answer.
+    (
+        "sessionStart",
+        &[
+            ("clear-notify.sh", &[]),
+            ("session-context.sh", &["cursor"]),
+        ],
+        None,
+    ),
     (
         "beforeSubmitPrompt",
         &[

@@ -17,6 +17,7 @@ pub(crate) mod badges;
 pub mod session_reconcile;
 
 // G6 — theming and fonts (DESIGN.md §8).
+pub mod agent_context; // the launch context in the agent's system prompt (DESIGN.md §16)
 pub(crate) mod appearance;
 pub(crate) mod color;
 pub(crate) mod contrast;

@@ -516,6 +516,7 @@ def main():
                 n = 2
             ev("prompt", {"prompt": f"spawn {n} subagents"})
             out("⠋ thinking…")
+            ev("tool_start", tool_extra("start"))
             starts = {"claude": "SubagentStart", "codex": "SubagentStart", "cursor-agent": "subagentStart"}
             stops = {"claude": "SubagentStop", "codex": "SubagentStop", "cursor-agent": "subagentStop"}
             ids = [f"agent-{uuid.uuid4().hex[:6]}" for _ in range(n)]
@@ -524,7 +525,7 @@ def main():
                     fire_collect(starts[NAME], {"agent_id": agent_id, "agent_type": "Explore",
                                                 "subagent_id": agent_id, "subagent_type": "Explore",
                                                 "task": "look around"})
-            out(f"⏺ {n} subagents running")
+            out(f"⏺ spawned {n} helper agents")
             time.sleep(4)
             for agent_id in ids:
                 if NAME in stops:
@@ -532,7 +533,8 @@ def main():
                                                "subagent_id": agent_id, "subagent_type": "Explore",
                                                "status": "completed", "stop_hook_active": False,
                                                "last_assistant_message": "found it"})
-            out("⏺ subagents done")
+            ev("tool_stop", tool_extra("stop"))
+            out("⏺ helper agents finished")
             finish_turn(f"spawn {n} subagents", "Subagents finished.")
         elif cmd == "/work":
             ev("prompt", {"prompt": rest or "work"})
