@@ -1028,6 +1028,11 @@ pub struct App {
     /// missing session is indistinguishable from a crash, which is exactly the
     /// case the recovery dialog is for.
     pub user_stopped_features: std::collections::HashSet<String>,
+    /// FORK: ids of agent sessions whose process exited while the pane's
+    /// shell survived (the row shows ■ "exited"). Not persisted: the 5 s
+    /// sweep re-detects the state after a relaunch. Cleared when the session
+    /// is started again.
+    pub exited_sessions: std::collections::HashSet<String>,
     /// Tmux "session:window" targets where compose interception is
     /// disabled and keys pass straight through to Claude Code.
     pub compose_direct_targets: std::collections::HashSet<String>,
@@ -2598,6 +2603,7 @@ impl App {
             view_input_batch: None,
             pending_inputs: Vec::new(),
             user_stopped_features: std::collections::HashSet::new(),
+            exited_sessions: std::collections::HashSet::new(),
             compose_direct_targets: std::collections::HashSet::new(),
             compose_drafts: HashMap::new(),
             compose_clipboard_paste: None,
@@ -2853,6 +2859,7 @@ impl App {
             view_input_batch: None,
             pending_inputs: Vec::new(),
             user_stopped_features: std::collections::HashSet::new(),
+            exited_sessions: std::collections::HashSet::new(),
             compose_direct_targets: std::collections::HashSet::new(),
             compose_drafts: HashMap::new(),
             compose_clipboard_paste: None,

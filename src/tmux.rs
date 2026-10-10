@@ -784,8 +784,13 @@ impl TmuxManager {
         Self::shell_launch_env_with(&extra)
     }
 
+    /// Clear the pane, then `exec` the harness so it *replaces* the launch
+    /// script's `sh` instead of running as its child. FORK: with the agent
+    /// as the pane's foreground process, tmux's `pane_current_command` names
+    /// it while it runs and the pane's own shell once it has exited — which
+    /// is how the sweep tells "agent exited" from "agent running".
     fn agent_launch_command(cmd: String) -> String {
-        format!("printf '\\033[2J\\033[H'; {cmd}")
+        format!("printf '\\033[2J\\033[H'; exec {cmd}")
     }
 
     fn pane_default_terminal() -> Option<String> {
@@ -1831,6 +1836,23 @@ impl TmuxManager {
             .unwrap_or_default()
     }
 
+    /// FORK: `(session, window, pane_current_command)` for every pane on the
+    /// server, in one call. See [`crate::traits::TmuxOps::pane_commands`].
+    pub fn pane_commands() -> Vec<(String, String, String)> {
+        Self::command()
+            .args([
+                "list-panes",
+                "-a",
+                "-F",
+                "#{session_name}\t#{window_name}\t#{pane_current_command}",
+            ])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| parse_pane_commands(&String::from_utf8_lossy(&o.stdout)))
+            .unwrap_or_default()
+    }
+
     /// Whether a specific window is still present in a tmux session.
     ///
     /// A live session is not a live window: any other window — the terminal, a
@@ -2520,6 +2542,21 @@ fn parse_pane_list(raw: &str) -> Vec<(String, String, i64)> {
         .collect()
 }
 
+/// FORK: parse tab-separated `session\twindow\tcommand` rows. A row without
+/// a command is kept with an empty one: the window is still live, we just
+/// don't know what runs in it (and an empty command never reads as a shell).
+fn parse_pane_commands(raw: &str) -> Vec<(String, String, String)> {
+    raw.lines()
+        .filter_map(|line| {
+            let mut parts = line.split('\t');
+            let session = parts.next()?.to_string();
+            let window = parts.next()?.to_string();
+            let command = parts.next().unwrap_or_default().trim().to_string();
+            Some((session, window, command))
+        })
+        .collect()
+}
+
 // ── TmuxOps trait implementation ─────────────────────────────────────────────
 
 impl TmuxOps for TmuxManager {
@@ -2545,6 +2582,10 @@ impl TmuxOps for TmuxManager {
 
     fn list_panes(&self) -> Vec<(String, String, i64)> {
         TmuxManager::list_panes()
+    }
+
+    fn pane_commands(&self) -> Vec<(String, String, String)> {
+        TmuxManager::pane_commands()
     }
 
     fn create_session_with_window(
@@ -3271,11 +3312,71 @@ mod tests {
     }
 
     #[test]
+    fn parse_pane_commands_keeps_rows_without_a_command() {
+        let raw =
+            "aiw-alpha\tclaude\tclaude\naiw-alpha\tterminal\tbash\naiw-beta\tcodex\n\ngarbage\n";
+
+        assert_eq!(
+            super::parse_pane_commands(raw),
+            vec![
+                (
+                    "aiw-alpha".to_string(),
+                    "claude".to_string(),
+                    "claude".to_string()
+                ),
+                (
+                    "aiw-alpha".to_string(),
+                    "terminal".to_string(),
+                    "bash".to_string()
+                ),
+                ("aiw-beta".to_string(), "codex".to_string(), String::new()),
+            ]
+        );
+    }
+
+    #[test]
     fn agent_launch_command_clears_shell_echo_before_starting_harness() {
         let cmd = TmuxManager::agent_launch_command("env AIW_SESSION='aiw-test' codex".into());
 
         assert!(cmd.starts_with("printf '\\033[2J\\033[H'; "));
         assert!(cmd.ends_with("env AIW_SESSION='aiw-test' codex"));
+    }
+
+    // FORK: the harness must be the pane's foreground process (not a child
+    // of the launch script's `sh`), or `pane_current_command` reads "sh" for
+    // a running agent and the exited-agent sweep can't tell the two apart.
+    #[test]
+    fn agent_launch_command_execs_the_harness_in_place_of_the_launch_shell() {
+        let cmd = TmuxManager::agent_launch_command("env AIW_SESSION='aiw-test' codex".into());
+
+        assert_eq!(
+            cmd,
+            "printf '\\033[2J\\033[H'; exec env AIW_SESSION='aiw-test' codex"
+        );
+        // Run for real: with `exec`, the command's pid *is* the script's.
+        let script = TmuxManager::write_agent_launch_script(&TmuxManager::agent_launch_command(
+            "sh -c 'echo $$'".into(),
+        ))
+        .unwrap();
+        let child = std::process::Command::new("sh")
+            .arg(&script)
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        let out = child.wait_with_output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        // The clear-screen escape precedes the pid on the same line.
+        let digits: String = text
+            .trim_end()
+            .chars()
+            .rev()
+            .take_while(char::is_ascii_digit)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        assert_eq!(digits.parse::<u32>().ok(), Some(pid), "{text:?}");
     }
 
     #[test]

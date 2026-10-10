@@ -514,7 +514,14 @@ fn apply_bg_result(app: &mut App, result: SessionStatusBgResult) {
                         SourceAction::Clear => session.clear_token_usage_source(),
                         SourceAction::NoChange => {}
                     }
-                    session.status_text = update.status_text;
+                    // FORK: an exited agent keeps its "exited" marker; the
+                    // usage line would otherwise make it look alive.
+                    if app.exited_sessions.contains(&session.id) {
+                        session.status_text =
+                            Some(crate::fork::session_reconcile::EXITED_STATUS.to_string());
+                    } else {
+                        session.status_text = update.status_text;
+                    }
                     session.token_usage = update.token_usage;
                     apply_context_result(
                         &mut app.context_states,

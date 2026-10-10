@@ -21,6 +21,12 @@ pub trait TmuxOps: Send + Sync {
     /// `(session, window, pane pid)` for every pane on the server, in one
     /// call. The pid is the pane's own shell, not what it is running.
     fn list_panes(&self) -> Vec<(String, String, i64)>;
+    /// FORK: `(session, window, pane_current_command)` for every pane on the
+    /// server, in one call. The command is the process in the pane's
+    /// foreground (tmux's `#{pane_current_command}`): the agent while it
+    /// runs, the pane's shell once it has exited. Empty when tmux cannot be
+    /// reached.
+    fn pane_commands(&self) -> Vec<(String, String, String)>;
     fn create_session_with_window(
         &self,
         session: &str,

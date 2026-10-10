@@ -1719,7 +1719,38 @@ impl App {
         extra_args: Vec<String>,
         resume_id: Option<String>,
     ) -> Result<()> {
-        self.tmux.create_window(tmux_session, window, workdir)?;
+        self.launch_agent_session_window_in(
+            agent,
+            tmux_session,
+            window,
+            workdir,
+            mode,
+            session_id,
+            extra_args,
+            resume_id,
+            false,
+        )
+    }
+
+    /// [`Self::launch_agent_session_window`], optionally typing the launch
+    /// command into a window that already exists (FORK: an agent that exited
+    /// and left its pane at the shell prompt is relaunched in place).
+    #[allow(clippy::too_many_arguments)]
+    fn launch_agent_session_window_in(
+        &self,
+        agent: &AgentKind,
+        tmux_session: &str,
+        window: &str,
+        workdir: &Path,
+        mode: &VibeMode,
+        session_id: &str,
+        extra_args: Vec<String>,
+        resume_id: Option<String>,
+        reuse_window: bool,
+    ) -> Result<()> {
+        if !reuse_window {
+            self.tmux.create_window(tmux_session, window, workdir)?;
+        }
         match agent {
             AgentKind::Claude => {
                 self.tmux.launch_claude(
@@ -1895,6 +1926,10 @@ impl App {
             .and_then(|f| f.sessions.get_mut(si))
         {
             session.stopped = stopped;
+            // FORK: a session that is running again is no longer "exited".
+            if !stopped && self.exited_sessions.remove(&session.id) {
+                session.status_text = None;
+            }
         }
     }
 
@@ -2092,9 +2127,10 @@ impl App {
             return false;
         };
         session.kind.is_agent_harness()
-            && !self
-                .tmux
-                .window_exists(&feature.tmux_session, &session.tmux_window)
+            && (self.session_is_exited(&session.id) // FORK: relaunch in place
+                || !self
+                    .tmux
+                    .window_exists(&feature.tmux_session, &session.tmux_window))
     }
 
     /// The restart worker: recreates the window unconditionally, assuming the
@@ -2156,7 +2192,10 @@ impl App {
         if !session.kind.is_tmux_backed() {
             return Ok(false);
         }
-        if self.tmux.window_exists(&tmux_session, &session.tmux_window) {
+        // FORK: an agent that exited while its pane's shell survived is
+        // launched again into that same window.
+        let exited_in_place = self.exited_sessions.contains(&session.id);
+        if self.tmux.window_exists(&tmux_session, &session.tmux_window) && !exited_in_place {
             // Up after all (recreated from outside AIW): the flag is what is
             // stale, not the window.
             if session.stopped {
@@ -2165,6 +2204,8 @@ impl App {
             }
             return Ok(false);
         }
+        let reuse_window =
+            exited_in_place && self.tmux.window_exists(&tmux_session, &session.tmux_window);
 
         if let Some(agent) = agent_for_session_kind(&session.kind) {
             let use_rc = remote_control && self.remote_control_allowed();
@@ -2173,7 +2214,7 @@ impl App {
                 remote_control: use_rc,
                 session_name: if use_rc { Some(feature_name) } else { None },
             });
-            self.launch_agent_session_window(
+            self.launch_agent_session_window_in(
                 &agent,
                 &tmux_session,
                 &session.tmux_window,
@@ -2186,6 +2227,7 @@ impl App {
                 // whole-feature restart in `feature_ops.rs`. Only Claude
                 // records one here; an override can resume any harness.
                 resume_override.unwrap_or_else(|| session.claude_session_id.clone()),
+                reuse_window,
             )?;
         } else {
             self.tmux

@@ -1,4 +1,5 @@
-//! FORK: keep the session list honest when a tmux window closes on its own.
+//! FORK: keep the session list honest when a tmux window closes on its own,
+//! or when an agent exits and leaves its pane at a shell prompt.
 //!
 //! A session's window can disappear without AI Workstation doing anything: the user types
 //! `exit` in a terminal, or an agent CLI quits. Upstream AIW only learns a
@@ -10,43 +11,92 @@
 //!   a shell means you're done with it);
 //! - any other session (agents, editors, custom commands) is marked **stopped**
 //!   (shown as ■), so opening it restarts it — agents resume their conversation
-//!   through AIW's existing stopped-session flow.
+//!   through AIW's existing stopped-session flow;
+//! - an **agent** window that is still there but whose foreground process is
+//!   the pane's plain shell (the agent crashed or was quit) is marked
+//!   **exited**: ■ with an "exited" status, no "finished" attention, and `c`
+//!   or `S` launch the agent again into the same window.
 //!
 //! Nothing is touched when tmux can't be reached, when the feature itself is
 //! stopped or its tmux session is gone (AIW's feature-level recovery handles
-//! that), for sessions created in the last few seconds (their window may not
-//! exist yet), or for the session currently open on screen.
+//! that), or for sessions created in the last few seconds (their window may
+//! not exist yet, or the agent may still be starting), or for the session
+//! currently open on screen.
+//!
+//! One `tmux list-panes -a` per sweep answers both questions.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::app::{App, AppMode, Selection};
 use crate::project::{ProjectStatus, SessionKind};
 
 /// Sessions younger than this are left alone: their window may still be
-/// being created.
+/// being created, or their agent still starting up at the shell.
 const CREATION_GRACE_SECS: i64 = 10;
+
+/// Status shown on a session whose agent exited but whose shell survived.
+pub(crate) const EXITED_STATUS: &str = "exited";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Fix {
     Remove,
     MarkStopped,
+    MarkExited,
+}
+
+/// Whether `command` (tmux's `pane_current_command`) is a plain shell, i.e.
+/// nothing is running in the pane. Login shells are reported with a leading
+/// `-` by some tmux versions; a path is reduced to its last component.
+pub(crate) fn is_plain_shell(command: &str) -> bool {
+    let name = command
+        .trim()
+        .trim_start_matches('-')
+        .rsplit('/')
+        .next()
+        .unwrap_or_default();
+    matches!(
+        name,
+        "sh" | "bash"
+            | "zsh"
+            | "fish"
+            | "dash"
+            | "ksh"
+            | "mksh"
+            | "tcsh"
+            | "csh"
+            | "ash"
+            | "nu"
+            | "elvish"
+            | "xonsh"
+            | "login"
+    )
 }
 
 impl App {
-    /// Reconciles sessions against the windows tmux actually has. Returns
+    /// Reconciles sessions against the panes tmux actually has. Returns
     /// `true` when anything changed (and was saved).
     pub(crate) fn reconcile_vanished_windows(&mut self) -> bool {
-        let windows = self.tmux.window_activity();
+        let panes = self.tmux.pane_commands();
         // Empty means tmux could not be reached (or nothing runs at all):
         // never conclude every window vanished from that.
-        if windows.is_empty() {
+        if panes.is_empty() {
             return false;
         }
-        let live: HashSet<(String, String)> = windows.into_iter().map(|(s, w, _)| (s, w)).collect();
-        let live_sessions: HashSet<&str> = live.iter().map(|(s, _)| s.as_str()).collect();
+        let mut commands: HashMap<(String, String), String> = HashMap::new();
+        for (session, window, command) in panes {
+            // A split window counts as busy when any of its panes is.
+            let entry = commands.entry((session, window)).or_default();
+            if entry.is_empty() || (is_plain_shell(entry) && !is_plain_shell(&command)) {
+                *entry = command;
+            }
+        }
+        let live_sessions: HashSet<&str> = commands.keys().map(|(s, _)| s.as_str()).collect();
 
         let viewing = match &self.mode {
             AppMode::Viewing(view) => Some((view.session.clone(), view.window.clone())),
+            AppMode::Compose(state) => {
+                Some((state.view.session.clone(), state.view.window.clone()))
+            }
             _ => None,
         };
         let cutoff = chrono::Utc::now() - chrono::Duration::seconds(CREATION_GRACE_SECS);
@@ -60,33 +110,45 @@ impl App {
                     continue;
                 }
                 for (si, session) in feature.sessions.iter().enumerate() {
-                    let key = (feature.tmux_session.clone(), session.tmux_window.clone());
-                    let vanished = session.kind.is_tmux_backed()
-                        && !session.stopped
-                        && session.created_at < cutoff
-                        && !live.contains(&key)
-                        && viewing.as_ref() != Some(&key);
-                    if !vanished {
+                    if !session.kind.is_tmux_backed()
+                        || session.stopped
+                        || session.created_at >= cutoff
+                    {
                         continue;
                     }
-                    let fix = if session.kind == SessionKind::Terminal {
-                        Fix::Remove
-                    } else {
-                        Fix::MarkStopped
+                    let key = (feature.tmux_session.clone(), session.tmux_window.clone());
+                    let Some(command) = commands.get(&key) else {
+                        // The window is gone. The one on screen is left
+                        // alone: the view owns it.
+                        if viewing.as_ref() == Some(&key) {
+                            continue;
+                        }
+                        let fix = if session.kind == SessionKind::Terminal {
+                            Fix::Remove
+                        } else {
+                            Fix::MarkStopped
+                        };
+                        fixes.push((pi, fi, si, fix));
+                        continue;
                     };
-                    fixes.push((pi, fi, si, fix));
+                    if session.kind.is_agent_harness() && is_plain_shell(command) {
+                        fixes.push((pi, fi, si, Fix::MarkExited));
+                    }
                 }
             }
         }
+
         if fixes.is_empty() {
             return false;
         }
 
         // Highest index first so removals don't shift pending indices.
         fixes.sort_by_key(|f| std::cmp::Reverse((f.0, f.1, f.2)));
+        fixes.dedup();
         for (pi, fi, si, fix) in fixes {
             match fix {
                 Fix::MarkStopped => self.set_session_stopped(pi, fi, si, true),
+                Fix::MarkExited => self.mark_session_exited(pi, fi, si),
                 Fix::Remove => {
                     self.store.projects[pi].features[fi].sessions.remove(si);
                     self.selection = selection_after_removal(&self.selection, pi, fi, si);
@@ -97,6 +159,48 @@ impl App {
             self.message = Some(format!("Could not save session list: {err}"));
         }
         true
+    }
+
+    /// The agent in `(pi, fi, si)` is gone but its pane's shell is still
+    /// there: ■ "exited", not "finished". The feature's "completed, awaiting
+    /// review" attention is dropped when this was its last running agent —
+    /// a crash is not a finished turn.
+    fn mark_session_exited(&mut self, pi: usize, fi: usize, si: usize) {
+        let Some(feature) = self
+            .store
+            .projects
+            .get_mut(pi)
+            .and_then(|p| p.features.get_mut(fi))
+        else {
+            return;
+        };
+        let tmux_session = feature.tmux_session.clone();
+        let feature_name = feature.name.clone();
+        let Some(session) = feature.sessions.get_mut(si) else {
+            return;
+        };
+        session.stopped = true;
+        session.status_text = Some(EXITED_STATUS.to_string());
+        let id = session.id.clone();
+        let label = session.label.clone();
+        let other_agent_running = feature
+            .sessions
+            .iter()
+            .enumerate()
+            .any(|(i, s)| i != si && s.kind.is_agent_harness() && s.runs_with_feature());
+        self.exited_sessions.insert(id);
+        if !other_agent_running {
+            self.clear_attention(&tmux_session);
+        }
+        self.log_info(
+            "reconcile",
+            format!("{label} in {feature_name} exited; its shell is still open (■ exited)"),
+        );
+    }
+
+    /// Whether session `id` is marked exited (agent gone, shell alive).
+    pub fn session_is_exited(&self, id: &str) -> bool {
+        self.exited_sessions.contains(id)
     }
 }
 
@@ -113,5 +217,22 @@ pub(crate) fn selection_after_removal(
             Selection::Session(p, f, s - 1)
         }
         ref other => other.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_plain_shell;
+
+    #[test]
+    fn shells_are_recognised_in_every_spelling() {
+        for shell in ["bash", "-zsh", "/bin/sh", "fish", "-/usr/bin/dash", "login"] {
+            assert!(is_plain_shell(shell), "{shell}");
+        }
+        for agent in [
+            "claude", "codex", "python3", "node", "", "sh-agent", "bashful",
+        ] {
+            assert!(!is_plain_shell(agent), "{agent}");
+        }
     }
 }
