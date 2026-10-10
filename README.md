@@ -1,23 +1,25 @@
 
-# Agent Mainframe (AMF)
+# AI Workstation (AIW)
 
-**Docs and more:** [agentmainframe.dev](https://agentmainframe.dev)
+Based on [agent-mainframe](https://github.com/eldridgerdev/agent-mainframe) by Ryan Eldridge (MIT). See
+[LICENSE](LICENSE) for the original notice, [FORK.md](FORK.md) for how this fork is maintained and
+[DESIGN.md](DESIGN.md) for what it adds.
 
 Run multiple AI coding agents in parallel—each on its own branch and in its
 own terminal—without losing track of them.
 
-AMF is a terminal dashboard for managing
+AIW is a terminal dashboard for managing
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code),
-[Codex](https://github.com/openai/codex),
-[OpenCode](https://opencode.ai), and Pi sessions. It organizes work by project
+[Codex](https://github.com/openai/codex), Gemini CLI, Cursor agent and Pi
+sessions. It organizes work by project
 and feature, creates isolated git worktrees when needed, and shows which
 agents are asking a question and which have finished work waiting to be
 reviewed.
 
-<img width="1896" height="1030" alt="AMF dashboard showing several agent sessions" src="https://github.com/user-attachments/assets/d8160bc6-49ea-4b2b-839a-7ec056897ffc" />
+<img width="1896" height="1030" alt="AIW dashboard showing several agent sessions" src="https://github.com/user-attachments/assets/d8160bc6-49ea-4b2b-839a-7ec056897ffc" />
 
 
-## What AMF does
+## What AIW does
 
 - Runs several coding-agent sessions side by side from one dashboard.
 - Keeps concurrent features isolated with git branches and worktrees.
@@ -37,15 +39,15 @@ with source and producing-session attribution.
 
 ## Requirements
 
-Install at least one supported agent CLI and sign in to it before using AMF:
+Install at least one supported agent CLI and sign in to it before using AIW:
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 - [Codex](https://github.com/openai/codex)
-- [OpenCode](https://opencode.ai)
+- [Gemini CLI](https://github.com/google-gemini/gemini-cli)
+- [Cursor agent](https://cursor.com/cli)
 - Pi (`pi` must be available in `PATH`)
 
-Release bundles include `tmux`. A source installation requires `tmux` in
-`PATH`. Git is required for branch and worktree features, but AMF can manage
+AIW is installed from source and requires `tmux` in `PATH`. Git is required for branch and worktree features, but AIW can manage
 non-git directories without it.
 
 Optional tools:
@@ -60,73 +62,18 @@ Optional tools:
 
 ## Installation
 
-### Release bundle (recommended)
-
-Download the archive for your platform from
-[GitHub Releases](https://github.com/eldridgerdev/agent-mainframe/releases),
-extract it, and place `amf` somewhere in your `PATH`.
-
-| Platform | Archive |
-| --- | --- |
-| Linux x86_64, most portable | `amf-x86_64-unknown-linux-musl.tar.gz` |
-| Linux x86_64, glibc | `amf-x86_64-unknown-linux-gnu.tar.gz` |
-| Linux aarch64 | `amf-aarch64-unknown-linux-gnu.tar.gz` |
-| macOS, Apple Silicon | `amf-aarch64-apple-darwin.tar.gz` |
-
-For example, on Linux x86_64:
+AIW is built from source; there are no release bundles. Building needs Rust
+(via [rustup](https://rustup.rs)), a C compiler, and `tmux`.
 
 ```bash
-curl -L https://github.com/eldridgerdev/agent-mainframe/releases/latest/download/amf-x86_64-unknown-linux-musl.tar.gz -o amf.tar.gz
-tar -xzf amf.tar.gz
-sudo mv amf-x86_64-unknown-linux-musl /opt/amf
-sudo ln -s /opt/amf/amf /usr/local/bin/amf
+cd ~/ai_workstation                      # your clone of this fork
+cargo +1.99.0 install --path . --locked  # installs the `aiw` binary into ~/.cargo/bin
+aiw
 ```
 
-On macOS with Apple Silicon:
-
-```bash
-curl -L https://github.com/eldridgerdev/agent-mainframe/releases/latest/download/amf-aarch64-apple-darwin.tar.gz -o amf.tar.gz
-tar -xzf amf.tar.gz
-sudo install -m 755 amf-aarch64-apple-darwin/amf /usr/local/bin/amf
-```
-
-### Install from crates.io
-
-Install the `agent-mainframe` crate with Cargo:
-
-```bash
-cargo install agent-mainframe --locked
-```
-
-The crate installs the `amf` binary. Make sure `~/.cargo/bin` is in your
-`PATH`, then run:
-
-```bash
-amf
-```
-
-This source installation requires Rust, a C compiler, and `tmux`.
-
-If you don't already have Rust and Cargo installed, install them with
-[rustup](https://rustup.rs):
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-Restart your shell (or run `source "$HOME/.cargo/env"`) so `cargo` is on your
-`PATH`, then re-run the `cargo install` command above.
-
-### Build from source
-
-Building uses the current stable Rust toolchain, a C compiler, and `tmux`.
-See "Install from crates.io" above for installing Rust via rustup if needed.
-
-```bash
-git clone https://github.com/eldridgerdev/agent-mainframe
-cd agent-mainframe
-cargo install --path . --locked
-```
+Make sure `~/.cargo/bin` is in your `PATH`. The first launch of `aiw` copies an
+existing AMF setup (projects, settings) into AIW's own folders; see
+"Coming from AMF" below.
 
 For contributor setup, focused tests and CI commands, see the
 [development checks](docs/development/checks.md) and
@@ -137,22 +84,56 @@ For a container installation, see the
 
 ### Upgrade
 
-```bash
-amf upgrade
-amf -V
-```
+AIW (this fork) has no self-upgrade: it never downloads anything itself. Pull
+the fork and rebuild (`cargo install --path .`). See [NO_CLOUD.md](NO_CLOUD.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration guidance.
 
+### Coming from AMF
+
+AIW keeps everything in its own folders, so it runs side by side with an
+agent-mainframe (AMF) install without touching it:
+
+| | AMF | AIW |
+| --- | --- | --- |
+| command | `amf` | `aiw` |
+| config + database | `~/.config/amf/` (`amf.db`) | `~/.config/ai_workstation/` (`aiw.db`) |
+| hook scripts | `~/.amf/hooks/` | `~/.config/ai_workstation/hooks/` |
+| tmux socket, debug log | `~/.local/state/amf/` (macOS `/tmp/amf/`) | `~/.local/state/ai_workstation/` (macOS `/tmp/ai_workstation/`) |
+| env vars, tmux sessions | `AMF_*`, `amf-*` | `AIW_*`, `aiw-*` |
+| repo files | `amf.json`, `.amf/`, `AMF_PLAN.md` | `aiw.json`, `.aiw/`, `AIW_PLAN.md` |
+
+**First launch.** When `~/.config/ai_workstation` does not exist yet and
+`~/.config/amf` does, AIW *copies* (never moves or edits) AMF's settings,
+database, port reservations, custom themes, syntax parsers and review memory
+into its own folder, and says so once in a toast. The database is copied only
+while AMF is not writing to it (a busy AMF gets a few retries; if it keeps
+writing, AIW stops and asks you to start it again) and is integrity-checked.
+AMF's pending notifications, its OpenCode plugins and its generated helper
+scripts are not copied. Projects and features from AMF show up on the
+dashboard; old settings such as `"theme": "amf"` keep working.
+
+**Old features.** They keep their `amf-…` tmux session names, but those
+sessions live on AMF's tmux server, so in AIW they show as **stopped**. Start
+one (or use `S` to resume a saved Claude/Codex conversation) and AIW recreates
+it under the same name on its own server. Stop it in AMF first: otherwise the
+same agent runs twice in one worktree. Starting a feature in AIW also rewrites
+the worktree's Claude hooks to point at AIW, so an AMF session still running
+in that worktree stops reporting to AMF.
+
+**Repo config.** A repo without `aiw.json` is read from AMF's `amf.json` (or
+the older `.amf/config.json`). The first time AIW saves project config it
+writes `aiw.json` and leaves `amf.json` alone for AMF.
+
 ## Quick start
 
-1. Start AMF from a normal shell or an existing tmux session:
+1. Start AIW from a normal shell or an existing tmux session:
 
    ```bash
-   amf
+   aiw
    ```
 
-2. On first launch, choose the agent CLIs you want AMF to use. AMF checks that
+2. On first launch, choose the agent CLIs you want AIW to use. AIW checks that
    each selected CLI is installed. You can reopen this setup later with `A`.
 
 3. Press `N` to add a project, then enter its name and directory. The directory
@@ -187,22 +168,22 @@ feature or `B` to create several features at once.
 
 ### Permission modes
 
-AMF asks you to choose how much autonomy an agent receives for each feature:
+AIW asks you to choose how much autonomy an agent receives for each feature:
 
 | Mode | Behavior |
 | --- | --- |
-| **Vibeless** | Shows supported file edits for approval before they are applied. Available for Claude Code and OpenCode. |
-| **Vibe** | Allows edits without AMF's per-edit review gate while retaining the agent's normal permission controls. |
-| **SuperVibe** | Skips agent permission prompts. AMF shows a warning before enabling it. |
+| **Vibeless** | Shows supported file edits for approval before they are applied. Available for Claude Code. |
+| **Vibe** | Allows edits without AIW's per-edit review gate while retaining the agent's normal permission controls. |
+| **SuperVibe** | Skips agent permission prompts. AIW shows a warning before enabling it. |
 
-Codex and Pi do not support AMF's Vibeless edit-review hooks. Pi also does not
-receive AMF permission-mode flags.
+Codex and Pi do not support AIW's Vibeless edit-review hooks. Pi also does not
+receive AIW permission-mode flags.
 
 ### Plan mode
 
 Plan mode interviews you about a feature before launching its agent. You can
 review and edit the resulting plan, ask an agent to improve it, or cancel it.
-AMF does not save the plan or launch the feature until you accept it. Press `P`
+AIW does not save the plan or launch the feature until you accept it. Press `P`
 on an existing feature to run the interview again.
 
 Multiple-choice questions in the interview also take your own answer: press `e`
@@ -234,7 +215,7 @@ and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-inte
 | `I` | On a TODOs session row: start an agent on the next TODO in priority order, across the lists currently showing |
 | `z` | Show dormant features: idle and unattended |
 | `G` | Open GitHub PR triage; on a project row, review a PR yourself |
-| `W` | Run AMF's AI review of a PR diff |
+| `W` | Run AIW's AI review of a PR diff |
 | `K` | Open Learning Mode: read the code and ask about it |
 | `L` | Open the prompt library |
 | `E` | Edit headless AI prompt templates (overrides) |
@@ -248,7 +229,7 @@ Search accepts every letter, including `j` and `k`. Use arrow keys or
 
 ### Embedded session
 
-Most keys go directly to the active session. These controls belong to AMF:
+Most keys go directly to the active session. These controls belong to AIW:
 
 | Key | Action |
 | --- | --- |
@@ -336,7 +317,7 @@ answer side by side, ask with an agent that offers both (`m`).
 Questions and answers are kept per project, so reopening `K` brings back what
 you asked before, with follow-ups still under the question they continue. A
 question remembers the lines it was about, and the code moves on — so on the way
-in AMF checks each one against the project as it is now. An entry whose code has
+in AIW checks each one against the project as it is now. An entry whose code has
 shifted is marked **moved** and the answer tells you where it went; one whose
 code is gone is marked **anchor lost**. Either way the question and the answer
 are kept exactly as they were: the point of the mark is that a stale line number
@@ -346,10 +327,10 @@ project.
 
 ### Review changes before shipping
 
-From an embedded session, press `Ctrl+Space`, then `f`. AMF presents the
+From an embedded session, press `Ctrl+Space`, then `f`. AIW presents the
 feature's diff file by file and lets you attach line comments or suggested
-changes. When you finish, AMF writes the feedback and hands it to an agent.
-With an authenticated `gh` CLI, AMF can also post the feedback to the branch's
+changes. When you finish, AIW writes the feedback and hands it to an agent.
+With an authenticated `gh` CLI, AIW can also post the feedback to the branch's
 pull request.
 
 The optional AI co-reviewer that drafts line comments for the current file
@@ -360,7 +341,9 @@ truncated prompt; the status line reports if any group could not be reviewed.
 
 With an authenticated `gh` and a GitHub remote, a feature whose branch has a
 pull request shows a `[PR #N · M open]` badge on its dashboard row and in an
-embedded session's header, refreshed every few minutes in the background.
+embedded session's header. AIW never polls GitHub in the background: badges
+refresh when you press `R` (or leader `r`) or open PR Triage, and otherwise
+show the last-known state.
 Once that PR is merged or closed without merging, the badge switches to
 `[PR #N merged]` / `[PR #N closed]` instead of disappearing, so a finished
 feature stays visually distinct from one that never had a PR. A branch
@@ -369,9 +352,9 @@ all.
 
 Select a feature and press `G` to open PR Triage. You can inspect review
 threads, send an individual or batched fix prompt to an agent, reply, and mark
-threads done. Press `W` to have AMF run its own review of the PR diff. GitHub
-actions are presented for confirmation before AMF writes to the pull request.
-When `f` or `B` targets a dedicated session, AMF lets you name it so multiple
+threads done. Press `W` to have AIW run its own review of the PR diff. GitHub
+actions are presented for confirmation before AIW writes to the pull request.
+When `f` or `B` targets a dedicated session, AIW lets you name it so multiple
 PR Triage agents can run simultaneously; leave the name blank to reuse the
 default `PR Triage` session.
 
@@ -390,10 +373,10 @@ investigation to act on it:
 post an editable reply, ask a follow-up (re-runs read-only with the prior answer
 as context), dismiss it, or keep it as a TODO.
 An unchanged AI-drafted reply discloses the harness, best-effort model,
-estimated tokens, and estimated cost of the session that wrote it. AMF's own
+estimated tokens, and estimated cost of the session that wrote it. AIW's own
 AI review (`W`) carries the same attribution: once a run finishes, the pane
 shows which harness and model produced it and the run's token usage and
-estimated cost, and that line is included above the `— AI review via AMF`
+estimated cost, and that line is included above the `— AI review via AIW`
 marker on the posted summary and every inline comment. A harness that reports
 no usage degrades to model-only attribution rather than showing a fake `$0.00`.
 
@@ -404,7 +387,7 @@ shows the batch progress. Coverage stays complete: any slice that still will
 not fit is listed rather than dropped, and the review summary is prefixed with
 a "⚠ Partial coverage" note whenever the diff had to be split. The size
 threshold is a per-harness default; set `review_prompt_budget_tokens` in
-`~/.config/amf/config.json` (or per repo in `amf.json`) to change it, or to
+`~/.config/ai_workstation/config.json` (or per repo in `aiw.json`) to change it, or to
 `0` to turn pre-send splitting off. For a sprawling refactor, reviewing the
 branch commit by commit still gives the sharpest results — per-slice review
 cannot see across files.
@@ -414,10 +397,10 @@ If `G` opened the feature's pull request directly, press `g` from PR Triage to
 return to the picker first. Choose a lookback of 20, 50, 100, or all recent
 closed and merged pull requests with `j`/`k`, then press `Enter`. The default is
 50. Press `g` in the lookback dialog to switch between the project's
-`.amf/review-memory.md` and the cross-project memory at
-`~/.config/amf/review-memory.md`; project memory is the default. This requires
+`.aiw/review-memory.md` and the cross-project memory at
+`~/.config/ai_workstation/review-memory.md`; project memory is the default. This requires
 authenticated `gh` and an available Claude CLI. Fetching the review history
-does not use agent tokens; AMF then makes one agent pass to distill recurring
+does not use agent tokens; AIW then makes one agent pass to distill recurring
 findings and appends only new ones. You can press `Esc` while it runs to return
 to the picker without cancelling the background job.
 
@@ -432,15 +415,15 @@ in, the tab says so, and `r` retries.
 
 Press `Enter` to open a pull request in the same diff viewer as the final
 review. It shows exactly the pull request's changes, from where it branched to
-its latest commit. No agent is started and no feature is needed. AMF fetches
-the pull request into private `refs/amf/review/` refs and reads every file from
+its latest commit. No agent is started and no feature is needed. AIW fetches
+the pull request into private `refs/aiw/review/` refs and reads every file from
 git objects: your checked-out branch, staged and unstaged changes, untracked
 files, and stash are never touched, and the refs are removed when you leave.
 
 Review as you would a feature: approve or reject files, and leave line
 comments, ranges, and suggested changes. `Esc` pauses and saves your draft;
 `Enter` on the same pull request resumes it, and the list marks it with
-`● N comments`. If the pull request has new commits by then, AMF flags only
+`● N comments`. If the pull request has new commits by then, AIW flags only
 the files whose changes differ, clears your verdicts on those files, and keeps
 every comment. A comment whose code is gone is listed as outdated in the notes
 panel, and `↻ updated` marks the row.
@@ -448,7 +431,7 @@ panel, and `↻ updated` marks the row.
 Press `q` to submit. Choose **Comment**, **Approve**, or **Request changes**
 (GitHub doesn't allow the last two on your own pull request), and write a
 summary with `e`. Inline comments are pinned to the commit you reviewed. If the
-pull request has moved on since you opened it, AMF won't post; press `o` to
+pull request has moved on since you opened it, AIW won't post; press `o` to
 reopen it at its new commit with your draft intact. Comments that can't sit on
 the diff, such as outdated ones, are included in the summary instead of being
 dropped. The walkthrough, AI co-review, and changeset-overview passes, and the
@@ -459,12 +442,12 @@ mode.
 
 Press `Q` in Final Review, manual PR review (`G`), or AI PR review (`W`) to ask
 about the reviewed code. `Ctrl+S` sends a question (`Ctrl+Enter` also works in
-terminals that report it); `Ctrl+H` changes the harness. As with AMF's other
+terminals that report it); `Ctrl+H` changes the harness. As with AIW's other
 AI calls, a notice first shows which prompt will run and lets you view or edit it
 (`review.question`, and `review.question_draft` for comment drafts). While a
 request runs, the overlay shows a spinner, the harness, and the elapsed time. The AI can inspect repository code beyond the selected file or lines,
 including unchanged helpers. PR questions require a clean local checkout at the
-reviewed PR head. If that checkout is unavailable, AMF explains the mismatch and
+reviewed PR head. If that checkout is unavailable, AIW explains the mismatch and
 keeps the review and question intact.
 
 After an answer, `e` starts a follow-up, `r` retries, `[`/`]` browse the
@@ -481,7 +464,7 @@ still requires the review's explicit submit action.
 ### Reuse prompts and track TODOs
 
 Press `L` to manage reusable prompt templates, or open them from a session with
-`Ctrl+Space`, then `p`. Templates may include `{{placeholder}}` fields that AMF
+`Ctrl+Space`, then `p`. Templates may include `{{placeholder}}` fields that AIW
 asks you to fill before injection.
 
 Add a `TODOs` session with `s` to open a checklist — one per feature. The
@@ -491,13 +474,13 @@ editor shows up to three lists side by side:
 | --- | --- |
 | **Worktree** | Work belonging to this feature's own checkout. Features on the repo root have no worktree list. |
 | **Project** | Work belonging to the project as a whole, whichever checkout you are in. |
-| **Global** | Work belonging to no project at all, shared across every repo AMF knows about. |
+| **Global** | Work belonging to no project at all, shared across every repo AIW knows about. |
 
 All three scopes start visible. Press `p` to hide or show the project list and
 `g` to hide or show the global list independently; the worktree list is always
 visible when the feature has one. Hidden scopes stay represented by compact
 labeled placeholders. The choice is shared by every TODO view for the rest of
-the current AMF run and resets the next time AMF starts. `Tab` / `Shift+Tab`
+the current AIW run and resets the next time AIW starts. `Tab` / `Shift+Tab`
 move between visible lists; each list keeps its own cursor, scroll, and
 scratchpad while hidden. `M` moves the selected TODO to another visible list
 and `C` copies it — a move carries whatever was already started for the item,
@@ -512,7 +495,7 @@ Existing TODO lists are unchanged by the upgrade: they stay project-scoped,
 keep their host feature and their links, and show up in the project pane. New
 worktree lists start empty.
 
-Press `Enter` on a TODO to start work on it. AMF asks how:
+Press `Enter` on a TODO to start work on it. AIW asks how:
 
 | Choice | What happens |
 | --- | --- |
@@ -520,7 +503,7 @@ Press `Enter` on a TODO to start work on it. AMF asks how:
 | **Start an agent in a new feature** | Opens the ordinary create-feature wizard, pre-filled with a branch name from the TODO title and plan mode off; once the feature exists, the TODO is linked to it and its agent is seeded with the TODO, unsent. Needs a git repository. |
 | **Plan this TODO first** | Runs the guided plan interview, with the TODO's title, notes, and the list scratchpad already filled in as the feature brief — editable before the first question. |
 
-If you choose to plan it, AMF then asks where the plan should land: **here**, in
+If you choose to plan it, AIW then asks where the plan should land: **here**, in
 the feature the list lives in, or in a **new feature and worktree** created for
 it. Picking a new feature opens the ordinary create-feature wizard, pre-filled
 from the TODO, so the branch, agent, and permission mode are still yours to
@@ -528,8 +511,8 @@ change; the worktree is created before the interview starts, so the plan is
 written into a real checkout.
 
 Either way the accepted plan is saved and an agent is started on it. A plan that
-lands in an existing feature is written to `AMF_PLAN.todo-<name>.md` rather than
-`AMF_PLAN.md`, so it sits beside that feature's own plan instead of replacing
+lands in an existing feature is written to `AIW_PLAN.todo-<name>.md` rather than
+`AIW_PLAN.md`, so it sits beside that feature's own plan instead of replacing
 it, and the agent is told which file is its own.
 
 A TODO planned into a new feature stays open on the list, marked as linked, and
@@ -538,11 +521,11 @@ feature is later deleted the TODO survives, the link is dropped, and `Enter`
 offers the choice again. An interrupted interview is saved as a draft and
 offered back the next time you press `Enter` on that TODO.
 
-Press `I` to work the list rather than a particular item: AMF takes the
+Press `I` to work the list rather than a particular item: AIW takes the
 highest-priority TODO nobody has started, opens an agent on it, and marks the
 item in progress (`[~]`) so the next `I` moves on. It considers whichever
 lists are currently visible. Hidden project and global scopes are excluded;
-at equal priority AMF prefers the narrower visible scope: worktree, then
+at equal priority AIW prefers the narrower visible scope: worktree, then
 project, then global. It works on the list itself and on the `TODOs` row on the
 dashboard, and the composer is seeded but unsent, exactly as `Enter` leaves it.
 
@@ -551,19 +534,19 @@ global TODO belongs to no one checkout, so `Enter` and `I` ask which feature
 should work it; the feature you pick supplies the agent and permission
 mode exactly as a worktree TODO's own feature would. Press `i` on a TODO to
 set or clear that in-progress mark by hand — useful when you abandoned a session
-without closing it. When every remaining TODO is already underway, AMF offers
+without closing it. When every remaining TODO is already underway, AIW offers
 the next one anyway and asks whether to go to the work already started, start a
 second agent, skip it, or cancel.
 
 Deleting a feature deletes its worktree list along with the checkout, so if
-that list still has unfinished items AMF asks first: move them to the project
+that list still has unfinished items AIW asks first: move them to the project
 list, move them to the global list, delete them with the worktree, or cancel
 the deletion. Nothing is killed or removed until you answer.
 
-### Override the AI prompts AMF sends
+### Override the AI prompts AIW sends
 
 Behind the plan interview, Learning Mode, the final-review diff helpers, the AI
-PR review, and the review-memory bootstrap/compaction, AMF makes one-shot
+PR review, and the review-memory bootstrap/compaction, AIW makes one-shot
 ("headless") AI calls with prompts it builds for you. Press `E` on the
 dashboard — or `Ctrl+Space`, then `E` from a session — to open the
 **prompt-override manager**. It lists every template with its effective source
@@ -575,19 +558,19 @@ scope picker, then a harness picker, then saves:
 
 | Scope | Where it lives | Applies to |
 | --- | --- | --- |
-| **This feature** | `amf.db` | just this checkout |
-| **This project** | `amf.json` `prompt_overrides` key | the repo — committed, shared with everyone |
-| **Global** | `amf.db` | every project on this machine |
+| **This feature** | `aiw.db` | just this checkout |
+| **This project** | `aiw.json` `prompt_overrides` key | the repo — committed, shared with everyone |
+| **Global** | `aiw.db` | every project on this machine |
 
 The nearest scope wins — feature → project → global → built-in — and within the
 winning scope a per-harness template beats the shared one. `d`, `d` clears the
-effective override. Templates carry visible `{{token}}` placeholders that AMF
+effective override. Templates carry visible `{{token}}` placeholders that AIW
 re-fills with live context (the diff, the question, the interview answers) each
 time the prompt runs. **There is no validation**: if you delete a required
-token or add one AMF does not supply, it is saved and rendered exactly as
+token or add one AIW does not supply, it is saved and rendered exactly as
 written.
 
-Project-scope overrides sit in `amf.json` under `prompt_overrides`, keyed by
+Project-scope overrides sit in `aiw.json` under `prompt_overrides`, keyed by
 the stable prompt id (shown in the manager):
 
 ```json
@@ -604,8 +587,8 @@ the stable prompt id (shown in the manager):
 }
 ```
 
-`.amf/` is generated and gitignored, so these overrides live in `amf.json`
-(the tracked repo config) rather than a file under `.amf/`.
+`.aiw/` is generated and gitignored, so these overrides live in `aiw.json`
+(the tracked repo config) rather than a file under `.aiw/`.
 
 Before each user-initiated headless call, a **pre-call notice** names the
 prompt and target harness: `v` shows the exact rendered prompt, `e` jumps to
@@ -617,7 +600,7 @@ and session summaries — announce with a toast instead of the modal.
 ### See which agents need you
 
 A stopped agent has stopped for a reason, and "waiting for input" does not say
-which. AMF reads its harnesses' lifecycle hooks and marks each stopped session
+which. AIW reads its harnesses' lifecycle hooks and marks each stopped session
 as one of:
 
 | State | Meaning |
@@ -630,21 +613,21 @@ The state shows on the feature's dashboard row and in the header count. Press
 `i` for the full list, questions first and oldest first within each group;
 `Enter` opens the session, `x` dismisses the row.
 
-AMF does not capture the agent's message — open the session to read the
+AIW does not capture the agent's message — open the session to read the
 question or the summary.
 
-Fidelity depends on the harness. Claude Code and OpenCode report all three
+Fidelity depends on the harness. Claude Code and Gemini CLI report all three
 states. Codex fires one hook when a turn ends and cannot say whether it
 finished or is asking, so its sessions show as **Waiting** either way. Pi has
-no hook mechanism, so its sessions carry no state at all. States are not saved: after an AMF restart, sessions
+no hook mechanism, so its sessions carry no state at all. States are not saved: after an AIW restart, sessions
 show as ordinary active until their next event.
 
 ### Keep the machine from filling up
 
-Agents and the editors they sit alongside are the bulk of what AMF puts on your
+Agents and the editors they sit alongside are the bulk of what AIW puts on your
 machine, and nothing warns you before the last gigabyte goes.
 
-Before starting an agent, AMF checks how many are already running — across every
+Before starting an agent, AIW checks how many are already running — across every
 project, plus any headless review or plan run in flight — and how much memory is
 left. If either is past its threshold, one dialog says which, and `y` starts it
 anyway. It never refuses. Terminals, editors, and TODO sessions are not counted
@@ -654,19 +637,19 @@ Creating a feature never raises that dialog: a batch create would queue one per
 feature. The feature is created and left stopped instead, with a toast saying
 why; `c` starts it.
 
-Stopping a feature also closes the editor AMF opened for it, and the language
-servers under it — usually the largest thing the feature was holding. AMF only
+Stopping a feature also closes the editor AIW opened for it, and the language
+servers under it — usually the largest thing the feature was holding. AIW only
 closes a window it opened itself and can still identify; anything else it
 reports as left alone. Under WSL, where `code` hands off to the Windows side,
-there is no local window for AMF to own, so it always reports a skip.
+there is no local window for AIW to own, so it always reports a skip.
 
 Press `z` to list dormant features — idle *and* unattended — with per-row stop,
 close-editor, delete, and open.
 
 ## Configuration
 
-AMF creates its global configuration at `~/.config/amf/config.json`. A project
-can add `amf.json` at its repository root; project settings override
+AIW creates its global configuration at `~/.config/ai_workstation/config.json`. A project
+can add `aiw.json` at its repository root; project settings override
 matching global settings.
 
 From an embedded session, press `Ctrl+Space`, then `c` to open the configuration
@@ -679,7 +662,7 @@ wizard. It covers the common customizations, including:
 - plan interview questions; and
 - key remapping.
 
-Use `T` on the dashboard to choose an AMF theme. If your terminal does not have
+Use `T` on the dashboard to choose an AIW theme. If your terminal does not have
 a Nerd Font, enable ASCII fallbacks:
 
 ```json
@@ -688,8 +671,8 @@ a Nerd Font, enable ASCII fallbacks:
 }
 ```
 
-AMF stores its projects, features, saved prompts, and other application state
-in `~/.config/amf/amf.db`.
+AIW stores its projects, features, saved prompts, and other application state
+in `~/.config/ai_workstation/aiw.db`.
 
 These settings govern the resource guards described above:
 
@@ -717,7 +700,7 @@ This setting governs how long a needs-attention state stays on the dashboard:
 }
 ```
 
-A question nobody has answered for this long stops being news, so AMF drops it
+A question nobody has answered for this long stops being news, so AIW drops it
 back to plain idle and the session leaves the `i` list. `0` keeps states up
 until the agent produces output again. Ageing out does not stop or change the
 session, and a waiting session still counts toward `max_concurrent_agents` and
@@ -731,8 +714,8 @@ ticket, the interview fetches it and treats its contents as part of the
 brief, so you don't have to paste it in. This works only when the interview
 runs on Claude. Other harnesses ignore the setting and log that they did.
 
-This is a **global-only** setting in `~/.config/amf/config.json`. A
-repository's `amf.json` can't turn it on, because MCP servers run programs.
+This is a **global-only** setting in `~/.config/ai_workstation/config.json`. A
+repository's `aiw.json` can't turn it on, because MCP servers run programs.
 
 **claude.ai connectors** (tools named `mcp__claude_ai_<Name>__…`) and
 servers you added with `claude mcp add` load automatically. You only list
@@ -775,7 +758,7 @@ so tickets from either workspace can be read.
 ```json
 {
   "plan_interview_mcp": {
-    "config": "~/.config/amf/plan-mcp.json",
+    "config": "~/.config/ai_workstation/plan-mcp.json",
     "allowed_tools": ["mcp__linear__get_issue"]
   }
 }
@@ -800,13 +783,13 @@ listed MCP tools. Directed revisions and isolated investigations don't use
 them. The interview still can't edit files or run shell commands, and the
 repository's own Claude settings, hooks, `.mcp.json` servers, `CLAUDE.md`,
 skills, and subagents are not loaded (the interview can still read those
-files, like any other file in the repository). AMF passes `--setting-sources ""` for that, plus
+files, like any other file in the repository). AIW passes `--setting-sources ""` for that, plus
 `MCP_CONNECTION_NONBLOCKING=false` so a run waits for claude.ai connectors
 instead of sometimes starting without them. If a tool name or the config
 file is invalid, the interview runs without MCP and shows why.
 
-To test a setup outside AMF, run the same command the interview uses from
-the feature's directory. Like AMF, it sends the prompt on stdin: a prompt
+To test a setup outside AIW, run the same command the interview uses from
+the feature's directory. Like AIW, it sends the prompt on stdin: a prompt
 argument after `--allowedTools` can be read as another tool name. Add
 `--mcp-config <path>` before `--allowedTools` if you set `config`, and
 separate several tools with commas.
@@ -821,23 +804,23 @@ echo "Fetch Asana task 1201234567890 and summarize it" |
 
 ### Built-in customization skills
 
-AMF injects a small set of skills into Claude Code, Codex, and OpenCode feature
-workspaces so the agent can safely customize the project-local AMF config for
-you. Ask the agent to use `amf:configure` to explain the current setup,
-`amf:add-session` to add a dev server or other persistent command,
-`amf:add-hook` to automate feature lifecycle events, `amf:add-preset` to create
-a reusable feature setup, or `amf:add-prompt` to add a shared prompt template.
+AIW injects a small set of skills into Claude Code and Codex feature
+workspaces so the agent can safely customize the project-local AIW config for
+you. Ask the agent to use `aiw:configure` to explain the current setup,
+`aiw:add-session` to add a dev server or other persistent command,
+`aiw:add-hook` to automate feature lifecycle events, `aiw:add-preset` to create
+a reusable feature setup, or `aiw:add-prompt` to add a shared prompt template.
 You can invoke a skill by name or simply describe the customization you want.
 
 ## Automation
 
-A running AMF instance accepts structured commands for creating projects and
+A running AIW instance accepts structured commands for creating projects and
 features without scripting the TUI:
 
 ```bash
-amf automation create-project --file request.json
-amf automation create-feature --file request.json
-amf automation create-batch-features --file request.json
+aiw automation create-project --file request.json
+aiw automation create-feature --file request.json
+aiw automation create-batch-features --file request.json
 ```
 
 See the [automation guide](docs/automation/README.md) for request templates,
@@ -845,21 +828,19 @@ examples, dry runs, and response formats.
 
 ## Troubleshooting
 
-- Run `amf doctor` for a read-only report on what AMF is putting on the
+- Run `aiw doctor` for a read-only report on what AIW is putting on the
   machine: agents against your limit, editor windows open alongside them,
-  memory and swap, `amf-*` tmux sessions and worktrees with no matching
+  memory and swap, `aiw-*` tmux sessions and worktrees with no matching
   feature, editors still running for features you stopped, and any project
-  still keeping config at the legacy `.amf/config.json` path, and whether a
-  phone can reach AMF Remote over HTTPS. `--json` emits
+  configured only by an AMF `amf.json` (read until it has its own `aiw.json`), plus a line
+  confirming AIW makes no network connections itself. `--json` emits
   the same findings for scripting. It changes nothing and always exits `0`.
-- Press `D` on the dashboard to view AMF's debug log. The same log is available
-  at `~/.local/state/amf/debug.log`.
+- Press `D` on the dashboard to view AIW's debug log. The same log is available
+  at `~/.local/state/ai_workstation/debug.log`.
 - If icons render incorrectly, set `"nerd_font": false` in the global config.
 - If an agent does not appear during feature creation, press `A` and confirm
   that its CLI is installed and enabled.
-- If an old AMF installation cannot run `amf upgrade`, install the latest
-  release bundle once and then use the built-in upgrader for future releases.
 
 ## License
 
-AMF is released under the [MIT License](LICENSE).
+AIW is released under the [MIT License](LICENSE).

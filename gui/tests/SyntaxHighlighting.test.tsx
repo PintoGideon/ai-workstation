@@ -146,7 +146,7 @@ it("refetches the diff after an install so the file gains colours", async () => 
   render(<QueryClientProvider client={client}><DiffPanel target={diffView.target} onClose={vi.fn()} /></QueryClientProvider>);
   fireEvent.click(await screen.findByRole("button", { name: "Install Python parser…" }));
   fireEvent.click(screen.getByRole("button", { name: "Install parser" }));
-  await screen.findByText(/Installing the Python parser/);
+  await screen.findByText(/Downloading \(git clone\) and building the Python parser/);
   await act(async () => { status = { ...status, running: false, message: "Installed Python tree-sitter parser", completed: 1 }; });
   await waitFor(() => expect(codeCell("+print(1)")?.querySelector(".syn-function-builtin")?.textContent).toBe("print"), { timeout: 3000 });
   expect(loads).toBe(2);

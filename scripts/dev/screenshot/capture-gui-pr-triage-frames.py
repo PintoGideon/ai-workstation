@@ -168,8 +168,8 @@ def choose_comment(author_prefix):
     evaluate(f'Array.from(document.querySelectorAll(".pr-comment")).find(b=>b.textContent.startsWith({json.dumps(author_prefix)})).click()')
 
 
-state = pathlib.Path(os.environ["AMF_GUI_GH_STATE"])
-calls_path = pathlib.Path(os.environ["AMF_GUI_AI_CALLS"])
+state = pathlib.Path(os.environ["AIW_GUI_GH_STATE"])
+calls_path = pathlib.Path(os.environ["AIW_GUI_AI_CALLS"])
 
 
 def ai_calls():
@@ -198,7 +198,7 @@ try:
     evaluate('document.querySelector(".pr-entry").click()')
     wait('!!document.querySelector(".pr-detail")')
     idle()
-    capture("002-review-thread.png", "The shared fetch normalizes inline comments, a changes-requested review summary and a bot comment. The selected thread shows its windowed diff context and the AMF follow-up reply collated beneath it, with resolve, reply, investigate and local triage actions.", ["PR #12", "3 open of 5", "aria-reviews", "invoice.ts:9", "Does this round negative totals", "Looking into it before changing anything.", "via AMF", "Resolve thread…", "Investigate…", "Reply: not needed", "coverage-bot[bot]", "resolved"], 'document.querySelectorAll(".pr-comment").length===4 && document.querySelector(".pr-hunk").innerText.includes("Math.round(total * 100)")')
+    capture("002-review-thread.png", "The shared fetch normalizes inline comments, a changes-requested review summary and a bot comment. The selected thread shows its windowed diff context and the AIW follow-up reply collated beneath it, with resolve, reply, investigate and local triage actions.", ["PR #12", "3 open of 5", "aria-reviews", "invoice.ts:9", "Does this round negative totals", "Looking into it before changing anything.", "via AIW", "Resolve thread…", "Investigate…", "Reply: not needed", "coverage-bot[bot]", "resolved"], 'document.querySelectorAll(".pr-comment").length===4 && document.querySelector(".pr-hunk").innerText.includes("Math.round(total * 100)")')
     assert ai_calls() == [] and gh_writes() == []
 
     click("Investigate…")
@@ -224,7 +224,7 @@ try:
     click("Review reply…")
     wait('!!document.querySelector(".pr-posted")')
     idle()
-    capture("005-reply-confirmation.png", "Replying is two explicit steps. The editable draft is seeded from the investigation; reviewing it shows where it will post and the exact body, including AMF's attribution footer. Nothing has been sent to GitHub.", ["Reply in the inline review thread on PR #12", "From a read-only investigation of this comment", "\u2014 posted via AMF", "Post reply to GitHub", "This writes to GitHub as your gh account"])
+    capture("005-reply-confirmation.png", "Replying is two explicit steps. The editable draft is seeded from the investigation; reviewing it shows where it will post and the exact body, including AIW's attribution footer. Nothing has been sent to GitHub.", ["Reply in the inline review thread on PR #12", "From a read-only investigation of this comment", "\u2014 posted via AIW", "Post reply to GitHub", "This writes to GitHub as your gh account"])
     assert gh_writes() == []
 
     (state / "head.txt").write_text("feed" + "1" * 36 + "\n")

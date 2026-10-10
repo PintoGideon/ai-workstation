@@ -130,8 +130,8 @@ jobs:
 
       - name: Package release bundle
         run: |
-          src="target/${{ matrix.target }}/release/amf"
-          dst="dist/amf-${{ matrix.target }}.tar.gz"
+          src="target/${{ matrix.target }}/release/aiw"
+          dst="dist/aiw-${{ matrix.target }}.tar.gz"
           mkdir -p dist
           strip "$src" 2>/dev/null || true
           bash scripts/dev/package-release-bundle.sh "${{ matrix.target }}" "$src" "$dst"
@@ -139,8 +139,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: amf-${{ matrix.target }}
-          path: dist/amf-${{ matrix.target }}.tar.gz
+          name: aiw-${{ matrix.target }}
+          path: dist/aiw-${{ matrix.target }}.tar.gz
           if-no-files-found: error
 
   build-gui:
@@ -168,7 +168,7 @@ jobs:
             bundles: deb,appimage
             deb_arch: arm64
             appimage_arch: aarch64
-          # Apple Silicon only, matching the amf macOS build.
+          # Apple Silicon only, matching the aiw macOS build.
           - target: aarch64-apple-darwin
             runner: macos-latest
             bundles: app,dmg
@@ -233,9 +233,9 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
           cp target/release/bundle/deb/*_"${version}"_${{ matrix.deb_arch }}.deb \
-            dist/amf-gui-${{ matrix.target }}.deb
+            dist/aiw-gui-${{ matrix.target }}.deb
           cp target/release/bundle/appimage/*_"${version}"_${{ matrix.appimage_arch }}.AppImage \
-            dist/amf-gui-${{ matrix.target }}.AppImage
+            dist/aiw-gui-${{ matrix.target }}.AppImage
 
       - name: Collect macOS disk image
         if: runner.os == 'macOS'
@@ -243,12 +243,12 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
           cp target/release/bundle/dmg/*_"${version}"_${{ matrix.dmg_arch }}.dmg \
-            dist/amf-gui-${{ matrix.target }}.dmg
+            dist/aiw-gui-${{ matrix.target }}.dmg
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: amf-gui-${{ matrix.target }}
+          name: aiw-gui-${{ matrix.target }}
           path: dist/*
           if-no-files-found: error
 

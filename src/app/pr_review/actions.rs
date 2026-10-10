@@ -5,7 +5,7 @@ use anyhow::Result;
 
 /// Append the provider-neutral reply-draft handoff to the exact prompt shown
 /// in the fix confirmation dialog. Every built-in harness can run the hidden
-/// `amf reply-draft` CLI; the body travels over stdin and the command turns it
+/// `aiw reply-draft` CLI; the body travels over stdin and the command turns it
 /// into structured IPC, avoiding brittle terminal-output scraping.
 pub(crate) fn with_reply_draft_handoff(
     mut prompt: String,
@@ -23,17 +23,17 @@ pub(crate) fn with_reply_draft_handoff(
     prompt.push_str(
         "\n\nAfter implementing and verifying each fix, draft a concise reviewer-facing \
          reply explaining what changed and any relevant validation. Do not post \
-         replies to GitHub yourself. Return each draft to AMF by passing only the \
+         replies to GitHub yourself. Return each draft to AIW by passing only the \
          reply text on stdin to its matching command. Do not include a commit \
-         hash; AMF will add the best-matching commit reference:",
+         hash; AIW will add the best-matching commit reference:",
     );
     for request in requests {
         prompt.push_str(&format!(
             "\n\nComment ID {comment_id}:\n\
-             amf reply-draft --pr-number {pr_number} --comment-id {comment_id} \
-             --request-id {request_id} <<'AMF_REPLY'\n\
+             aiw reply-draft --pr-number {pr_number} --comment-id {comment_id} \
+             --request-id {request_id} <<'AIW_REPLY'\n\
              <concise reply text>\n\
-             AMF_REPLY",
+             AIW_REPLY",
             comment_id = request.comment_id,
             request_id = request.request_id,
         ));
@@ -165,7 +165,7 @@ impl App {
         match selected_actionable {
             Some(true) => {}
             Some(false) => {
-                self.message = Some("AMF follow-up replies are shown for context only".to_string());
+                self.message = Some("AIW follow-up replies are shown for context only".to_string());
                 return;
             }
             None => {
@@ -282,7 +282,7 @@ impl App {
             return;
         };
         if !actionable {
-            self.message = Some("AMF follow-up replies cannot be batched as fixes".to_string());
+            self.message = Some("AIW follow-up replies cannot be batched as fixes".to_string());
             return;
         }
         let AppMode::PrReview(state) = &mut self.mode else {

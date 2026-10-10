@@ -1,5 +1,7 @@
 mod dashboard;
 mod dialogs;
+pub(crate) mod fork_chrome; // FORK: G11 dashboard chrome
+mod fork_split; // FORK: split view
 pub mod header;
 pub(crate) mod list;
 pub mod pane;
@@ -25,6 +27,11 @@ pub(crate) use pane::viewing_main_width;
 pub(crate) use toast::draw_toasts;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
+    // FORK: split view draws the whole screen itself.
+    if matches!(app.mode, crate::app::AppMode::SplitView(_)) {
+        fork_split::draw(frame, app);
+        return;
+    }
     dashboard::draw(frame, app);
 }
 
@@ -66,3 +73,7 @@ pub(crate) fn dialog_rect(viewport: Rect, width: u16, height: u16) -> Rect {
 
 #[cfg(test)]
 mod usability_tests;
+
+// FORK: dashboard frame benchmark (G11 budget, DESIGN.md §12).
+#[cfg(test)]
+pub(crate) mod fork_bench;

@@ -10,7 +10,7 @@
 ## Why / problem
 
 The config wizard can now remap a fixed list of dashboard actions, but
-the rest of AMF still has hardcoded keys. The most visible gap is the
+the rest of AIW still has hardcoded keys. The most visible gap is the
 view-mode leader menu: commands such as steering, diff viewer, session
 switcher, sidebar toggles, bookmarks, and remote-control helpers cannot
 be customized without changing code.

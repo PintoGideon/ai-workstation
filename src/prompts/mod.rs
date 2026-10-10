@@ -1,4 +1,4 @@
-//! Central registry of every headless AI prompt AMF sends.
+//! Central registry of every headless AI prompt AIW sends.
 //!
 //! Historically each headless call site (`app/plan_interview.rs`,
 //! `app/learning.rs`, `app/review.rs`, `app/ai_review.rs`, `app/pr_review.rs`,
@@ -6,7 +6,7 @@
 //! module is the single place those templates live, so they can be listed,
 //! displayed, and overridden.
 //!
-//! Task boundaries (see `AMF_PLAN.md`):
+//! Task boundaries (see `AIW_PLAN.md`):
 //! - This file: stable [`PromptId`]s, the built-in default template text
 //!   (in [`defaults`]), the placeholder names each expects, and room for
 //!   optional per-harness default variants.
@@ -37,7 +37,7 @@ pub use resolve::{
 use crate::project::AgentKind;
 
 /// Stable identifier for one headless prompt. The [`PromptId::as_str`] form is
-/// the key used for SQLite override rows and `.amf/prompts/` file names, so it
+/// the key used for SQLite override rows and `.aiw/prompts/` file names, so it
 /// must never change for an existing prompt (renaming orphans committed
 /// overrides).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -133,7 +133,7 @@ impl PromptId {
     ];
 
     /// The stable string key. Used verbatim as the SQLite `prompt_id` and the
-    /// `.amf/prompts/` file stem — do not change for an existing prompt.
+    /// `.aiw/prompts/` file stem — do not change for an existing prompt.
     pub fn as_str(self) -> &'static str {
         match self {
             PromptId::ModelAnalysis => "model_analysis.recommend",
@@ -515,7 +515,7 @@ mod tests {
 
     #[test]
     fn batched_review_prompt_keys_are_stable() {
-        // These are written to override rows and `amf.json`; a rename orphans
+        // These are written to override rows and `aiw.json`; a rename orphans
         // committed overrides.
         for (id, key) in [
             (PromptId::ReviewBatch, "review.batch"),

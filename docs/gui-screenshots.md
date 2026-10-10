@@ -1,10 +1,9 @@
 # Viewing screenshots in the GUI
 
-PR Triage and PR Review show images inline in the **PR description**, selected
-comment and thread replies. Markdown images, reference images and GitHub's HTML
-`<img>` upload markup render in their original position. Click an image to
-open a larger view with fit, original size, zoom and pan. Closing it preserves
-your selected comment and unsent reply. Failed images have an inline retry.
+PR Triage and PR Review show the **PR description**, selected comment and
+thread replies. AIW (this fork) downloads no images itself: an image in PR
+Markdown is shown as a placeholder with a button that opens it in your browser
+(see [NO_CLOUD.md](../NO_CLOUD.md)).
 
 PR links open in your browser. Reading a comment does not build a separate
 image gallery or automatically download Actions artifacts or linked galleries.
@@ -38,19 +37,6 @@ screenshots**. Cleanup also remains accessible after the feature is gone. A
 partial removal can be retried. Restart the producing agent after cleanup to
 receive a fresh destination.
 
-PNG, JPEG, WebP and GIF are supported; animations show their first frame. SVG
-and HTML galleries do not render in the viewer. GitHub's HTML image markup is
-supported when it references a supported image. Gallery links open in your
-browser using its authentication. Private attachments are retrieved as images.
-
-GitHub CLI authentication is reused for GitHub sources. If an uploaded image
-returns an HTML page or fails to download, AMF asks GitHub's authenticated API
-for a fresh image URL and retries automatically. Private attachment and
-artifact support is implemented but **live authenticated private-source
-validation is still pending**. GitHub Enterprise hosts are currently unsupported.
-Use **Check access** beside a failed PR image to check AMF's GitHub account,
-access to the current PR, and retrieval of that image separately. The check
-uses the existing CLI credentials and reports no tokens or signed URLs.
-Images, archives and history are bounded; source errors and limit notices stay
-visible. See [coverage and acceptance](development/gui-screenshot-viewer.md) for
-verified cases and the native check command.
+PNG, JPEG, WebP and GIF are supported for local validation screenshots;
+animations show their first frame. AIW's GitHub image and Actions-artifact
+downloader (and its **Check access** button) is not part of AIW.

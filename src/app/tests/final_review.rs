@@ -67,7 +67,7 @@ fn store_with_review_project(repo: &std::path::Path) -> ProjectStore {
         branch: "feat".to_string(),
         workdir: repo.to_path_buf(),
         is_worktree: false,
-        tmux_session: "amf-feat".to_string(),
+        tmux_session: "aiw-feat".to_string(),
         sessions: vec![],
         collapsed: false,
         mode: VibeMode::default(),
@@ -1584,8 +1584,8 @@ fn a_pr_scope_shows_only_the_prs_changes_never_the_current_feature_branch() {
     let repo = TempDir::new().unwrap();
     let dir = repo.path();
     git_in(dir, &["init", "--quiet", "--initial-branch=main"]);
-    git_in(dir, &["config", "user.name", "AMF Test"]);
-    git_in(dir, &["config", "user.email", "amf@example.com"]);
+    git_in(dir, &["config", "user.name", "AIW Test"]);
+    git_in(dir, &["config", "user.email", "aiw@example.com"]);
     std::fs::write(dir.join("shared.rs"), "fn shared() {}\n").unwrap();
     git_in(dir, &["add", "shared.rs"]);
     git_in(dir, &["commit", "--quiet", "-m", "initial"]);

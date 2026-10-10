@@ -1,7 +1,7 @@
 # Learning Mode, the failure paths
 
-Captured from an isolated, throwaway AMF instance
-(`scripts/dev/screenshot/amf-capture.sh`, scenario
+Captured from an isolated, throwaway AIW instance
+(`scripts/dev/screenshot/aiw-capture.sh`, scenario
 `scripts/dev/screenshot/scenarios/learning-mode-errors.txt`) at `140x40`.
 
 Every frame is a message that previously either said only what failed, or said

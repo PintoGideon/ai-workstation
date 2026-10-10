@@ -13,10 +13,10 @@ import {
 import { terminalAppearance } from "./themes";
 
 // Installed Nerd Fonts first, then common coding fonts. The bundled
-// "AMF Symbols" fonts (styles.css) supply Nerd Font icons, powerline and
+// "AIW Symbols" fonts (styles.css) supply Nerd Font icons, powerline and
 // technical symbols to whichever of those lacks them, so agent status lines
 // and tool output don't render as boxes.
-const SYMBOL_FONTS = ["AMF Symbols", "AMF Symbols 2", "AMF Symbols 3"];
+const SYMBOL_FONTS = ["AIW Symbols", "AIW Symbols 2", "AIW Symbols 3"];
 const SYMBOL_SAMPLE = "\ue0b0\u23bf\u23f5";
 
 const TERMINAL_FONT = [
@@ -120,7 +120,7 @@ export default function TerminalPane({ target, onReadyChange }: {
       term.options.minimumContrastRatio = appearance.minimumContrastRatio;
     };
     darkMode?.addEventListener("change", updateTheme);
-    window.addEventListener("amf-theme-change", updateTheme);
+    window.addEventListener("aiw-theme-change", updateTheme);
     const fit = new FitAddon();
     term.loadAddon(fit);
     if (containerRef.current) {
@@ -392,7 +392,7 @@ export default function TerminalPane({ target, onReadyChange }: {
     return () => {
       disposed = true;
       darkMode?.removeEventListener("change", updateTheme);
-      window.removeEventListener("amf-theme-change", updateTheme);
+      window.removeEventListener("aiw-theme-change", updateTheme);
       jumpToLatest.current = () => {};
       clearTimeout(noticeTimer);
       onReadyChange?.(false);

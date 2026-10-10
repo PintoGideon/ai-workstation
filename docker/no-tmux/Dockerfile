@@ -1,11 +1,11 @@
 FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    HOME=/home/amf \
+    HOME=/home/aiw \
     LANG=C.UTF-8 \
     TERM=xterm-256color \
     COLORTERM=truecolor \
-    AMF_INSTALL_ROOT=/opt/amf
+    AIW_INSTALL_ROOT=/opt/aiw
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -22,20 +22,20 @@ RUN apt-get update \
     && npm install -g @anthropic-ai/claude-code \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --shell /bin/bash amf \
-    && mkdir -p /opt/amf \
-    && chown -R amf:amf /opt/amf /home/amf
+RUN useradd --create-home --shell /bin/bash aiw \
+    && mkdir -p /opt/aiw \
+    && chown -R aiw:aiw /opt/aiw /home/aiw
 
-WORKDIR /home/amf
+WORKDIR /home/aiw
 
-COPY docker/no-tmux/install-amf-release.sh /usr/local/bin/amf-install-release
-COPY docker/no-tmux/entrypoint.sh /usr/local/bin/amf-no-tmux-entrypoint
+COPY docker/no-tmux/install-aiw-release.sh /usr/local/bin/aiw-install-release
+COPY docker/no-tmux/entrypoint.sh /usr/local/bin/aiw-no-tmux-entrypoint
 
 RUN chmod 755 \
-        /usr/local/bin/amf-install-release \
-        /usr/local/bin/amf-no-tmux-entrypoint
+        /usr/local/bin/aiw-install-release \
+        /usr/local/bin/aiw-no-tmux-entrypoint
 
-USER amf
+USER aiw
 
-ENTRYPOINT ["/usr/local/bin/amf-no-tmux-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/aiw-no-tmux-entrypoint"]
 CMD ["bash"]

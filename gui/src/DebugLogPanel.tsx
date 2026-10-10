@@ -22,7 +22,7 @@ export default function DebugLogPanel({ onClose }: { onClose: () => void }) {
     && (!needle || `${entry.context}\n${entry.message}`.toLocaleLowerCase().includes(needle))) ?? [];
 
   return <Modal label="Debug log" title="Debug log" size="xl" onClose={onClose}
-    subtitle="Recent AMF activity, oldest first. Refresh to load new entries."
+    subtitle="Recent AIW activity, oldest first. Refresh to load new entries."
     footer={<button className="btn btn-primary" onClick={onClose}>Close</button>}>
     <div className="row debug-log-toolbar">
       <label>Level <select value={level} onChange={(event) => setLevel(event.target.value as LogLevel | "")}>

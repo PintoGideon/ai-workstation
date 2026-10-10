@@ -12,7 +12,7 @@
 //!   ownership rules, so nothing here signals a process itself. Like the TUI,
 //!   opening VS Code on a stopped feature starts the feature first, which is
 //!   what ties the window's cleanup to the feature's stop.
-//! - **Custom sessions** come from the project's effective `amf.json` (the
+//! - **Custom sessions** come from the project's effective `aiw.json` (the
 //!   project file merged with the global config, as the picker reads it).
 //!   The `pre_check` runs first, without the GUI lock held, and a failure is
 //!   returned as an outcome with the command's output rather than an error,
@@ -69,7 +69,7 @@ pub struct NewSessionOptions {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CustomSessionSource {
-    /// The project's `amf.json`.
+    /// The project's `aiw.json`.
     Project,
     /// The global config, merged in under a name the project does not use.
     Global,
@@ -139,27 +139,27 @@ pub struct OpenVscodeResponse {
 pub enum FeatureEditorState {
     /// Launched; the window process has not been identified yet.
     Opening,
-    /// AMF opened this window and can still identify its process.
+    /// AIW opened this window and can still identify its process.
     Open,
-    /// Handed to a VS Code instance AMF did not start (or a remote window
-    /// with no local process): AMF never closes it.
+    /// Handed to a VS Code instance AIW did not start (or a remote window
+    /// with no local process): AIW never closes it.
     NotOwned,
 }
 
-/// One editor window AMF launched for a feature.
+/// One editor window AIW launched for a feature.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct FeatureEditor {
     pub id: String,
     pub name: String,
     pub state: FeatureEditorState,
-    /// Stopping the feature closes it (`kill_editor_on_stop`, and AMF's).
+    /// Stopping the feature closes it (`kill_editor_on_stop`, and AIW's).
     pub closes_with_feature: bool,
     pub started_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CloseEditorsResponse {
-    /// Nothing AMF could close was open any more.
+    /// Nothing AIW could close was open any more.
     pub already_closed: bool,
     pub editors: EditorCleanupView,
     pub message: String,
@@ -535,7 +535,7 @@ impl GuiHandle {
         })
     }
 
-    /// Close the VS Code windows AMF opened for a feature: the TUI dormant
+    /// Close the VS Code windows AIW opened for a feature: the TUI dormant
     /// list's `e`, through `App::kill_tracked_editors` and its ownership
     /// rules. `seen` is the editor rows the user confirmed; a window opened
     /// since then is not closed on the strength of an older list.
@@ -569,7 +569,7 @@ impl GuiHandle {
                 editors: EditorCleanupView::from(
                     &crate::app::editor_ops::EditorKillReport::default(),
                 ),
-                message: format!("No VS Code window AMF can close is open for '{name}'"),
+                message: format!("No VS Code window AIW can close is open for '{name}'"),
             });
         }
         let report = app.kill_tracked_editors(&feature_id);
@@ -583,7 +583,7 @@ impl GuiHandle {
                     .map(|first| first.to_uppercase().chain(chars).collect())
                     .unwrap_or_default()
             })
-            .unwrap_or_else(|| format!("No VS Code window AMF can close is open for '{name}'"));
+            .unwrap_or_else(|| format!("No VS Code window AIW can close is open for '{name}'"));
         Ok(CloseEditorsResponse {
             already_closed: false,
             editors: EditorCleanupView::from(&report),

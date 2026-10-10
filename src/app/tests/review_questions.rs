@@ -122,9 +122,9 @@ fn commit(path: &Path) {
         path,
         &[
             "-c",
-            "user.name=AMF",
+            "user.name=AIW",
             "-c",
-            "user.email=amf@example.com",
+            "user.email=aiw@example.com",
             "commit",
             "-m",
             "fixture",
@@ -188,12 +188,7 @@ fn ask(app: &mut App) {
 fn unchanged_helper_discovery_on_all_surfaces_and_harnesses_preserves_review_position() {
     let fixture = Fixture::new();
     for surface in 0..3 {
-        for harness in [
-            AgentKind::Claude,
-            AgentKind::Codex,
-            AgentKind::Opencode,
-            AgentKind::Pi,
-        ] {
+        for harness in [AgentKind::Claude, AgentKind::Codex, AgentKind::Pi] {
             let mut app = fixture.app();
             if surface == 1 {
                 fixture.manual(&mut app);
@@ -642,7 +637,7 @@ fn complete_prompt_context_and_feature_project_global_builtin_precedence() {
     let prepared = prepare(&context, local_ai_diff).unwrap();
     let tokens = context.tokens(&prepared, "question", "earlier", "answer");
     let db_dir = TempDir::new().unwrap();
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     for id in [PromptId::ReviewQuestion, PromptId::ReviewQuestionDraft] {
         let spec = crate::prompts::spec(id);
         for placeholder in spec.placeholders {
@@ -687,7 +682,7 @@ fn complete_prompt_context_and_feature_project_global_builtin_precedence() {
             "global question"
         );
         std::fs::write(
-            fixture.dir.path().join("amf.json"),
+            fixture.dir.path().join("aiw.json"),
             serde_json::json!({"prompt_overrides": {id.as_str(): {"template": "project {{question}}"}}})
                 .to_string(),
         )
@@ -1075,7 +1070,7 @@ fn a_failed_question_shows_its_reason_where_the_answer_would_be() {
 }
 
 #[test]
-fn amf_managed_blocks_do_not_count_as_local_changes_but_real_edits_do() {
+fn aiw_managed_blocks_do_not_count_as_local_changes_but_real_edits_do() {
     for surface in [1, 2] {
         let fixture = Fixture::new();
         let dir = fixture.dir.path();
@@ -1085,12 +1080,12 @@ fn amf_managed_blocks_do_not_count_as_local_changes_but_real_edits_do() {
         } else {
             fixture.ai(&mut app);
         }
-        // A tracked AGENTS.md gains AMF's Plan Mode block (Codex/OpenCode/Pi).
+        // A tracked AGENTS.md gains AIW's Plan Mode block (Codex/Pi).
         crate::app::setup::ensure_plan_mode_instructions(dir, &AgentKind::Codex, true);
-        // An untracked file that is nothing but an AMF block.
+        // An untracked file that is nothing but an AIW block.
         std::fs::write(
             dir.join("CLAUDE.local.md"),
-            "<!-- AMF:review-instructions:begin -->\n\nReview.\n\n<!-- AMF:review-instructions:end -->\n",
+            "<!-- AIW:review-instructions:begin -->\n\nReview.\n\n<!-- AIW:review-instructions:end -->\n",
         )
         .unwrap();
         assert!(!git(dir, &["status", "--porcelain"]).unwrap().is_empty());

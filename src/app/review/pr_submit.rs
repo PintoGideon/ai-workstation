@@ -151,7 +151,7 @@ fn folded_line(path: &str, comment: &LineComment, why: &str) -> String {
 }
 
 /// Why `event` can't be posted with `submission`, if it can't. Checked
-/// before posting, so the answer is AMF's plain one rather than GitHub's 422.
+/// before posting, so the answer is AIW's plain one rather than GitHub's 422.
 pub(crate) fn submission_problem(
     event: PrReviewEvent,
     submission: &PrSubmission,

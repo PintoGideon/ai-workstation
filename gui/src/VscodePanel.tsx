@@ -8,19 +8,19 @@ import "./sessions.css";
 const STATE_LABEL: Record<FeatureEditorState, string> = {
   open: "Open",
   opening: "Opening",
-  not_owned: "Not AMF's",
+  not_owned: "Not AIW's",
 };
 
 function explain(editor: FeatureEditor): string {
   switch (editor.state) {
     case "open":
       return editor.closes_with_feature
-        ? "AMF opened this window and closes it, with its language servers, when the feature stops."
-        : "AMF opened this window. Closing editors on stop is off (kill_editor_on_stop), so stopping the feature leaves it open.";
+        ? "AIW opened this window and closes it, with its language servers, when the feature stops."
+        : "AIW opened this window. Closing editors on stop is off (kill_editor_on_stop), so stopping the feature leaves it open.";
     case "opening":
-      return "Waiting for the window to appear so AMF can identify it. A window that cannot be identified on this machine is removed from this list after the lookup finishes.";
+      return "Waiting for the window to appear so AIW can identify it. A window that cannot be identified on this machine is removed from this list after the lookup finishes.";
     case "not_owned":
-      return "VS Code handed the folder to a window AMF did not open, or the window is not on this machine. AMF never closes it.";
+      return "VS Code handed the folder to a window AIW did not open, or the window is not on this machine. AIW never closes it.";
   }
 }
 
@@ -28,7 +28,7 @@ const when = (iso: string) => new Date(iso).toLocaleString(undefined, {
   month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
 });
 
-/** The VS Code tab: the windows AMF launched for this feature, from the
+/** The VS Code tab: the windows AIW launched for this feature, from the
  *  shared `launched_editors` record. There is no tmux pane to attach. */
 export default function VscodePanel({
   target,
@@ -81,7 +81,7 @@ export default function VscodePanel({
         </button>
         <button className="btn btn-secondary" disabled={closable.length === 0 || closing || confirming !== null}
           onClick={() => { setReport(null); setConfirming(editors.map((editor) => editor.id)); }}>
-          <Icon name="x" size={12} /> Close windows AMF opened
+          <Icon name="x" size={12} /> Close windows AIW opened
         </button>
       </div>
 
@@ -91,7 +91,7 @@ export default function VscodePanel({
           <div>
             <p><strong>Close {closable.length === 1 ? "this VS Code window" : `these ${closable.length} VS Code windows`}?</strong></p>
             <p>
-              Unsaved changes in them are lost. A window AMF did not open, one whose process now belongs
+              Unsaved changes in them are lost. A window AIW did not open, one whose process now belongs
               to something else, or one sharing its VS Code instance with other windows is left running.
             </p>
             <div className="row">

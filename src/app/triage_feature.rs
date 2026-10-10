@@ -7,7 +7,7 @@
 //! permissions. If the PR was built in SuperVibe and you want review fixes
 //! applied under Vibeless supervision, there was no way to get it.
 //!
-//! This module adds a third target: an isolated, worktree-backed AMF feature
+//! This module adds a third target: an isolated, worktree-backed AIW feature
 //! created on demand for one PR, with its harness, vibe mode, and other
 //! settings chosen independently of the source feature (optionally from a
 //! configured feature preset).
@@ -305,7 +305,14 @@ impl App {
         // would have to unwind the PR pane, and the choice-less path is what
         // the automation API already does here.
         let ext = merge_project_extension_config(&self.config.extension, &project_repo);
-        if let Some(hook) = ext.lifecycle_hooks.on_worktree_created.as_ref() {
+        // FORK: an unapproved repo-supplied hook is skipped (no dialog here).
+        let worktree_hook = self.approved_repo_hook_or_skip(
+            &project_repo,
+            crate::fork::hook_approval::HookName::WorktreeCreated,
+            ext.lifecycle_hooks.on_worktree_created.clone(),
+            &workdir,
+        );
+        if let Some(hook) = worktree_hook.as_ref() {
             let (ok, detail) = Self::run_worktree_hook_sync(hook.script(), &workdir, None);
             if !ok {
                 self.log_warn(

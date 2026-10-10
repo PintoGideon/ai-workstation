@@ -1,6 +1,6 @@
 # Re-running a plan interview
 
-Captured from an isolated AMF instance against a throwaway repository, using
+Captured from an isolated AIW instance against a throwaway repository, using
 `scripts/dev/screenshot/scenarios/plan-interview-rerun.txt`. The scenario seeds
 a project and one feature, then runs the interview on that feature a **second**
 time — so every question arrives carrying the answer behind the plan already
@@ -13,7 +13,7 @@ database during the scenario's opening `wait`, keyed by the seeded feature's
 id:
 
 ```python
-python3 - "$(ls /tmp/amf-shots-rerun/*/config/amf/amf.db)" <<'PY'
+python3 - "$(ls /tmp/aiw-shots-rerun/*/config/ai_workstation/aiw.db)" <<'PY'
 import json, sqlite3, sys
 
 conn = sqlite3.connect(sys.argv[1])

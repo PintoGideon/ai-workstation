@@ -6,10 +6,10 @@ weight = 50
 
 ## Review changes before shipping
 
-From an embedded session, press `Ctrl+Space`, then `f`. AMF presents the
+From an embedded session, press `Ctrl+Space`, then `f`. AIW presents the
 feature's diff file by file and lets you attach line comments or suggested
-changes. When you finish, AMF writes the feedback and hands it to an agent.
-With an authenticated `gh` CLI, AMF can also post the feedback to the
+changes. When you finish, AIW writes the feedback and hands it to an agent.
+With an authenticated `gh` CLI, AIW can also post the feedback to the
 branch's pull request.
 
 The optional AI co-reviewer that drafts line comments for the current file
@@ -33,8 +33,8 @@ Once that PR is merged or closed without merging, the badge switches to
 Select a feature and press `G` to open PR Triage. You can inspect review
 threads, send an individual fix prompt or, with `B`, a batched one covering
 several comments in a single agent run, reply, and mark threads done.
-Press `W` to have AMF run its own review of the PR diff. GitHub actions are
-presented for confirmation before AMF writes to the pull request.
+Press `W` to have AIW run its own review of the PR diff. GitHub actions are
+presented for confirmation before AIW writes to the pull request.
 
 <figure>
   <img src="/images/docs/pr-triage-comments.png" alt="PR Triage listing several review comments with a detail pane showing the selected comment's diff hunk and text">
@@ -49,7 +49,7 @@ verifies against the PR and repo. Press `a` on a finished investigation to
 post an editable reply, ask a follow-up, dismiss it, or keep it as a TODO.
 
 An unchanged AI-drafted reply discloses the harness, best-effort model,
-estimated tokens, and estimated cost of the session that wrote it. AMF's own
+estimated tokens, and estimated cost of the session that wrote it. AIW's own
 AI review (`W`) carries the same attribution. When several comments were
 fixed together in one `B` batch, the shared run's cost is shown in full on
 every comment it resolved, marked `combined` (`combined (3)` for a
@@ -61,17 +61,17 @@ per-file batches, reviews each on its own, and combines the findings with a
 synthesis pass. Coverage stays complete: any slice that still will not fit
 is listed rather than dropped, and the summary is prefixed with a
 "⚠ Partial coverage" note. The size threshold is a per-harness default; set
-`review_prompt_budget_tokens` in `~/.config/amf/config.json` (or per repo in
-`amf.json`) to change it, or to `0` to turn pre-send splitting off.
+`review_prompt_budget_tokens` in `~/.config/ai_workstation/config.json` (or per repo in
+`aiw.json`) to change it, or to `0` to turn pre-send splitting off.
 
 <figure>
   <img src="/images/docs/ai-review-findings.png" alt="AI Review pane listing findings with the selected finding's file, line, and diff hunk shown in the detail pane">
-  <figcaption>AMF's own AI review of a PR diff, cached so it doesn't need to run again to view.</figcaption>
+  <figcaption>AIW's own AI review of a PR diff, cached so it doesn't need to run again to view.</figcaption>
 </figure>
 
 To seed review memory from earlier reviews, open the PR picker and press
 `b`. Choose a lookback of 20, 50, 100, or all recent closed and merged pull
 requests, then press `Enter`. Press `g` in the lookback dialog to switch
-between the project's `.amf/review-memory.md` and the cross-project memory
-at `~/.config/amf/review-memory.md`; project memory is the default. This
+between the project's `.aiw/review-memory.md` and the cross-project memory
+at `~/.config/ai_workstation/review-memory.md`; project memory is the default. This
 requires authenticated `gh` and an available Claude CLI.

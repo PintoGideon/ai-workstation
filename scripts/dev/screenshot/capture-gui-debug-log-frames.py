@@ -83,7 +83,7 @@ def select(selector, value):
     assert evaluate(js) == value
 
 
-dbpath = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "amf/amf.db"
+dbpath = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "ai_workstation/aiw.db"
 with sqlite3.connect(dbpath) as db:
     db.executemany("INSERT INTO debug_log(ts,level,context,message) VALUES(?,?,?,?)", [
         ("2026-10-09T14:02:00Z", "INFO", "startup", "GUI ready for review"),

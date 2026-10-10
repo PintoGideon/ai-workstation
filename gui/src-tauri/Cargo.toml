@@ -1,7 +1,7 @@
 [package]
-name = "amf-gui"
+name = "aiw-gui"
 version = "0.1.0"
-description = "AMF GUI shell (Tauri) — additive alongside the amf TUI, sharing amf's core library"
+description = "AI Workstation desktop shell (Tauri) — alongside the aiw TUI, sharing its core library"
 edition = "2024"
 publish = false
 
@@ -10,15 +10,15 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # Path dependency on the existing TUI package's library target: see
-# AMF_PLAN.md's package-layout decision. This intentionally pulls in
+# AIW_PLAN.md's package-layout decision. This intentionally pulls in
 # ratatui/crossterm/vt100 the GUI does not use yet rather than forcing an
 # upfront presentation-free core-crate split.
-agent-mainframe = { path = "../.." }
+ai-workstation = { path = "../.." }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 
 [[bin]]
-name = "amf-gui"
+name = "aiw-gui"
 path = "src/main.rs"

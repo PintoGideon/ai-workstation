@@ -6,7 +6,7 @@ import type { FeatureEditor, NewSessionOptions } from "./sessionsApi";
 // src/automation.rs). Kept in one place so the rest of the frontend imports
 // types instead of re-declaring them per component.
 
-export type AgentSlug = "claude" | "opencode" | "codex" | "pi";
+export type AgentSlug = "claude" | "codex" | "pi" | "gemini" | "cursor"; // FORK: Gemini/Cursor
 export type ModeSlug = "vibeless" | "vibe" | "supervibe";
 export type FeatureStatus = "active" | "idle" | "stopped";
 
@@ -94,7 +94,7 @@ export interface SidebarFeature {
   thinking: boolean;
   waiting_for_input: boolean;
   pending_input: boolean;
-  /** VS Code windows AMF launched for this feature (sessionsApi). */
+  /** VS Code windows AIW launched for this feature (sessionsApi). */
   editors: FeatureEditor[];
 }
 
@@ -888,7 +888,7 @@ export interface EditorCleanup {
   killed: { name: string; processes: number }[];
   /** `deliberate` is false only for an editor that had already closed. */
   skipped: { name: string; reason: string; deliberate: boolean }[];
-  /** Windows still opening; AMF closes them once they can be identified. */
+  /** Windows still opening; AIW closes them once they can be identified. */
   pending: string[];
   summary: string | null;
 }

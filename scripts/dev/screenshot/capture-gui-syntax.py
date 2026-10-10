@@ -21,7 +21,7 @@ import urllib.request
 out = pathlib.Path(sys.argv[1]).resolve()
 out.mkdir(parents=True, exist_ok=True)
 workspace = pathlib.Path(__file__).resolve().parents[3]
-with tempfile.TemporaryDirectory(prefix="amf-gui-syntax-") as temporary:
+with tempfile.TemporaryDirectory(prefix="aiw-gui-syntax-") as temporary:
     scratch = pathlib.Path(temporary)
     with socket.socket() as inspector_socket:
         inspector_socket.bind(("127.0.0.1", 0))
@@ -29,8 +29,8 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-syntax-") as temporary:
     config = scratch / "config"
     state = scratch / "state"
     repo = scratch / "invoice-api"
-    (config / "amf").mkdir(parents=True)
-    (state / "amf").mkdir(parents=True)
+    (config / "ai_workstation").mkdir(parents=True)
+    (state / "ai_workstation").mkdir(parents=True)
     repo.mkdir()
     env = os.environ.copy()
     env.update(
@@ -42,9 +42,9 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-syntax-") as temporary:
     git_env = env | {
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "AMF demo",
+        "GIT_AUTHOR_NAME": "AIW demo",
         "GIT_AUTHOR_EMAIL": "demo@example.com",
-        "GIT_COMMITTER_NAME": "AMF demo",
+        "GIT_COMMITTER_NAME": "AIW demo",
         "GIT_COMMITTER_EMAIL": "demo@example.com",
     }
 
@@ -164,7 +164,7 @@ replicas = 2
     gui_log = (out / "gui.log").open("w")
     # Explicit opt-in permits capture beside a dev server from this checkout.
     # It serves frontend assets only; GUI IPC/SQLite remain in the scratch process.
-    reuse_frontend = os.environ.get("AMF_GUI_CAPTURE_REUSE_FRONTEND") == "1"
+    reuse_frontend = os.environ.get("AIW_GUI_CAPTURE_REUSE_FRONTEND") == "1"
     vite = None if reuse_frontend else subprocess.Popen(
         ["npm", "run", "dev"],
         cwd=workspace / "gui",
@@ -187,14 +187,14 @@ replicas = 2
         else:
             raise RuntimeError("The isolated frontend did not become ready")
         gui = subprocess.Popen(
-            [str(workspace / "target/debug/amf-gui")],
+            [str(workspace / "target/debug/aiw-gui")],
             cwd=scratch,
             env=env,
             stdout=gui_log,
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
-        dbpath = config / "amf/amf.db"
+        dbpath = config / "ai_workstation/aiw.db"
         for _ in range(60):
             if gui.poll() is not None:
                 raise RuntimeError(
@@ -227,7 +227,7 @@ replicas = 2
                     "Credit notes",
                     "credit-notes",
                     str(repo),
-                    "amf-gui-shot-unused",
+                    "aiw-gui-shot-unused",
                     "stopped",
                     stamp,
                     stamp,
@@ -243,7 +243,7 @@ replicas = 2
         subprocess.run(
             [
                 "/usr/bin/python3",
-                os.environ.get("AMF_GUI_CAPTURE_FRAMES", str(workspace / "scripts/dev/screenshot/capture-gui-syntax-frames.py")),
+                os.environ.get("AIW_GUI_CAPTURE_FRAMES", str(workspace / "scripts/dev/screenshot/capture-gui-syntax-frames.py")),
                 str(out),
                 str(gui.pid),
                 inspector_address,

@@ -70,7 +70,7 @@ impl Stream {
         let (tx, done) = mpsc::channel();
         let shared = tail.clone();
         std::thread::Builder::new()
-            .name("amf-review-check-output".into())
+            .name("aiw-review-check-output".into())
             .spawn(move || {
                 let mut buffer = [0; 8192];
                 let result = loop {

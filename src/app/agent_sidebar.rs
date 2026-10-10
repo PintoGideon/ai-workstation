@@ -7,7 +7,7 @@
 //! order, their wording and the sources each one reads stay one
 //! implementation.
 //!
-//! Most inputs come from caches that any AMF process can fill from shared
+//! Most inputs come from caches that any AIW process can fill from shared
 //! sources (the session-status collector, the background sidebar loads,
 //! Codex rollout metadata, the TODO database, usage). The rest are signals
 //! only the process that observed them knows. They arrive through
@@ -21,12 +21,6 @@ use super::{App, CodexLiveThreadState};
 use crate::context_tracking::SessionContextSnapshot;
 use crate::project::{Feature, FeatureSession, Project, SessionKind, TokenUsageSourceMatch};
 use crate::token_tracking::{TokenUsageProvider, TokenUsageSource};
-
-const SIDEBAR_PROMPT_PREVIEW_COLS: usize = 32;
-const SIDEBAR_PROMPT_PREVIEW_LINES: usize = 2;
-const SIDEBAR_SUMMARY_PREVIEW_COLS: usize = 32;
-const SIDEBAR_SUMMARY_PREVIEW_LINES: usize = 3;
-const SIDEBAR_WORK_VALUE_CHARS: usize = 28;
 
 /// The leader-key hint the TUI appends to a pending diff review's Work text.
 /// The GUI offers its own action instead and drops this line.
@@ -48,7 +42,7 @@ pub(crate) struct AgentSidebarData {
     pub work_text: Option<String>,
     pub todos_text: Option<String>,
     /// The current session's TODO-menu-originated reference, resolved from
-    /// AMF's TODO DB.
+    /// AIW's TODO DB.
     pub active_todos_text: Option<String>,
     /// Whether the *currently viewed* session itself carries a menu-launched
     /// TODO reference. `leader z` acts only on the current
@@ -111,8 +105,7 @@ impl SidebarSectionKind {
 /// The sections that have content, in display order, with each one's body
 /// text. A section with nothing to say is left out, never shown empty. The
 /// Context body is the shared indicator text
-/// (`context_display::format_context_indicator`). OpenCode puts its summary
-/// last.
+/// (`context_display::format_context_indicator`).
 pub(crate) fn sidebar_section_bodies(data: &AgentSidebarData) -> Vec<(SidebarSectionKind, String)> {
     let mut sections = Vec::new();
     let non_empty = |text: &str| !text.trim().is_empty();
@@ -147,11 +140,10 @@ pub(crate) fn sidebar_section_bodies(data: &AgentSidebarData) -> Vec<(SidebarSec
         sections.push((SidebarSectionKind::PrTriage, pr.to_string()));
     }
 
-    let is_opencode = matches!(data.agent_kind, SessionKind::Opencode);
     if let Some(work) = data.work_text.as_deref() {
         sections.push((SidebarSectionKind::Work, work.to_string()));
     }
-    if !is_opencode && non_empty(&data.summary_text) {
+    if non_empty(&data.summary_text) {
         sections.push((SidebarSectionKind::Summary, data.summary_text.clone()));
     }
     if non_empty(&data.prompt_text) {
@@ -163,9 +155,6 @@ pub(crate) fn sidebar_section_bodies(data: &AgentSidebarData) -> Vec<(SidebarSec
     if let Some(active) = data.active_todos_text.as_deref() {
         sections.push((SidebarSectionKind::ActiveTodo, active.to_string()));
     }
-    if is_opencode && non_empty(&data.summary_text) {
-        sections.push((SidebarSectionKind::Summary, data.summary_text.clone()));
-    }
     sections
 }
 
@@ -174,8 +163,9 @@ pub(crate) fn sidebar_title(agent_kind: &SessionKind) -> &'static str {
     match agent_kind {
         SessionKind::Claude => "Claude Sidebar",
         SessionKind::Codex => "Codex Sidebar",
-        SessionKind::Opencode => "Opencode Sidebar",
         SessionKind::Pi => "Pi Sidebar",
+        SessionKind::Gemini => "Gemini Sidebar", // FORK
+        SessionKind::Cursor => "Cursor Sidebar", // FORK
         _ => "Harness Sidebar",
     }
 }
@@ -412,80 +402,16 @@ impl App {
         };
 
         match kind {
-            SessionKind::Opencode => Some(self.opencode_sidebar(feature, session, runtime, common)),
             SessionKind::Claude => Some(self.claude_sidebar(feature, session, runtime, common)),
             SessionKind::Codex => Some(self.codex_sidebar(feature, session, runtime, common)),
-            SessionKind::Pi => Some(self.pi_sidebar(feature, session, runtime, common)),
+            SessionKind::Pi => {
+                Some(self.pi_sidebar(feature, session, runtime, common, SessionKind::Pi))
+            }
+            // FORK: Gemini/Cursor reuse Pi's generic (hook-fed) sidebar.
+            SessionKind::Gemini | SessionKind::Cursor => {
+                Some(self.pi_sidebar(feature, session, runtime, common, kind.clone()))
+            }
             _ => None,
-        }
-    }
-
-    fn opencode_sidebar(
-        &self,
-        feature: &Feature,
-        session: Option<&FeatureSession>,
-        runtime: &SidebarRuntime<'_>,
-        common: SidebarCommon,
-    ) -> AgentSidebarAssembly {
-        let opencode_sidebar = self.opencode_sidebar_cache.get(&feature.tmux_session);
-        let usage_line = session
-            .and_then(|session| session.status_text.as_deref())
-            .map(format_sidebar_usage)
-            .filter(|line| line != "Usage: unavailable");
-        let prompt_full = opencode_sidebar
-            .and_then(|sidebar| sidebar.latest_prompt.as_deref())
-            .or_else(|| self.latest_prompt_for_session(&feature.tmux_session));
-        let prompt_text = opencode_sidebar_prompt_text(prompt_full);
-        let work_text = opencode_sidebar_work_text(opencode_sidebar);
-        let todos_text = opencode_sidebar_todos_text(opencode_sidebar);
-        let summary_text = opencode_sidebar_summary_text(
-            runtime.summary_generating,
-            feature.summary.as_deref(),
-            opencode_sidebar,
-        );
-        let model_text = self.sidebar_model_cache.get(&feature.tmux_session).cloned();
-        let diff_review = pending_diff_review_work_text(&runtime.pending_inputs);
-        let activity_line = if diff_review.is_some() {
-            "Waiting for diff review".to_string()
-        } else if opencode_sidebar
-            .and_then(|sidebar| sidebar.pending_permission.as_ref())
-            .is_some()
-        {
-            "Waiting on permission".to_string()
-        } else if runtime.running_tool {
-            "Running tool".to_string()
-        } else if runtime.thinking {
-            "Thinking".to_string()
-        } else {
-            common.status_line
-        };
-
-        let pending_diff_review = diff_review.is_some();
-        AgentSidebarAssembly {
-            data: AgentSidebarData {
-                agent_kind: SessionKind::Opencode,
-                status_text: append_model_status_line(
-                    opencode_sidebar_status_text(activity_line, usage_line, opencode_sidebar),
-                    model_text.as_deref(),
-                ),
-                usage_text: sidebar_usage_text(self, &SessionKind::Opencode),
-                model_text,
-                prompt_text,
-                work_text: diff_review
-                    .or(work_text)
-                    .or_else(|| fallback_sidebar_work_text(runtime)),
-                todos_text,
-                active_todos_text: common.active_todos_text,
-                active_todo_affordance: common.active_todo_affordance,
-                summary_text,
-                issue_source_text: issue_source_sidebar_text(feature),
-                pr_triage_text: pr_triage_sidebar_text(self, feature, runtime),
-                plan_text: plan_sidebar_text(self, feature),
-                context_snapshot: common.context_snapshot,
-                context_hint_visible: common.context_hint_visible,
-            },
-            prompt_full: prompt_full.map(ToOwned::to_owned),
-            pending_diff_review,
         }
     }
 
@@ -615,6 +541,7 @@ impl App {
         session: Option<&FeatureSession>,
         runtime: &SidebarRuntime<'_>,
         common: SidebarCommon,
+        agent_kind: SessionKind, // FORK: shared with Gemini/Cursor
     ) -> AgentSidebarAssembly {
         let usage_line = session
             .and_then(|session| session.status_text.as_deref())
@@ -634,9 +561,9 @@ impl App {
 
         AgentSidebarAssembly {
             data: AgentSidebarData {
-                agent_kind: SessionKind::Pi,
+                usage_text: sidebar_usage_text(self, &agent_kind),
+                agent_kind,
                 status_text,
-                usage_text: sidebar_usage_text(self, &SessionKind::Pi),
                 model_text,
                 prompt_text,
                 work_text,
@@ -744,110 +671,6 @@ pub(crate) fn codex_configured_model_text() -> Option<String> {
         .map(|model| format!("Model: {model}"))
 }
 
-pub(crate) fn opencode_sidebar_status_text(
-    activity_line: String,
-    usage_line: Option<String>,
-    opencode_sidebar: Option<&crate::app::opencode_storage::OpencodeSidebarData>,
-) -> String {
-    let mut lines = vec![format!("Activity: {activity_line}")];
-    if let Some(usage_line) = usage_line {
-        lines.push(usage_line);
-    }
-    if let Some(reasoning_tokens) = opencode_sidebar
-        .and_then(|sidebar| sidebar.reasoning_tokens)
-        .filter(|tokens| *tokens > 0)
-    {
-        lines.push(format!(
-            "Reasoning: {}",
-            crate::token_tracking::format_token_count(reasoning_tokens)
-        ));
-    }
-    if let Some(change_line) = opencode_sidebar.and_then(|sidebar| sidebar.change_summary_line()) {
-        lines.push(change_line);
-    }
-    lines.join("\n")
-}
-
-pub(crate) fn opencode_sidebar_work_text(
-    opencode_sidebar: Option<&crate::app::opencode_storage::OpencodeSidebarData>,
-) -> Option<String> {
-    let mut lines = Vec::new();
-    if let Some(status) = opencode_sidebar
-        .and_then(|sidebar| sidebar.status.as_deref())
-        .filter(|status| !status.is_empty())
-    {
-        lines.push(format!("State: {status}"));
-    }
-    if let Some(tool) = opencode_sidebar
-        .and_then(|sidebar| sidebar.last_tool.as_deref())
-        .filter(|tool| !tool.is_empty())
-    {
-        lines.push(format!("Tool: {tool}"));
-    }
-    if let Some(permission) = opencode_sidebar
-        .and_then(|sidebar| sidebar.pending_permission.as_deref())
-        .filter(|permission| !permission.is_empty())
-    {
-        lines.push(format!(
-            "Permission: {}",
-            compact_sidebar_text(permission, SIDEBAR_WORK_VALUE_CHARS)
-        ));
-    }
-    if let Some(lsp_summary) = opencode_sidebar
-        .and_then(|sidebar| sidebar.lsp_summary.as_deref())
-        .filter(|summary| !summary.is_empty())
-    {
-        lines.push(format!(
-            "LSP: {}",
-            compact_sidebar_text(lsp_summary, SIDEBAR_WORK_VALUE_CHARS)
-        ));
-    }
-    if let Some(error) = opencode_sidebar
-        .and_then(|sidebar| sidebar.last_error.as_deref())
-        .filter(|error| !error.is_empty())
-    {
-        lines.push(format!(
-            "Error: {}",
-            compact_sidebar_text(error, SIDEBAR_WORK_VALUE_CHARS)
-        ));
-    }
-
-    if lines.is_empty() {
-        None
-    } else {
-        Some(lines.join("\n"))
-    }
-}
-
-pub(crate) fn opencode_sidebar_todos_text(
-    opencode_sidebar: Option<&crate::app::opencode_storage::OpencodeSidebarData>,
-) -> Option<String> {
-    let sidebar = opencode_sidebar?;
-    let todo_count = sidebar
-        .todo_count
-        .unwrap_or(sidebar.todo_preview.len() as u64) as usize;
-    if todo_count == 0 && sidebar.todo_preview.is_empty() {
-        return None;
-    }
-
-    // Opencode only provides open items — no completed count — so skip the
-    // progress bar and render all preview items as pending (○).
-    const MAX_SHOWN: usize = 5;
-    let mut lines: Vec<String> = sidebar
-        .todo_preview
-        .iter()
-        .take(MAX_SHOWN)
-        .map(|item| format!("○ {item}"))
-        .collect();
-
-    let remaining = todo_count.saturating_sub(lines.len());
-    if remaining > 0 {
-        lines.push(format!("+{remaining} more"));
-    }
-
-    Some(lines.join("\n"))
-}
-
 pub(crate) fn claude_sidebar_todos_text(task_state: &ClaudeTaskState) -> Option<String> {
     let total = task_state.tasks.len();
     if total == 0 {
@@ -898,49 +721,6 @@ pub(crate) fn claude_sidebar_todos_text(task_state: &ClaudeTaskState) -> Option<
     }
 
     Some(lines.join("\n"))
-}
-
-pub(crate) fn opencode_sidebar_summary_text(
-    generating: bool,
-    feature_summary: Option<&str>,
-    opencode_sidebar: Option<&crate::app::opencode_storage::OpencodeSidebarData>,
-) -> String {
-    if generating {
-        return "Generating summary...".to_string();
-    }
-
-    if let Some(summary) = opencode_sidebar
-        .and_then(|sidebar| sidebar.live_summary.as_deref())
-        .filter(|summary| !summary.is_empty())
-    {
-        return compact_sidebar_block(
-            summary,
-            SIDEBAR_SUMMARY_PREVIEW_COLS,
-            SIDEBAR_SUMMARY_PREVIEW_LINES,
-        );
-    }
-
-    feature_summary
-        .map(|summary| {
-            compact_sidebar_block(
-                summary,
-                SIDEBAR_SUMMARY_PREVIEW_COLS,
-                SIDEBAR_SUMMARY_PREVIEW_LINES,
-            )
-        })
-        .unwrap_or_default()
-}
-
-pub(crate) fn opencode_sidebar_prompt_text(prompt: Option<&str>) -> String {
-    prompt
-        .map(|prompt| {
-            compact_sidebar_block(
-                prompt,
-                SIDEBAR_PROMPT_PREVIEW_COLS,
-                SIDEBAR_PROMPT_PREVIEW_LINES,
-            )
-        })
-        .unwrap_or_default()
 }
 
 pub(crate) fn sidebar_status_activity_text(
@@ -1047,60 +827,8 @@ pub(crate) fn compact_sidebar_text(text: &str, max_chars: usize) -> String {
     format!("{truncated}…")
 }
 
-pub(crate) fn compact_sidebar_block(text: &str, max_cols: usize, max_lines: usize) -> String {
-    if max_cols == 0 || max_lines == 0 {
-        return String::new();
-    }
-
-    let compact = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if compact.is_empty() {
-        return String::new();
-    }
-
-    let words: Vec<&str> = compact.split(' ').collect();
-    let mut lines = Vec::new();
-    let mut current = String::new();
-    let mut index = 0;
-
-    while index < words.len() && lines.len() < max_lines {
-        let word = words[index];
-        let candidate = if current.is_empty() {
-            word.to_string()
-        } else {
-            format!("{current} {word}")
-        };
-
-        if candidate.chars().count() <= max_cols {
-            current = candidate;
-            index += 1;
-            continue;
-        }
-
-        if current.is_empty() {
-            lines.push(compact_sidebar_text(word, max_cols));
-            index += 1;
-        } else {
-            lines.push(current);
-            current = String::new();
-        }
-    }
-
-    if lines.len() < max_lines && !current.is_empty() {
-        lines.push(current);
-    }
-
-    if index < words.len()
-        && let Some(last) = lines.pop()
-    {
-        let trimmed = compact_sidebar_text(&last, max_cols.saturating_sub(1));
-        lines.push(format!("{trimmed}…"));
-    }
-
-    lines.join("\n")
-}
-
-/// What the agent is doing when nothing more specific (a diff review, an
-/// OpenCode or Codex work item) says so: the oldest waiting request, a tool
+/// What the agent is doing when nothing more specific (a diff review, a
+/// Codex work item) says so: the oldest waiting request, a tool
 /// call or a turn in progress.
 pub(crate) fn fallback_sidebar_work_text(runtime: &SidebarRuntime<'_>) -> Option<String> {
     if let Some(first) = runtime.pending_inputs.first() {

@@ -3,10 +3,10 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: package-no-tmux-test-bundle.sh <amf-binary> <output-archive>
+Usage: package-no-tmux-test-bundle.sh <aiw-binary> <output-archive>
 
 Builds a runnable test archive for the repo's no-tmux Docker image.
-It wraps the provided amf binary with its runtime loader and shared
+It wraps the provided aiw binary with its runtime loader and shared
 libraries, then copies the already-bundled tmux directory from the
 current tmux installation.
 EOF
@@ -15,11 +15,11 @@ EOF
 
 [ $# -eq 2 ] || usage
 
-amf_bin="$1"
+aiw_bin="$1"
 out_archive="$2"
 
-[ -f "$amf_bin" ] || {
-  echo "amf binary not found: $amf_bin" >&2
+[ -f "$aiw_bin" ] || {
+  echo "aiw binary not found: $aiw_bin" >&2
   exit 1
 }
 
@@ -53,51 +53,51 @@ copy_tree() {
   cp -a "$src" "$dest"
 }
 
-amf_root="$bundle_dir/amf-root"
-mkdir -p "$amf_root"
-cp "$amf_bin" "$bundle_dir/amf-real"
-chmod +x "$bundle_dir/amf-real"
+aiw_root="$bundle_dir/aiw-root"
+mkdir -p "$aiw_root"
+cp "$aiw_bin" "$bundle_dir/aiw-real"
+chmod +x "$bundle_dir/aiw-real"
 
-mapfile -t amf_deps < <(
-  ldd "$amf_bin" \
+mapfile -t aiw_deps < <(
+  ldd "$aiw_bin" \
     | awk '{for (i = 1; i <= NF; i++) if ($i ~ /^\//) print $i}' \
     | sed 's/[()]//g' \
     | sort -u
 )
 
-if [[ ${#amf_deps[@]} -eq 0 ]]; then
-  echo "failed to resolve runtime dependencies for $amf_bin" >&2
+if [[ ${#aiw_deps[@]} -eq 0 ]]; then
+  echo "failed to resolve runtime dependencies for $aiw_bin" >&2
   exit 1
 fi
 
-amf_loader=""
-amf_lib_dirs=()
-for dep in "${amf_deps[@]}"; do
+aiw_loader=""
+aiw_lib_dirs=()
+for dep in "${aiw_deps[@]}"; do
   if [[ "$dep" == *ld-linux* || "$dep" == *ld-musl* ]]; then
-    amf_loader="$dep"
+    aiw_loader="$dep"
   else
-    amf_lib_dirs+=("$(dirname "$dep")")
+    aiw_lib_dirs+=("$(dirname "$dep")")
   fi
-  copy_tree "$dep" "$amf_root$dep"
+  copy_tree "$dep" "$aiw_root$dep"
 done
 
-amf_lib_dirs=($(printf '%s\n' "${amf_lib_dirs[@]}" | sort -u))
+aiw_lib_dirs=($(printf '%s\n' "${aiw_lib_dirs[@]}" | sort -u))
 
-cat >"$bundle_dir/amf" <<EOF
+cat >"$bundle_dir/aiw" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
 
-amf_root="\$HERE/amf-root"
-amf_real="\$HERE/amf-real"
-loader="\$amf_root${amf_loader}"
+aiw_root="\$HERE/aiw-root"
+aiw_real="\$HERE/aiw-real"
+loader="\$aiw_root${aiw_loader}"
 lib_dirs=(
-$(for dir in "${amf_lib_dirs[@]}"; do printf '  "%s/%s"\n' '$amf_root' "${dir#/}"; done)
+$(for dir in "${aiw_lib_dirs[@]}"; do printf '  "%s/%s"\n' '$aiw_root' "${dir#/}"; done)
 )
 
 if [[ -x "\$loader" && \${#lib_dirs[@]} -gt 0 ]]; then
   ld_path="\$(IFS=:; echo "\${lib_dirs[*]}")"
-  exec "\$loader" --library-path "\$ld_path" "\$amf_real" "\$@"
+  exec "\$loader" --library-path "\$ld_path" "\$aiw_real" "\$@"
 fi
 
 if [[ \${#lib_dirs[@]} -gt 0 ]]; then
@@ -105,9 +105,9 @@ if [[ \${#lib_dirs[@]} -gt 0 ]]; then
   export LD_LIBRARY_PATH="\$ld_path\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
 fi
 
-exec "\$amf_real" "\$@"
+exec "\$aiw_real" "\$@"
 EOF
-chmod +x "$bundle_dir/amf"
+chmod +x "$bundle_dir/aiw"
 
 cp -a "$tmux_bundle_dir/." "$bundle_dir/"
 

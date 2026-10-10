@@ -21,11 +21,11 @@ jump to it.
 
 ## Resume a harness's own saved transcripts
 
-Press `S` on a Claude, Codex, or OpenCode feature or session to browse that
-harness's own saved conversation history and resume one in a new AMF
-session — including transcripts from before AMF started tracking the
+Press `S` on a Claude or Codex feature or session to browse that
+harness's own saved conversation history and resume one in a new AIW
+session — including transcripts from before AIW started tracking the
 feature, and even for a stopped feature (the picker starts it for you). Pi
-has no saved-session storage AMF can read, so `S` isn't offered there. See
+has no saved-session storage AIW can read, so `S` isn't offered there. See
 [Choosing a Harness](@/docs/harnesses.md) for the rest of what varies by
 harness.
 
@@ -34,14 +34,14 @@ harness.
 A long-running session's history counts against the model's context budget
 even once most of it is no longer relevant. Press `Ctrl+Space`, then
 `Shift+F` from any agent session to open an editable prompt: type what the
-new session should do, and AMF starts a brand-new session in the same
+new session should do, and AIW starts a brand-new session in the same
 feature, seeded with the feature's plan file (if any), a sample of the
 branch's changed files, and your instruction — left unsent in the compose
 box for review, the same way Learning Mode hands off an escalated answer.
 `Ctrl+Space`, then `Shift+X` dismisses the sidebar's context-usage hint
 without starting a session. See
 [Track context and usage in the sidebar](@/docs/attention-and-limits.md#track-context-and-usage-in-the-sidebar)
-for when AMF surfaces that hint on its own — pressing `Shift+F` there
+for when AIW surfaces that hint on its own — pressing `Shift+F` there
 pre-fills the prompt with a generated continuation instruction instead of
 starting from a blank one.
 
@@ -53,14 +53,14 @@ starting from a blank one.
 ## Remote Control status
 
 Claude Code's own Remote Control (research preview, v2.1.51+) bridges a
-session to claude.ai/code and the Claude mobile app. When it's active, AMF
+session to claude.ai/code and the Claude mobile app. When it's active, AIW
 shows a `[remote ●]` badge on the session. `Ctrl+Space`, then `c` copies the
 session's claude.ai URL when Claude has printed it as visible text;
 `Ctrl+Space`, then `Shift+O` opens it. To turn it on or off, type Claude's
 own `/rc` in the session. Remote Control is Claude-only and unavailable on
 z.ai / third-party-provider sessions.
 
-In a session, `Ctrl+Space`, then `Shift+C` and `Shift+Q` belong to AMF's own
+In a session, `Ctrl+Space`, then `Shift+C` and `Shift+Q` belong to AIW's own
 phone companion instead: they turn its server on or off and show the pairing
 QR code, exactly as on the dashboard.
 

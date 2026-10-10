@@ -5,7 +5,7 @@
 //! tree-sitter service (`crate::highlight`), and the frontend receives token
 //! spans. Both interfaces therefore agree on a file's language (the same
 //! path/shebang detection), use the same grammars and token classes, share
-//! one on-disk parser install (`~/.config/amf/tree-sitter`) and work offline
+//! one on-disk parser install (`~/.config/ai_workstation/tree-sitter`) and work offline
 //! once a parser is installed. The frontend bundle gains no highlighter or
 //! grammars. Whole old/new file contents are only available on this side,
 //! so each diff line is coloured with its full-file context: a line inside a
@@ -355,7 +355,7 @@ where
     let language = HighlightLanguage::ALL
         .into_iter()
         .find(|language| language.package_key() == language_key)
-        .ok_or_else(|| GuiError::conflict(format!("AMF has no parser for {language_key}")))?;
+        .ok_or_else(|| GuiError::conflict(format!("AIW has no parser for {language_key}")))?;
     let mut view = state.lock().map_err(|_| poisoned())?;
     if view.running {
         return Err(GuiError::conflict(format!(

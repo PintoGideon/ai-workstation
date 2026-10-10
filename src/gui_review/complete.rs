@@ -425,7 +425,7 @@ mod tests {
         act(gui, view, action).unwrap().unwrap()
     }
     fn edit_store(dir: &tempfile::TempDir, edit: impl FnOnce(&mut ProjectStore)) {
-        let db = crate::db::AmfDb::open(&dir.path().join("amf.db")).unwrap();
+        let db = crate::db::AiwDb::open(&dir.path().join("aiw.db")).unwrap();
         let mut store = db.load_store().unwrap();
         edit(&mut store);
         db.save_store(&store).unwrap();

@@ -354,7 +354,7 @@ pub struct PrThreadReplyView {
     pub id: u64,
     pub author: String,
     pub body: String,
-    pub via_amf: bool,
+    pub via_aiw: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -949,7 +949,6 @@ fn view(gui: &mut GuiHandle) -> GuiResult<PrTriageView> {
             let harness = match s.kind {
                 crate::project::SessionKind::Claude => AgentKind::Claude,
                 crate::project::SessionKind::Codex => AgentKind::Codex,
-                crate::project::SessionKind::Opencode => AgentKind::Opencode,
                 crate::project::SessionKind::Pi => AgentKind::Pi,
                 _ => return None,
             };
@@ -1069,7 +1068,7 @@ fn start_fix_draft(gui: &mut GuiHandle, comment_id: u64, session_id: String) -> 
     let state = review_mut(app)?;
     if !comment.is_actionable() {
         return Err(GuiError::conflict(
-            "AMF follow-up replies are shown for context only",
+            "AIW follow-up replies are shown for context only",
         ));
     }
     if state.reply.is_some() {
@@ -1372,7 +1371,7 @@ fn review_view(state: &PrReviewState, investigating: Option<(u64, AgentKind)>) -
                 id: r.id,
                 author: r.author.clone(),
                 body: r.body.clone(),
-                via_amf: r.is_amf_followup_reply(),
+                via_aiw: r.is_aiw_followup_reply(),
             })
             .collect(),
         investigation: state
@@ -1404,10 +1403,10 @@ fn review_view(state: &PrReviewState, investigating: Option<(u64, AgentKind)>) -
         branch_mismatch: state.branch_mismatch().map(str::to_string),
         fetched_at: state.review.fetched_at.format("%Y-%m-%d %H:%M").to_string(),
         open_count: state.review.open_count(),
-        // Collated AMF replies render under their root, not as rows.
+        // Collated AIW replies render under their root, not as rows.
         total: all
             .iter()
-            .filter(|c| !state.review.is_collated_amf_reply(c))
+            .filter(|c| !state.review.is_collated_aiw_reply(c))
             .count(),
         hide_resolved: state.hide_resolved,
         sort: sort_key(state.sort_mode),
@@ -1706,7 +1705,7 @@ fn apply(
             let comment = select(app, comment_id)?;
             if !comment.is_actionable() {
                 return Err(GuiError::conflict(
-                    "AMF follow-up replies are shown for context only",
+                    "AIW follow-up replies are shown for context only",
                 ));
             }
             let toasts = app.toasts.len();
@@ -1871,7 +1870,7 @@ fn request_investigation(
     let comment = select(app, comment_id)?;
     if !comment.is_actionable() {
         return Err(GuiError::conflict(
-            "AMF follow-up replies cannot be investigated",
+            "AIW follow-up replies cannot be investigated",
         ));
     }
     let note = note
@@ -2042,7 +2041,7 @@ fn start_reply(gui: &mut GuiHandle, comment_id: u64, reply: &str) -> GuiResult<(
     }
     if !comment.is_actionable() {
         return Err(GuiError::conflict(
-            "AMF follow-up replies are shown for context only",
+            "AIW follow-up replies are shown for context only",
         ));
     }
     let toasts = app.toasts.len();
@@ -2185,7 +2184,7 @@ fn confirm_write(gui: &mut GuiHandle, reads: &mut PrTriagePrefetch) -> GuiResult
 pub(crate) fn screenshot_context(
     gui: &mut GuiHandle,
     workflow_id: &str,
-) -> GuiResult<crate::screenshot_sources::PrContext> {
+) -> GuiResult<crate::gui_screenshots::PrContext> {
     gui.refresh_store()?;
     let context = gui
         .pr_triage_context
@@ -2218,7 +2217,7 @@ pub(crate) fn screenshot_context(
             "Screenshot sources currently support github.com repositories",
         ));
     }
-    Ok(crate::screenshot_sources::PrContext {
+    Ok(crate::gui_screenshots::PrContext {
         workflow_id: workflow_id.into(),
         feature_id,
         workdir,
@@ -2301,7 +2300,7 @@ mod tests {
                     ),
                     comment(
                         serde_json::json!({"id": 103, "author": "dev", "in_reply_to": 101,
-                        "body": "Checking.\n\n— posted via AMF"}),
+                        "body": "Checking.\n\n— posted via AIW"}),
                     ),
                     comment(
                         serde_json::json!({"id": 104, "kind": "Conversation", "path": null,
@@ -2325,21 +2324,10 @@ mod tests {
     }
 
     #[test]
-    fn inline_screenshot_reads_are_independent_and_reject_changed_pr_contexts() {
+    fn pr_description_read_rejects_a_changed_pr_context() {
         use crate::gui_screenshots;
         let (_dir, mut gui, _github, view) = opened();
         let description = gui_screenshots::plan_pr_document(&mut gui, &view.workflow_id).unwrap();
-        let first =
-            gui_screenshots::plan_inline_image(&mut gui, &view.workflow_id, "./first.png".into())
-                .unwrap();
-        let neighbor = gui_screenshots::plan_inline_image(
-            &mut gui,
-            &view.workflow_id,
-            "./neighbor.png".into(),
-        )
-        .unwrap();
-        gui_screenshots::finish_inline_image(&mut gui, &first).unwrap();
-        gui_screenshots::finish_inline_image(&mut gui, &neighbor).unwrap();
         gui_screenshots::finish_pr_document(&mut gui, &description).unwrap();
         super::act(
             &mut gui,
@@ -2348,87 +2336,7 @@ mod tests {
             PrTriageAction::BackToList,
         )
         .unwrap();
-        assert!(gui_screenshots::finish_inline_image(&mut gui, &first).is_err());
-        assert!(gui_screenshots::finish_inline_image(&mut gui, &neighbor).is_err());
         assert!(gui_screenshots::finish_pr_document(&mut gui, &description).is_err());
-    }
-
-    #[test]
-    fn screenshot_bridge_rejects_closed_requests_switched_runs_and_prs() {
-        use crate::gui_screenshots;
-        let (_dir, mut gui, _github, view) = opened();
-        let first = gui_screenshots::plan_remote(
-            &mut gui,
-            &view.workflow_id,
-            None,
-            1,
-            "first-request".into(),
-        )
-        .unwrap();
-        gui_screenshots::close_remote(&mut gui, "first-request");
-        assert!(first.run().is_err());
-        assert!(
-            gui_screenshots::plan_remote(
-                &mut gui,
-                &view.workflow_id,
-                None,
-                1,
-                "first-request".into()
-            )
-            .is_err()
-        );
-        let _first = gui_screenshots::plan_remote(
-            &mut gui,
-            &view.workflow_id,
-            None,
-            1,
-            "other-request".into(),
-        )
-        .unwrap();
-        let _second = gui_screenshots::plan_remote(
-            &mut gui,
-            &view.workflow_id,
-            Some(10),
-            2,
-            "new-request".into(),
-        )
-        .unwrap();
-        assert!(
-            gui_screenshots::plan_remote_image(&mut gui, "other-request".into(), "image", true)
-                .is_err()
-        );
-        // A delayed closed request must not cancel the newer live selection.
-        assert!(
-            gui_screenshots::plan_remote(
-                &mut gui,
-                &view.workflow_id,
-                None,
-                1,
-                "first-request".into()
-            )
-            .is_err()
-        );
-        assert!(
-            !gui.app_for_workflow()
-                .evidence_work
-                .remote
-                .as_ref()
-                .unwrap()
-                .cancelled
-                .load(std::sync::atomic::Ordering::Acquire)
-        );
-
-        super::act(
-            &mut gui,
-            &view.workflow_id,
-            view.revision,
-            PrTriageAction::BackToList,
-        )
-        .unwrap();
-        assert!(
-            gui_screenshots::plan_remote_image(&mut gui, "new-request".into(), "image", true)
-                .is_err()
-        );
     }
 
     fn fixture() -> (tempfile::TempDir, GuiHandle, FeatureTarget) {
@@ -2576,7 +2484,7 @@ mod tests {
         tmux.expect_paste_text()
             .withf(|_, _, text| {
                 text.starts_with("Edited instruction")
-                    && text.contains("amf reply-draft --pr-number 7 --comment-id 101")
+                    && text.contains("aiw reply-draft --pr-number 7 --comment-id 101")
             })
             .times(1)
             .returning(|_, _, _| Ok(()));
@@ -3033,17 +2941,17 @@ mod tests {
         assert_eq!(review.number, 7);
         assert_eq!(
             review.open_count, 2,
-            "resolved threads and AMF replies are not open work"
+            "resolved threads and AIW replies are not open work"
         );
-        assert_eq!(review.total, 3, "collated AMF replies are not rows");
-        // The AMF follow-up reply is collated under its root, not a row.
+        assert_eq!(review.total, 3, "collated AIW replies are not rows");
+        // The AIW follow-up reply is collated under its root, not a row.
         assert_eq!(
             review.comments.iter().map(|c| c.id).collect::<Vec<_>>(),
             [101, 102, 104]
         );
         let root = comment_view(&view, 101);
         assert_eq!(root.replies.len(), 1);
-        assert!(root.replies[0].via_amf);
+        assert!(root.replies[0].via_aiw);
         assert!(root.hunk.as_deref().unwrap().contains("+committed"));
         assert!(root.can_resolve && !root.resolved);
         assert!(comment_view(&view, 102).resolved);
@@ -3425,7 +3333,7 @@ mod tests {
         assert!(pending.destination.contains("inline review thread"));
         assert_eq!(
             pending.body.as_deref(),
-            Some("The caller already guards empty input.\n\n— posted via AMF")
+            Some("The caller already guards empty input.\n\n— posted via AIW")
         );
         assert!(fake.state().writes.is_empty(), "preparing never writes");
 
@@ -3466,7 +3374,7 @@ mod tests {
         let posted = act(&mut gui, &confirm, PrTriageAction::ConfirmWrite);
         assert_eq!(
             fake.state().writes,
-            ["reply 101: The caller already guards empty input.\n\n— posted via AMF"]
+            ["reply 101: The caller already guards empty input.\n\n— posted via AIW"]
         );
         assert!(posted.reply.is_none());
         let row = comment_view(&posted, 101);

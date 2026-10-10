@@ -44,9 +44,7 @@ pub struct DebugLog {
 }
 
 pub fn global_log_path() -> PathBuf {
-    let state_dir = dirs::state_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("amf");
+    let state_dir = crate::ipc::state_dir();
     let _ = fs::create_dir_all(&state_dir);
     state_dir.join("debug.log")
 }
@@ -260,7 +258,7 @@ pub fn install_panic_hook() {
                 &format!("thread `{thread}` panicked at {location}: {payload}"),
             );
             flush_log_writer();
-            set_user_alert("Error: AMF hit an internal error. Check debug log for details.".into());
+            set_user_alert("Error: AIW hit an internal error. Check debug log for details.".into());
         }));
     });
 }

@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import FreshContextDialog from "../src/FreshContextDialog";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const target = { project_id: "p", feature_id: "f", session_id: "s" };
-const preview = { revision: "r1", prompt: "Read AMF_PLAN.md. Continue carefully.", label: "Fresh Context" };
+const preview = { revision: "r1", prompt: "Read AIW_PLAN.md. Continue carefully.", label: "Fresh Context" };
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 function mount() {
   const onCreated = vi.fn(), onClose = vi.fn();

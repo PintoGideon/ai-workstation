@@ -1,4 +1,4 @@
-//! GUI-facing TODO operations (`AMF_PLAN.md` Task 8, "Share TODO and
+//! GUI-facing TODO operations (`AIW_PLAN.md` Task 8, "Share TODO and
 //! planning workflows incrementally").
 //!
 //! Unlike project/feature state, `db::todos` was already presentation-clean
@@ -7,7 +7,7 @@
 //! comment. This module is a thin GUI-request-shaped wrapper over it, not a
 //! parallel implementation, exactly the reuse the plan's "retaining TUI
 //! adapters" language asks for: the TUI's `app/todos.rs` and this module
-//! both end up calling the identical `db::todos`/`AmfDb` functions.
+//! both end up calling the identical `db::todos`/`AiwDb` functions.
 //!
 //! TODO lists live outside `ProjectStore`'s full-replace save path (see
 //! `db::todos`'s own module doc), so none of Task 5's version-checked-save
@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 // Re-exported (not just `use`d) rather than left inside the private `db`
 // module: these types now appear in this module's own public signatures
 // below, so the external GUI crate needs a real path to name them --
-// `agent_mainframe::gui_todos::Todo`, not an accident of reachability. `db`
+// `ai_workstation::gui_todos::Todo`, not an accident of reachability. `db`
 // itself stays private; only these specific types are deliberately exported
 // here, the same "widen module by module" reasoning `src/lib.rs`'s doc
 // comment already states, applied at the type level rather than the module
@@ -197,7 +197,7 @@ mod tests {
     use std::path::PathBuf;
 
     /// TODO lists live outside `ProjectStore` (see `db::todos`'s module
-    /// doc), so these tests only need a real `AmfDb` -- no tmux interaction
+    /// doc), so these tests only need a real `AiwDb` -- no tmux interaction
     /// happens anywhere in this module, so an empty `MockTmuxOps` (no
     /// expectations at all) is enough to build an `App`.
     fn fixture() -> (GuiHandle, FeatureTarget, tempfile::NamedTempFile) {
@@ -231,7 +231,7 @@ mod tests {
         store.projects.push(project);
 
         let tmp_db = tempfile::NamedTempFile::new().unwrap();
-        let db = crate::db::AmfDb::open(tmp_db.path()).unwrap();
+        let db = crate::db::AiwDb::open(tmp_db.path()).unwrap();
         db.save_store(&store).unwrap();
 
         let mut app = App::new_for_test(

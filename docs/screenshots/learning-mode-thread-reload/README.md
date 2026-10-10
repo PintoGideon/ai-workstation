@@ -1,7 +1,7 @@
 # A follow-up stays with its question across a reopen
 
-Captured from an isolated, throwaway AMF instance
-(`scripts/dev/screenshot/amf-capture.sh`, scenario
+Captured from an isolated, throwaway AIW instance
+(`scripts/dev/screenshot/aiw-capture.sh`, scenario
 `scripts/dev/screenshot/scenarios/learning-mode-thread-reload.txt`) at
 `160x44`, against a scratch `taskline` repo seeded with a `README.md`,
 `CLAUDE.md`, `Cargo.toml` and `src/main.rs` so the pinned **Start here**

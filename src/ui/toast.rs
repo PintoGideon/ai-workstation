@@ -82,7 +82,7 @@ pub(crate) fn draw_toasts(frame: &mut Frame, toasts: &[Toast], theme: &Theme) {
 /// Word-wrap `message` to `width` display columns, at most `max_lines` lines.
 ///
 /// Measured in display width rather than bytes so wide glyphs and the em dashes
-/// AMF's own messages use don't overflow the box — and sliced on character
+/// AIW's own messages use don't overflow the box — and sliced on character
 /// boundaries, never byte offsets, which a message carrying any non-ASCII would
 /// otherwise panic on.
 fn wrap_message(message: &str, width: usize, max_lines: usize) -> Vec<String> {

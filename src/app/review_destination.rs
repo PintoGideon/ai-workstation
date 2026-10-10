@@ -58,7 +58,7 @@ impl App {
     /// a final review.
     ///
     /// The reviewed feature may not resolve from the store (an ad-hoc diff of a
-    /// path AMF doesn't track); the picker still opens, just without the
+    /// path AIW doesn't track); the picker still opens, just without the
     /// per-other-feature rows and with the machine's harness list rather than a
     /// per-repo one.
     pub(crate) fn open_review_destination_picker(&mut self) {
@@ -420,7 +420,14 @@ impl App {
         // Run the on-worktree-created hook synchronously — the interactive
         // prompt flow would have to unwind the review viewer.
         let ext = merge_project_extension_config(&self.config.extension, &project_repo);
-        if let Some(hook) = ext.lifecycle_hooks.on_worktree_created.as_ref() {
+        // FORK: an unapproved repo-supplied hook is skipped (no dialog here).
+        let worktree_hook = self.approved_repo_hook_or_skip(
+            &project_repo,
+            crate::fork::hook_approval::HookName::WorktreeCreated,
+            ext.lifecycle_hooks.on_worktree_created.clone(),
+            &workdir,
+        );
+        if let Some(hook) = worktree_hook.as_ref() {
             let (ok, detail) = Self::run_worktree_hook_sync(hook.script(), &workdir, None);
             if !ok {
                 self.log_warn(

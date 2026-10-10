@@ -32,7 +32,7 @@ function fullView(): SessionSidebarView {
       { kind: "context", title: "Context", actions: [], lines: [
         { kind: "text", text: "Ctx ~85% CRITICAL STALE · 170,000", tone: "plain", emphasised: false },
       ], context: { percent: 85, used_tokens: 170000, limit_tokens: 200000, band: "critical", estimated: true, stale: true, fresh_context_hint: true } },
-      { kind: "plan", title: "Plan", actions: [{ kind: "open_plan" }], lines: [field("Current", "AMF_PLAN.md")] },
+      { kind: "plan", title: "Plan", actions: [{ kind: "open_plan" }], lines: [field("Current", "AIW_PLAN.md")] },
       { kind: "issue", title: "Issue", actions: [], lines: [field("Repository", "github.com/acme/widget"), field("Issue", "#42")] },
       { kind: "pr_triage", title: "PR Triage", actions: [{ kind: "pr_triage" }], lines: [field("PR", "#77 · 2 open"), field("Status", "Working", "pr_working", true)] },
       { kind: "work", title: "Work", actions: [{ kind: "supervised_edits" }], lines: [field("State", "waiting for diff review", "waiting", true)] },
@@ -73,7 +73,7 @@ beforeEach(() => {
   current = fullView();
   vi.mocked(invoke).mockImplementation(async (command) => {
     if (command === "session_sidebar") return current;
-    if (command === "session_sidebar_plan") return { path: "AMF_PLAN.md", markdown: "# The plan\n\nStep one", truncated: false };
+    if (command === "session_sidebar_plan") return { path: "AIW_PLAN.md", markdown: "# The plan\n\nStep one", truncated: false };
     if (command === "session_sidebar_complete_todo") return "Marked referenced TODO complete";
     throw new Error(`Unexpected command: ${command}`);
   });
@@ -202,7 +202,7 @@ describe("session sidebar", () => {
     fireEvent.click(await waitFor(() => within(section("Plan")).getByRole("button", { name: "Open" })));
     const dialog = await screen.findByRole("dialog", { name: "Current plan" });
     expect(await within(dialog).findByText("Step one")).toBeTruthy();
-    expect(within(dialog).getByText("AMF_PLAN.md")).toBeTruthy();
+    expect(within(dialog).getByText("AIW_PLAN.md")).toBeTruthy();
     expect(vi.mocked(invoke)).toHaveBeenCalledWith("session_sidebar_plan", { target });
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
 
@@ -234,7 +234,7 @@ describe("session sidebar", () => {
     mount();
     fireEvent.click(await waitFor(() => within(section("Plan")).getByRole("button", { name: "Open" })));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Close" }));
-    await act(async () => { finish({ path: "AMF_PLAN.md", markdown: "# Late plan", truncated: false }); });
+    await act(async () => { finish({ path: "AIW_PLAN.md", markdown: "# Late plan", truncated: false }); });
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -273,7 +273,7 @@ describe("session sidebar", () => {
     const rail = screen.getByRole("button", { name: "Show agent sidebar" });
     expect(rail.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByRole("region")).toBeNull();
-    expect(window.localStorage.getItem("amf.gui.collapsed.sessionSidebar")).toBe("1");
+    expect(window.localStorage.getItem("aiw.gui.collapsed.sessionSidebar")).toBe("1");
     const calls = sidebarCalls().length;
     await act(async () => { await client.refetchQueries(); });
     expect(sidebarCalls().length).toBe(calls);
@@ -285,7 +285,7 @@ describe("session sidebar", () => {
     expect(screen.getByRole("button", { name: "Show agent sidebar" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Show agent sidebar" }));
     expect(await screen.findByRole("heading", { name: "Claude Sidebar" })).toBeTruthy();
-    expect(window.localStorage.getItem("amf.gui.collapsed.sessionSidebar")).toBe("0");
+    expect(window.localStorage.getItem("aiw.gui.collapsed.sessionSidebar")).toBe("0");
   });
 
   it("still works when storage refuses writes", async () => {

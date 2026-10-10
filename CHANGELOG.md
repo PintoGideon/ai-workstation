@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to AMF are documented in this file.
+All notable changes to AIW are documented in this file.
 
 This changelog follows a Keep a Changelog style layout. Use
 `## [Unreleased]` for pending work, then add a dated release section
@@ -10,9 +10,27 @@ are tagged.
 
 ## [Unreleased]
 
+### Changed
+
+- **AI Workstation is its own product now.** One command, `aiw`; crate
+  `ai-workstation`; GUI "AI Workstation" (`aiw-gui`); env vars `AIW_*`; tmux
+  sessions `aiw-*`; config in `~/.config/ai_workstation` (`aiw.db`, hooks in
+  `hooks/`); state in `~/.local/state/ai_workstation`; repo files `aiw.json`,
+  `.aiw/`, `AIW_PLAN.md`; skills `aiw-*`; theme `classic`. The first launch
+  copies the upstream setup into the new folders without touching the
+  original, and old names in configs keep loading. See README ("Coming from
+  …") and DESIGN.md §11.
+
+### Removed
+
+- **OpenCode support.** Claude Code, Codex, Gemini CLI, Cursor agent and Pi
+  remain. Stored OpenCode sessions are dropped on load; features and
+  preferences that named OpenCode fall back to the default agent. See
+  DESIGN.md §14.
+
 ### Added
 
-- **Desktop debug-log viewer.** Open recent AMF activity from workspace
+- **Desktop debug-log viewer.** Open recent AIW activity from workspace
   navigation, filter by level or context/message, and refresh without reopening.
   Load failures are shown alongside clearly labeled previous results.
   No migration is required.
@@ -66,14 +84,14 @@ are tagged.
 - **VS Code, custom sessions and TODOs from the desktop New session dialog.**
   The dialog now offers everything the TUI's session picker does. **VS Code**
   opens the worktree in a new window with the same launch and tracking as the
-  TUI, so stopping the feature still closes windows AMF opened and leaves
+  TUI, so stopping the feature still closes windows AIW opened and leaves
   others alone. A **VS Code** tab (and a sidebar chip) lists those windows,
-  says which ones AMF can close, and closes them after confirmation.
-  **Configured sessions** from the project's `amf.json` are listed with their
+  says which ones AIW can close, and closes them after confirmation.
+  **Configured sessions** from the project's `aiw.json` are listed with their
   icon, description, command, working directory, pre-check, on-stop command
   and autolaunch. A failed `pre_check` is shown in the dialog with its output,
   and nothing is created. The new session's terminal attaches like any other.
-  A session removed or changed in `amf.json` after the dialog opened is refused
+  A session removed or changed in `aiw.json` after the dialog opened is refused
   rather than created from the old entry. Repeated custom-session requests
   are refused while the first pre-check runs. **TODOs** adds the feature's TODOs
   session.
@@ -130,14 +148,14 @@ are tagged.
   Other full-screen programs show a notice instead of receiving keys.
 - **Python highlighting.** Grammars that no longer ship optional injection or
   locals queries (current tree-sitter-python) now load instead of failing, so
-  Python files are highlighted in the TUI and AMF stops trying to reinstall the
+  Python files are highlighted in the TUI and AIW stops trying to reinstall the
   parser at every start.
 
 ## [v0.49.0] - 2026-10-06
 
-The desktop app now covers much more of AMF: complete Final Review with feedback
+The desktop app now covers much more of AIW: complete Final Review with feedback
 handoff, supervised edits, PR Triage, prompt overrides, dormant features and a
-sidebar that matches the TUI dashboard. AMF Remote is easier to reach over
+sidebar that matches the TUI dashboard. AIW Remote is easier to reach over
 Tailscale, and model advice and reasoning levels are available in more places.
 
 ### Added
@@ -162,7 +180,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   reviews, checks or agent targets are refused, and unsaved drafts block
   completion. No migration is required.
 - **Answer supervised edits in the desktop GUI.** When a Vibeless agent waits
-  for you to approve a file change and no AMF TUI is running, the feature is
+  for you to approve a file change and no AIW TUI is running, the feature is
   badged in navigation and a notice offers **Review**. Open **Supervised
   edits** on the feature page to read the proposed diff (unified or side by
   side, with more context), then **Approve edit**, **Reject edit** with optional
@@ -171,23 +189,23 @@ Tailscale, and model advice and reasoning levels are available in more places.
   whose agent stopped waiting is refused. Edits a running TUI received are
   still answered in the TUI, and AI explanations of an edit remain TUI-only. No
 - **Edit headless prompt overrides in the desktop GUI.** Open **Prompt
-  overrides** from navigation to see all of AMF's headless AI prompts. Each
+  overrides** from navigation to see all of AIW's headless AI prompts. Each
   prompt shows the layer in effect (feature, project, global or built-in, and
   whether a harness-specific template won), its placeholders, its effective
   template and the built-in default. Save an override for this feature, this
-  project's `amf.json` or all projects, either shared or for one harness.
+  project's `aiw.json` or all projects, either shared or for one harness.
   Clearing an override needs confirmation. Unsaved edits are protected. A
-  change made by the TUI, another window or a hand edit of `amf.json` must be
+  change made by the TUI, another window or a hand edit of `aiw.json` must be
   reloaded before saving. Pending Final Review and planning AI calls offer
   **Edit prompt**; your saved change applies when you continue the call. No
   migration is required.
 - **Find and stop dormant features in the desktop GUI.** Open **Dormant
   features** in navigation to see running features that are idle and
   unopened past the configured thresholds, with how long and since when. Select
-  features, confirm, and AMF stops them through the same stop as the TUI,
+  features, confirm, and AIW stops them through the same stop as the TUI,
   including closing editor windows it opened. Each feature is checked again at
   confirm time: one that was opened, produced output, was stopped or deleted is
-  skipped with its reason, and a window AMF did not open, or one sharing its VS
+  skipped with its reason, and a window AIW did not open, or one sharing its VS
   Code instance, is left running and reported. Showing a session in the GUI now
   counts as opening its feature, as entering it in the TUI does. No migration is
   required.
@@ -272,29 +290,29 @@ Tailscale, and model advice and reasoning levels are available in more places.
   Choices work with direct starts and Full or Quick planning. Setup finishes
   before the interview; cancelling the interview keeps the worktree without
   launching an agent.
-- **AMF Remote finds your Tailscale address by itself.** When Tailscale
-  serves AMF on your tailnet, the pairing QR code uses that HTTPS address
+- **AIW Remote finds your Tailscale address by itself.** When Tailscale
+  serves AIW on your tailnet, the pairing QR code uses that HTTPS address
   automatically, with no need to copy it into `config.json`.
-- **Set up Tailscale from the pairing dialog.** Press `t` to share AMF on
+- **Set up Tailscale from the pairing dialog.** Press `t` to share AIW on
   your tailnet (tailnet only, never public). Press `s` for step-by-step
   setup, from installing Tailscale to limiting access to your own devices;
-  each step is ticked off from what AMF sees on this computer, `c` copies a
+  each step is ticked off from what AIW sees on this computer, `c` copies a
   ready-made access policy, and the steps scroll with `j`/`k` or the mouse
   wheel.
-- **`amf doctor` checks phone access.** It reports whether a phone can reach
-  AMF Remote over HTTPS and, if not, the next step to take.
-- **A warning when no device can reach AMF.** If Tailscale serves AMF but no
+- **`aiw doctor` checks phone access.** It reports whether a phone can reach
+  AIW Remote over HTTPS and, if not, the next step to take.
+- **A warning when no device can reach AIW.** If Tailscale serves AIW but no
   other device on your tailnet may connect (the phone isn't signed in, or an
   access policy shuts it out), the pairing dialog, its setup steps and
-  `amf doctor` now say so, instead of showing everything as done.
+  `aiw doctor` now say so, instead of showing everything as done.
 - **The pairing dialog checks that its address works.** If the address in
-  the QR code doesn't reach AMF from this computer (Tailscale logged out or
-  not serving AMF, a tunnel that's down, a mistyped `remote_public_url`), the
+  the QR code doesn't reach AIW from this computer (Tailscale logged out or
+  not serving AIW, a tunnel that's down, a mistyped `remote_public_url`), the
   dialog warns under the QR code and suggests the fix, such as running
   `tailscale up` or pressing `t`. It checks again every few seconds, so the
   warning goes away once you fix the problem.
 - **New settings for non-standard Tailscale installs.** `remote_tailscale_cli`
-  and `remote_tailscale_socket` point AMF at a `tailscale` command or daemon
+  and `remote_tailscale_socket` point AIW at a `tailscale` command or daemon
   socket outside the usual places, such as a `tailscaled` you start
   yourself.
 - **Get advice for an Expert plan review.** Press `m` in the Expert model picker
@@ -317,7 +335,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   focus table offers speed, balance and depth choices when supported. Press
   `s` to inspect dated provider research. Account access and supported effort
   levels are checked; task-specific quality, time and token totals stay unknown.
-- **Collapse projects in AMF Remote's dashboard.** Tap a project heading to
+- **Collapse projects in AIW Remote's dashboard.** Tap a project heading to
   hide or show its features. Each heading shows the feature count, and your
   choices are remembered on this device across refreshes and reloads. Features
   needing attention stay visible at the top even when their project is collapsed.
@@ -346,11 +364,11 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 ### Changed
 
-- **`amf automation` help now documents the request JSON.** `-h` / `--help` on
+- **`aiw automation` help now documents the request JSON.** `-h` / `--help` on
   `create-project`, `create-feature`, and `create-batch-features` lists every
   field with its type, default, and allowed values (agents and modes), plus a
   minimal example, so you no longer need a dry run to discover the schema.
-- **AMF Remote's keys work inside a session too.** `leader+C` (turn the phone
+- **AIW Remote's keys work inside a session too.** `leader+C` (turn the phone
   server on or off) and `leader+Q` (show the pairing QR code) now work from a
   session view as well as the dashboard, and closing the QR code returns you
   to the session you were in. Both keys are listed in the dashboard's leader
@@ -363,7 +381,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 - **A paused Expert plan review resumes with the config level, not the one you
   picked.** The model is restored with the draft but the reasoning level is not.
 - **A stopped session stays stopped.** Starting its feature again, or
-  restarting AMF, starts every session except the ones you stopped yourself.
+  restarting AIW, starts every session except the ones you stopped yourself.
   Stopping a feature still remembers which sessions were running, so starting
   it brings back the same set. If every session was stopped, starting the
   feature starts all of them.
@@ -371,14 +389,14 @@ Tailscale, and model advice and reasoning levels are available in more places.
 ### Removed
 
 - **`leader+C` in a session no longer sends Claude's `/rc`.** That key now
-  belongs to AMF Remote. `leader+c` and `leader+O` still copy and open the
+  belongs to AIW Remote. `leader+c` and `leader+O` still copy and open the
   claude.ai link.
 
 ### Fixed
 
-- **Saving a project prompt override keeps the rest of `amf.json`.** The TUI
+- **Saving a project prompt override keeps the rest of `aiw.json`.** The TUI
   and GUI now change only its `prompt_overrides` key. Other keys, including
-  unknown ones, keep their order, and unset settings are no longer written out. A malformed `amf.json` is reported
+  unknown ones, keep their order, and unset settings are no longer written out. A malformed `aiw.json` is reported
   rather than replaced with a default config.
 - Verbose Final Review checks can finish without hanging on full output buffers.
   Closing or cancelling a check also stops its child processes.
@@ -398,8 +416,8 @@ Tailscale, and model advice and reasoning levels are available in more places.
 - **Missing or invalid setup choices no longer leave an unwanted worktree.**
   Desktop and automation creation requests reject them before creating a
   checkout or claiming a TODO.
-- **An installed AMF Remote no longer hangs on its splash screen** when it
-  can't reach AMF. After a few seconds it opens and shows "Can't reach AMF".
+- **An installed AIW Remote no longer hangs on its splash screen** when it
+  can't reach AIW. After a few seconds it opens and shows "Can't reach AIW".
   It also no longer saves a tunnel's error page in place of the app.
 - **The pairing dialog no longer hides everything under the QR code.** On
   shorter terminals the QR filled the dialog, cutting off the pairing code,
@@ -409,19 +427,19 @@ Tailscale, and model advice and reasoning levels are available in more places.
   adding another TODO or editing the list scratchpad keeps a valid choice.
 
 - **Automation example and template JSON no longer include `enable_notes`.**
-  AMF never read that field. The `create-feature` template now lists
+  AIW never read that field. The `create-feature` template now lists
   `plan_mode` and `create_terminal`.
 - **The pairing QR code warns when a phone can't reach it.** Without
   `remote_public_url` set, the QR pointed at this computer's local address,
   which a phone can't open. The dialog now says so and offers the fix.
 - **Notifications and attention keep working after you rebuild or reinstall
-  AMF.** Agent sessions started before the rebuild could lose every hook, so
+  AIW.** Agent sessions started before the rebuild could lose every hook, so
   nothing reached the attention list or your phone. They now fall back to the
-  `amf` on your `PATH`.
+  `aiw` on your `PATH`.
 
 ### Migration
 
-- No manual migration is required. AMF updates its database on first startup.
+- No manual migration is required. AIW updates its database on first startup.
 - To turn Claude's own Remote Control on or off, type `/rc` in the session
   instead of pressing `leader+C`.
 
@@ -429,7 +447,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 ### Added
 
-- **Use AMF from your phone with AMF Remote.** Pair an installable web app to
+- **Use AIW from your phone with AIW Remote.** Pair an installable web app to
   see which features need attention, receive push notifications, and read or
   type into the same agent terminals as your computer. You can start and stop
   features, manage sessions and TODOs, review changes, and use your prompt
@@ -437,7 +455,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 - **Remote access starts when you ask for it.** Use `leader+C` to toggle the
   server and `leader+Q` to pair a device by QR code. Each device can be revoked
   independently. HTTPS through a tunnel such as Tailscale enables phone access,
-  installation, and notifications; see [AMF Remote setup](https://github.com/eldridgerdev/agent-mainframe/blob/v0.48.0/docs/remote-control.md).
+  installation, and notifications; see the upstream v0.48.0 `docs/remote-control.md` (removed in AIW, see NO_CLOUD.md).
 - **Ask AI questions while reviewing code.** Press `Q` in Final Review,
   manual PR review (`G`), or AI PR review (`W`) to ask about the selected code
   or find reusable helpers elsewhere in the repository. Send with `Ctrl+S`;
@@ -466,7 +484,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 ### Migration
 
-- No manual migration is required. AMF updates its database on first startup.
+- No manual migration is required. AIW updates its database on first startup.
 - Phone access is optional. Set up an HTTPS tunnel and `remote_public_url`
   before pairing a phone; the server is off until you enable it.
 
@@ -474,7 +492,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 ### Added
 
-- **Review a teammate's pull request in AMF's diff viewer.** Press `G` on a
+- **Review a teammate's pull request in AIW's diff viewer.** Press `G` on a
   project row (or `Tab` in the PR picker) to see every open pull request in
   the repository, including your own and drafts. `Enter` opens one in the same
   viewer as the final review, showing exactly the pull request's changes. It
@@ -489,7 +507,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   instead of being lost.
 - **Submit straight to GitHub.** `q` posts your review as Comment, Approve,
   or Request changes, with a summary and your inline comments, ranges, and
-  suggested changes. AMF won't post if the pull request has moved on since you
+  suggested changes. AIW won't post if the pull request has moved on since you
   opened it, so your comments never land on code you haven't seen, and it
   tells you plainly when GitHub wouldn't accept a choice (such as approving
   your own pull request). Comments that can't sit on the diff go in the
@@ -506,7 +524,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   and 80% used, like the dashboard's. Before, the box showed the percentage left
   (`5h  62% left · 3h`), so it was the reverse of the dashboard's number.
 
-- **The usage summary on AMF's AI review (`W`) is now collapsed on GitHub.**
+- **The usage summary on AIW's AI review (`W`) is now collapsed on GitHub.**
   The review's own summary comes first, followed by one line with the
   harness, model, tokens, and estimated cost. Expand that line to see every
   metric, including elapsed time and cached and total tokens.
@@ -528,7 +546,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 ### Migration
 
 - No migration is required. The review needs an authenticated `gh`, as PR
-  Triage does. AMF updates its database the first time it starts.
+  Triage does. AIW updates its database the first time it starts.
 - Desktop-app sessions started before upgrading can still open extra windows
   until they are restarted.
 
@@ -538,7 +556,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 - **Plan interviews can read linked tickets from Asana, Linear, Jira, and
   other trackers.** List the exact read-only MCP tools the interview may
-  call in `plan_interview_mcp` in `~/.config/amf/config.json`. claude.ai
+  call in `plan_interview_mcp` in `~/.config/ai_workstation/config.json`. claude.ai
   connectors and servers added with `claude mcp add` work as-is, and other
   servers can be supplied as a config file. A brief that links a ticket then
   has it fetched instead of pasted in. Works when the interview runs on
@@ -552,13 +570,13 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 - No migration is required. Ticket lookup is off until you add
   `plan_interview_mcp` to your global config. It can't be set in a
-  project's `amf.json`, because MCP servers run programs.
+  project's `aiw.json`, because MCP servers run programs.
 
 ## [v0.45.0] - 2026-09-24
 
 ### Added
 
-- **AMF now has a desktop app (preview) alongside `amf`.** It uses the same
+- **AIW now has a desktop app (preview) alongside `aiw`.** It uses the same
   projects, features and agent sessions as the terminal interface, so you can
   switch between the two or run both at once. What you can do in it today:
   - Browse your projects and features in a sidebar, with running features
@@ -573,8 +591,8 @@ Tailscale, and model advice and reasoning levels are available in more places.
   - Approve over-limit agent starts, as the TUI asks you to.
 
   Everything else, including Learning Mode, PR triage and reviews, still
-  needs `amf`. See `gui/README.md` for the full list and for install steps.
-- **Every release now includes desktop app downloads** next to `amf`:
+  needs `aiw`. See `gui/README.md` for the full list and for install steps.
+- **Every release now includes desktop app downloads** next to `aiw`:
   - **Linux (x86_64 and ARM64):** a `.deb` that also installs `tmux`, and an
     AppImage for other distributions.
   - **Windows:** install the x86_64 Linux build inside WSL2; it opens as a
@@ -585,15 +603,15 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 ### Fixed
 
-- **Running AMF in more than one place no longer loses changes.** Two `amf`
-  windows, or `amf` and the desktop app, used to be able to overwrite each
-  other's projects and features without warning. AMF now picks up changes
+- **Running AIW in more than one place no longer loses changes.** Two `aiw`
+  windows, or `aiw` and the desktop app, used to be able to overwrite each
+  other's projects and features without warning. AIW now picks up changes
   made elsewhere about once a second, and if a save still collides it keeps
   the other change, refreshes your view, and asks you to retry.
 
 ### Migration
 
-- No migration is required. The desktop app is optional, and `amf` works as
+- No migration is required. The desktop app is optional, and `aiw` works as
   before.
 - The desktop app needs `tmux` and your agent CLIs installed. On a Mac, the
   app isn't signed with an Apple Developer ID yet: the first time you open
@@ -614,7 +632,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 ### Migration
 
-- No manual migration is required. AMF separates affected saved features
+- No manual migration is required. AIW separates affected saved features
   when they are next started.
 
 ## [v0.44.0] - 2026-09-21
@@ -641,10 +659,10 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 ### Changed
 
-- **Doc/marketing site moved off `*.pages.dev` to `agentmainframe.dev`.** The
+- **Doc/marketing site moved off `*.pages.dev` to its own domain.** The
   shared `pages.dev` subdomain is blocked by some corporate web filters; the
   site now has its own custom domain, with the old `*.pages.dev` URL and
-  `www.agentmainframe.dev` redirecting to it. No change to the site's build
+  the `www.` host redirecting to it. No change to the site's build
   pipeline or deploy target.
 
 ## [v0.43.0] - 2026-09-17
@@ -660,7 +678,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 - **Expert plan review is now an explicit frontier-model action.** At the final
   plan review, press `a` to request an Expert review, select a model from the
   same verified choices used by AI Review, and verify both harness and model
-  in the pre-call confirmation. AMF never starts or suggests this review
+  in the pre-call confirmation. AIW never starts or suggests this review
   automatically, and it does not inherit the ordinary review model. The
   Expert's implementation brief and optional clarification questions still
   feed the accepted-plan kickoff for the implementation agent. Codex choices
@@ -682,15 +700,15 @@ Tailscale, and model advice and reasoning levels are available in more places.
   and generate a short entry — the underlying issue, why it matters, where it
   applies, and the check to run next time — with the file/PR context folded
   in, since that text is the entry's only field. Generation runs in the
-  background without blocking the rest of AMF; the result lands in the same
+  background without blocking the rest of AIW; the result lands in the same
   editable confirm view for review before `⏎` saves it, and a failed or
   unavailable harness falls back to the original raw comment with normal
   save still available. Nothing is written until you explicitly confirm.
 
-- **GitHub issues can now become tracked AMF features.** Select a project on
+- **GitHub issues can now become tracked AIW features.** Select a project on
   the dashboard and press `g` to browse its open issues, refresh or page
   through the list, then review the feature name, branch, harness settings,
-  planning mode, and generated issue prompt before creating anything. AMF
+  planning mode, and generated issue prompt before creating anything. AIW
   warns when the same canonical repository issue is already linked, records
   the source issue on the feature row and session sidebar, and posts an
   identifying GitHub comment only after local creation succeeds. Failed or
@@ -702,7 +720,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   feature has no plan yet, leader `n` in its session opens a picker over the
   worktree's Markdown files; pressing `p` there now starts the same guided
   plan-mode interview available elsewhere (e.g. `P` on the dashboard),
-  scoped to that feature. Accepting writes `AMF_PLAN.md` as usual, which is
+  scoped to that feature. Accepting writes `AIW_PLAN.md` as usual, which is
   picked up automatically, so a feature with no plan can get one without
   leaving the picker to hand-write a file first.
 
@@ -718,7 +736,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   into the full Plan-mode interview — with an explicit message explaining why
   and everything already answered carried forward, so nothing is asked twice.
 
-- **A prompt that fails to reach an agent is no longer lost.** If AMF has a
+- **A prompt that fails to reach an agent is no longer lost.** If AIW has a
   prompt ready to send — for example, starting an agent from a TODO — but the
   launch itself fails (hitting your agent limit, a harness spawn error), that
   prompt now gets saved instead of discarded: it's added to your Prompt
@@ -728,12 +746,12 @@ Tailscale, and model advice and reasoning levels are available in more places.
   `[unsent]`, once a session exists there to send it from. No migration is
   required.
 
-- **AMF now has a public website** (`site/`, built with the Zola static site
+- **AIW now has a public website** (`site/`, built with the Zola static site
   generator): a landing page plus a documentation section covering
   installation, quick start, core concepts, keybindings, Learning Mode,
   reviewing changes and PR feedback, prompts and TODOs, overriding AI
   prompts, attention/resource limits, and configuration. This does not
-  change the `amf` binary or any in-app behavior — it is separate,
+  change the `aiw` binary or any in-app behavior — it is separate,
   publishable site content with its own build (`zola build`/`zola serve`)
   and a GitHub Actions workflow that deploys it to Cloudflare Pages on push
   to `main`. No migration is required.
@@ -746,7 +764,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   explicit opt-in that switches those passes to a read-only run, so the
   interviewer can read the attached documents *and* the surrounding codebase
   when shaping questions and the plan. A document outside the feature's
-  workdir is copied into a gitignored `.amf/interview-docs/` scratch folder so
+  workdir is copied into a gitignored `.aiw/interview-docs/` scratch folder so
   the agent can reach it, and that folder is cleared when the interview ends;
   one that has moved or become unreadable by the time a pass runs is skipped
   with a notice rather than failing the pass. The optional-AI consent screen
@@ -757,11 +775,11 @@ Tailscale, and model advice and reasoning levels are available in more places.
   adds an `attached_docs` column to the stored interviews table; existing rows
   are treated as having no attachments.
 
-- **AMF's AI reviews now split an oversized diff into slices instead of
+- **AIW's AI reviews now split an oversized diff into slices instead of
   failing or silently truncating it.** When the diff for the `W` AI PR review,
   or for a final-review AI co-review (`Ctrl+Space`, then `f`, then the
   co-review key) on a very large file, would exceed the review model's context
-  window, AMF parses the unified diff into per-file sections, packs them into
+  window, AIW parses the unified diff into per-file sections, packs them into
   budgeted batches, reviews each batch on its own, splits any single file
   that is still too big hunk by hunk, and then combines every batch's findings
   into one review with a synthesis pass. The running screen reports progress
@@ -775,8 +793,8 @@ Tailscale, and model advice and reasoning levels are available in more places.
   the size threshold; ordinary reviews are unchanged. The threshold is a
   per-harness default (Claude/Codex ~128k tokens, OpenCode/Pi ~96k) and can be
   overridden globally with `review_prompt_budget_tokens` in
-  `~/.config/amf/config.json`, or per repository with the same key in
-  `amf.json`; `0` disables pre-send splitting and relies only on retrying a
+  `~/.config/ai_workstation/config.json`, or per repository with the same key in
+  `aiw.json`; `0` disables pre-send splitting and relies only on retrying a
   smaller prompt after an actual "prompt too long" error. The
   batch/hunk/synthesis prompts are editable like every other headless prompt
   (dashboard `E`) — the new ids are `review.batch`, `review.hunk_split`,
@@ -787,7 +805,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 - **The plan interview no longer sends an over-long prompt when the repository
   context is large.** If an adaptive interview round, the plan synthesis, or
-  the advisory plan review would exceed the model's context window, AMF first
+  the advisory plan review would exceed the model's context window, AIW first
   drops the repository `README` / `CLAUDE.md` excerpts from that one prompt
   and retries; the interview dialog's footer says what was trimmed. If it is
   still too large, the prompt is sent as is with a note that it may not fit.
@@ -830,15 +848,15 @@ Tailscale, and model advice and reasoning levels are available in more places.
   `A`/`w`/`O` review passes fetch the PR diff with `gh pr diff`, which pulls it
   from GitHub's API — and GitHub refuses to render a diff past a size cap
   ("the diff exceeded the maximum number of lines"), so the review never
-  started. AMF now recognises that specific refusal and falls back to building
+  started. AIW now recognises that specific refusal and falls back to building
   the same merge-base diff locally with `git`, which has no such limit. The
   fallback fetches the PR head and base — from whichever repository `gh`
   resolves the PR against, so fork checkouts and `gh repo set-default` work —
   into private per-process refs (leaving your working tree, branch, and
   `origin/*` untouched) and cleans them up afterward, and its `git diff` is
-  pinned to the same flags AMF uses elsewhere so a repo-local `diff.external`
+  pinned to the same flags AIW uses elsewhere so a repo-local `diff.external`
   or `diff.context` setting can't distort it. If the PR is already merged (so
-  the local diff would come back empty), AMF re-surfaces GitHub's original
+  the local diff would come back empty), AIW re-surfaces GitHub's original
   refusal instead of reviewing nothing. Every
   other `gh pr diff` failure — no PR, not authenticated, offline — still
   surfaces as before. A diff that large may still exceed the review model's
@@ -872,11 +890,11 @@ Tailscale, and model advice and reasoning levels are available in more places.
   no longer rely on Alt+Enter, which Windows can intercept. Plain Enter keeps
   its existing save or send behavior. No migration is required.
 
-- **Prompt library entries no longer disappear when running multiple AMF
-  instances.** Saving in one AMF instance (e.g. another checkout open in a
+- **Prompt library entries no longer disappear when running multiple AIW
+  instances.** Saving in one AIW instance (e.g. another checkout open in a
   different terminal) could silently erase templates recently added or
   edited in another — often the most recent one, or several from the same
-  session. Templates are now saved independently of other AMF state, and the
+  session. Templates are now saved independently of other AIW state, and the
   prompt library always shows the latest saved templates when opened. No
   migration is required.
 
@@ -923,22 +941,22 @@ Tailscale, and model advice and reasoning levels are available in more places.
   investigation's recorded prompt. Leaving the box empty runs the
   investigation exactly as before. No migration is required.
 
-- **Every headless AI prompt AMF sends can now be viewed and overridden.**
-  AMF makes one-shot ("headless") AI calls behind the plan interview, Learning
+- **Every headless AI prompt AIW sends can now be viewed and overridden.**
+  AIW makes one-shot ("headless") AI calls behind the plan interview, Learning
   Mode, the final-review diff helpers (walkthrough, AI co-review, changeset
   overview, diff explanation), the AI PR review, and the review-memory
   bootstrap/compaction. A new **prompt-override manager** — `E` on the
   dashboard, or `Ctrl+Space` then `E` from a session — lists all 15 templates
   with their effective source (built-in / feature / project / global), opens
   an editor on the effective template, and saves an override at one of three
-  scopes: **feature** (this checkout, in `amf.db`), **global** (all projects,
-  in `amf.db`), or **project** (`amf.json`'s new `prompt_overrides` key,
+  scopes: **feature** (this checkout, in `aiw.db`), **global** (all projects,
+  in `aiw.db`), or **project** (`aiw.json`'s new `prompt_overrides` key,
   committed with the repo). An override can be shared across harnesses or
   pinned to one (harness picker in the save flow). Precedence is
   nearest-scope-wins — feature → project → global → built-in — with a
   per-harness template beating the shared one within the winning scope. `d`,
   `d` clears an override. Templates use visible `{{token}}` placeholders that
-  AMF re-fills with live context at run time; there is **no validation** —
+  AIW re-fills with live context at run time; there is **no validation** —
   a dropped or unknown token is saved and rendered verbatim. The editor
   lists the template items (placeholders) each prompt accepts above the
   edit box.
@@ -951,7 +969,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   Automated calls that run without a person watching — the Learning Mode
   answer queue and session summaries — announce with a non-blocking toast
   instead of the modal, so a batch of queued questions never stalls.
-  Migration: `amf.db` gains a `prompt_overrides` table
+  Migration: `aiw.db` gains a `prompt_overrides` table
   (`MIGRATION_034`), applied automatically on first launch; existing
   databases are unaffected until an override is saved.
 
@@ -994,10 +1012,10 @@ Tailscale, and model advice and reasoning levels are available in more places.
   that feature's agent with the TODO, unsent. It declines with a reason on
   a project that is not a git repository. Requires no migration.
 
-- **AMF's own AI review (`W`) now adds a compact usage summary to its
+- **AIW's own AI review (`W`) now adds a compact usage summary to its
   GitHub review.** The overall PR review records the harness, model, elapsed
   time, input, output, cached, and total tokens when each is reported, plus an
-  estimated cost using AMF's configured rates. Line comments stay focused on
+  estimated cost using AIW's configured rates. Line comments stay focused on
   their finding and do not repeat this metadata. Missing metrics and costs are
   labeled unavailable rather than shown as zero, so partial reports remain
   trustworthy. Existing cached reviews remain compatible; no migration is
@@ -1016,7 +1034,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   brightens on the siblings of whichever comment is selected, and `[` / `]`
   jump between them. The badge and cost appear only on comments that were
   actually resolved; a batch comment you never replied to shows nothing.
-  AMF's own AI Review (`W`) shows the same `Fix cost (est.): … · combined (N)`
+  AIW's own AI Review (`W`) shows the same `Fix cost (est.): … · combined (N)`
   on a finding once it has been posted and then fixed in PR Triage as part of
   a batch, matched back by file and line. Single-comment fixes are unchanged,
   and triage records written before this release are left as-is.
@@ -1039,7 +1057,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   file back.** A feature with review mode on used to be told to read
   `.claude/review-notes.md` each batch before appending, so the growing file
   was pulled into the agent's context over and over. The instruction now says
-  to blind-append and *not* read the file (or its archive) — AMF already keeps
+  to blind-append and *not* read the file (or its archive) — AIW already keeps
   only the newest note per changed file after every turn, so the read was
   redundant. The developer-notes panel in the final-review diff viewer is
   unchanged, and the `g` on-demand walkthrough still fills in files with no
@@ -1073,7 +1091,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   until someone clicked approve. The workflow is now capture-only and the
   private Cloudflare Pages gallery is deployed from your own machine instead —
   nothing waits for a reviewer, and the Cloudflare credentials never enter CI.
-  This is contributor tooling for the AMF repository itself and does not affect
+  This is contributor tooling for the AIW repository itself and does not affect
   managed projects.
 
 ### Migration
@@ -1083,13 +1101,13 @@ Tailscale, and model advice and reasoning levels are available in more places.
 - Schema migration 032 adds two nullable columns (`batch_id`,
   `batch_fix_cost`) to `pr_comment_triage`. It applies automatically on
   startup; existing triage rows keep both as `NULL` (not part of any batch)
-  and are unaffected. No downgrade step is needed — an older AMF simply
+  and are unaffected. No downgrade step is needed — an older AIW simply
   ignores the columns.
 
 - Publishing screenshot proof to a PR now deploys from your machine, so it
   needs a one-time local setup: put a `CLOUDFLARE_API_TOKEN` scoped to
   Cloudflare Pages · Edit in the environment (the maintainer keeps it in
-  `~/.secrets/cf-amf-pages.env`, sourced by the `amf-publish-screenshots` shell
+  `~/.secrets/cf-aiw-pages.env`, sourced by the `aiw-publish-screenshots` shell
   wrapper) and set `CLOUDFLARE_ACCOUNT_ID`. `wrangler login` also works but is
   unreliable; prefer the token. The `screenshot-pages` GitHub environment is no
   longer used and can be deleted along with its `CLOUDFLARE_*` secrets.
@@ -1157,14 +1175,14 @@ Tailscale, and model advice and reasoning levels are available in more places.
   cancels from either keymap. Vim mode starts off for each new review, so
   existing plain-editor behavior is unchanged.
 
-- **AMF's own AI review (`W`) now carries model, token, and cost
+- **AIW's own AI review (`W`) now carries model, token, and cost
   attribution.** After a run completes, the AI Review pane shows a line
   naming the harness and model that produced the findings plus the run's
   input/output tokens and estimated cost. The same disclosure is inserted
-  above the `— AI review via AMF` marker on the posted GitHub summary and on
+  above the `— AI review via AIW` marker on the posted GitHub summary and on
   every inline comment, so a reader on the PR can tell which model reviewed
   their code and roughly what it cost. It uses the same configured pricing
-  and rounding as AMF's other usage meters, and matches the disclosure
+  and rounding as AIW's other usage meters, and matches the disclosure
   already shown on AI-drafted PR Triage replies. A harness that reports no
   token usage degrades to model-only attribution rather than showing a
   fabricated `$0.00`; a review generated before this change keeps the bare
@@ -1203,25 +1221,25 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 - **A new leader command starts a fresh agent session for continuing work
   without dragging along a long conversation history.** From an agent
-  session, press `Ctrl+Space`, then `Shift+F`. AMF asks what you want the new
+  session, press `Ctrl+Space`, then `Shift+F`. AIW asks what you want the new
   session to do, then opens a brand-new session in the same feature, using
   the same agent. Its compose box arrives pre-filled (not sent) with your
   instruction plus a pointer to the feature's current plan and the files
   changed on this branch, so it starts oriented without inheriting the old
   session's accumulated context — review it and send when ready. If the
-  feature has no plan file, that part is left out and AMF says why; on a
+  feature has no plan file, that part is left out and AIW says why; on a
   non-git project, or a branch with nothing changed yet, the changed-files
   list is simply left out too.
 
 - **You can now customize the context-window size and the warning/critical
-  thresholds behind the `Ctx` indicator, instead of relying on AMF's
+  thresholds behind the `Ctx` indicator, instead of relying on AIW's
   hardcoded defaults.** Press `w` on the dashboard to open Context Window
-  Settings: set a token count to override the context-window size AMF
+  Settings: set a token count to override the context-window size AIW
   assumes when a harness doesn't report its own (useful if you're on a
-  larger or smaller context-window plan than AMF's default guess), and set
+  larger or smaller context-window plan than AIW's default guess), and set
   the usage percentages at which the indicator switches to `WARNING` and
   `CRITICAL` (70% / 85% by default). These are global settings, saved to
-  your AMF config. No migration is required — leaving both blank/default
+  your AIW config. No migration is required — leaving both blank/default
   keeps today's behavior exactly as it is.
 
 ### Changed
@@ -1243,7 +1261,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 - **Raised the fallback context-window size used for Claude Code sessions
   from 200,000 to 900,000 tokens.** This only affects the `Ctx` percentage
   when Claude's own status line or transcript doesn't report its context
-  window size directly; AMF's estimate now better matches Sonnet's actual
+  window size directly; AIW's estimate now better matches Sonnet's actual
   auto-compact window instead of understating it.
 
 - **Project and global TODO lists can now be shown or hidden independently.**
@@ -1252,7 +1270,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   navigation, `I` (implement next), and other cross-pane actions. The worktree
   list remains visible whenever the feature has one, while repo-root features
   may hide both optional lists. Visibility is shared by every TODO view for the
-  current AMF run and resets to both lists shown on the next launch.
+  current AIW run and resets to both lists shown on the next launch.
 - **TODO priority and launch keys moved to make room for the scope toggles.**
   Press `P` to cycle priority and `Enter` to start or plan the selected TODO.
   The previous `\` side-pane toggle and `g` launch alias are no longer used in
@@ -1288,9 +1306,9 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 - **Agent sidebars now keep the feature's current plan within reach.** Claude
   Code, Codex, OpenCode, and Pi sessions show the current plan in a dedicated
-  sidebar section; press `Ctrl+Space`, then `n` to open it in AMF's read-only
-  Markdown viewer. `AMF_PLAN.md` is selected automatically. When it is absent,
-  AMF offers Markdown files from the feature worktree and remembers the chosen
+  sidebar section; press `Ctrl+Space`, then `n` to open it in AIW's read-only
+  Markdown viewer. `AIW_PLAN.md` is selected automatically. When it is absent,
+  AIW offers Markdown files from the feature worktree and remembers the chosen
   file for that feature. Moved or deleted selections are cleared safely, and
   `r` refreshes a plan while it is open. Dashboard and non-agent session rows
   remain unchanged.
@@ -1327,7 +1345,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   Closing or stopping the associated agent does not silently reset the work:
   the TODO stays in progress until you change it. Press `Space` or `x` to cycle
   not started → in progress → completed. If an associated session is removed,
-  AMF clears the stale link while preserving the visible in-progress state.
+  AIW clears the stale link while preserving the visible in-progress state.
 
 ### Fixed
 
@@ -1343,14 +1361,14 @@ Tailscale, and model advice and reasoning levels are available in more places.
   revision instead of looking identical to a review that never ran. Running
   reviews and unpublished findings still take precedence, while failed reviews
   get a separate failure badge without crowding the header with error details.
-  Same-revision results survive leaving the pane and restarting AMF; a new head
+  Same-revision results survive leaving the pane and restarting AIW; a new head
   commit starts unreviewed as before. Empty or incomplete agent responses are
   recorded as failures rather than clean reviews.
 
 ### Migration
 
 - No migration is required for current-plan shortcuts. Existing features start
-  without a manual selection, and AMF updates its database automatically.
+  without a manual selection, and AIW updates its database automatically.
 - No migration is required for context-window indicators.
 - No migration is required for AI Review line mapping. Existing cached findings
   remain readable; entries without side information are handled conservatively
@@ -1372,7 +1390,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
   Two other scopes sit beside it. Press `\` in the editor to reveal the
   **project** list — the one that existed before — and a new **global** list
-  that belongs to no project and is shared across every repo AMF knows about.
+  that belongs to no project and is shared across every repo AIW knows about.
   The three panes each keep their own cursor, scroll, and scratchpad; `Tab` /
   `Shift+Tab` move between them, and the reveal is remembered between sessions.
   The global list has no entry point of its own — it is reachable as a side
@@ -1398,7 +1416,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   names the list it is writing to.
 
   Deleting a feature deletes its worktree list along with the checkout, so if
-  that list still holds unfinished items AMF asks first: move them to the
+  that list still holds unfinished items AIW asks first: move them to the
   project list, move them to the global list, delete them with the worktree, or
   cancel. Nothing is killed or removed until you answer.
 
@@ -1427,7 +1445,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   rather than the session; completing an item clears it too, and a TODO whose
   agent session has since been removed is picked up again automatically rather
   than staying marked forever. When every remaining TODO is already underway,
-  AMF offers the next one anyway and asks whether to go to the work already
+  AIW offers the next one anyway and asks whether to go to the work already
   started, start a second agent on it, skip it, or cancel — rather than
   reporting an empty list that is not empty.
 
@@ -1443,7 +1461,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
   agent is started on it.
 
   A plan that lands in a feature that already exists is written to
-  `AMF_PLAN.todo-<name>.md`, beside that feature's own `AMF_PLAN.md` rather
+  `AIW_PLAN.todo-<name>.md`, beside that feature's own `AIW_PLAN.md` rather
   than over it, and the agent is told which file is its own. A TODO planned
   into a new feature stays open on the list, is marked as linked, and `g`
   afterwards jumps to that feature instead of asking again; if that feature is
@@ -1459,7 +1477,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 - **Plan interviews can pause while you inspect the codebase.** Press
   `Ctrl+Q` to park the interview on the dashboard without losing the answer
-  you are editing. AMF marks the relevant project or feature row so `Enter`
+  you are editing. AIW marks the relevant project or feature row so `Enter`
   can resume it directly; if you open a session to investigate first,
   leaving that session returns to the interview automatically. A plan
   operation already using agent tokens must finish before the interview can
@@ -1467,25 +1485,25 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 ### Changed
 
-- **Project config moved to `amf.json` at the repo root.** AMF's per-project
+- **Project config moved to `aiw.json` at the repo root.** AIW's per-project
   settings — custom sessions, feature presets, lifecycle hooks, keybindings,
-  plan questions, and prompt templates — now live in a tracked `amf.json`
-  beside `Cargo.toml`, instead of `.amf/config.json`. Committing config no
-  longer needs `git add -f`: `.amf/` is ignored dir-wide because everything
+  plan questions, and prompt templates — now live in a tracked `aiw.json`
+  beside `Cargo.toml`, instead of `.aiw/config.json`. Committing config no
+  longer needs `git add -f`: `.aiw/` is ignored dir-wide because everything
   still inside it is generated, and the config file is no longer an exception
-  hidden in an ignored directory. Existing `.amf/config.json` files keep being
+  hidden in an ignored directory. Existing `.aiw/config.json` files keep being
   read until the next config write moves them, and that move either completes
   or leaves the old file untouched — an interrupted migration never leaves you
   with a half-written config.
-- **`amf doctor` reports projects still on the legacy config path.** The new
-  `config-path` finding names each `.amf/config.json` it can still see, and
+- **`aiw doctor` reports projects still on the legacy config path.** The new
+  `config-path` finding names each `.aiw/config.json` it can still see, and
   distinguishes the two cases: a file that is simply not migrated yet (still
   read, and moved on the next config write) from one sitting next to an
-  `amf.json` that has already superseded it, where edits to the old file do
+  `aiw.json` that has already superseded it, where edits to the old file do
   nothing.
-- **`.amf/` explains itself.** The directory now gets a `README.md` when AMF
+- **`.aiw/` explains itself.** The directory now gets a `README.md` when AIW
   creates it, saying that its contents are generated and safe to delete, and
-  pointing at `amf.json` for real settings. Your own edits to that README are
+  pointing at `aiw.json` for real settings. Your own edits to that README are
   left alone.
 - **The dashboard's needs-attention badge now shows `<leader i>`.** Questions,
   completed work, waiting sessions, and other input requests now advertise the
@@ -1493,9 +1511,9 @@ Tailscale, and model advice and reasoning levels are available in more places.
   opening help. On a narrow terminal the working directory is shortened before
   the badge is, so the shortcut stays readable. No configuration change is
   required.
-- **Plan mode now keeps its approved plan in `AMF_PLAN.md` at the feature root.**
+- **Plan mode now keeps its approved plan in `AIW_PLAN.md` at the feature root.**
   The plan is no longer hidden under the Claude-specific `.claude/` directory,
-  and the AMF-specific name avoids overwriting a repository's conventional
+  and the AIW-specific name avoids overwriting a repository's conventional
   `PLAN.md`. Codex also receives the same editable, unsubmitted kickoff prompt
   as Claude when a newly approved plan starts work, including when startup
   steering was enabled. Existing `PLAN.md` and `.claude/plan.md` files remain
@@ -1503,12 +1521,12 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 ### Fixed
 
-- **AMF no longer exhausts your GitHub API budget refreshing PR badges.** The
+- **AIW no longer exhausts your GitHub API budget refreshing PR badges.** The
   dashboard's pull-request badge was refreshed every 30 seconds, and each sweep
   made a GitHub API call for *every* feature you have — not just the ones with
   open pull requests. On a workspace with ~34 features that is around 8,500
   points an hour against GitHub's 5,000-point hourly GraphQL budget, so simply
-  leaving AMF open drained the whole allowance in about 35 minutes. The first
+  leaving AIW open drained the whole allowance in about 35 minutes. The first
   visible symptom was usually PR Triage failing with a rate-limit error — the
   one workflow that had not caused it.
 
@@ -1521,13 +1539,13 @@ Tailscale, and model advice and reasoning levels are available in more places.
   interval governs how often badges refresh, not how long you wait to see one:
   the first sweep still runs a few seconds after launch.
 
-  When GitHub does report an exhausted budget, AMF now says so and pauses badge
+  When GitHub does report an exhausted budget, AIW now says so and pauses badge
   refresh for 15 minutes rather than retrying into an empty allowance, and
   features it did not get to keep their existing badge instead of blanking.
 
   Two smaller behavior changes come with the batching: a repository with no
   GitHub remote is now treated as "no pull requests" instead of reporting an
-  error per feature, and a feature is matched by the branch AMF has recorded for
+  error per feature, and a feature is matched by the branch AIW has recorded for
   it rather than by whatever branch its worktree currently has checked out. Note
   that a worktree whose `origin` is a **fork**, with its PR on the upstream
   repository, no longer shows a badge.
@@ -1543,20 +1561,20 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 - **Features with a damaged worktree can be deleted again.** If a worktree's
   `.git` file is already missing, Git refuses to remove it even with force and
-  AMF used to leave the feature permanently stuck in the dashboard. AMF now
+  AIW used to leave the feature permanently stuck in the dashboard. AIW now
   recognizes that stale-worktree failure and finishes removing the feature.
 
 ### Migration
 
-- **Project config migrates itself.** `.amf/config.json` is still read, so
-  existing checkouts keep working untouched. The next time AMF writes config
+- **Project config migrates itself.** `.aiw/config.json` is still read, so
+  existing checkouts keep working untouched. The next time AIW writes config
   — saving the config wizard, exporting a prompt template — it writes
-  `amf.json` and removes the old file, so there is only ever one answer to
-  where config lives. To migrate by hand, `git mv .amf/config.json amf.json`.
-  Drop the force-tracked `.amf/config.json` exception from your `.gitignore`
+  `aiw.json` and removes the old file, so there is only ever one answer to
+  where config lives. To migrate by hand, `git mv .aiw/config.json aiw.json`.
+  Drop the force-tracked `.aiw/config.json` exception from your `.gitignore`
   once you have.
 - No migration is required for plan mode. The next plan you accept is written
-  to `AMF_PLAN.md`; older `.claude/plan.md` files may be removed when no longer
+  to `AIW_PLAN.md`; older `.claude/plan.md` files may be removed when no longer
   needed.
 - Existing `PR Triage` and legacy `PR Review` sessions continue to be
   recognized when the default name is used.
@@ -1567,7 +1585,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 - **The dashboard says why an agent stopped.** A stopped session used to be a
   single undifferentiated "waiting for input", which is the one thing you
-  already knew. AMF now reads its harnesses' lifecycle hooks and marks each
+  already knew. AIW now reads its harnesses' lifecycle hooks and marks each
   stopped session as **Question** (the agent asked something, or wants
   permission, and cannot continue without an answer), **Completed** (its turn
   ended and the work wants a look), or **Waiting** (stopped, reason unknown).
@@ -1577,12 +1595,12 @@ Tailscale, and model advice and reasoning levels are available in more places.
   needs-attention list — questions first, oldest
   first within each group — replacing the flat input-request picker. Inside a
   session, `Ctrl+Space` then `i` opens the same list and the sidebar reports
-  the session's own state. AMF does not capture the agent's message; open the
+  the session's own state. AIW does not capture the agent's message; open the
   session to read the question or the summary.
 
   A state clears when the agent produces output again, or ages out after
   `waiting_stale_minutes` (default 30; `0` keeps states until the agent
-  resumes). States are held in memory only, so an AMF restart clears them and
+  resumes). States are held in memory only, so an AIW restart clears them and
   sessions show as ordinary active until their next event. Ageing out changes
   nothing about the session itself: a waiting session still counts toward
   `max_concurrent_agents` and still qualifies as dormant under `z`.
@@ -1618,23 +1636,23 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 ### Changed
 
-- **Harness fidelity varies, and AMF does not guess.** Claude Code and
+- **Harness fidelity varies, and AIW does not guess.** Claude Code and
   OpenCode report all three states. Codex fires one hook when a turn ends and
   cannot say whether it finished or is asking, so its sessions show as
   **Waiting** either way rather than being labelled done. **Pi has no hook
   mechanism at all**, so its sessions carry no state — they behave exactly as
   they did before this release rather than showing a generic waiting marker.
-- **Claude workspaces regain a `Notification` hook.** AMF used to strip it,
+- **Claude workspaces regain a `Notification` hook.** AIW used to strip it,
   because the old wiring queued a pending input for what is only a permission
   prompt. The new wiring runs the attention script alone: it records why the
   session stopped and never touches the notification flow. Only notifications
   that actually block the turn — permission prompts and elicitations — become
   a **Question**; idle nudges, sign-in notices, and completion messages report
   nothing, so they cannot relabel work that has already finished.
-  AMF-generated hook scripts live under `~/.config/amf/hooks/` and are
+  AIW-generated hook scripts live under `~/.config/ai_workstation/hooks/` and are
   rewritten on the next startup after upgrading; nothing you wrote yourself is
   touched.
-- **AMF's hooks no longer need `jq`.** Every notification hook used to shell
+- **AIW's hooks no longer need `jq`.** Every notification hook used to shell
   out to `jq`, and failed quietly without it: nothing errored, the dashboard
   simply never showed an agent working, finishing, or asking — which looks
   exactly like an agent with nothing to say. There is nothing to install now,
@@ -1642,7 +1660,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 ### Fixed
 
-- **A prompt AMF opens a session to deliver no longer disappears when the
+- **A prompt AIW opens a session to deliver no longer disappears when the
   resource warning asks first.** Accepting a plan, spawning an agent from a
   TODO, and escalating a Learning Mode question all open a session and load a
   prompt into its composer for you to review. If the machine was at the agent
@@ -1657,12 +1675,12 @@ Tailscale, and model advice and reasoning levels are available in more places.
   dashboard hidden behind the dialog, so you could come out of a plan review
   pointed at a different feature than you went in on. The wheel now scrolls
   the plan, the agent's review of it, and the plan and instruction editors,
-  three lines at a time like every other scrollable view in AMF. Clicking
+  three lines at a time like every other scrollable view in AIW. Clicking
   inside the dialog no longer reaches the dashboard underneath either, where
   a double-click could open or start whichever feature happened to be there.
 
 - **Learning Mode says when its file list is incomplete.** In a project that
-  is not a git repository, any folder AMF could not open was left out
+  is not a git repository, any folder AIW could not open was left out
   silently — and a list missing a whole folder looks exactly like a project
   that does not have one. It now tells you how many folders are missing and
   where to see which ones.
@@ -1701,7 +1719,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 
 - **The README now covers Learning Mode.** A new *Understand a codebase you
   didn't write* workflow — placed first, because it is the one that needs no
-  prior knowledge of AMF — explains what the mode is for, that nothing in it
+  prior knowledge of AIW — explains what the mode is for, that nothing in it
   changes your files and `S` is the single exception, how to start when you do
   not yet know what to ask, the two ask keys and the five keys that act on an
   answer, and the newcomer/familiar reading levels. It also says why `D`
@@ -1713,7 +1731,7 @@ Tailscale, and model advice and reasoning levels are available in more places.
 - **`CLAUDE.md` documents Learning Mode's architecture** — the four new
   modules, the read-only invariant and its one exception, and the distinction
   between a follow-up and a deep dive, which are two different relationships
-  between Q&A rows rather than one. Nothing about AMF's behavior changes.
+  between Q&A rows rather than one. Nothing about AIW's behavior changes.
 
 ### Migration
 
@@ -1735,11 +1753,11 @@ No migration is required.
   it goes. Entries you have handed over are marked `→ session`, and pressing
   `S` again returns to that conversation rather than starting a second one; if
   that session has since been closed or its agent has exited, a fresh one
-  starts and AMF tells you which happened.
+  starts and AIW tells you which happened.
 
 ### Fixed
 
-- **Lists no longer lose whatever they start with.** Anywhere AMF renders
+- **Lists no longer lose whatever they start with.** Anywhere AIW renders
   markdown — Learning Mode answers, the markdown viewer, plan review, PR
   triage — a bullet that began with code showed only the rest of the line
   (`• — it worked` instead of `` `Ok(())` — it worked``). Task list
@@ -1751,7 +1769,7 @@ No migration is required.
   Claude" while it was still being written. It now reads once and matches
   what is actually happening: `Claude is answering`, `queued for Claude`, or
   `Claude couldn't answer`.
-- **Building AMF from source on macOS is warning-free again.** Linux-only
+- **Building AIW from source on macOS is warning-free again.** Linux-only
   memory probes are no longer compiled into the macOS binary as unused code.
 
 ### Migration
@@ -1822,7 +1840,7 @@ Learning Mode opens its own help with `?`, and shows it once automatically the
 first time you open a project. No migration is required; the mode adds its own
 storage the first time it runs.
 
-- **AMF now warns before it fills the machine up, instead of after.** Starting
+- **AIW now warns before it fills the machine up, instead of after.** Starting
   an agent — a feature, or a new agent session — first checks how many agent
   sessions are already running across every project (plus any headless review
   or plan-interview run in flight) and how much memory the OS says is left. If
@@ -1832,13 +1850,13 @@ storage the first time it runs.
   `max_concurrent_agents` (default `4`) and `low_memory_warn_mb` (default
   `1536`); set either to `0` to turn that half off. The defaults are sized from
   measured idle memory per harness — the README's Configuration section has
-  the numbers and the reasoning. Platforms where AMF cannot read a trustworthy
+  the numbers and the reasoning. Platforms where AIW cannot read a trustworthy
   memory figure simply run on the agent count alone.
 
-- **Stopping a feature now closes the editor AMF opened for it.** Editors were
+- **Stopping a feature now closes the editor AIW opened for it.** Editors were
   the one thing a feature owned that lived outside tmux, so stopping it left
   the window — and the language server underneath, routinely the single
-  largest process on the box — running until you noticed. AMF now opens VS Code
+  largest process on the box — running until you noticed. AIW now opens VS Code
   with `--new-window` and remembers which window it created, and stopping (or
   deleting) the feature ends that window and its children. It only ever closes
   a window it can prove it opened and can still identify; anything else is
@@ -1849,7 +1867,7 @@ storage the first time it runs.
   before its window finishes opening is handled too: the window is closed as
   soon as it appears, and the stop says so. Set `kill_editor_on_stop` to
   `false` to keep the old behavior. Note that under WSL, `code` hands off to
-  the Windows side and no local window process exists for AMF to own, so it
+  the Windows side and no local window process exists for AIW to own, so it
   will report a skip there.
 
 - **`z` on the dashboard lists dormant features.** A feature counts as dormant
@@ -1861,9 +1879,9 @@ storage the first time it runs.
   since you looked at it, and whether a tracked editor is still alive, with
   `x` stop, `e` close just the editor, `d` delete, and `Enter` to jump in.
 
-- **`amf doctor` reports what AMF is putting on this machine.** Agent sessions
+- **`aiw doctor` reports what AIW is putting on this machine.** Agent sessions
   against your limit, editor windows open alongside them, memory and swap,
-  `amf-*` tmux sessions with no matching feature, worktrees on disk with no
+  `aiw-*` tmux sessions with no matching feature, worktrees on disk with no
   matching feature, and editors still running for features you stopped.
   Editors sit next to the agent count rather than inside it — one language
   server can outweigh five harnesses, so a single number could not price both
@@ -1871,9 +1889,9 @@ storage the first time it runs.
   for the same reason. `--json` emits the same findings for
   scripting. It is advice only — it stops nothing, kills nothing, deletes
   nothing, and always exits `0`. That extends to its own files: it opens the
-  database strictly read-only, so unlike launching AMF it will not create it,
+  database strictly read-only, so unlike launching AIW it will not create it,
   migrate its schema, or rewrite a byte of it, and it will not create a
-  `config.json` on a machine that has none. On a machine AMF has never run on
+  `config.json` on a machine that has none. On a machine AIW has never run on
   it reports on the machine alone and says so. Under WSL it points at where swap is
   configured while being explicit that adding swap trades an out-of-memory kill
   for heavy paging, and that lowering `max_concurrent_agents` is the fix for
@@ -1881,14 +1899,14 @@ storage the first time it runs.
 - **AI-drafted PR replies disclose how they were generated.** An unchanged
   reply returned by a PR Triage fix session now includes the agent harness,
   best-effort model name, estimated token usage, and estimated cost for that
-  fix before AMF's existing AI-attribution footer. The details are recorded
+  fix before AIW's existing AI-attribution footer. The details are recorded
   against the session the fix was injected into, so re-opening PR Triage,
   switching fix targets, or removing a session never re-attributes a draft to a
   different agent — a draft whose session is gone keeps its harness and model
   and reports usage as unavailable. Harnesses that do not expose model or usage
   telemetry say that it is unreported or unavailable instead of silently
   omitting the field. Editing the draft still changes it to a user-authored,
-  AMF-posted reply and removes the AI generation disclosure. The database
+  AIW-posted reply and removes the AI generation disclosure. The database
   migrates in place on first launch; drafts captured before the upgrade post
   with their details marked unreported.
 
@@ -1908,7 +1926,7 @@ storage the first time it runs.
   it does.
 
 - **Pi can now power its own plan interviews.** When the installed Pi CLI
-  advertises its current safe-headless contract, AMF prefers it for Pi
+  advertises its current safe-headless contract, AIW prefers it for Pi
   features instead of immediately falling back to Claude, Codex, or Opencode.
   Question generation and synthesis run without tools or repository-provided
   resources; directed feedback and isolated investigations receive only Pi's
@@ -1917,21 +1935,21 @@ storage the first time it runs.
   No migration is required.
 
 - **AI Review can pick a model when it runs on Pi.** Pi previously skipped
-  straight to its default model because AMF didn't pass `--model` to it;
+  straight to its default model because AIW didn't pass `--model` to it;
   now that it does, the model picker opens for Pi like it does for every
   other harness, and a configured `review_model` applies to Pi runs.
 
 - **You can open the file you are reviewing in your own editor, at the line you
   are looking at.** Sometimes you need to poke around the real file before you
-  can write the comment. In Final Review, `E` suspends AMF and opens the current
+  can write the comment. In Final Review, `E` suspends AIW and opens the current
   file in `$VISUAL` / `$EDITOR` (falling back to `vi`), with the cursor already
   on the line the review cursor is on; with the line cursor off it opens at the
   first hunk. Quitting the editor drops you back exactly where you were. If you
-  changed the file while you were in there, AMF notices and reloads the diff, so
+  changed the file while you were in there, AIW notices and reloads the diff, so
   your comments never end up sitting on hunks that have moved. The line jump
   works with the vi family, nano, emacs, kak, micro, helix, Sublime, Zed, and
   VS Code and its forks (which are told to wait rather than returning
-  immediately); an editor AMF does not recognise simply opens at the top of the
+  immediately); an editor AIW does not recognise simply opens at the top of the
   file rather than being handed a flag it would treat as a filename. An
   `$EDITOR` that already carries its own flags, like `emacsclient -nw`, is
   respected. Files with nothing to open — a deletion, or a binary — say so
@@ -1940,7 +1958,7 @@ storage the first time it runs.
 
 - **The theme picker groups subtypes instead of listing all 28 themes flat.**
   Catppuccin and Gruvbox Material alone made up 22 of the picker's 28 rows,
-  burying the six standalone themes (Default, AMF, Dracula, Nord, Gruvbox
+  burying the six standalone themes (Default, AIW, Dracula, Nord, Gruvbox
   Dark, Gruvbox Light) in the middle of a long list. Both families now
   collapse into a single row — `Catppuccin (4)`, `Gruvbox Material (18)` —
   giving eight rows at the top level. Opening a group (`Enter`) drills into
@@ -2039,9 +2057,9 @@ storage the first time it runs.
   feature.** An opted-in AI flow turns the interview into a structured
   implementation plan, then shows the rendered markdown for review. You can
   edit the raw plan, regenerate it, scroll through the preview, or abort;
-  AMF writes `.claude/plan.md` and starts the feature only after you press
+  AIW writes `.claude/plan.md` and starts the feature only after you press
   `Enter` to accept. If synthesis is unavailable or returns an invalid plan,
-  AMF shows the raw interview plan as a fallback. No migration is required.
+  AIW shows the raw interview plan as a fallback. No migration is required.
 - **The dashboard now shows when an AI Review is generating.** A feature's PR
   badge reads `[PR #123 · 4 open · AI review]` while its review runs, so you
   can leave the AI Review pane, work elsewhere, and still see the pass is in
@@ -2055,7 +2073,7 @@ storage the first time it runs.
   on `Current` returns directly to the editable review. No migration is
   required.
 - **Plan-mode interviews now ask AI-generated follow-up questions.** After
-  the configured questions, AMF offers an explicit opt-in before using any
+  the configured questions, AIW offers an explicit opt-in before using any
   agent tokens. If accepted, the feature's agent harness (or an available
   fallback) tailors up to two more rounds to the brief and prior answers,
   with a progress screen while each round runs. Declining or finishing early
@@ -2072,11 +2090,11 @@ storage the first time it runs.
   real finish; `Esc` just closes it and returns to reviewing, with nothing
   written, posted, or dispatched. No migration is required.
 - **PR Triage's detail pane now shows a comment's replies, however they got
-  posted.** A reply posted outside AMF's own `R`/`n` flow — e.g. an agent
+  posted.** A reply posted outside AIW's own `R`/`n` flow — e.g. an agent
   working the PR with its own `gh` access — previously left no trace next to
   the original comment; you had to hunt the flat list for the reply entry. A
-  new "Replies" section lists each reply with its author, a `[via AMF]` chip
-  when it carries AMF's own posting disclosure, and the thread's current
+  new "Replies" section lists each reply with its author, a `[via AIW]` chip
+  when it carries AIW's own posting disclosure, and the thread's current
   `[outdated]`/`[✓ resolved]` chips, so confirming a thread already got
   answered is a glance at the comment, refreshed on demand with `r`. The
   `pr-continue` skill also now explicitly avoids posting a "done" reply on
@@ -2090,19 +2108,19 @@ storage the first time it runs.
   action left unset still falls back to the existing shared `review_model`
   setting, so nothing changes for configs that don't opt in. No migration is
   required; existing `review_model` configs continue to work.
-- **Review Mode note reads stay bounded without losing history.** AMF now
+- **Review Mode note reads stay bounded without losing history.** AIW now
   keeps only the latest note for each of the 50 most recently documented
   files in `.claude/review-notes.md`, moving older and superseded sections
   to `.claude/review-notes-archive.md` after each agent turn. Review
   surfaces merge both files, while agents only re-read the small live file.
-  No migration is required; AMF archives existing notes automatically.
-- **Codex can now capture visual proof of AMF UI changes.** Codex features
-  receive an `amf-screenshot` skill that drives the same isolated screenshot
+  No migration is required; AIW archives existing notes automatically.
+- **Codex can now capture visual proof of AIW UI changes.** Codex features
+  receive an `aiw-screenshot` skill that drives the same isolated screenshot
   harness as Claude, verifies captured frames, and returns viewable PNG or GIF
-  files without touching the user's real AMF database or tmux sessions.
+  files without touching the user's real AIW database or tmux sessions.
 - **Leaving a plan interview no longer loses your answers.** Answers are saved
   as you give them, so aborting the interview, cancelling the feature, or
-  closing AMF entirely keeps them. Starting the interview again for the same
+  closing AIW entirely keeps them. Starting the interview again for the same
   feature offers to resume the saved draft or discard it and start over, and
   tells you when it was saved, how much was answered, and whether a plan had
   already been generated — nothing is restored until you choose.
@@ -2145,7 +2163,7 @@ storage the first time it runs.
   instruction so you can retry without retyping it.
 - **Plan research can now stay out of the implementation session's context.**
   Press `i` at the plan review gate and enter up to four research focuses,
-  separated by blank lines. AMF runs each in a fresh read-only agent context,
+  separated by blank lines. AIW runs each in a fresh read-only agent context,
   validates and bounds the findings, then gives only those findings to a
   separate no-tools planning pass that merges them into the draft. Failed or
   dismissed investigations leave the current plan untouched, and a failure
@@ -2155,29 +2173,29 @@ storage the first time it runs.
 
 - **Vibeless review stays with the feature that enabled it.** A Vibeless
   feature using the main repository no longer causes inherited diff-review
-  popups in later worktree features. AMF scopes existing hooks automatically
+  popups in later worktree features. AIW scopes existing hooks automatically
   on startup; no manual configuration changes are required.
 
 ### Migration
 
-No manual migration is required. AMF creates and migrates the new local
+No manual migration is required. AIW creates and migrates the new local
 storage automatically and refreshes managed feature hooks on startup.
 
 ## [v0.34.1] - 2026-08-12
 
 ### Fixed
 
-- **Older macOS Claude hooks are repaired before they can run.** AMF now checks
+- **Older macOS Claude hooks are repaired before they can run.** AIW now checks
   worktree-local settings, root-repository settings inherited by worktrees,
   legacy project settings, and Claude's global settings. Old unquoted commands
-  under `~/Library/Application Support/amf` no longer keep producing
+  under `~/Library/Application Support/aiw` no longer keep producing
   `PostToolUse: Bash hook error`, including when Claude is a secondary session
   in a Codex, OpenCode, or Pi feature. Generated Claude scripts now live under
-  the space-free `~/.amf/hooks` path and use Claude's direct command form.
+  the space-free `~/.config/ai_workstation/hooks` path and use Claude's direct command form.
 
 ### Migration
 
-No manual settings edits are required. After upgrading, restart AMF and restart
+No manual settings edits are required. After upgrading, restart AIW and restart
 affected features so Claude reloads the automatically repaired hook settings.
 
 ## [v0.34.0] - 2026-08-07
@@ -2189,7 +2207,7 @@ affected features so Claude reloads the automatically repaired hook settings.
   including clear labels for actions that spend agent tokens.
 - **Final Review can open the current file in your editor.** Press `E` to open
   the reviewed file at the cursored line using `$VISUAL` or `$EDITOR`.
-  Returning to AMF reloads the diff if the file changed.
+  Returning to AIW reloads the diff if the file changed.
 - **Final Review can navigate comments across files and undo verdicts.** Use
   `{` and `}` to visit review comments throughout the changeset, and `U`
   to restore the most recent approve, skip, or rejection.
@@ -2204,22 +2222,22 @@ affected features so Claude reloads the automatically repaired hook settings.
 - **Plans can be refined without filling the implementation session with
   research.** Press `f` to give a draft direct revision feedback or `i` to
   run isolated, read-only investigations. After accepting a new plan for a
-  running feature, AMF can seed a handoff prompt into that feature's composer.
+  running feature, AIW can seed a handoff prompt into that feature's composer.
 - **Pi can power plan interviews and expose model selection for AI Review.**
   Current Pi installations use the safe headless flow; older versions keep the
   existing fallback to another available harness.
 - **The theme picker groups large theme families.** Catppuccin and Gruvbox
   Material now open into their own variant screens, keeping the top-level
   picker short while preserving live previews and existing shortcuts.
-- **Agents working on AMF can capture UI proof.** This repository includes
-  native Claude and Codex `amf-screenshot` skills for isolated PNG and GIF
-  capture without touching the user's real AMF database or tmux sessions.
+- **Agents working on AIW can capture UI proof.** This repository includes
+  native Claude and Codex `aiw-screenshot` skills for isolated PNG and GIF
+  capture without touching the user's real AIW database or tmux sessions.
 ### Changed
 
-- **The AMF screenshot skill stays with AMF.** Feature setup no longer injects
+- **The AIW screenshot skill stays with AIW.** Feature setup no longer injects
   this repository-specific development workflow into unrelated projects.
 - **Global review memory can be compacted from PR Triage.** Press `c`, then
-  `g`, to select the cross-project memory document. AMF preserves findings
+  `g`, to select the cross-project memory document. AIW preserves findings
   added by another session while compaction is running and asks before any
   conflicting overwrite.
 - **Session summaries use the feature's own harness.** Codex, OpenCode, and Pi
@@ -2243,7 +2261,7 @@ affected features so Claude reloads the automatically repaired hook settings.
 
 ### Migration
 
-No migration is required. AMF creates plan-interview storage automatically.
+No migration is required. AIW creates plan-interview storage automatically.
 Existing saved sessions pick up the macOS hyperlink fix when reopened, and
 Codex features receive the screenshot skill when their local setup next runs.
 
@@ -2252,7 +2270,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Added
 
 - **Plan-mode interviews now stop at a review gate before launching.** Review
-  the rendered plan, edit its source, regenerate it, or abort. AMF writes the
+  the rendered plan, edit its source, regenerate it, or abort. AIW writes the
   plan and starts the feature only after you explicitly accept it.
 - **Plan interviews can ask optional AI-generated follow-up questions.** After
   the configured questions, you can spend agent tokens on up to two adaptive
@@ -2269,12 +2287,12 @@ Codex features receive the screenshot skill when their local setup next runs.
   Folded directories summarize hidden files and outstanding review work.
 - **Review memory now has a cross-project layer.** AI Review reads both the
   repository memory and a personal memory file at
-  `~/.config/amf/review-memory.md`. Use `g` when adding or bootstrapping
+  `~/.config/ai_workstation/review-memory.md`. Use `g` when adding or bootstrapping
   memory to choose the global destination; project memory remains the
   default.
 - **PR Triage fixes can run in a dedicated companion feature.** Choose
   `New feature…` as the fix target to create an isolated worktree with its
-  own harness, mode, or preset. AMF reuses that companion for the PR and
+  own harness, mode, or preset. AIW reuses that companion for the PR and
   clearly identifies where fixes are running. Press `I` to review and land
   its commits by pushing to the PR branch or cherry-picking into the source
   worktree.
@@ -2306,13 +2324,13 @@ Codex features receive the screenshot skill when their local setup next runs.
 - **AI Review's model picker can return to harness selection.** Press
   `Esc` or `q` to correct the harness without leaving AI Review; model
   choices are rebuilt for the newly selected harness.
-- **AMF-authored follow-up replies no longer crowd out new PR feedback.**
+- **AIW-authored follow-up replies no longer crowd out new PR feedback.**
   Replies stay attached to their original comment after refresh, while
   standalone findings remain actionable.
 
 ### Migration
 
-- No migration is required. AMF adds the PR companion-feature database field
+- No migration is required. AIW adds the PR companion-feature database field
   and archives older Review Mode notes automatically. Existing
   `review_model` settings continue to work unchanged.
 
@@ -2329,15 +2347,15 @@ Codex features receive the screenshot skill when their local setup next runs.
   keep reviewing without side effects, or press `q` again to finish.
 - **PR fixes prepare editable reply drafts.** After an agent addresses a
   comment sent with `f` or `B`, pressing `R` prefills its reviewer-facing
-  response. AMF labels the reply as AI-drafted, chooses a relevant fix commit
+  response. AIW labels the reply as AI-drafted, chooses a relevant fix commit
   when possible, and still requires confirmation before posting.
 - **Completed AI Reviews stay pending in PR Triage.** A persistent badge shows
   how many findings remain publishable, and `A` reopens the cached review
   instead of running it again. Reviews also include an editable overall
   summary, and PR Triage refreshes automatically after posting.
 - **PR Triage shows replies with their original comment.** The detail pane
-  lists replies even when they were posted outside AMF, including their
-  author, AMF attribution, and current outdated or resolved state.
+  lists replies even when they were posted outside AIW, including their
+  author, AIW attribution, and current outdated or resolved state.
 
 ### Migration
 
@@ -2356,7 +2374,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   OpenCode, and Pi.
 - **Review memory can now be compacted from the PR picker.** Press `c` to
   merge duplicate guidance and remove stale or overly specific findings.
-  AMF shows the proposed rewrite in an editable full-screen preview and does
+  AIW shows the proposed rewrite in an editable full-screen preview and does
   not write it until you confirm.
 - **Final Review supports file-level comments.** Press `m` on a file to
   leave an observation, question, nit, or praise without rejecting it, and
@@ -2364,14 +2382,14 @@ Codex features receive the screenshot skill when their local setup next runs.
   rounds and can be posted to GitHub.
 - **Final Review can apply suggested changes.** Press `x` on a suggestion
   to apply it immediately, or `X` to apply all remaining suggestions when
-  the review finishes. AMF skips files that changed after the diff loaded and
+  the review finishes. AIW skips files that changed after the diff loaded and
   reports anything that still needs attention.
 - **Final Review can be paused and resumed.** Top-level `Esc` now returns to
   the feature without writing feedback, posting to GitHub, or dispatching a
   fix; reopening Final Review restores the same decisions, comments, and
   filters. Press `q` to finish as before.
 - **Review memory paths can be configured per project.** Set
-  `review_memory_path` in `.amf/config.json` to override the global path
+  `review_memory_path` in `.aiw/config.json` to override the global path
   for that repository.
 - **AI Review has an in-pane model picker.** Choose the harness default, a
   verified Claude preset, or a custom model before starting a review. The
@@ -2396,19 +2414,19 @@ Codex features receive the screenshot skill when their local setup next runs.
   to a gitignored archive.
 - **New-session setup now labels Review Mode as high token usage.** Existing
   sessions and defaults are unchanged.
-- **Templated PR replies now disclose that AMF posted them.** “Done” and
+- **Templated PR replies now disclose that AIW posted them.** “Done” and
   “Not needed” replies receive a lightweight attribution footer that is
   previewed before posting.
-- **“Done” replies choose a more relevant commit.** AMF checks the commented
+- **“Done” replies choose a more relevant commit.** AIW checks the commented
   line and file history before falling back to the current `HEAD`.
 - **Final Review's layout status is clearer.** The footer shows the layout
-  actually in use, and AMF explains why new or untracked files cannot switch
+  actually in use, and AIW explains why new or untracked files cannot switch
   away from unified view.
 
 ### Fixed
 
-- **Stale Claude hook entries are cleaned up with custom config roots.** AMF
-  now recognizes its managed hooks under any `amf` config directory and
+- **Stale Claude hook entries are cleaned up with custom config roots.** AIW
+  now recognizes its managed hooks under any `aiw` config directory and
   automatically replaces obsolete paths the next time feature hooks refresh.
 - **File-level comment editing is visible in Final Review.** The editor now
   receives the same expanded space as line comments and rejection feedback.
@@ -2417,14 +2435,14 @@ Codex features receive the screenshot skill when their local setup next runs.
 - **The ambient PR indicator remains visible and current while composing.**
   It now refreshes independently while you stay inside an agent session.
 - **PR fixes warn before targeting the wrong branch.** When the loaded PR
-  branch differs from the worktree's checked-out branch, AMF shows the
+  branch differs from the worktree's checked-out branch, AIW shows the
   mismatch both in the pane and before fix injection.
 - **Composer paste works on macOS.** Both text and image clipboard content can
-  now be pasted through AMF.
+  now be pasted through AIW.
 
 ### Migration
 
-- No migration is required. AMF upgrades its local database and cleans stale
+- No migration is required. AIW upgrades its local database and cleans stale
   managed hooks automatically. Existing AI Review drafts from PR Triage are
   not moved into the new pane; regenerate any draft you still need with `A`.
 
@@ -2433,7 +2451,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Fixed
 
 - **Builds work again on musl Linux and macOS.** A platform-specific type
-  mismatch in AMF's terminal-attach code broke `cargo build` — and the
+  mismatch in AIW's terminal-attach code broke `cargo build` — and the
   downloadable release binaries built from it — on those targets. No
   migration is required.
 
@@ -2448,12 +2466,12 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 - **PR Triage surfaces the last AI review's outcome, not just while it's
   running.** Previously, pressing `A` and then leaving the pane (or closing
-  and reopening AMF) left no trace of what happened — the findings were
+  and reopening AIW) left no trace of what happened — the findings were
   cached, but nothing showed whether a review had even run. The pane header
   now shows a badge for the most recent `A` run on the current head SHA: "AI
   review: N findings (5m)", "AI review: no findings (2h)", or "AI review
   failed (1h): `<error>`" — colored as a warning for a failure. The badge
-  persists across a same-head-SHA cache-hit reopen and survives an AMF
+  persists across a same-head-SHA cache-hit reopen and survives an AIW
   restart; it clears automatically once the PR's head SHA moves (a push
   means the record no longer describes the current diff). No setup or
   migration required.
@@ -2463,7 +2481,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   attached to that file — instead of being dumped as a paragraph in the
   review's summary body alongside every other whole-file rejection.
 - **"Fixes ready — re-review?" notification.** After you finish a review
-  and it dispatches feedback to an agent, AMF now watches that session and
+  and it dispatches feedback to an agent, AIW now watches that session and
   notifies you once the agent has finished working through it — instead of
   you polling the pane to see if it's done. Selecting the notification jumps
   straight back into the review, pre-filtered to just the files that
@@ -2477,9 +2495,9 @@ Codex features receive the screenshot skill when their local setup next runs.
   agent window no longer affects this status. No setup or migration is
   required.
 - A design doc for the planned **plan-mode guided discovery interview**
-  in `docs/backlog/plan-mode-interview-plan.md`, viewable in AMF's
+  in `docs/backlog/plan-mode-interview-plan.md`, viewable in AIW's
   in-app Markdown viewer alongside the other plans. It captures where
-  plan mode is headed — AMF interviews you about a feature (curated and
+  plan mode is headed — AIW interviews you about a feature (curated and
   per-project questions plus AI follow-ups from your feature's own
   agent harness), synthesizes a structured plan you review and edit,
   and only then launches the agent seeded with it — including the
@@ -2494,19 +2512,19 @@ Codex features receive the screenshot skill when their local setup next runs.
   migration is required. Completing the interview now saves the brief and
   answers to the feature's gitignored `.claude/plan.md` before launch, so the
   resulting plan stays isolated to that feature and is ready for the agent and
-  AMF's plan preview. This also applies to the first feature that runs directly
+  AIW's plan preview. This also applies to the first feature that runs directly
   in the project repository: the agent and sidebar use the same
   `.claude/plan.md`, without creating a second root-level plan. Plan
   instructions now follow the feature's selected harness: Claude reads them
   from its local instruction file, while Codex, OpenCode, and Pi receive them
-  through `AGENTS.md`. AMF removes its managed instructions when the feature
+  through `AGENTS.md`. AIW removes its managed instructions when the feature
   stops or is deleted and moves them when the harness changes. It no longer
   creates or updates the old shared repo-root `PLAN.md`; existing copies are
   left untouched and can be deleted if they are no longer needed. The `?`
   help overlay and README now document every interview shortcut, including
   multi-line answers, back navigation, skipping, finishing early, and cancel.
 - **Plan-mode interviews support custom questions.** Add `plan_questions` to
-  global or project AMF config to append free-text questions, offer selectable
+  global or project AIW config to append free-text questions, offer selectable
   answers with an `options` list, or replace a built-in question by reusing its
   ID. Project questions override global questions with the same ID, and
   `skip_builtin_questions` can run an interview using only configured
@@ -2517,7 +2535,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   project override. The interview also labels global and project templates with
   their actual scope. Existing configs keep the built-in interview unchanged,
   so no migration is required.
-- **AI follow-up groundwork for plan-mode interviews.** AMF now prepares
+- **AI follow-up groundwork for plan-mode interviews.** AIW now prepares
   harness-neutral follow-up requests from the feature brief, prior answers, and
   a bounded snapshot of the repository's README, top-level layout, and project
   instructions. Adaptive questions are not shown in the interview UI yet; this
@@ -2540,22 +2558,22 @@ Codex features receive the screenshot skill when their local setup next runs.
   setup or migration is required.
 - **AI-authored PR review comments are attributed.** When you post an AI
   review (`W` in the PR-review pane), each inline comment now carries a
-  small `— drafted by AI via AMF` footer, so a reviewer looking at just
+  small `— drafted by AI via AIW` footer, so a reviewer looking at just
   that comment — without the review summary in view — can still tell it's
   AI-authored rather than mistake it for your own words. Your own typed
   replies (the "not needed" explanation, a "done in `<sha>`" note) are
   never touched.
 - **Choose the harness that generates an AI PR review.** The first time you
-  press `A` in a PR Triage pane, AMF now offers the project's enabled Claude,
+  press `A` in a PR Triage pane, AIW now offers the project's enabled Claude,
   Codex, OpenCode, and Pi harnesses, defaults to the project's preference, and
   remembers the choice for later reviews in that pane. This choice is separate
   from the harness used for `f`/`B` fixes, so a rate limit or outage on one
-  provider no longer blocks review generation when another is available. AMF
+  provider no longer blocks review generation when another is available. AIW
   validates the selected CLI before fetching the diff or spending tokens, and
   provider-specific failures remain visible in PR Triage. No setup or migration
   is required.
 - **AI review of the PR diff (draft findings).** Press `A` in the PR-review
-  pane to have AMF review the PR's diff itself and surface findings as draft
+  pane to have AIW review the PR's diff itself and surface findings as draft
   items in the same list, triaged with the verbs already there (`f` inject-fix
   · `s` skip · `M` add to memory). The review-memory doc is injected as
   context so it checks the team's known recurring issues first; an optional
@@ -2603,8 +2621,8 @@ Codex features receive the screenshot skill when their local setup next runs.
   the base ref shifted).
 - **Build/test gate before finishing a final review.** Point
   `final_review_check_command` at your project's build, test, or proof
-  script in `.amf/config.json` (or globally in `~/.config/amf/config.json`;
-  project overrides global, same as lifecycle hooks) and AMF runs it in the
+  script in `.aiw/config.json` (or globally in `~/.config/ai_workstation/config.json`;
+  project overrides global, same as lifecycle hooks) and AIW runs it in the
   background when you finish a review — no config means no change, it's
   entirely opt-in. The command doesn't block the UI while it runs, and
   pass/fail shows up in the finish summary and a `Check` section in
@@ -2612,9 +2630,9 @@ Codex features receive the screenshot skill when their local setup next runs.
   swallowed by an all-approve: even with zero rejections, a failing check
   still writes and dispatches the round so the agent sees it.
 - **Review-memory lookback bootstrap.** Press `b` in the PR picker to seed
-  `.amf/review-memory.md` from your PR history instead of building it up one
+  `.aiw/review-memory.md` from your PR history instead of building it up one
   comment at a time. Pick a depth (20 / 50 / 100 / all recent merged & closed
-  PRs); AMF fetches their review comments and summaries via `gh` (zero agent
+  PRs); AIW fetches their review comments and summaries via `gh` (zero agent
   tokens — bot boilerplate stripped, same as everywhere else in PR review),
   then makes **one** agent pass to cluster the recurring findings and appends
   the new ones (dedup-aware, so re-running over overlapping history is a
@@ -2622,16 +2640,16 @@ Codex features receive the screenshot skill when their local setup next runs.
   that one pass, and `esc` returns you to the picker without losing the run —
   it keeps going in the background and still reports its result when done.
 - **Review-findings memory doc groundwork (no UI yet).** Added the on-disk
-  primitives for `.amf/review-memory.md` — a version-controlled file that
+  primitives for `.aiw/review-memory.md` — a version-controlled file that
   will accumulate the team's recurring code-review findings, grouped by
-  category, for the upcoming AI reviewer to read as context. AMF only ever
+  category, for the upcoming AI reviewer to read as context. AIW only ever
   appends to it (dedup-aware) and never rewrites existing prose; the
   location is configurable if you'd rather keep it somewhere other than
-  `.amf/review-memory.md`. This is groundwork only — there's no pane key or
+  `.aiw/review-memory.md`. This is groundwork only — there's no pane key or
   agent action wired up to it yet; that lands with the PR-review lookback
   bootstrap and "add to memory" key.
 - **"Add to memory" key in the PR review pane.** Press `M` on a selected
-  comment to append its distilled finding to `.amf/review-memory.md` — seeded
+  comment to append its distilled finding to `.aiw/review-memory.md` — seeded
   from the bot-stripped comment text plus a `file:line` hint, editable before
   it's saved, with `Tab` cycling a category (Concurrency, Error handling,
   Naming, Tests, …). Appends are dedup-aware, so re-adding the same finding
@@ -2697,8 +2715,8 @@ Codex features receive the screenshot skill when their local setup next runs.
   cursor jumps to the first match as you type; after `Enter`, `n` / `N` cycle
   matches (wrapping) and `Esc` clears the search. Every hit is flagged with a
   `▷` gutter marker and the footer shows the match count.
-- **AMF is now licensed under the MIT License.** The repository ships a
-  `LICENSE` file, so you can use, modify, and redistribute AMF under
+- **AIW is now licensed under the MIT License.** The repository ships a
+  `LICENSE` file, so you can use, modify, and redistribute AIW under
   standard MIT terms. No migration is required.
 - **TODOs keybindings in the help overlay.** The `?` help now has an "In the
   TODOs view" section documenting every key in a TODO list — navigate, add,
@@ -2706,7 +2724,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   and spawn an agent — so they're discoverable without leaving the app.
 - **Deleting a TODO list's host feature no longer loses your TODOs.** A
   project's TODO list lives under whichever feature you created it in. When you
-  delete that host feature but the project still has other features, AMF now
+  delete that host feature but the project still has other features, AIW now
   prompts you to **re-home** the list onto a surviving feature or **delete** it
   outright — `Esc` keeps the list by moving it to the first surviving feature.
   If no features remain, the now-orphaned list is cleaned up automatically.
@@ -2716,7 +2734,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 - **Codex-powered headless analysis is now isolated and disposable.** AI PR
   reviews and other one-shot Codex tasks run with a read-only sandbox, accept
   work outside a Git repository, and no longer leave temporary sessions in
-  Codex history. AMF now checks that the installed Codex version supports the
+  Codex history. AIW now checks that the installed Codex version supports the
   required headless flags and asks you to upgrade instead of failing after the
   task starts. No setup or migration is required.
 - **PR Comment Review is now PR Triage.** Dashboard help, pickers, pane titles,
@@ -2740,34 +2758,34 @@ Codex features receive the screenshot skill when their local setup next runs.
   feature navigation, the prompt library (leader menu) and the syntax parser
   picker (dashboard) both moved from `P` to `p`.
 - **Building from source is now warning-free.** `cargo build` and
-  `cargo clippy` complete without a single warning, so installing AMF from
+  `cargo clippy` complete without a single warning, so installing AIW from
   source no longer scrolls lint noise past you. CI now enforces this
   (`clippy -D warnings` plus a formatting check), so it stays that way.
-  Nothing about AMF's behavior changes.
+  Nothing about AIW's behavior changes.
 - **The README caught up with the app.** It now covers the Pi harness, the
   first-run harness setup wizard, the final-review workflow (including the AI
   co-reviewer and suggested changes), PR comment review, per-project TODO
   lists, and the usage/cost meters — and the keybinding tables match the
   in-app help overlay again. Config examples were corrected too: agent and
   mode values in `config.json` must be lowercase (`"claude"`, `"vibe"`), and
-  the `feature_presets` docs now list the real field set. Nothing about AMF's
+  the `feature_presets` docs now list the real field set. Nothing about AIW's
   behavior changes.
 - **Review and Plan are no longer labeled "(experimental)".** Both features
   are stable and fully documented in the README, so the feature-wizard
   toggles, the batch-creation dialog, feature-list and view-mode badges, and
   the leader-key help all drop the caveat. Steering keeps its experimental
   label for now.
-- **`amf --help` explains itself.** The top-level help text now describes
-  what AMF is, and `-V, --version` has a one-line description instead of
+- **`aiw --help` explains itself.** The top-level help text now describes
+  what AIW is, and `-V, --version` has a one-line description instead of
   showing up blank.
-- **AMF now respects `XDG_CONFIG_HOME`.** Config, plugins, notifications, and
+- **AIW now respects `XDG_CONFIG_HOME`.** Config, plugins, notifications, and
   the project database resolve through `dirs::config_dir()` instead of a
-  hardcoded `~/.config/amf`. Existing installs are unaffected: if the old
-  `~/.config/amf` already has data and the new location doesn't, AMF keeps
+  hardcoded `~/.config/ai_workstation`. Existing installs are unaffected: if the old
+  `~/.config/ai_workstation` already has data and the new location doesn't, AIW keeps
   using the old path, so nothing moves out from under you on upgrade.
 - **Stopped features restart with only one saved agent by default.** When you
   start a stopped feature that has several saved Claude, Codex, opencode, or Pi
-  panes, AMF now auto-launches only the first agent harness and leaves the rest
+  panes, AIW now auto-launches only the first agent harness and leaves the rest
   as tmux windows at the shell prompt. This avoids suddenly reviving a large
   batch of agent CLIs on memory-constrained environments such as WSL. Set
   `max_agent_autostart_sessions` to `0` to restore unlimited auto-start.
@@ -2806,11 +2824,11 @@ Codex features receive the screenshot skill when their local setup next runs.
   review (`A`), the review-memory lookback bootstrap, final review's diff
   walkthrough/co-review/changeset overview, and session summaries.
 - **Sending pasted images from Windows/WSL now shows progress.** The composer
-  stays visible with `[Pasting...]` while AMF moves an attached image through
+  stays visible with `[Pasting...]` while AIW moves an attached image through
   the Windows clipboard and waits for the agent harness to ingest it, so the
   app no longer appears frozen during the slower PowerShell handoff.
 - **Claude sidebar TODOs stay tied to the selected session.** When another
-  Claude session has a newer task list, AMF no longer shows that unrelated
+  Claude session has a newer task list, AIW no longer shows that unrelated
   checklist in the current session's sidebar. The sidebar still uses the
   selected session's own task store or transcript, so TODO progress remains
   session-specific.
@@ -2818,25 +2836,25 @@ Codex features receive the screenshot skill when their local setup next runs.
   custom sessions, and related launch helpers no longer paste long environment
   setup commands directly into tmux panes, so macOS no longer cuts off the
   command before the agent starts.
-- **macOS source builds work again.** AMF now uses the libc argument types
+- **macOS source builds work again.** AIW now uses the libc argument types
   expected by macOS for the tmux PTY setup, so `cargo build` no longer fails
   with `openpty` / `ioctl` type errors on that platform.
-- **AMF-managed hooks now stay dormant outside AMF.** Running Claude, Codex, or
-  Opencode directly from a worktree that AMF has prepared no longer triggers
-  AMF's notification, thinking, sidebar, or diff-review hooks. This prevents
-  standalone Claude runs from getting stuck waiting for an AMF diff-review
+- **AIW-managed hooks now stay dormant outside AIW.** Running Claude, Codex, or
+  Opencode directly from a worktree that AIW has prepared no longer triggers
+  AIW's notification, thinking, sidebar, or diff-review hooks. This prevents
+  standalone Claude runs from getting stuck waiting for an AIW diff-review
   prompt that is not open.
-- **Claude hooks recover from stale temporary AMF config paths.** If an AMF
+- **Claude hooks recover from stale temporary AIW config paths.** If an AIW
   verification run or unusual `HOME` / `XDG_CONFIG_HOME` setting left Claude
-  hooks pointing at deleted `/tmp/claude-*` helper scripts, AMF now removes
+  hooks pointing at deleted `/tmp/claude-*` helper scripts, AIW now removes
   those stale entries and reinstalls the current local hooks on startup. This
   clears repeated `PostToolUse:Bash hook error` messages without requiring
   manual edits to `.claude/settings.local.json`.
-- **Claude hook paths with spaces work on macOS.** AMF now quotes its Claude
+- **Claude hook paths with spaces work on macOS.** AIW now quotes its Claude
   hook commands and cleans up older unquoted macOS hook entries, so paths under
-  `~/Library/Application Support/amf` no longer fail with `/bin/sh` errors
+  `~/Library/Application Support/aiw` no longer fail with `/bin/sh` errors
   such as `Library/Application: no such file or directory`. Existing features
-  with stale local Claude settings are repaired during AMF startup, even if the
+  with stale local Claude settings are repaired during AIW startup, even if the
   normal hook refresh already ran.
 - **File-level PR review comments no longer inject the whole file as a diff
   hunk.** A comment left on the file as a whole (GitHub's `subject_type:
@@ -2850,7 +2868,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   comments out of the gutter, because each one was pinned to an exact line
   number. Comments now follow their code when it moves, including multi-line
   ones. If a comment's line is genuinely gone (the agent already fixed it, say),
-  AMF tells you it was "possibly addressed" instead of silently discarding it,
+  AIW tells you it was "possibly addressed" instead of silently discarding it,
   keeps it in the feedback file, and won't post it to a pull request where it
   would land on the wrong line.
 - **Markdown tables show their header rows again.** The in-app Markdown viewer
@@ -2878,13 +2896,13 @@ Codex features receive the screenshot skill when their local setup next runs.
   formulas now render as styled `$...$` / `$$...$$` text, including inside
   table cells, so plans and notes with formulas no longer look like ordinary
   prose or lose math-specific context.
-- **Agent harness launches hide their startup command echo.** When AMF starts a
+- **Agent harness launches hide their startup command echo.** When AIW starts a
   fresh Claude, Codex, opencode, or Pi session — including Pi opened from a
   feature row, and Claude/Codex/opencode sessions resumed with `S` — the
   embedded pane now shows a loading screen until the harness is ready instead
   of flashing the long tmux launch command and environment setup. Existing
   running sessions open normally.
-- **Terminal sessions no longer add surprise blank lines on macOS.** AMF now
+- **Terminal sessions no longer add surprise blank lines on macOS.** AIW now
   uses the direct tmux input path on macOS, so typing in an embedded terminal
   inserts the intended characters instead of turning each keypress into a
   newline.
@@ -2901,10 +2919,10 @@ Codex features receive the screenshot skill when their local setup next runs.
   When a project has more worktrees than fit in the dialog, navigating past
   the visible rows used to scroll the selection out of view with no way to
   see it again. The list now auto-scrolls to keep the selected worktree
-  visible, like every other picker in AMF.
+  visible, like every other picker in AIW.
 - **Inline PR comments now show the code they actually reference.** GitHub can
   attach an entire newly-added function to a comment on one line, making the
-  relevant code hard to find and bloating fix prompts. AMF now centers the
+  relevant code hard to find and bloating fix prompts. AIW now centers the
   displayed and injected diff on the referenced line with three surrounding
   lines of context on each side, including for outdated and cached comments.
 
@@ -2933,7 +2951,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   `"next_feature"` / `"prev_feature"` keybindings to your config to restore
   them.
 - If you want stopped features to resume every saved agent pane automatically,
-  set `"max_agent_autostart_sessions": 0` in `~/.config/amf/config.json`.
+  set `"max_agent_autostart_sessions": 0` in `~/.config/ai_workstation/config.json`.
 
 ## [v0.29.0] - 2026-07-01
 
@@ -2967,7 +2985,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   so you can still select a span that spans hunks.
 - **A line comment now flags its file as needing work.** Leaving a comment (or a
   suggested change) on a file in a final review is itself a signal the file
-  isn't done, so AMF now marks that file "needs revision" for you — no separate
+  isn't done, so AIW now marks that file "needs revision" for you — no separate
   reject step, and the comments themselves stand in as the reason. Your own call
   always wins: explicitly approving, skipping, or rejecting a file overrides the
   automatic mark and sticks, and clearing a file's last comment clears an
@@ -2984,7 +3002,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   (completed items get a strikethrough and sink to the bottom, never
   auto-cleared), `p` cycle priority, `J`/`K` reorder, `d` delete (with confirm),
   `b` edit the scratchpad note, and `j`/`k` to move. Press `g` (or `Enter`) on
-  an item to **launch an agent for it**: AMF opens a fresh agent session in the
+  an item to **launch an agent for it**: AIW opens a fresh agent session in the
   list's feature — using that feature's harness and mode — and pre-fills the
   composer with a prompt built from the item's title and notes, left editable so
   you review it before sending. Launched items show a marker, and pressing `g`
@@ -2995,12 +3013,12 @@ Codex features receive the screenshot skill when their local setup next runs.
   The list is saved per checkout, so it survives restarts.
 ### Fixed
 
-- **Notification hook scripts are written atomically.** AMF rewrites its
+- **Notification hook scripts are written atomically.** AIW rewrites its
   helper hook scripts (`tool-start.sh`, `notify.sh`, and friends) under
-  `~/.config/amf` on startup. Those writes happened in place, so if a script
+  `~/.config/ai_workstation` on startup. Those writes happened in place, so if a script
   changed (e.g. after an upgrade) at the moment the agent harness was executing
   it, the shell could read a half-rewritten file and fail with a spurious
-  syntax error — which surfaced as a hook error blocking a tool call. AMF now
+  syntax error — which surfaced as a hook error blocking a tool call. AIW now
   stages each script in a temp file and renames it into place, so a running
   hook always sees a complete file (old or new, never a mix).
 
@@ -3016,15 +3034,15 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 - **Agent usage now binds to the right session more reliably.** New Claude,
   Codex, and opencode panes now pass enough session identity through their
-  local hooks/plugins for AMF to attach token usage to the matching dashboard
+  local hooks/plugins for AIW to attach token usage to the matching dashboard
   session instead of guessing from the newest transcript in the worktree.
-- **Inferred usage is safer for older sessions.** When AMF has to fall back to
+- **Inferred usage is safer for older sessions.** When AIW has to fall back to
   workdir/timestamp matching, it no longer assigns the same inferred provider
   session to multiple same-harness panes in one feature; unmatched sessions stay
   unbound until a better match or exact provider event appears.
 - **New Codex panes no longer inherit old usage.** A newly created Codex pane
   could briefly show a large cost from an older Codex thread in the same
-  worktree before Codex emitted its exact session identity. AMF now ignores
+  worktree before Codex emitted its exact session identity. AIW now ignores
   stale inferred Codex sources and clears any older bad inferred binding on the
   next refresh, so new panes stay blank until their own usage is known.
 
@@ -3074,7 +3092,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   feature's existing agent pane (the default, as before) or a brand-new
   dedicated review session — the footer shows `t target: live` / `dedicated`.
   Pick the dedicated target and, when finishing needs to spin up that session,
-  AMF asks which harness should run it (Claude / Codex / opencode / …) so the
+  AIW asks which harness should run it (Claude / Codex / opencode / …) so the
   fixes run in a clean context instead of the long-running review conversation.
   A dedicated "Final Review" session is reused on later rounds without asking
   again. The feedback file is always written first, so skipping the harness
@@ -3100,19 +3118,19 @@ Codex features receive the screenshot skill when their local setup next runs.
   land as inline comments on the diff, and whole-file rejections plus any
   general feedback go in the review summary. It posts as a plain `COMMENT`
   review (so it works on your own PR) and is best-effort — if there's no PR for
-  the branch or `gh` isn't set up, AMF just says so and carries on. The local
+  the branch or `gh` isn't set up, AIW just says so and carries on. The local
   `.claude/final-review-feedback.md` is still written every time, so nothing is
   lost whether or not the PR post succeeds. Off by default; needs an
   authenticated `gh` CLI.
 - **Final review flags what changed since last time.** Finishing a final review
   now records a fingerprint of the diff, so the next time you review the same
-  feature AMF marks the files that changed since your last pass with a `Δ` in
+  feature AIW marks the files that changed since your last pass with a `Δ` in
   the file list (and a `Δ N changed` count in the header). On a fresh re-review
   where only some files changed, the file list automatically narrows to just
   those files and lands on the first one — press `F` to cycle the filter
   (all → undecided → rejected → changed) and see everything again. This closes
   the loop after an agent addresses feedback: you only re-check what it touched.
-- **Reply to PR comments from inside AMF.** In the PR comment-review pane you
+- **Reply to PR comments from inside AIW.** In the PR comment-review pane you
   can now answer a comment without leaving the tool, with two purpose-built
   replies: press `R` to post a "Done in `<sha>`." reply auto-filled from your
   latest commit (and mark the comment done), or `n` to write why a fix isn't
@@ -3120,19 +3138,19 @@ Codex features receive the screenshot skill when their local setup next runs.
   and only post when you press `⏎` — replies to inline review comments land in
   the right thread, while conversation comments and review summaries post to the
   PR conversation. The first time you post, if your `gh` login lacks write
-  access AMF tells you to run `gh auth refresh -s repo` rather than failing
+  access AIW tells you to run `gh auth refresh -s repo` rather than failing
   cryptically.
 - **Resolve PR review threads from the pane.** Press `x` on an inline review
   comment to resolve its thread on GitHub (or reopen one that's already
-  resolved) without leaving AMF — the `✓` marker updates immediately. Resolving
+  resolved) without leaving AIW — the `✓` marker updates immediately. Resolving
   is independent of replying, so you can close out a thread with or without a
-  comment. After you post a reply AMF also re-checks thread resolution, so the
+  comment. After you post a reply AIW also re-checks thread resolution, so the
   list stays in sync if a comment got resolved meanwhile. Conversation comments
   and review summaries have no thread to resolve and say so.
 - **PR review triage state sticks.** In the PR comment-review pane you can now
   mark a comment done (`m`) or skip it (`s`), and injecting a fix (`f`)
   automatically flags the comment as "fixing". These states persist across
-  re-opening the PR and restarting AMF, so a long review picks up where you left
+  re-opening the PR and restarting AIW, so a long review picks up where you left
   off. The comment list shows a per-comment checkbox (`[ ]`/`[~]`/`[x]`/`[-]`)
   and the detail header a `[fixing]`/`[done]`/`[skipped]` chip — distinct from
   GitHub's own `✓` thread-resolution marker. Mark-done and skip are manual with
@@ -3156,13 +3174,13 @@ Codex features receive the screenshot skill when their local setup next runs.
   "While reviewing PR comments" section) list the new key.
 - **Pick a PR to review from a list.** When you press `G` on a feature whose
   branch has no detectable PR — or press `g` inside the review pane to switch PRs
-  — AMF now shows a scrollable list of the repo's pull requests (number · title ·
+  — AIW now shows a scrollable list of the repo's pull requests (number · title ·
   author · branch, newest first) so you can open one without knowing its number.
   Press `a` to include closed/merged PRs, `#` to type a number instead (the old
   prompt is still one keypress away), and `⏎` to open the highlighted PR. The list
   is fetched in Rust via `gh pr list`, so it spends zero agent tokens.
 - **Choose which harness runs your PR-review fixes.** The first time you press
-  `f` to fix a comment in a PR, AMF now asks which agent harness the dedicated
+  `f` to fix a comment in a PR, AIW now asks which agent harness the dedicated
   review session should run — so you can triage on a cheaper or faster harness
   than the one your feature is being built with. It highlights the project's
   preferred agent by default; pick one with `j/k` and `⏎` (or `esc` to back
@@ -3173,7 +3191,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 - Added the full Gruvbox Material UI theme family to the theme picker and
   config: dark/light, hard/medium/soft contrast, and material/mix/original
   foreground palettes. Use names like `gruvbox-material-dark-medium` or
-  `gruvbox-material-original-light-soft` in `~/.config/amf/config.json`.
+  `gruvbox-material-original-light-soft` in `~/.config/ai_workstation/config.json`.
 
 ### Changed
 
@@ -3183,19 +3201,19 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Fixed
 
-- AMF now cleans up the bundled `amf-gruvbox` Opencode theme along with the
-  other AMF-managed Opencode themes when removing local Opencode integration
+- AIW now cleans up the bundled `aiw-gruvbox` Opencode theme along with the
+  other AIW-managed Opencode themes when removing local Opencode integration
   files.
 - Claude panes now render immediately behind the composer when an agent session
   opens with composer input enabled. Previously the composer could appear over a
   blank pane until you closed it or sent input.
 - **Composer pastes now show progress.** Pressing `Ctrl+V` in the composer
-  immediately shows `[Pasting...]` while AMF reads the clipboard, so slow text
+  immediately shows `[Pasting...]` while AIW reads the clipboard, so slow text
   or image pastes no longer look like the app ignored the keypress.
 
 ### Migration
 
-- No action required. AMF adds a `pr_comment_triage` table to its SQLite store
+- No action required. AIW adds a `pr_comment_triage` table to its SQLite store
   on first launch; triage state is keyed by PR number, comment id, and head
   commit, and stale rows are pruned automatically after a week. The new
   Gruvbox Material themes are available immediately after upgrade.
@@ -3240,7 +3258,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   half-done review isn't finished by accident.
 - **Pause and resume a final review.** Your verdicts, line comments, and
   general feedback are now saved to `.claude/final-review-progress.json` as you
-  go, so a long review survives quitting AMF (or a crash). Reopening the final
+  go, so a long review survives quitting AIW (or a crash). Reopening the final
   review for the same feature restores everything where you left off; finishing
   the review clears the saved progress so the next one starts fresh.
 - **Choose the diff base ref.** Press `b` in the branch diff viewer or final
@@ -3276,25 +3294,25 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 - **Prompt library shows where each template lives.** The picker preview pane
   now displays the resolved source file for the selected entry — the local
-  SQLite store for your own (`User`) templates, or the `.amf/config.json` path
+  SQLite store for your own (`User`) templates, or the `.aiw/config.json` path
   for `Project` / `Worktree` / `Global` templates. The export prompt (`x`) now
   names each target's exact path before you choose — e.g.
-  `(g) ~/.config/amf/config.json   (p) <repo>/.amf/config.json` — so you can
+  `(g) ~/.config/ai_workstation/config.json   (p) <repo>/.aiw/config.json` — so you can
   confirm which repo a template lands in. The New/Edit dialog adds a hint
   showing where a save will be written, calling out that `User` templates live
   in the local store and aren't version-controlled.
 
-- **`/amf:add-prompt` skill.** A new skill (parallel to `/amf:add-preset`) that
+- **`/aiw:add-prompt` skill.** A new skill (parallel to `/aiw:add-preset`) that
   adds a declarative prompt template to your workspace without hand-writing
-  JSON. It writes a `prompt_templates` entry to `.amf/config.json` (project) or
-  the global `~/.config/amf/config.json`, and documents the template schema —
+  JSON. It writes a `prompt_templates` entry to `.aiw/config.json` (project) or
+  the global `~/.config/ai_workstation/config.json`, and documents the template schema —
   including tags, inline `{{slot}}` / `{{name|opt1|opt2}}` syntax, and explicit
   text / multi-line / select placeholders. The template then shows up in the
   prompt library picker as a read-only `Project`/`Global` entry.
 
 - **Tags for prompt templates.** The New/Edit Prompt dialog now has a `Tags`
   field (Tab cycles Name → Tags → Body); enter a comma- or space-separated
-  list and AMF stores it with the template. Tags show as `#chips` in the
+  list and AIW stores it with the template. Tags show as `#chips` in the
   picker's preview pane. In the picker's search (`/`), the query now also
   matches tags, and a `#`-prefixed query filters by tag only — `#frontend`
   narrows to templates tagged `frontend`, and a bare `#` lists every tagged
@@ -3305,7 +3323,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   combined counts like `2d3w`. A leading `0` still jumps to the start of the
   line unless you are already typing a count (`10w`).
 
-- **Review a PR's comments inside AMF.** Press `G` on a feature in the
+- **Review a PR's comments inside AIW.** Press `G` on a feature in the
   dashboard to open a full-screen pane listing the open pull request's
   comments for that branch — inline review comments, review summaries, and
   conversation comments together, each showing its file/line, author, a
@@ -3314,7 +3332,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   with `Ctrl+D`/`Ctrl+U` (or `PgDn`/`PgUp`), and press `h` to hide comments
   already resolved on GitHub so you can focus on what's still open (a counter
   shows how many are hidden); `esc`/`q` closes. If the branch has no open PR,
-  AMF prompts for a PR number instead of giving up, and you can press `g` from
+  AIW prompts for a PR number instead of giving up, and you can press `g` from
   inside the pane any time to pull up a different PR's comments by number (a bad
   number reports the error inline so you can correct it). Everything is fetched
   with the GitHub CLI and stays read-only for now — acting on comments (sending
@@ -3331,9 +3349,9 @@ Codex features receive the screenshot skill when their local setup next runs.
   file contents — alongside a `~N tokens` estimate and the target session, so
   nothing reaches the agent until you approve it. Press `e` to edit the prompt
   in place before sending (`Esc` back to the confirmation), `Enter` to inject,
-  or `Esc` to cancel. On inject AMF drops you into the session to watch it
+  or `Esc` to cancel. On inject AIW drops you into the session to watch it
   work; the prompt is pasted without auto-sending so you can still eyeball it
-  there. By default the fix goes to a dedicated "PR Review" session that AMF
+  there. By default the fix goes to a dedicated "PR Review" session that AIW
   spins up once and reuses for every fix on that PR (so the per-session
   overhead is paid once); press `t` to switch the target to the feature's
   existing live session for warm in-progress context. The footer shows the
@@ -3353,7 +3371,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   hints moved onto the dialog's bottom border, and the "where this saves"
   hint sits at the bottom — so the form is much easier to scan.
 
-- The AMF prompt composer now works in Codex, OpenCode, and Pi sessions with
+- The AIW prompt composer now works in Codex, OpenCode, and Pi sessions with
   the same workflow and keybindings as Claude Code. Start typing to compose,
   use `Ctrl+E` or `leader+e` to switch between compose and direct input, and
   use drafts, prompt templates, multiline input, clipboard paste, and image
@@ -3389,7 +3407,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 - Adding a session to a stopped feature now starts the feature automatically,
   so the new session opens immediately and the dashboard returns to a green
-  status. If AMF cannot start the feature or create the session, it now shows
+  status. If AIW cannot start the feature or create the session, it now shows
   an error toast instead of appearing to do nothing.
 
 - Scrolling to the bottom of a developer note in the final review now reaches
@@ -3432,7 +3450,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 - **Worktree export target for prompt templates.** Pressing `x` → `w` in the
   prompt library exports a template to the active feature's worktree
-  `.amf/config.json` instead of the main project config. Worktree templates
+  `.aiw/config.json` instead of the main project config. Worktree templates
   appear with a distinct yellow `[Worktree]` badge so you can tell them apart
   from `[Project]` templates. This lets you commit a prompt on a feature branch
   and promote it to the main repo via git when it's ready.
@@ -3440,11 +3458,11 @@ Codex features receive the screenshot skill when their local setup next runs.
 - **Edit prompts from any source.** Project, Global, and Worktree templates can
   now be opened in the prompt editor with `e`. Saving writes back to the config
   file they came from — SQLite for `[User]` templates, the appropriate
-  `.amf/config.json` for config-file sources. Renaming a config-source template
+  `.aiw/config.json` for config-file sources. Renaming a config-source template
   removes the old entry so stale names don't accumulate.
 
 - A running bug backlog in `docs/backlog/bug-backlog-plan.md`, viewable
-  in AMF's in-app Markdown viewer alongside the existing plans, so known
+  in AIW's in-app Markdown viewer alongside the existing plans, so known
   issues are tracked in one place. First entry: pressing `A` on the
   dashboard does not open harness setup.
 
@@ -3463,7 +3481,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   invisible until you closed and reopened the picker.
 
 - Global templates are re-read from disk each time the library opens, so
-  changes made while AMF is running (including exports from the same session)
+  changes made while AIW is running (including exports from the same session)
   take effect without restarting the app.
 
 - Export failures now surface as a toast instead of doing nothing silently.
@@ -3475,30 +3493,30 @@ Codex features receive the screenshot skill when their local setup next runs.
   config template now immediately explains this instead of arming a confirm
   dialog that then refuses to act.
 
-- **Direct tmux transport is now the default.** AMF no longer attaches a
+- **Direct tmux transport is now the default.** AIW no longer attaches a
   persistent control-mode (`-CC`) client to drive agent panes; it talks to
   tmux directly, the same way it always has on Windows. This is what fixes the
   long-standing garbled-pane corruption (see Fixed). Control mode remains
   available as an opt-in via `tmux_control_mode: true` in `config.json` (or the
-  `AMF_TMUX_INPUT_TRANSPORT` / `AMF_EXPERIMENTAL_PERSISTENT_TMUX_INPUT` env
+  `AIW_TMUX_INPUT_TRANSPORT` / `AIW_EXPERIMENTAL_PERSISTENT_TMUX_INPUT` env
   vars). The periodic automatic pane refresh and the SIGWINCH re-anchor bounce
   now run only in control mode, where they're needed — direct mode re-captures
   the full pane each frame and self-heals, so it no longer flickers from those.
 
 - The diff-review popup now holds for **1.5s** by default instead of 3s.
 
-  **Migration:** on first launch after upgrading, AMF rewrites `config.json`
+  **Migration:** on first launch after upgrading, AIW rewrites `config.json`
   once to apply the new defaults — a persisted `tmux_control_mode: true` is set
   to `false` and a `diff_review_popup_hold_secs` of `3.0` becomes `1.5`. Values
   you previously customized away from those old defaults are left untouched, and
   the file is stamped with a `config_version` so the migration never runs twice
   (re-enable control mode afterward and it stays enabled).
 
-- **Retired the legacy vimdiff diff-review viewer.** The native in-app AMF diff
+- **Retired the legacy vimdiff diff-review viewer.** The native in-app AIW diff
   viewer is now the only reviewer; the neovim/vimdiff popup path and its bundled
   `plugins/diff-review` scripts have been removed. Existing configs that still
   set `diff_review_viewer = "nvim"` (or the old `"legacy"` alias) keep working —
-  the value now deserializes to the AMF viewer instead of erroring.
+  the value now deserializes to the AIW viewer instead of erroring.
 
 ### Maintenance
 
@@ -3512,14 +3530,14 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Fixed
 
 - **Garbled / mangled agent panes on Linux and macOS.** The persistent
-  control-mode tmux clients AMF attached to each session could desync Claude
+  control-mode tmux clients AIW attached to each session could desync Claude
   Code's incremental renderer, leaving stale cells in the pane grid (the input
   box bleeding into the divider above it). Windows was never affected because
   that transport is Unix-only. Defaulting to the direct transport removes the
   extra clients and the corruption with them.
 
-- Diff/review mode no longer shows AMF-generated runtime files as if they
-  were branch changes. The change-tracker log (`.amf/change-history.json`)
+- Diff/review mode no longer shows AIW-generated runtime files as if they
+  were branch changes. The change-tracker log (`.aiw/change-history.json`)
   and the opencode TUI state (`tui.json`) are now gitignored and untracked,
   so the review surface reflects only the real changes on your branch.
 
@@ -3540,12 +3558,12 @@ Codex features receive the screenshot skill when their local setup next runs.
   without sending when compose is off. Manage entries from the picker
   (`n` new, `e` edit, `d` delete, `y` duplicate, `/` search) or export
   one to declarative config with `x` → `g` (global
-  `~/.config/amf/config.json`) or `p` (project `{repo}/.amf/config.json`)
+  `~/.config/ai_workstation/config.json`) or `p` (project `{repo}/.aiw/config.json`)
   so it can be version-controlled and shared. From the compose box,
   `Ctrl+P` opens the library to inject a saved prompt (mirroring
   `leader+P`) and `Ctrl+S` saves the current buffer as a new template.
   Templates are
-  stored in the AMF SQLite database. Fill-in `{{placeholder}}` slots and
+  stored in the AIW SQLite database. Fill-in `{{placeholder}}` slots and
   declarative/team templates are planned for later phases.
 - Vim normal mode now supports the change operator: `c` with a motion
   (`cw`, `cb`, `c$`, …) deletes and drops into insert mode, `cc`/`S`
@@ -3572,12 +3590,12 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Changed
 
 - Final review (press `f` in a feature view) now runs entirely inside
-  AMF instead of opening tmux/vim popups. You step through every changed
+  AIW instead of opening tmux/vim popups. You step through every changed
   file with syntax-highlighted diffs, read the agent's own per-file
   reasoning beside each change (captured by review mode in
   `.claude/review-notes.md`), and approve, reject with feedback, or skip
   each file — plus leave general feedback that isn't tied to a file. On
-  finish, AMF writes `.claude/final-review-feedback.md` and prompts the
+  finish, AIW writes `.claude/final-review-feedback.md` and prompts the
   feature's agent to read it and address every item, so a review round
   flows straight back to the agent without copy-pasting.
 - The per-file change review now finds a developer's note even when the
@@ -3594,7 +3612,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 - Final review no longer crashes with a tmux `open terminal failed: not
   a terminal` error. The previous version tried to attach a separate
   terminal session for its vim/popup walkthrough, which doesn't work
-  with AMF's embedded tmux; the review now stays inside AMF.
+  with AIW's embedded tmux; the review now stays inside AIW.
 - The Ctrl+Space leader menu now lists the bookmark shortcuts for
   opening bookmarks, adding or removing the current session, and jumping
   to saved bookmark slots, so the on-screen help matches the available
@@ -3602,7 +3620,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Migration
 
-- The AMF database gains a `prompt_templates` table (schema migration
+- The AIW database gains a `prompt_templates` table (schema migration
   `007`), applied automatically on first launch. No user action is
   required.
 
@@ -3634,7 +3652,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   project list. From a Claude view, the Ctrl+Space menu adds: `c` to
   copy the session URL, `O` to open it in your browser, and `C` to
   toggle Remote Control on or off at runtime. When the link only lives
-  in Claude Code's footer (and can't be read back), AMF tells you to use
+  in Claude Code's footer (and can't be read back), AIW tells you to use
   that footer link rather than failing silently.
 
 ### Changed
@@ -3646,7 +3664,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Fixed
 
 - Opening the branch diff viewer and Markdown viewer now shows a
-  loading indicator while AMF gathers files or reads content, so slower
+  loading indicator while AIW gathers files or reads content, so slower
   startups and large worktrees no longer look like the app ignored the
   command.
 
@@ -3660,7 +3678,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 - New compose input for Claude Code sessions that sidesteps Claude
   Code's input-box rendering glitches. Start typing in a Claude view
-  and an AMF-drawn input opens over Claude Code's own input box; press
+  and an AIW-drawn input opens over Claude Code's own input box; press
   Enter to send the finished text in one shot (Alt+Enter inserts a
   newline). Claude Code's output stays visible and live above the box
   while you type.
@@ -3697,8 +3715,8 @@ Codex features receive the screenshot skill when their local setup next runs.
   repaint (leader-R) only cleared it until the next update. The garble
   is in the real tmux grid — Claude Code's incremental renderer draws
   its input box at a stale anchor row and leaves the vacated cells
-  behind — so AMF was faithfully showing corrupted pane content rather
-  than mis-rendering. AMF now re-anchors a live Claude pane every few
+  behind — so AIW was faithfully showing corrupted pane content rather
+  than mis-rendering. AIW now re-anchors a live Claude pane every few
   seconds with a one-row SIGWINCH bounce, forcing Claude Code to fully
   repaint and clear the stale cells. The bounce is hidden: the display
   holds its last good frame while the shrink/restore and repaint happen
@@ -3713,7 +3731,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Migration
 
 - The compose input is on by default for Claude Code sessions, so
-  typing in a Claude view now opens the AMF composer instead of going
+  typing in a Claude view now opens the AIW composer instead of going
   straight to Claude Code. If you prefer the old behavior for a
   session, press `leader+e` (or Ctrl+E inside the composer) to switch
   that session to direct input.
@@ -3728,18 +3746,18 @@ Codex features receive the screenshot skill when their local setup next runs.
 - Leader → Shift-R in view mode now repaints the agent's screen on
   demand. If an agent's display ever desyncs mid-turn (text appearing
   on the wrong line while it streams — a Claude Code rendering bug,
-  not an AMF one), one keystroke forces a full redraw instead of
+  not an AIW one), one keystroke forces a full redraw instead of
   waiting for it to fix itself.
-- Agent sidebars now show the active model when AMF can determine it
+- Agent sidebars now show the active model when AIW can determine it
   for Claude, Codex, and OpenCode sessions, making it easier to confirm
   which model a running agent is using.
 
 ### Changed
 
-- Pending input requests can now surface sooner when AMF starts in an
+- Pending input requests can now surface sooner when AIW starts in an
   embedded session view. The default input-request startup wait is now
   1.5 seconds, and you can tune it with
-  `input_request_wait_seconds` in `~/.config/amf/config.json`.
+  `input_request_wait_seconds` in `~/.config/ai_workstation/config.json`.
 - Diff-review prompts now only open automatically while you are viewing
   the feature that requested the review. From the dashboard or another
   feature's view, the review is added to the pending input requests and
@@ -3749,8 +3767,8 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Fixed
 
 - The embedded view no longer corrupts permanently when something else
-  resizes an agent's pane behind AMF's back (a second AMF instance,
-  attaching the session directly in another terminal). AMF now
+  resizes an agent's pane behind AIW's back (a second AIW instance,
+  attaching the session directly in another terminal). AIW now
   notices the size drift within a few seconds and restores it, and it
   backs off instead of fighting if another instance keeps resizing.
 - The embedded pane now fills the full view area (it was always two
@@ -3761,26 +3779,26 @@ Codex features receive the screenshot skill when their local setup next runs.
   output. Screen updates from fast agent output are now paced so
   keystrokes keep priority, and keystroke echo is never delayed behind
   a backlog of redraws.
-- Dragging or re-tiling the AMF window now resizes the agent's pane
+- Dragging or re-tiling the AIW window now resizes the agent's pane
   once, after the size settles, instead of once per animation frame.
   Repeated mid-stream resizes were the main way garbled "ghost" rows
   got baked into an agent's scrollback.
-- AMF now detects when its tmux server was started by a different AMF
+- AIW now detects when its tmux server was started by a different AIW
   build with a different bundled tmux version. Previously this
   mismatch silently broke the fast view path and session-event
   updates; both now fall back cleanly, with a clear note in the debug
   log.
-- Session status events now arrive from the tmux server AMF actually
+- Session status events now arrive from the tmux server AIW actually
   uses. They were being watched on the wrong server, so status changes
   silently fell back to slow polling for everyone.
 - Codex sidebar model details now remain visible after usage and
   activity lines appear by letting the Status section grow to fit its
   contents.
 - The vibeless diff-review popup now appears on macOS. The hook's
-  `amf notify-wait` call bound its reply socket under `$TMPDIR`, whose
+  `aiw notify-wait` call bound its reply socket under `$TMPDIR`, whose
   long per-user path on macOS exceeds the Unix socket path limit, so
   IPC delivery silently failed on every review. Reply sockets now live
-  in the short state directory used by the main AMF socket.
+  in the short state directory used by the main AIW socket.
 - Fallback notification files (written when IPC delivery fails) now
   open the diff-review popup automatically instead of waiting for a
   manual `V` refresh. The existing filesystem watcher picks them up
@@ -3794,13 +3812,13 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 - No migration is required. To override the new default, set
   `"input_request_wait_seconds": 1.5` in
-  `~/.config/amf/config.json` and adjust the value as needed.
+  `~/.config/ai_workstation/config.json` and adjust the value as needed.
 
 ## [v0.21.0] - 2026-06-11
 
 ### Changed
 
-- AMF now stays fast after running for hours or days. Usage and token
+- AIW now stays fast after running for hours or days. Usage and token
   statistics are computed in the background and re-read only what
   changed since the last check, so input no longer stalls as the day's
   agent transcripts grow.
@@ -3808,24 +3826,24 @@ Codex features receive the screenshot skill when their local setup next runs.
   updated when output actually arrives instead of being re-captured
   many times per second, with no change to typing echo or streaming
   responsiveness.
-- Hook and agent notifications now wake AMF immediately instead of
+- Hook and agent notifications now wake AIW immediately instead of
   waiting for the next poll tick, so toasts and pending-input alerts
   appear without delay.
-- The debug log (`~/.local/state/amf/debug.log`) is now capped at
+- The debug log (`~/.local/state/ai_workstation/debug.log`) is now capped at
   10 MB with one rotated generation kept, so it no longer grows
   without bound. Routine per-message IPC chatter is summarized once
   per 5 seconds instead of logged line by line.
 - The dashboard now reacts immediately when agent sessions start or
-  stop: AMF listens for tmux session events instead of polling every
+  stop: AIW listens for tmux session events instead of polling every
   5 seconds, so a feature that finishes or dies shows its new status
   right away.
 - Agent activity indicators and sidebar prompts now update from
   filesystem events instead of timed scans. Thinking status appears
-  as soon as an agent reports it, and an idle AMF does close to zero
+  as soon as an agent reports it, and an idle AIW does close to zero
   background work regardless of how many features exist.
-- AMF now keeps a small hidden tmux session (`_amf-observer`) while
+- AIW now keeps a small hidden tmux session (`_aiw-observer`) while
   running so it can receive those session events. It never appears in
-  AMF's pickers and is removed when AMF exits.
+  AIW's pickers and is removed when AIW exits.
 
 ### Fixed
 
@@ -3872,14 +3890,14 @@ Codex features receive the screenshot skill when their local setup next runs.
   lookups while the dialog redraws.
 - Fixed Vibeless diff reviews that could get stuck on Claude's file
   update step when Claude reported a working directory that did not
-  match AMF's stored feature path. AMF now identifies the waiting
+  match AIW's stored feature path. AIW now identifies the waiting
   review by its managed tmux session first, so the review dialog opens
   immediately instead of requiring the manual `V` recovery shortcut.
-- AMF now skips broken Claude Code auto-update binaries when launching
+- AIW now skips broken Claude Code auto-update binaries when launching
   Claude sessions or headless Claude commands. If the newest installed
-  Claude binary fails `--version`, AMF tries the next installed version
+  Claude binary fails `--version`, AIW tries the next installed version
   before falling back to `claude` on `PATH`, so a bad Claude update no
-  longer prevents AMF-managed Claude sessions from starting.
+  longer prevents AIW-managed Claude sessions from starting.
 
 ### Migration
 
@@ -3898,7 +3916,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 - Pending Claude diff reviews now stay visible in the sidebar `Work`
   section while they are waiting, and clear from the sidebar after the
   review is submitted.
-- Fixed vibeless diff-review not appearing when AMF was on the
+- Fixed vibeless diff-review not appearing when AIW was on the
   dashboard. Previously, a diff-review arriving while the dashboard was
   open would be silently queued and never shown — the review request
   would time out after 120 seconds and the agent would stall waiting
@@ -3922,7 +3940,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Changed
 
-- Opencode sidebar updates now use AMF's IPC path when available and
+- Opencode sidebar updates now use AIW's IPC path when available and
   keep fallback file checks off the UI thread, so sidebar refreshes no
   longer risk making the dashboard or embedded view feel stuck. That
   keeps the view responsive while sidebar state is loading or updating.
@@ -3949,7 +3967,7 @@ Codex features receive the screenshot skill when their local setup next runs.
     dedicated background thread; the usage display updates once the count
     arrives without delaying the dashboard.
   - **Loading gate trimmed**: the session-status background thread
-    (`session_status_bg`) no longer holds the "Loading AMF..." screen
+    (`session_status_bg`) no longer holds the "Loading AIW..." screen
     open. Token-usage counts are cosmetic; the dashboard now appears as
     soon as the other startup tasks finish and the counts fill in
     asynchronously.
@@ -3962,7 +3980,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Fixed
 
-- Fixed the dominant cause of the "Loading AMF..." stall that persisted
+- Fixed the dominant cause of the "Loading AIW..." stall that persisted
   through v0.19.3. `App::new` was synchronously reading every Claude
   session `.jsonl` file (potentially megabytes per feature) and every
   `PLAN.md` to pre-populate the prompt and plan caches before the first
@@ -3978,10 +3996,10 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Fixed
 
-- Fixed slow startup (stall on "Loading AMF..." or "Refreshing Claude
+- Fixed slow startup (stall on "Loading AIW..." or "Refreshing Claude
   hooks...") that became noticeable after the v0.19.0 global store
   migration. With a large feature count, `ensure_notify_scripts` and
-  `ensure_amf_skills` were writing tens of files per feature on every
+  `ensure_aiw_skills` were writing tens of files per feature on every
   launch. The hook and plugin refresh passes now record a version stamp
   after completing; subsequent startups on the same binary skip both
   passes entirely. Individual script and skill writes are also guarded
@@ -4006,9 +4024,9 @@ Codex features receive the screenshot skill when their local setup next runs.
 - Sidebar metadata and worktree sidebar updates now trigger redraws as
   soon as they arrive, so harness-side status changes appear without an
   extra keystroke.
-- Fixed slow startup ("Loading AMF..." screen stall) introduced in v0.19.0
+- Fixed slow startup ("Loading AIW..." screen stall) introduced in v0.19.0
   by the global project store migration. `ensure_notify_scripts` and
-  `ensure_amf_skills` now skip disk writes when the on-disk content is
+  `ensure_aiw_skills` now skip disk writes when the on-disk content is
   already up to date, so startup I/O scales to a few cheap reads per
   feature instead of tens of unconditional writes.
 
@@ -4039,11 +4057,11 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Changed
 
-- The dashboard header now shows the AMF version next to the app title.
-- AMF now uses one global project database at `~/.config/amf/amf.db`
+- The dashboard header now shows the AIW version next to the app title.
+- AIW now uses one global project database at `~/.config/ai_workstation/aiw.db`
   no matter which checkout you launch it from, so your project list stays
   consistent across directories.
-- If you already had separate per-worktree project stores, AMF now merges
+- If you already had separate per-worktree project stores, AIW now merges
   them into the global database automatically the next time you start it.
   That means the first launch after upgrading may bring in projects from
   other checkouts instead of keeping them isolated.
@@ -4057,13 +4075,13 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Migration
 
-- No manual migration is required. AMF will fold legacy worktree-local
+- No manual migration is required. AIW will fold legacy worktree-local
   project data into the global database on startup.
 
 ### Fixed
 
 - Drag-to-copy selection now highlights correctly while you are in scroll/copy mode and still copies the selected text from the scrolled view.
-- AMF now validates installed syntax highlighters at startup and repairs stale parser bundles automatically, so release builds should stop silently dropping syntax coloring.
+- AIW now validates installed syntax highlighters at startup and repairs stale parser bundles automatically, so release builds should stop silently dropping syntax coloring.
 
 ## [v0.18.4] - 2026-05-08
 
@@ -4095,9 +4113,9 @@ Codex features receive the screenshot skill when their local setup next runs.
 - Fixed persistent "warning: could not set up terminal" on macOS even after
   the `xterm-256color` fix in v0.18.2. The root cause was that a user-set
   `TERMINFO` or `TERMINFO_DIRS` env var (e.g. a Homebrew ncurses path) was
-  inherited by AMF's control-mode tmux clients, overriding the system
+  inherited by AIW's control-mode tmux clients, overriding the system
   terminfo lookup and preventing any terminal type — including `dumb` —
-  from being found. AMF now strips `TERMINFO` and `TERMINFO_DIRS` from the
+  from being found. AIW now strips `TERMINFO` and `TERMINFO_DIRS` from the
   environment of all spawned control-mode clients so they fall back to the
   compiled-in system terminfo paths where `xterm-256color` is reliably
   present.
@@ -4111,15 +4129,15 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Fixed
 
 - Fixed noticeable input lag on macOS caused by the wrong terminal type
-  (`screen-256color`) being used for AMF-managed tmux sessions. macOS's
+  (`screen-256color`) being used for AIW-managed tmux sessions. macOS's
   system terminfo does not include `screen-256color`, which caused the
   tmux control-mode clients to fail initialisation and fall back to
   spawning a `tmux send-keys` subprocess per keypress (~20–50 ms each).
-  AMF now uses `xterm-256color` on macOS, which is present in the system
+  AIW now uses `xterm-256color` on macOS, which is present in the system
   terminfo, and explicitly overrides `TERM` when spawning control-mode
   clients so they are not affected by an inherited broken terminal type.
   This also eliminates the "warning: could not set up terminal" message
-  that appeared when opening a terminal inside an AMF session on macOS.
+  that appeared when opening a terminal inside an AIW session on macOS.
 
 ### Migration
 
@@ -4129,7 +4147,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Fixed
 
-- Linux `amf upgrade` now skips unsupported packaged file types inside the
+- Linux `aiw upgrade` now skips unsupported packaged file types inside the
   bundled `tmux-root` tree, which prevents failures when copying release
   assets that contain special entries such as package docs.
 
@@ -4143,7 +4161,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 - Toast notifications now surface input requests and other transient
   prompts directly in the dashboard.
-- AMF skills can now be injected into feature workspaces when a feature
+- AIW skills can now be injected into feature workspaces when a feature
   starts.
 - Mouse-wheel scrolling now works in the Markdown viewer and help
   dialog.
@@ -4156,7 +4174,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   Codex settings overrides are merged into the local workspace config.
 - The tmux viewing stack now has a fallback path for environments where
   control-mode is unavailable.
-- Startup now shows a loading screen while AMF initializes.
+- Startup now shows a loading screen while AIW initializes.
 - Embedded overlays now keep the tmux cursor hidden behind dialogs and
   other UI surfaces.
 
@@ -4167,7 +4185,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   the next manual input or view refresh.
 - Toasts now render correctly in Viewing mode.
 - macOS control-mode space rendering now works correctly.
-- `amf upgrade` now handles symlinked release paths correctly.
+- `aiw upgrade` now handles symlinked release paths correctly.
 - Harness setup can now be dismissed cleanly.
 
 ### Migration
@@ -4207,9 +4225,9 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Added
 
 - Embedded tmux sessions now use a full tmux control-mode view by
-  default, streaming pane output directly into AMF for much more
+  default, streaming pane output directly into AIW for much more
   responsive typing and rendering in view mode.
-- Added `tmux_control_mode` to `~/.config/amf/config.json`. It defaults
+- Added `tmux_control_mode` to `~/.config/ai_workstation/config.json`. It defaults
   to `true`; set it to `false` to return to the legacy ambient tmux
   socket and direct `tmux send-keys` fallback path.
 - Help dialogs now support scrolling so longer keybinding and workflow
@@ -4217,7 +4235,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Changed
 
-- AMF now uses a dedicated managed tmux socket for control-mode sessions
+- AIW now uses a dedicated managed tmux socket for control-mode sessions
   instead of inheriting a potentially polluted ambient tmux server.
 - View-mode input no longer relies on per-key `tmux send-keys`
   subprocesses in the default path, reducing input latency and avoiding
@@ -4239,9 +4257,9 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 - No store migration is required.
 - Existing tmux sessions on the previous ambient socket are not moved to
-  the new managed control-mode socket. Restart those sessions from AMF,
+  the new managed control-mode socket. Restart those sessions from AIW,
   or temporarily set `"tmux_control_mode": false` in
-  `~/.config/amf/config.json` if you need to keep using the legacy tmux
+  `~/.config/ai_workstation/config.json` if you need to keep using the legacy tmux
   server.
 
 ## [v0.16.0] - 2026-04-20
@@ -4266,7 +4284,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   into the border title, prompt text renders directly without a
   `Preview:` prefix, and prompt copy uses the primary text color.
 - Persistent tmux control-mode input is now guarded behind
-  `AMF_EXPERIMENTAL_PERSISTENT_TMUX_INPUT`, with direct `send-keys`
+  `AIW_EXPERIMENTAL_PERSISTENT_TMUX_INPUT`, with direct `send-keys`
   remaining the default path.
 
 ### Fixed
@@ -4289,7 +4307,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Added
 
-- Agent harness configuration and setup flow. AMF now lets you choose
+- Agent harness configuration and setup flow. AIW now lets you choose
   which harnesses are enabled, persists that selection in
   `projects.json`, and can prompt for setup on startup when no
   harnesses are configured.
@@ -4309,7 +4327,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Fixed
 
-- `amf upgrade` now streams release downloads to disk instead of
+- `aiw upgrade` now streams release downloads to disk instead of
   buffering the full archive in memory first, improving reliability for
   larger bundles and lower-memory systems.
 - Diff syntax highlighting now refreshes its cache correctly, reducing
@@ -4320,7 +4338,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 - Existing stores migrate in place to keep using project store version
   5 while adding the new `available_harnesses` field.
-- After upgrading, AMF may ask you to configure at least one harness
+- After upgrading, AIW may ask you to configure at least one harness
   before feature creation or session picker flows are available.
 
 ## [v0.14.1] - 2026-04-07
@@ -4347,8 +4365,8 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Changed
 
-- Linked git worktrees now keep branch-local AMF state in
-  `.amf/projects.json`, seeded from the primary checkout on first
+- Linked git worktrees now keep branch-local AIW state in
+  `.aiw/projects.json`, seeded from the primary checkout on first
   launch, so project and feature changes in one checkout no longer leak
   into another.
 - Embedded tmux view refresh was reworked for better responsiveness,
@@ -4358,16 +4376,16 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Migration
 
 - No manual migration is required.
-- The primary checkout still uses `~/.config/amf/projects.json`.
-- The first AMF launch inside a linked worktree creates a local
-  `.amf/projects.json`, initialized from the primary store when one
+- The primary checkout still uses `~/.config/ai_workstation/projects.json`.
+- The first AIW launch inside a linked worktree creates a local
+  `.aiw/projects.json`, initialized from the primary store when one
   exists.
 
 ## [v0.13.1] - 2026-03-31
 
 ### Fixed
 
-- `amf upgrade` now replaces bundled release directories recursively,
+- `aiw upgrade` now replaces bundled release directories recursively,
   preventing partial installs that could leave the tmux wrapper present
   without its neighboring `tmux-real` binary or bundled support files.
 
@@ -4382,7 +4400,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   now session-specific rather than shared across features.
 - Codex sidebar session metadata display including thread information,
   usage source confidence, and reasoning token counts.
-- Local command actions in command picker — focused access to AMF-level
+- Local command actions in command picker — focused access to AIW-level
   actions without mixing in session-specific commands.
 - Claude session resume picker on `S` now works for Claude sessions as
   well as Opencode, with session titles pulled from the first user
@@ -4407,13 +4425,13 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 - Stale worktree delete failures are now handled gracefully without
   blocking feature deletion.
-- tmux session launches no longer leak AMF-managed `PATH` overrides into
+- tmux session launches no longer leak AIW-managed `PATH` overrides into
   child sessions.
-- `amf upgrade` now resolves the actual release asset from GitHub's
+- `aiw upgrade` now resolves the actual release asset from GitHub's
   release metadata instead of hardcoding a guessed download URL, so
   future packaging changes do not regress into `404` download failures.
 - macOS `x86_64` upgrade detection now only selects the Apple Silicon
-  bundle when AMF is running under Rosetta on Apple Silicon. Native
+  bundle when AIW is running under Rosetta on Apple Silicon. Native
   Intel Macs now get a clear unsupported-platform error instead of a
   misleading architecture mapping.
 
@@ -4455,12 +4473,12 @@ Codex features receive the screenshot skill when their local setup next runs.
 - Restored sessions now resize correctly to the current pane dimensions
   on attach, and the session picker no longer wraps unexpectedly on
   narrow terminals.
-- `amf upgrade` now downloads the full `.tar.gz` bundle and extracts
-  all bundled files (`amf`, `tmux`, `tmux-real`, libs) into the install
+- `aiw upgrade` now downloads the full `.tar.gz` bundle and extracts
+  all bundled files (`aiw`, `tmux`, `tmux-real`, libs) into the install
   directory, so the bundled tmux binary is also updated on upgrade.
-- Install and upgrade scripts remove the existing `/opt/amf` directory
+- Install and upgrade scripts remove the existing `/opt/aiw` directory
   before moving the new bundle into place, preventing the old binary
-  from being left behind when `/opt/amf` already exists.
+  from being left behind when `/opt/aiw` already exists.
 
 ## [v0.11.0] - 2026-03-17
 
@@ -4475,7 +4493,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   from the dashboard without leaving the TUI. Accessible via the
   feature creation flow and a new view-mode shortcut.
 - Gruvbox Dark and Gruvbox Light UI themes, plus a matching
-  `amf-gruvbox.json` Opencode theme with full syntax, markdown, and
+  `aiw-gruvbox.json` Opencode theme with full syntax, markdown, and
   diff highlighting.
 - Live theme preview in the theme picker — scrolling through themes
   applies them immediately; `Esc` reverts to the original and `Enter`
@@ -4498,7 +4516,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Fixed
 
 - Thinking/tool hook scripts (`thinking-start.sh`, `tool-start.sh`,
-  etc.) now use `$AMF_SESSION` (the tmux session name) as the IPC
+  etc.) now use `$AIW_SESSION` (the tmux session name) as the IPC
   key instead of the Claude hook UUID. This fixes the thinking
   throbber never appearing in IPC mode.
 - Bundled `ld-linux` is used when invoking the bundled tmux on
@@ -4514,7 +4532,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   start or appear in pickers. Remove them from saved features if
   desired.
 - If you have custom `token_pricing` needs, add a `token_pricing`
-  block to `~/.config/amf/config.json` (see configuration docs).
+  block to `~/.config/ai_workstation/config.json` (see configuration docs).
 
 ## [v0.10.1] - 2026-03-13
 
@@ -4529,11 +4547,11 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Added
 
-- AMF release bundles now include a statically-linked `tmux` binary.
-  When launched outside an existing tmux session, AMF uses the bundled
+- AIW release bundles now include a statically-linked `tmux` binary.
+  When launched outside an existing tmux session, AIW uses the bundled
   binary on a private socket so that tmux does not need to be installed
   separately.
-- `AMF_TMUX_BIN` and `AMF_TMUX_SOCKET` environment variables let you
+- `AIW_TMUX_BIN` and `AIW_TMUX_SOCKET` environment variables let you
   override the tmux binary and socket path at runtime.
 
 ### Changed
@@ -4557,7 +4575,7 @@ Codex features receive the screenshot skill when their local setup next runs.
   restarting, accessible from the diff viewer and diff review prompt.
 - Scroll support in the diff review prompt pane (j/k, g/G, mouse wheel).
 - Opencode change-tracker plugin (`.opencode/plugins/change-tracker.js`)
-  that watches file writes, emits AMF notifications, and wires into the
+  that watches file writes, emits AIW notifications, and wires into the
   diff review approval flow for Opencode sessions.
 
 ### Fixed
@@ -4592,7 +4610,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Changed
 
-- Diff review and markdown-reading workflows now stay inside AMF instead
+- Diff review and markdown-reading workflows now stay inside AIW instead
   of requiring an external tool or a separate terminal flow.
 - Markdown picker labels now distinguish worktree files from repo-root
   files when both scopes are available.
@@ -4608,9 +4626,9 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Added
 
 - Full automation system for creating projects, features, and batch features via CLI and IPC
-  - `amf automation create-project` for programmatic project creation
-  - `amf automation create-feature` for programmatic feature creation
-  - `amf automation create-batch-features` for parallel multi-feature creation
+  - `aiw automation create-project` for programmatic project creation
+  - `aiw automation create-feature` for programmatic feature creation
+  - `aiw automation create-batch-features` for parallel multi-feature creation
   - JSON-based request/response interface with timeout and dry-run support
 - Steering Coach startup prompt overlay for coaching new features
 - Plan mode for collaborative planning sessions with shared PLAN.md
@@ -4638,14 +4656,14 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Migration
 
-- No manual migration required, but review the new automation interface if integrating AMF into CI/CD workflows
+- No manual migration required, but review the new automation interface if integrating AIW into CI/CD workflows
 
 ## [v0.6.1] - 2026-03-06
 
 ### Fixed
 
 - Fixed extension reload path handling for workspace-local
-  `.amf/config.json`.
+  `.aiw/config.json`.
 - Repaired related test fixtures around extension loading.
 
 ### Migration
@@ -4656,11 +4674,11 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Added
 
-- Full AMF UI theming with built-in `default`, `amf`, `dracula`,
+- Full AIW UI theming with built-in `default`, `aiw`, `dracula`,
   `nord`, and Catppuccin variants.
 - A dashboard theme picker and `theme` / `transparent_background`
   config support.
-- `allowed_agents` config so each workspace can restrict AMF to a
+- `allowed_agents` config so each workspace can restrict AIW to a
   subset of Claude, Codex, and Opencode.
 - Session bookmarks with `H`, `M`, and `1`-`9` quick
   jumps.
@@ -4679,7 +4697,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 - Optional: add `theme`, `transparent_background`,
   `leader_timeout_seconds`, or `extension.allowed_agents` to
-  `~/.config/amf/config.json` or a repo-local `.amf/config.json`.
+  `~/.config/ai_workstation/config.json` or a repo-local `.aiw/config.json`.
 - No store migration is needed. `projects.json` is auto-migrated on
   load.
 
@@ -4688,7 +4706,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Added
 
 - Initial Codex agent and session support.
-- IPC-based input notifications with file-based fallback when the AMF
+- IPC-based input notifications with file-based fallback when the AIW
   socket is unavailable.
 - Improved input request handling for Codex worktrees.
 
@@ -4706,9 +4724,9 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Added
 
-- `amf upgrade` to replace the installed binary with the latest GitHub
+- `aiw upgrade` to replace the installed binary with the latest GitHub
   release.
-- `amf -V` / `amf --version` for quick version checks.
+- `aiw -V` / `aiw --version` for quick version checks.
 
 ### Migration
 
@@ -4731,7 +4749,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Migration
 
-- Repo-local `.amf/config.json` files are now respected alongside the
+- Repo-local `.aiw/config.json` files are now respected alongside the
   global config and merged on top of it.
 - Existing saved state is auto-migrated to include summary and
   nickname fields.
@@ -4766,7 +4784,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 
 ### Added
 
-- Built-in AMF themes, transparent background support, and bundled
+- Built-in AIW themes, transparent background support, and bundled
   Opencode themes for the embedded pane.
 - VSCode session support launched through the `code` CLI.
 - Saved latest Claude prompt overlay.
@@ -4775,7 +4793,7 @@ Codex features receive the screenshot skill when their local setup next runs.
 ### Migration
 
 - Optional: set `theme`, `transparent_background`, or
-  `opencode_theme` in `~/.config/amf/config.json`.
+  `opencode_theme` in `~/.config/ai_workstation/config.json`.
 - If you use VSCode sessions, make sure the `code` CLI is installed.
 
 ## [v0.1.1] - 2026-03-01

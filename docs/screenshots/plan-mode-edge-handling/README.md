@@ -1,13 +1,13 @@
 # Plan-mode empty and edge handling
 
-Captured with the repository's `/amf-screenshot` workflow from an isolated AMF
+Captured with the repository's `/aiw-screenshot` workflow from an isolated AIW
 instance against a throwaway git repository. That repository's
-`.amf/config.json` sets `skip_builtin_questions: true` with no configured
+`.aiw/config.json` sets `skip_builtin_questions: true` with no configured
 questions, so the feature brief is the entire static interview.
 
 The reusable scenario is
 `scripts/dev/screenshot/scenarios/plan-interview-edge-handling.txt`. Run it with
-`scripts/dev/screenshot/amf-capture.sh --scenario <scenario> --seed <seed>`,
+`scripts/dev/screenshot/aiw-capture.sh --scenario <scenario> --seed <seed>`,
 where the create-project seed points at a throwaway repository containing:
 
 ```json

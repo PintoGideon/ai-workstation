@@ -2,7 +2,7 @@
 """Build the restricted, script-free Pages gallery from a downloaded capture.
 
 Input is the directory `gh run download` writes for an
-`amf-screenshot-artifact.yml` run: rendered `*.png` / `*.gif` frames plus an
+`aiw-screenshot-artifact.yml` run: rendered `*.png` / `*.gif` frames plus an
 optional `capture-notes.jsonl` (one `{"file": ..., "note": ...}` object per
 line). Output is a self-contained directory ready for `wrangler pages deploy` —
 `index.html` with every image inlined as a `data:` URI and a `_headers` file
@@ -87,14 +87,14 @@ def main() -> None:
     summary = html.escape(args.summary[:600])
     (destination / "index.html").write_text(
         "<!doctype html><meta charset=utf-8>"
-        f"<title>AMF screenshot proof — PR #{pr}</title>"
+        f"<title>AIW screenshot proof — PR #{pr}</title>"
         "<style>body{margin:2rem auto;max-width:1100px;padding:0 1rem;"
         "background:#16181d;color:#e6e6e6;font:15px system-ui,sans-serif}"
         ".flow{margin:1rem 0 2rem;padding:1rem;border-left:3px solid #6ea8fe;"
         "background:#20242c}figure{margin:0 0 2rem}img{display:block;width:100%;"
         "height:auto;border:1px solid #424955;border-radius:8px}"
         "figcaption{padding:.65rem 0;color:#c7ced8}figcaption p{margin:.4rem 0 0}</style>"
-        f"<h1>AMF screenshot proof — PR #{pr}</h1>"
+        f"<h1>AIW screenshot proof — PR #{pr}</h1>"
         f"<section class=flow><strong>Flow under review</strong><p>{summary}</p></section>"
         "<h2>Evidence walkthrough</h2>" + "".join(figures),
         encoding="utf-8",

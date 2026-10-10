@@ -41,8 +41,6 @@ pub trait GithubTransport {
     fn check_auth(&self) -> Result<()>;
     fn current_user(&self, workdir: &Path) -> Result<String>;
     fn list_prs(&self, workdir: &Path, include_closed: bool) -> Result<Vec<PrListEntry>>;
-    fn resolve_pr(&self, workdir: &Path) -> Result<PrResolution>;
-    fn fetch_pr_by_number(&self, workdir: &Path, number: u32) -> Result<PrRef>;
     fn list_issues(
         &self,
         workdir: &Path,
@@ -651,7 +649,7 @@ impl GhCli {
     /// makes `gh pr diff` fail on huge PRs.
     ///
     /// Fetches the PR head (`pull/<n>/head`) and the base branch into private
-    /// `refs/amf/` refs so nothing about the working tree, checked-out branch,
+    /// `refs/aiw/` refs so nothing about the working tree, checked-out branch,
     /// or `origin/*` tracking refs changes, diffs `base...head` (the same
     /// merge-base three-dot range `gh pr diff` shows), then deletes the temp
     /// refs.
@@ -659,7 +657,7 @@ impl GhCli {
     /// The fetch source is the repository `gh` itself resolved for this PR
     /// (`gh repo view --json url -q .url`), not a hardcoded `origin` — in a fork clone
     /// `origin` is the fork and would not carry `pull/<n>/head` or the base
-    /// branch. The temp refs carry this process's pid so two AMF features
+    /// branch. The temp refs carry this process's pid so two AIW features
     /// reviewing the same PR number concurrently don't fetch into, and delete,
     /// each other's refs. The `git diff` invocation mirrors the flags every
     /// other `git diff` in the codebase uses (`src/diff.rs`) so a repo-local
@@ -686,8 +684,8 @@ impl GhCli {
             .context("Failed to resolve the PR's base repository for the local diff fallback.")?;
 
         let pid = std::process::id();
-        let head_ref = format!("refs/amf/pr-{number}-{pid}-head");
-        let base_ref = format!("refs/amf/pr-{number}-{pid}-base");
+        let head_ref = format!("refs/aiw/pr-{number}-{pid}-head");
+        let base_ref = format!("refs/aiw/pr-{number}-{pid}-base");
 
         let fetch = without_git_prompts(&mut Command::new("git"))
             .args(["fetch", "--quiet", "--no-tags", &repo_url])
@@ -1304,14 +1302,6 @@ impl GithubTransport for GhCli {
 
     fn list_prs(&self, workdir: &Path, include_closed: bool) -> Result<Vec<PrListEntry>> {
         Self::list_prs(workdir, include_closed)
-    }
-
-    fn resolve_pr(&self, workdir: &Path) -> Result<PrResolution> {
-        Self::resolve_pr(workdir)
-    }
-
-    fn fetch_pr_by_number(&self, workdir: &Path, number: u32) -> Result<PrRef> {
-        Self::fetch_pr_by_number(workdir, number)
     }
 
     fn list_issues(
@@ -2446,15 +2436,15 @@ mod tests {
     #[test]
     fn owner_repo_is_read_from_either_remote_spelling() {
         for url in [
-            "https://github.com/eldridgerdev/agent-mainframe.git",
-            "https://github.com/eldridgerdev/agent-mainframe",
-            "git@github.com:eldridgerdev/agent-mainframe.git",
-            "ssh://git@github.com/eldridgerdev/agent-mainframe.git",
-            "git@git.example.com:eldridgerdev/agent-mainframe",
+            "https://github.com/example-org/ai-workstation.git",
+            "https://github.com/example-org/ai-workstation",
+            "git@github.com:example-org/ai-workstation.git",
+            "ssh://git@github.com/example-org/ai-workstation.git",
+            "git@git.example.com:example-org/ai-workstation",
         ] {
             assert_eq!(
                 parse_remote_owner_repo(url),
-                Some(("eldridgerdev".into(), "agent-mainframe".into())),
+                Some(("example-org".into(), "ai-workstation".into())),
                 "failed on {url}"
             );
         }
@@ -2462,22 +2452,21 @@ mod tests {
 
     #[test]
     fn canonical_github_identity_normalizes_equivalent_remote_spellings() {
-        let https = GithubRepository::from_remote_url(
-            "https://GitHub.com/EldridgerDev/Agent-Mainframe.git",
-        )
-        .unwrap();
-        let ssh = GithubRepository::from_remote_url("git@github.com:EldridgerDev/Agent-Mainframe")
-            .unwrap();
+        let https =
+            GithubRepository::from_remote_url("https://GitHub.com/Example-Org/AI-Workstation.git")
+                .unwrap();
+        let ssh =
+            GithubRepository::from_remote_url("git@github.com:Example-Org/AI-Workstation").unwrap();
         assert_eq!(https, ssh);
-        assert_eq!(https.canonical(), "github.com/eldridgerdev/agent-mainframe");
+        assert_eq!(https.canonical(), "github.com/example-org/ai-workstation");
 
         let enterprise = GithubRepository::from_remote_url(
-            "ssh://git@github.acme.example/platform/agent-mainframe.git",
+            "ssh://git@github.acme.example/platform/ai-workstation.git",
         )
         .unwrap();
         assert_eq!(
             enterprise.canonical(),
-            "github.acme.example/platform/agent-mainframe"
+            "github.acme.example/platform/ai-workstation"
         );
     }
 
@@ -2699,8 +2688,8 @@ mod tests {
     #[test]
     fn parses_owner_repo_from_url() {
         assert_eq!(
-            parse_owner_repo("https://github.com/eldridgerdev/agent-mainframe/pull/321"),
-            Some(("eldridgerdev".to_string(), "agent-mainframe".to_string()))
+            parse_owner_repo("https://github.com/example-org/ai-workstation/pull/321"),
+            Some(("example-org".to_string(), "ai-workstation".to_string()))
         );
     }
 
@@ -2841,20 +2830,20 @@ mod tests {
     #[test]
     fn branch_pr_resolution_accepts_open_successor() {
         let json = br#"{"number":450,"headRefOid":"new",
-            "url":"https://github.com/acme/amf/pull/450","state":"OPEN","headRefName":"feat-b"}"#;
+            "url":"https://github.com/acme/aiw/pull/450","state":"OPEN","headRefName":"feat-b"}"#;
 
         let pr = parse_open_resolved_pr(json).unwrap().unwrap();
         assert_eq!(pr.number, 450);
         assert_eq!(pr.head_sha, "new");
         assert_eq!(pr.owner, "acme");
-        assert_eq!(pr.repo, "amf");
+        assert_eq!(pr.repo, "aiw");
         assert_eq!(pr.head_ref, "feat-b");
     }
 
     #[test]
     fn branch_pr_resolution_rejects_closed_predecessor() {
         let json = br#"{"number":449,"headRefOid":"old",
-            "url":"https://github.com/acme/amf/pull/449","state":"CLOSED"}"#;
+            "url":"https://github.com/acme/aiw/pull/449","state":"CLOSED"}"#;
 
         assert!(parse_open_resolved_pr(json).unwrap().is_none());
     }

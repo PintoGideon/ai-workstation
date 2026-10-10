@@ -88,11 +88,12 @@ export function promptOverridesPrecallTarget(): Promise<PrecallOverrideTarget> {
 }
 
 export const HARNESS_LABELS: Record<AgentSlug, string> = {
-  claude: "Claude", codex: "Codex", opencode: "OpenCode", pi: "Pi",
+  claude: "Claude", codex: "Codex", pi: "Pi",
+  gemini: "Gemini", cursor: "Cursor", // FORK
 };
 
 export const SCOPE_LABELS: Record<OverrideLayer, string> = {
-  feature: "Feature", project: "Project (amf.json)", global: "Global", built_in: "Built-in default",
+  feature: "Feature", project: "Project (aiw.json)", global: "Global", built_in: "Built-in default",
 };
 
 export function slotLabel(scope: OverrideLayer, harness: AgentSlug | null): string {

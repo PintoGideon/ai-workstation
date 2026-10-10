@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 OUT_DIR="${1:?Pass an output directory}"
-CAPTURE_RUNNER="${AMF_GUI_CAPTURE_RUNNER:-$SCRIPT_DIR/capture-gui-diff.py}"
+CAPTURE_RUNNER="${AIW_GUI_CAPTURE_RUNNER:-$SCRIPT_DIR/capture-gui-diff.py}"
 
 # The capture-only CI job checks out the requested ref and holds no Pages token.
 # Install native GUI dependencies here, so TUI-only captures stay lightweight.
@@ -16,7 +16,7 @@ if [[ "${CI:-}" == "true" ]]; then
 fi
 npm --prefix "$REPO_ROOT/gui" ci --no-audit --no-fund
 npm --prefix "$REPO_ROOT/gui" run build
-cargo build --manifest-path "$REPO_ROOT/Cargo.toml" -p amf-gui --locked
+cargo build --manifest-path "$REPO_ROOT/Cargo.toml" -p aiw-gui --locked
 
 if [[ "${CI:-}" == "true" || -z "${DISPLAY:-}" ]]; then
   # A runner's DISPLAY variable does not guarantee a usable desktop. Give

@@ -1,6 +1,7 @@
 //! Settings-only connection to an existing Codex daemon. Never starts a turn,
 //! loads a conversation, changes defaults, or sends terminal input.
 use super::discovery;
+use super::local_ws::{Frame, WsClient};
 use crate::{
     model_options::{EligibleOptions, LaunchPath, ModelChoice},
     project::AgentKind,
@@ -79,7 +80,7 @@ fn prepare_with<P: Protocol + 'static>(
     request: Request,
     cancelled: &AtomicBool,
 ) -> Result<Box<dyn Prepared>> {
-    rpc.call("initialize", json!({"clientInfo":{"name":"amf-model-settings","version":env!("CARGO_PKG_VERSION")},"capabilities":{"experimentalApi":true}}), cancelled)?;
+    rpc.call("initialize", json!({"clientInfo":{"name":"aiw-model-settings","version":env!("CARGO_PKG_VERSION")},"capabilities":{"experimentalApi":true}}), cancelled)?;
     rpc.initialized()?;
     validate_eligibility(&mut rpc, &request, cancelled)?;
     let before = read_thread(&mut rpc, &request, cancelled)?;
@@ -116,7 +117,7 @@ fn validate_eligibility(
     )?;
     // Only what the daemon reports is checked here. An environment override
     // such as OPENAI_BASE_URL set where the daemon started is invisible to
-    // config/read, and AMF's own environment says nothing about that process.
+    // config/read, and AIW's own environment says nothing about that process.
     ensure!(
         discovery::is_openai_config(&config),
         "Running daemon uses unverified provider configuration"
@@ -175,7 +176,7 @@ impl<P: Protocol> Prepared for Settings<P> {
         // connection's first budget.
         self.rpc.restart_deadline();
         // Repeat policy/catalog checks on the same connection, then reject a
-        // native-picker change that happened while AMF was validating its target.
+        // native-picker change that happened while AIW was validating its target.
         (|| -> Result<()> {
             validate_eligibility(&mut self.rpc, &self.request, cancelled)?;
             let current = read_thread(&mut self.rpc, &self.request, cancelled)?;
@@ -253,7 +254,7 @@ impl Drop for Proxy {
     }
 }
 struct Rpc<S: Read + Write> {
-    socket: tungstenite::WebSocket<S>,
+    socket: WsClient<S>,
     next: u64,
     deadline: Instant,
     _proxy: Option<Proxy>,
@@ -304,32 +305,21 @@ fn check_wait(deadline: Instant, cancelled: &AtomicBool) -> Result<()> {
     );
     Ok(())
 }
-fn would_block(error: &tungstenite::Error) -> bool {
-    matches!(error, tungstenite::Error::Io(e) if e.kind() == std::io::ErrorKind::WouldBlock)
-}
 impl<S: Read + Write> Rpc<S> {
     fn connect_stream(io: S, cancelled: &AtomicBool) -> Result<Self> {
         let deadline = Instant::now() + PHASE_BUDGET;
         check_wait(deadline, cancelled)?;
-        let config = tungstenite::protocol::WebSocketConfig::default()
-            .max_message_size(Some(4 * 1024 * 1024))
-            .max_frame_size(Some(4 * 1024 * 1024));
-        let mut handshake =
-            tungstenite::client::client_with_config("ws://localhost/", io, Some(config));
-        let socket = loop {
+        let mut socket = WsClient::new(io);
+        loop {
             check_wait(deadline, cancelled)?;
-            match handshake {
-                Ok((socket, _)) => break socket,
-                Err(tungstenite::HandshakeError::Interrupted(pending)) => {
-                    std::thread::sleep(Duration::from_millis(10));
-                    handshake = pending.handshake();
-                }
-                Err(tungstenite::HandshakeError::Failure(e)) => {
-                    return Err(anyhow::anyhow!(e)
-                        .context("Could not connect to the running Codex control socket"));
+            match socket.handshake_step() {
+                Ok(true) => break,
+                Ok(false) => std::thread::sleep(Duration::from_millis(10)),
+                Err(e) => {
+                    return Err(e.context("Could not connect to the running Codex control socket"));
                 }
             }
-        };
+        }
         Ok(Self {
             socket,
             next: 0,
@@ -339,20 +329,15 @@ impl<S: Read + Write> Rpc<S> {
     }
     fn send(&mut self, value: Value, cancelled: &AtomicBool) -> Result<()> {
         check_wait(self.deadline, cancelled)?;
-        // write queues a frame even if its first flush would block. Never
-        // enqueue that frame again; retry only flush, to avoid duplicate RPCs.
-        if let Err(e) = self
-            .socket
-            .write(tungstenite::Message::text(value.to_string()))
-        {
-            ensure!(would_block(&e), "Codex control write failed: {e}");
-        }
+        // The frame is queued exactly once; only the flush is retried, so a
+        // blocked write can never duplicate an RPC.
+        self.socket.queue_text(&value.to_string());
         loop {
             check_wait(self.deadline, cancelled)?;
             match self.socket.flush() {
-                Ok(()) => return Ok(()),
-                Err(e) if would_block(&e) => std::thread::sleep(Duration::from_millis(10)),
-                Err(e) => return Err(e.into()),
+                Ok(true) => return Ok(()),
+                Ok(false) => std::thread::sleep(Duration::from_millis(10)),
+                Err(e) => return Err(e.context("Codex control write failed")),
             }
         }
     }
@@ -365,7 +350,7 @@ impl<S: Read + Write + Send> Protocol for Rpc<S> {
         loop {
             check_wait(self.deadline, cancelled)?;
             match self.socket.read() {
-                Ok(tungstenite::Message::Text(text)) => {
+                Ok(Some(Frame::Text(text))) => {
                     let value: Value = serde_json::from_str(&text)?;
                     if value["id"] != id {
                         continue;
@@ -382,10 +367,10 @@ impl<S: Read + Write + Send> Protocol for Rpc<S> {
                         .cloned()
                         .context("Missing settings response");
                 }
-                Ok(tungstenite::Message::Ping(_) | tungstenite::Message::Pong(_)) => {}
-                Ok(_) => anyhow::bail!("Unexpected Codex control frame"),
-                Err(e) if would_block(&e) => std::thread::sleep(Duration::from_millis(10)),
-                Err(e) => return Err(e.into()),
+                Ok(Some(Frame::Ping | Frame::Pong)) => {}
+                Ok(Some(Frame::Binary)) => anyhow::bail!("Unexpected Codex control frame"),
+                Ok(None) => std::thread::sleep(Duration::from_millis(10)),
+                Err(e) => return Err(e),
             }
         }
     }

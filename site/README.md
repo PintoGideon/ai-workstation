@@ -1,6 +1,6 @@
-# AMF site
+# AIW site
 
-Marketing landing page + docs for Agent Mainframe, built with
+Marketing landing page + docs for AI Workstation, built with
 [Zola](https://www.getzola.org/) (a Rust static site generator — no Node/npm
 toolchain).
 
@@ -63,8 +63,8 @@ is set once in `content/docs/_index.md`).
 
 The homepage hero shows a placeholder until `content/_index.md` sets
 `extra.hero_image` to a path under `static/` (e.g. `images/dashboard.png`).
-Use the `amf-screenshot` skill to capture a real dashboard screenshot or GIF
-from a live AMF instance rather than a mockup.
+Use the `aiw-screenshot` skill to capture a real dashboard screenshot or GIF
+from a live AIW instance rather than a mockup.
 
 ## Deployment
 

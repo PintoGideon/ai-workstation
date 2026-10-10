@@ -10,7 +10,7 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 
 export type SidebarPref = "sessionSidebar" | "projectsSidebar";
 
-const STORAGE_PREFIX = "amf.gui.collapsed.";
+const STORAGE_PREFIX = "aiw.gui.collapsed.";
 const memory = new Map<SidebarPref, boolean>();
 const listeners = new Set<() => void>();
 

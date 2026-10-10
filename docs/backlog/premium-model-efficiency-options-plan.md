@@ -1,4 +1,4 @@
-# Making premium models affordable through AMF
+# Making premium models affordable through AIW
 
 - **Status:** Backlog
 - **Owner:** unassigned
@@ -13,10 +13,10 @@
 ## Purpose
 
 Make expensive models such as GPT-6 Astra and Claude Fable practical for
-everyday development through AMF. Control which work reaches them, what
+everyday development through AIW. Control which work reaches them, what
 context accompanies it, and when previous results can be reused. Preserve
 their value for difficult reasoning while moving routine execution,
-evidence gathering, and bookkeeping into AMF or less expensive models.
+evidence gathering, and bookkeeping into AIW or less expensive models.
 
 This document captures eight options, their mechanisms, worked savings
 examples, implementation boundaries, and questions for later feature plans.
@@ -24,7 +24,7 @@ Complexity is not a constraint on the options considered here. The existing
 token-efficiency plan remains a related implementation backlog; this document
 extends the design space and does not replace it or mark its work complete.
 
-All savings examples are hypothetical calculations, not AMF benchmarks or
+All savings examples are hypothetical calculations, not AIW benchmarks or
 promises. No workflow comparison or paid-model experiment was run to produce
 them. Provider behavior and prices were checked against official documentation
 during the original investigation. Recheck them when planning implementation.
@@ -90,7 +90,7 @@ models. Avoiding 10,000 cached input tokens saves $0.01 on Astra/Fable 5 or
 $0.0025 on Fable 5.1. This makes unnecessary reasoning and repeated attempts
 especially valuable targets.
 
-## Existing AMF foundations and gaps
+## Existing AIW foundations and gaps
 
 The code snapshot was inspected directly on `chore/codebase-maintainability`.
 Confirm these observations against the target branch when writing a feature
@@ -100,7 +100,7 @@ of current behavior.
 | Foundation | Current evidence | Opportunity |
 | --- | --- | --- |
 | Headless execution | [`HeadlessRunner`](../../src/headless.rs) supports harness selection, optional models, and progress/usage reporting. | Add explicit workflow profiles and bounded expert consultations. |
-| Session and feature ownership | Sessions, worktrees, and workflow orchestration already belong to AMF. | Own task state, handoffs, validation artifacts, and model routing. |
+| Session and feature ownership | Sessions, worktrees, and workflow orchestration already belong to AIW. | Own task state, handoffs, validation artifacts, and model routing. |
 | Usage accounting | [`token_tracking.rs`](../../src/token_tracking.rs) records usage, but `TokenPricingConfig` defaults to one Sonnet-based rate table. | Attribute actual models and price each usage segment correctly. |
 | Context telemetry | [`context_tracking.rs`](../../src/context_tracking.rs), [`context_collectors.rs`](../../src/context_collectors.rs), and [`context_hints.rs`](../../src/app/context_hints.rs) already exist. | Build economic decisions on existing context/reset signals rather than introducing another occupancy counter. |
 | Session summaries | [`summary.rs`](../../src/summary.rs) uses the selected harness, recent pane lines, and no explicit model. | Deterministic summaries, separate utility models, and artifact reuse. |
@@ -147,9 +147,9 @@ Maintain separate implementer and expert sessions. An inexpensive model
 handles routine implementation. Astra/Fable receives a bounded consultation:
 the question, relevant source, observed failures, attempted fixes, and
 acceptance criteria. It may request more evidence and returns a decision or
-targeted patch. AMF runs validation and returns the result to the implementer.
+targeted patch. AIW runs validation and returns the result to the implementer.
 
-For an AMF lifecycle bug, an expert request could be: "These two cleanup paths
+For an AIW lifecycle bug, an expert request could be: "These two cleanup paths
 disagree about process ownership; identify the correct invariant and necessary
 changes." The expert need not inherit unrelated implementation chatter.
 
@@ -199,14 +199,14 @@ accounting. Total tokens may increase while premium usage and cost fall.
 
 ### Behavior and implementation shape
 
-Provide AMF operations such as `run_checks`, `inspect_failure`, and
+Provide AIW operations such as `run_checks`, `inspect_failure`, and
 `read_symbol`. These are proposed tools, not existing commands. Retain full
 output locally and return structured evidence: command identity, exit status,
 failure locations, relevant diagnostics, and an artifact reference for more.
 
 For this repository, a validation result could report formatting and Clippy
 success, the failing test name, and its diagnostic. The full test log remains
-available on demand. AMF can execute a known validation sequence without an
+available on demand. AIW can execute a known validation sequence without an
 expensive model deciding and interpreting every routine step.
 
 Use deterministic parsers first. Retain stderr, failures, and unexpected
@@ -292,7 +292,7 @@ At a completed phase, offer a fresh session with a bounded checkpoint:
 - Validation commands and outcomes, unresolved failures, and active work.
 - Remaining tasks and the next concrete action.
 
-Construct most fields from AMF state, Git, and execution records. Use a model
+Construct most fields from AIW state, Git, and execution records. Use a model
 only for information that requires interpretation, such as a design rationale
 not recorded elsewhere. Preserve the original session and make omitted history
 retrievable. Bind checkpoints to the selected provider session, not merely the
@@ -342,7 +342,7 @@ rotate when expected avoided future input cost
 
 Keep reusable instructions, tool definitions, and context prefixes stable;
 place changing task information after them. Observe cache writes, reads, and
-misses. Identify prompt changes controlled by AMF that prevent reuse.
+misses. Identify prompt changes controlled by AIW that prevent reuse.
 
 Request-level caching controls require an integration that actually owns or
 exposes those settings. A prompt cache key alone does not make different
@@ -388,10 +388,10 @@ not a universal argument for shrinking every request.
 
 - Record price-source date, service tier, cache retention, model identity, and
   applicable thresholds. Display unknown rates explicitly.
-- Distinguish AMF-caused misses from native harness/provider behavior.
+- Distinguish AIW-caused misses from native harness/provider behavior.
 - Compare against actual current cache performance, not an artificially
   uncached baseline. Include cache rebuilding after model/effort changes.
-- Show threshold estimates with uncertainty when AMF cannot observe the
+- Show threshold estimates with uncertainty when AIW cannot observe the
   complete rendered request. Do not remove required context just to fit a tier.
 
 ## OPT-06: Incremental review with reusable evidence
@@ -428,7 +428,7 @@ construction. Cross-cutting changes can eliminate most reuse.
 - Define when a final full review is still needed and include it in costs.
 - Compare incremental findings with full-review findings on the same final
   patch. Track missed defects, stale findings, false positives, and total cost.
-- Reuse PR identity and review progression owned by existing AMF workflows.
+- Reuse PR identity and review progression owned by existing AIW workflows.
 
 ## OPT-07: Reasoning effort by task stage
 
@@ -588,13 +588,13 @@ these hypothetical counts.
 
 ## Architectural boundaries
 
-AMF can already configure launches, prepare prompts, observe usage, manage
+AIW can already configure launches, prepare prompts, observe usage, manage
 sessions/worktrees, and orchestrate headless jobs. This supports early work on
 expert consultations, utility profiles, review reuse, and deliberate handoffs.
 
 Observing a tmux pane does not expose or control every model request. Reliable
 tool-result shaping, exact pre-request budgets, and cache breakpoints need
-supported harness integrations or an optional AMF-controlled API execution
+supported harness integrations or an optional AIW-controlled API execution
 path. A prompt request to keep output short is not an enforced token budget.
 
 Prefer native harness controls where they meet the requirement. For each
@@ -615,7 +615,7 @@ mid-edit merely to reduce spending.
 
 Before claiming savings, record per-request or best-available usage segments:
 
-- Feature, AMF session, provider conversation, workflow stage, and parent job.
+- Feature, AIW session, provider conversation, workflow stage, and parent job.
 - Requested and observed provider/model, effort, service tier, and price date.
 - Disjoint input categories, generated output, reasoning detail when reported,
   current context, and confidence/provenance for each value.
@@ -627,7 +627,7 @@ Attribute child work once and include abandoned or failed paid calls. Unknown
 usage must remain unknown rather than appearing as zero. Keep telemetry local
 and avoid full transcript rescans in the normal refresh path.
 
-Evaluate representative AMF tasks: a small UI fix, a configuration/persistence
+Evaluate representative AIW tasks: a small UI fix, a configuration/persistence
 change, a lifecycle bug, a refactor across modules, and a multi-commit review.
 Use the same repository snapshots, task requirements, and acceptance checks.
 Repeat enough tasks/runs to expose variance; report sample size and failure
@@ -674,7 +674,7 @@ promised performance targets.
 ## Progress
 
 - [x] Capture the eight options and their worked savings examples.
-- [x] Record existing AMF foundations, architectural boundaries, and sources.
+- [x] Record existing AIW foundations, architectural boundaries, and sources.
 - [x] Define measurement requirements and a suggested planning sequence.
 - [ ] Establish measured cost and quality baselines on representative tasks.
 - [ ] Create individual feature plans for selected options.

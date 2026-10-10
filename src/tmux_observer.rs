@@ -2,8 +2,8 @@
 //! performance plan).
 //!
 //! One long-lived `tmux -C` client stays attached to a hidden
-//! `_amf-observer` session (the name deliberately does not match the
-//! `amf-` prefix AMF uses for feature sessions). tmux pushes
+//! `_aiw-observer` session (the name deliberately does not match the
+//! `aiw-` prefix AIW uses for feature sessions). tmux pushes
 //! `%sessions-changed` notifications to every control client whenever
 //! any session is created, destroyed, or renamed, so feature status
 //! reconciliation becomes event-driven: the main loop runs
@@ -25,7 +25,7 @@ use std::time::Duration;
 
 use crate::debug::{LogLevel, log_to_file};
 
-const OBSERVER_SESSION: &str = "_amf-observer";
+const OBSERVER_SESSION: &str = "_aiw-observer";
 
 #[derive(Default)]
 pub struct TmuxObserverFlags {
@@ -80,8 +80,8 @@ impl Drop for TmuxObserver {
             let _ = child.kill();
         }
         // Best-effort, non-blocking removal of the hidden session so an
-        // AMF-started tmux server does not outlive AMF. A concurrently
-        // running AMF instance simply recreates it on its next retry.
+        // AIW-started tmux server does not outlive AIW. A concurrently
+        // running AIW instance simply recreates it on its next retry.
         let _ = crate::tmux::TmuxManager::command()
             .args(["kill-session", "-t", OBSERVER_SESSION])
             .stdin(Stdio::null())
@@ -132,9 +132,9 @@ fn run_observer_client(
     wakeup_fd: &OwnedFd,
 ) -> anyhow::Result<()> {
     // -A attaches if the hidden session already exists (e.g. a second
-    // AMF instance). The inert command keeps the window alive without
+    // AIW instance). The inert command keeps the window alive without
     // a shell. Must go through TmuxManager::command() so the client
-    // talks to AMF's managed socket (and bundled binary), not the
+    // talks to AIW's managed socket (and bundled binary), not the
     // user's default tmux server.
     let mut command = crate::tmux::TmuxManager::command();
     command

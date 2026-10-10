@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inject a PR-Triage "Investigate" fixture into a scratch AMF DB.
+"""Inject a PR-Triage "Investigate" fixture into a scratch AIW DB.
 
 Usage: seed-investigation-fixture.py <db_path> <repo_root> [pr_number]
 
@@ -29,7 +29,7 @@ db_path = sys.argv[1]
 repo_root = sys.argv[2]
 pr_number = int(sys.argv[3]) if len(sys.argv) > 3 else 602
 
-OWNER, REPO = "eldridgerdev", "agent-mainframe"
+OWNER, REPO = "example-org", "ai-workstation"
 QUESTION_ID = 700101
 CHANGE_ID = 700102
 
@@ -147,7 +147,7 @@ conn.execute(
     "INSERT OR REPLACE INTO features "
     "(id, project_id, name, branch, workdir, is_worktree, tmux_session, mode, agent, status, collapsed, created_at, last_accessed) "
     "VALUES ('inv-demo-feature', ?, 'investigate demo', 'pr-triage-investigate', ?, 0, "
-    "'amf-inv-demo', 'vibe', 'codex', 'stopped', 0, datetime('now'), datetime('now'))",
+    "'aiw-inv-demo', 'vibe', 'codex', 'stopped', 0, datetime('now'), datetime('now'))",
     (project_id, repo_root),
 )
 

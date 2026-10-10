@@ -1,4 +1,4 @@
-//! Bounded, read-only desktop access to AMF's shared debug history.
+//! Bounded, read-only desktop access to AIW's shared debug history.
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;

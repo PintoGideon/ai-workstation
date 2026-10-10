@@ -61,7 +61,7 @@ export default function LearningPanel({ view, busy, onAct, onLaunch, onClose }: 
           </select>
         </Field>
       </div>
-      {!view.history_saved && <p role="status">History is in memory only; it will not survive closing AMF.</p>}
+      {!view.history_saved && <p role="status">History is in memory only; it will not survive closing AIW.</p>}
       {view.error && <p role="alert">{view.error}</p>}
       {view.notice && <p role="status">{view.notice}</p>}
       <div className="learning-reader">
@@ -152,7 +152,7 @@ export default function LearningPanel({ view, busy, onAct, onLaunch, onClose }: 
             {answer.todo_id
               ? <span className="field-hint" role="status">On the TODO list</span>
               : <button className="btn btn-secondary btn-sm" disabled={busy || !view.can_keep_todo || !answer.todo_seed}
-                title={view.can_keep_todo ? undefined : "AMF can't reach its database, so there's no TODO list to add to"}
+                title={view.can_keep_todo ? undefined : "AIW can't reach its database, so there's no TODO list to add to"}
                 onClick={() => answer.todo_seed && setKeepDraft({ qaId: answer.id, ...answer.todo_seed })}>Keep as TODO</button>}
             <button className="btn btn-warning btn-sm" disabled={busy || answer.status === "running" || answer.status === "pending" || !!question.trim()} title={question.trim() ? "Send or clear your question before opening an editing agent" : undefined} onClick={() => onLaunch(answer.id)}>
               {answer.spawned_session_id ? "Return to editing agent" : "Open editing agent"}

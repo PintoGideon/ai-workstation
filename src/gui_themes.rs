@@ -66,7 +66,7 @@ fn project(name: ThemeName) -> GuiTheme {
     if name == ThemeName::Default {
         return GuiTheme {
             id,
-            name: "AMF default (system)".into(),
+            name: "AIW default (system)".into(),
             mode: ThemeMode::System,
             tokens: BTreeMap::new(),
             terminal: BTreeMap::new(),
@@ -99,7 +99,6 @@ fn project(name: ThemeName) -> GuiTheme {
         ("red", &theme.danger),
         ("sb-harness-claude", &theme.session_icon_claude),
         ("sb-harness-codex", &theme.session_icon_codex),
-        ("sb-harness-opencode", &theme.session_icon_opencode),
         ("sb-accent-pr", &theme.info),
         ("sb-accent-summary", &theme.info),
         ("sb-accent-prompt", &theme.secondary),
@@ -240,7 +239,6 @@ const CUSTOM_TOKENS: &[&str] = &[
     "syn-punctuation",
     "sb-harness-claude",
     "sb-harness-codex",
-    "sb-harness-opencode",
     "sb-harness-pi",
     "sb-accent-status",
     "sb-accent-usage",
@@ -363,7 +361,7 @@ fn load_at(directory: &Path, tui_theme: ThemeName) -> ThemeCatalog {
 }
 
 pub fn load() -> ThemeCatalog {
-    load_from_config_dir(&crate::project::amf_config_dir())
+    load_from_config_dir(&crate::project::aiw_config_dir())
 }
 
 fn load_from_config_dir(config_dir: &Path) -> ThemeCatalog {

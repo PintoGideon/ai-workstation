@@ -440,9 +440,12 @@ pub fn handle_theme_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
                     }
                     group.themes.get(group.selected).copied()
                 } else {
-                    if state.selected + 1 < state.entries.len() {
-                        state.selected += 1;
-                    }
+                    // FORK: skip the Dark / Light section headers.
+                    state.selected = crate::fork::theme_picker::step_selection(
+                        &state.entries,
+                        state.selected,
+                        1,
+                    );
                     state
                         .entries
                         .get(state.selected)
@@ -467,9 +470,12 @@ pub fn handle_theme_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
                     }
                     group.themes.get(group.selected).copied()
                 } else {
-                    if state.selected > 0 {
-                        state.selected -= 1;
-                    }
+                    // FORK: skip the Dark / Light section headers.
+                    state.selected = crate::fork::theme_picker::step_selection(
+                        &state.entries,
+                        state.selected,
+                        -1,
+                    );
                     state
                         .entries
                         .get(state.selected)
@@ -521,7 +527,7 @@ pub fn handle_theme_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
                                 app.preview_theme(name);
                             }
                         }
-                        None => {}
+                        Some(ThemePickerEntry::Header(_)) | None => {} // FORK
                     }
                 }
             }
@@ -807,7 +813,7 @@ mod tests {
             ViewState::new(
                 "demo".to_string(),
                 "feature".to_string(),
-                "amf-feature".to_string(),
+                "aiw-feature".to_string(),
                 "claude".to_string(),
                 "Claude 1".to_string(),
                 crate::project::SessionKind::Claude,
@@ -824,7 +830,7 @@ mod tests {
         ViewState::new(
             "demo".to_string(),
             "feature".to_string(),
-            "amf-feature".to_string(),
+            "aiw-feature".to_string(),
             "claude".to_string(),
             "Claude 1".to_string(),
             crate::project::SessionKind::Claude,
@@ -1192,11 +1198,11 @@ mod tests {
     #[test]
     fn current_plan_viewer_refreshes_edits_in_place() {
         let workdir = TempDir::new().unwrap();
-        let path = workdir.path().join("AMF_PLAN.md");
+        let path = workdir.path().join("AIW_PLAN.md");
         std::fs::write(&path, "# Before\n").unwrap();
         let mut app = markdown_app_with_feature(workdir.path(), workdir.path());
         app.mode = AppMode::MarkdownViewer(MarkdownViewerState {
-            title: "AMF_PLAN.md".into(),
+            title: "AIW_PLAN.md".into(),
             source_path: path.clone(),
             content: "# Before\n".into(),
             scroll_offset: 0,
@@ -1416,14 +1422,16 @@ mod tests {
 
         // Navigating off the group row and back previews its first variant,
         // so drilling in must land there rather than on the active theme.
+        // FORK: the dark Catppuccin group starts at Frappe (Latte is listed
+        // under Light).
         handle_theme_picker_key(&mut app, KeyCode::Char('k')).unwrap();
         handle_theme_picker_key(&mut app, KeyCode::Char('j')).unwrap();
         assert_eq!(picker(&app).selected, group_row);
-        assert_eq!(picker(&app).previewed, ThemeName::CatppuccinLatte);
+        assert_eq!(picker(&app).previewed, ThemeName::CatppuccinFrappe);
 
         handle_theme_picker_key(&mut app, KeyCode::Enter).unwrap();
 
-        assert_eq!(highlighted_group_theme(&app), ThemeName::CatppuccinLatte);
+        assert_eq!(highlighted_group_theme(&app), ThemeName::CatppuccinFrappe);
     }
 
     #[test]
@@ -1455,12 +1463,13 @@ mod tests {
 
     #[test]
     fn enter_inside_a_group_applies_the_highlighted_variant() {
-        let mut app = theme_app(ThemeName::CatppuccinLatte);
+        // FORK: Latte moved to the Light section; Frappe opens the dark group.
+        let mut app = theme_app(ThemeName::CatppuccinFrappe);
         handle_theme_picker_key(&mut app, KeyCode::Char('j')).unwrap();
 
         handle_theme_picker_key(&mut app, KeyCode::Enter).unwrap();
 
-        assert_eq!(app.config.theme, ThemeName::CatppuccinFrappe);
+        assert_eq!(app.config.theme, ThemeName::CatppuccinMacchiato);
         assert!(matches!(app.mode, AppMode::Normal));
     }
 
@@ -1475,5 +1484,37 @@ mod tests {
         assert!(matches!(app.mode, AppMode::Normal));
         assert_eq!(app.config.theme, ThemeName::Nord);
         assert_eq!(app.theme.name, Theme::load(&ThemeName::Nord).name);
+    }
+
+    // FORK: live preview across the Dark / Light sections.
+    #[test]
+    fn moving_previews_live_skips_headers_and_esc_reverts() {
+        let mut app = theme_app(ThemeName::Ember);
+        // Ember is the first row under the "Dark" header: up stays put.
+        handle_theme_picker_key(&mut app, KeyCode::Char('k')).unwrap();
+        assert_eq!(picker(&app).previewed, ThemeName::Ember);
+
+        handle_theme_picker_key(&mut app, KeyCode::Char('j')).unwrap();
+        assert_eq!(
+            app.theme.name, "graphite",
+            "dashboard restyles while moving"
+        );
+
+        let mut app = theme_app(ThemeName::Paper);
+        handle_theme_picker_key(&mut app, KeyCode::Char('k')).unwrap();
+        assert!(
+            matches!(
+                picker(&app).entries.get(picker(&app).selected),
+                Some(ThemePickerEntry::Group {
+                    label: "Gruvbox Material",
+                    ..
+                })
+            ),
+            "up from Paper skips the Light header"
+        );
+        handle_theme_picker_key(&mut app, KeyCode::Esc).unwrap();
+        assert!(matches!(app.mode, AppMode::Normal));
+        assert_eq!(app.theme.name, "paper");
+        assert_eq!(app.config.theme, ThemeName::Paper);
     }
 }

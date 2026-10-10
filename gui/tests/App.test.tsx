@@ -32,7 +32,7 @@ function session(id: string, kind = "terminal"): FeatureSession {
 const promptCalls = () => vi.mocked(invoke).mock.calls.filter(([command]) => command === "terminal_submit_prompt");
 const draftInput = () => screen.getByRole("textbox", { name: "Draft prompt" }) as HTMLTextAreaElement;
 
-it.each(["claude", "codex", "opencode", "pi"])("composes locally for %s and stays available after sending", async (kind) => {
+it.each(["claude", "codex", "pi"])("composes locally for %s and stays available after sending", async (kind) => {
   const client = await openFeature([session("Agent", kind)]);
   const original = vi.mocked(invoke).getMockImplementation()!;
   vi.mocked(invoke).mockImplementation((command, args, options) =>
@@ -391,7 +391,7 @@ it("does not poll a review with no AI work in flight", async () => {
   } finally { vi.useRealTimers(); client.clear(); }
 });
 
-it.each(["claude", "codex", "opencode", "pi"])("adds a library prompt to an existing %s draft without sending or replacing another draft", async (kind) => {
+it.each(["claude", "codex", "pi"])("adds a library prompt to an existing %s draft without sending or replacing another draft", async (kind) => {
   const client = await openFeature([session("First", kind), session("Second", kind)]);
   fireEvent.change(draftInput(), { target: { value: "First message" } });
   fireEvent.click(screen.getByRole("tab", { name: /Second/ }));
@@ -744,7 +744,7 @@ it("opens dormant features from navigation and hands Open to the feature page wi
           project_name: "demo", workdir: "/demo", is_worktree: false, editor_alive: false,
           idle_secs: 7200, unattended_secs: 86_400, observation: {
             target: { project_id: "project", feature_id: "feature" }, feature_name: "my-feat",
-            tmux_session: "amf-my-feat", last_activity: "2026-10-05T08:00:00Z", last_accessed: "2026-10-04T10:00:00Z",
+            tmux_session: "aiw-my-feat", last_activity: "2026-10-05T08:00:00Z", last_accessed: "2026-10-04T10:00:00Z",
           },
         }],
       };
@@ -875,7 +875,7 @@ it("lets the reviewer disable automatic opening without changing shared TUI conf
   await waitingPopup(client);
   fireEvent.click(await screen.findByRole("checkbox", { name: "Automatically open waiting edits" }));
   fireEvent.keyDown(document, { key: "Escape" });
-  expect(localStorage.getItem("amf.autoReviewEdits")).toBe("off");
+  expect(localStorage.getItem("aiw.autoReviewEdits")).toBe("off");
   await waitingPopup(client, ["e2"]);
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 300)); });
   expect(screen.queryByRole("dialog")).toBeNull();
@@ -886,7 +886,7 @@ it("lets the reviewer disable automatic opening without changing shared TUI conf
 
 
 it.each(["manual", "automatic disabled"])("keeps a %s review mounted through its queue and empty state", async (mode) => {
-  if (mode === "automatic disabled") localStorage.setItem("amf.autoReviewEdits", "off");
+  if (mode === "automatic disabled") localStorage.setItem("aiw.autoReviewEdits", "off");
   const client = await openFeature([session("Agent", "claude")]);
   // A composer draft defers automatic opening, but manual review stays available.
   fireEvent.change(draftInput(), { target: { value: "Keep this draft" } });

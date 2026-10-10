@@ -334,6 +334,8 @@ fn begin_feature_creation_core(
     }
     let hook_warning = match app
         .create_feature()
+        // FORK: the GUI has no approval dialog; skip an unapproved repo hook.
+        .and_then(|()| app.skip_pending_repo_hook_without_dialog())
         .and_then(|()| finish_worktree_hook(app, request.hook_choice.as_deref()))
     {
         Ok(warning) => warning,
@@ -844,7 +846,7 @@ pub fn act(
             {
                 let kind = if launches_feature { "feature" } else { "TODO" };
                 return Err(GuiError::needs_approval(format!(
-                    "Accepting this {kind} plan would exceed AMF's resource warning: {}. Start the agent anyway?",
+                    "Accepting this {kind} plan would exceed AIW's resource warning: {}. Start the agent anyway?",
                     describe_tripped(over_limit, low_memory)
                 )));
             }
@@ -1018,7 +1020,7 @@ mod tests {
     fn todo_fixture(workdir: &Path, tmux: MockTmuxOps) -> (GuiHandle, FeatureTarget, String) {
         let (mut gui, target) = fixture_with_tmux(workdir, tmux);
         gui.app_for_workflow().store.projects[0].features[0].status = ProjectStatus::Active;
-        let db = crate::db::AmfDb::open(&workdir.join("amf.db")).unwrap();
+        let db = crate::db::AiwDb::open(&workdir.join("aiw.db")).unwrap();
         db.save_store(&gui.app_for_workflow().store).unwrap();
         let list = db
             .create_todo_list(
@@ -1059,7 +1061,7 @@ mod tests {
             .times(1)
             .returning(move |_, _, _| Ok(created_path.clone()));
         let mut app = App::new_for_test(store, Box::new(tmux), Box::new(worktree));
-        let db = crate::db::AmfDb::open(&root.join("amf.db")).unwrap();
+        let db = crate::db::AiwDb::open(&root.join("aiw.db")).unwrap();
         db.save_store(&app.store).unwrap();
         let list = db
             .create_todo_list(
@@ -1125,7 +1127,7 @@ mod tests {
 
         let ended = act(&mut gui, &review.step_key, PlanAction::Cancel, None).unwrap();
         assert!(ended.active.is_none());
-        assert!(!dir.path().join("AMF_PLAN.md").exists());
+        assert!(!dir.path().join("AIW_PLAN.md").exists());
         assert_eq!(
             gui.app_for_workflow().store.projects[0].features[0].status,
             ProjectStatus::Stopped
@@ -1151,7 +1153,7 @@ mod tests {
 
         let ended = act(&mut gui, &review.step_key, PlanAction::Accept, None).unwrap();
         assert!(ended.active.is_none());
-        let written = std::fs::read_to_string(dir.path().join("AMF_PLAN.md")).unwrap();
+        let written = std::fs::read_to_string(dir.path().join("AIW_PLAN.md")).unwrap();
         assert!(written.contains("Implement the API"));
     }
 
@@ -1201,7 +1203,7 @@ mod tests {
 
         let ended = act(&mut gui, &view.step_key, PlanAction::Cancel, None).unwrap();
         assert!(ended.active.is_none());
-        assert!(!dir.path().join("AMF_PLAN.md").exists());
+        assert!(!dir.path().join("AIW_PLAN.md").exists());
         let todo = gui
             .db()
             .unwrap()
@@ -1237,7 +1239,7 @@ mod tests {
 
         let warning = act(&mut gui, &step, PlanAction::Accept, None).unwrap_err();
         assert_eq!(warning.kind, GuiErrorKind::NeedsApproval);
-        assert!(!dir.path().join("AMF_PLAN.md").exists());
+        assert!(!dir.path().join("AIW_PLAN.md").exists());
         let todo = gui
             .db()
             .unwrap()
@@ -1290,7 +1292,7 @@ mod tests {
             std::fs::read_dir(dir.path())
                 .unwrap()
                 .filter_map(Result::ok)
-                .any(|entry| entry.file_name().to_string_lossy().starts_with("AMF_PLAN"))
+                .any(|entry| entry.file_name().to_string_lossy().starts_with("AIW_PLAN"))
         );
     }
 
@@ -1338,7 +1340,7 @@ mod tests {
             let cancelled = act(&mut gui, &view.step_key, PlanAction::Cancel, None).unwrap();
             assert!(cancelled.active.is_none());
             assert!(gui.app_for_workflow().store.projects[0].features.is_empty());
-            assert!(!dir.path().join("AMF_PLAN.md").exists());
+            assert!(!dir.path().join("AIW_PLAN.md").exists());
         }
     }
 
@@ -1451,7 +1453,7 @@ mod tests {
         ExtensionConfig {
             lifecycle_hooks: LifecycleHooks {
                 on_worktree_created: Some(HookConfig::WithPrompt {
-                    script: "printf '%s' \"$AMF_HOOK_CHOICE\" > hook-choice".into(),
+                    script: "printf '%s' \"$AIW_HOOK_CHOICE\" > hook-choice".into(),
                     prompt: HookPrompt {
                         title: "Choose stack".into(),
                         options: vec!["node".into(), "rust & tools".into()],
@@ -1487,7 +1489,7 @@ mod tests {
                     .features
                     .is_empty()
             );
-            assert!(!workdir.join("AMF_PLAN.md").exists());
+            assert!(!workdir.join("AIW_PLAN.md").exists());
             assert_eq!(
                 gui.db()
                     .unwrap()
@@ -1529,7 +1531,7 @@ mod tests {
         assert!(todo.work.agent_session_id.is_none());
         assert!(todo.linked_feature_id.is_none());
         assert!(gui.app_for_workflow().store.projects[0].features.is_empty());
-        assert!(!workdir.join("AMF_PLAN.md").exists());
+        assert!(!workdir.join("AIW_PLAN.md").exists());
     }
 
     #[test]
@@ -1564,7 +1566,7 @@ mod tests {
         assert!(reopened.hook_warning.is_none());
         act(&mut gui, &view.step_key, PlanAction::Cancel, None).unwrap();
         assert!(gui.app_for_workflow().store.projects[0].features.is_empty());
-        assert!(!workdir.join("AMF_PLAN.md").exists());
+        assert!(!workdir.join("AIW_PLAN.md").exists());
     }
 
     #[test]
@@ -1638,7 +1640,7 @@ mod tests {
         );
         assert!(matches!(gui.app_for_workflow().mode, AppMode::Normal));
         assert!(
-            std::fs::read_to_string(dir.path().join("AMF_PLAN.md"))
+            std::fs::read_to_string(dir.path().join("AIW_PLAN.md"))
                 .unwrap()
                 .contains("Build the feature")
         );
@@ -1660,7 +1662,7 @@ mod tests {
         let cancelled = act(&mut gui, &view.step_key, PlanAction::Cancel, None).unwrap();
         assert!(cancelled.active.is_none());
         assert!(worktree_dir.exists());
-        assert!(!worktree_dir.join("AMF_PLAN.md").exists());
+        assert!(!worktree_dir.join("AIW_PLAN.md").exists());
         assert!(gui.app_for_workflow().store.projects[0].features.is_empty());
         let todo = gui
             .db()
@@ -1721,7 +1723,7 @@ mod tests {
         assert_eq!(todo.linked_feature_id.as_deref(), Some(feature_id.as_str()));
         assert_eq!(todo.work.agent_session_id, Some(handoff.target.session_id));
         assert!(
-            std::fs::read_to_string(worktree_dir.join("AMF_PLAN.md"))
+            std::fs::read_to_string(worktree_dir.join("AIW_PLAN.md"))
                 .unwrap()
                 .contains("Build the TODO")
         );
@@ -1775,7 +1777,7 @@ mod tests {
 
         let warning = act(&mut gui, &step, PlanAction::Accept, None).unwrap_err();
         assert_eq!(warning.kind, GuiErrorKind::NeedsApproval);
-        assert!(!dir.path().join("AMF_PLAN.md").exists());
+        assert!(!dir.path().join("AIW_PLAN.md").exists());
         assert!(gui.app_for_workflow().store.projects[0].features.is_empty());
     }
 }

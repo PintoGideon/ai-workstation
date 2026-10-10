@@ -1,7 +1,7 @@
 # Context-pressure hint
 
 These captures show the context-pressure feature's sidebar item, new leader
-commands, and fresh-session composer in an isolated `120x40` AMF screenshot
+commands, and fresh-session composer in an isolated `120x40` AIW screenshot
 instance.
 
 - `sidebar-warning.png` shows the selected session's `Fresh Context` item,

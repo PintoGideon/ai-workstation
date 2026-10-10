@@ -270,9 +270,9 @@ fn draw_scope_picker(frame: &mut Frame, area: Rect, state: &PromptOverridesState
                 ("  ", Style::default().fg(theme.text.to_color()))
             };
             let hint = match scope {
-                PromptOverrideScope::Feature => "amf.db · this checkout only",
-                PromptOverrideScope::Project => "amf.json · committed, shared with the repo",
-                PromptOverrideScope::Global => "amf.db · every project on this machine",
+                PromptOverrideScope::Feature => "aiw.db · this checkout only",
+                PromptOverrideScope::Project => "aiw.json · committed, shared with the repo",
+                PromptOverrideScope::Global => "aiw.db · every project on this machine",
             };
             Line::from(vec![
                 Span::styled(format!("{marker}{}", scope.label()), style),
@@ -362,7 +362,7 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
         Line::raw(""),
         Line::from(muted(
             theme,
-            " Every headless AI call AMF makes runs one of these templates. Override any of",
+            " Every headless AI call AIW makes runs one of these templates. Override any of",
         )),
         Line::from(muted(
             theme,

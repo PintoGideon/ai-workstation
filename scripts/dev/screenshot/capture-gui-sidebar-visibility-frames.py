@@ -20,7 +20,7 @@ from Xlib import display
 
 out = pathlib.Path(sys.argv[1]).resolve()
 pid = int(sys.argv[2])
-dbpath = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "amf/amf.db"
+dbpath = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "ai_workstation/aiw.db"
 
 for attempt in range(100):
     try:
@@ -147,8 +147,8 @@ def assert_layout(projects, agent):
     assert evaluate("document.querySelector('.term-surface') === window.proofTerminal")
     assert evaluate("document.querySelector('textarea[aria-label=\"Draft prompt\"]') === window.proofDraft")
     assert evaluate("window.proofDraft.value === 'Keep this draft while toggling sidebars.'")
-    assert evaluate(f"localStorage.getItem('amf.gui.collapsed.projectsSidebar') === '{0 if projects else 1}'")
-    assert evaluate(f"localStorage.getItem('amf.gui.collapsed.sessionSidebar') === '{0 if agent else 1}'")
+    assert evaluate(f"localStorage.getItem('aiw.gui.collapsed.projectsSidebar') === '{0 if projects else 1}'")
+    assert evaluate(f"localStorage.getItem('aiw.gui.collapsed.sessionSidebar') === '{0 if agent else 1}'")
     return evaluate("document.querySelector('.term-surface').getBoundingClientRect().width")
 
 
@@ -161,7 +161,7 @@ try:
         db.execute("UPDATE store_meta SET value=CAST(value AS INTEGER)+1 WHERE key='store_version'")
     wait(nav_has("Round invoice totals"))
     # Clear only this throwaway window's viewer preferences.
-    evaluate("localStorage.setItem('amf.gui.collapsed.projectsSidebar','0'); localStorage.setItem('amf.gui.collapsed.sessionSidebar','0'); window.proofReloadPending=true; location.reload()")
+    evaluate("localStorage.setItem('aiw.gui.collapsed.projectsSidebar','0'); localStorage.setItem('aiw.gui.collapsed.sessionSidebar','0'); window.proofReloadPending=true; location.reload()")
     wait("typeof window.proofReloadPending === 'undefined' && " + nav_has("Round invoice totals"))
     click_nav("Round invoice totals")
     wait("!!document.querySelector('.agent-sidebar-head') && !!document.querySelector('.composer textarea')")

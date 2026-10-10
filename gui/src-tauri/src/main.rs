@@ -14,59 +14,59 @@ mod login_path;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use agent_mainframe::automation::{
+use ai_workstation::automation::{
     AutomationHookPrompt, CreateFeatureRequest, CreateFeatureResponse, CreateProjectRequest,
     CreateProjectResponse,
 };
-use agent_mainframe::gui_contract::fresh_context::{
+use ai_workstation::gui_contract::fresh_context::{
     FreshContextPreview, FreshContextRequest, FreshContextResponse,
 };
-use agent_mainframe::gui_contract::session_sidebar::{
+use ai_workstation::gui_contract::session_sidebar::{
     CompleteSidebarTodo, SessionPlanView, SessionSidebarView,
 };
-use agent_mainframe::gui_contract::sidebar::{CollapseTarget, SidebarClock};
-use agent_mainframe::gui_contract::{
+use ai_workstation::gui_contract::sidebar::{CollapseTarget, SidebarClock};
+use ai_workstation::gui_contract::{
     AddSessionResponse, DeleteFeatureResponse, FeatureTarget, GuiError, GuiErrorKind, GuiHandle,
     RemoveSessionResponse, SessionTarget, StartFeatureResponse, StartSessionResponse,
     StopFeatureResponse, StopSessionResponse, TodoAgentLaunchResponse, TodoDeleteChoice,
     TodoHostChoice, WorkspaceSnapshot,
 };
-use agent_mainframe::gui_debug_log::{self, DebugLogView};
-use agent_mainframe::gui_diff::{self, DiffOptions, DiffView};
-use agent_mainframe::gui_dormancy::{self, DormancyStopResult, DormancyView, DormantObservation};
-use agent_mainframe::gui_learning::{self, LearningAction, LearningHandoff, LearningView};
-use agent_mainframe::gui_plans::{self, PlanAction, PlanInput, PlanStatus};
-use agent_mainframe::gui_pr_review::{self, PrReviewAction, PrReviewView};
-use agent_mainframe::gui_pr_triage::{
+use ai_workstation::gui_debug_log::{self, DebugLogView};
+use ai_workstation::gui_diff::{self, DiffOptions, DiffView};
+use ai_workstation::gui_dormancy::{self, DormancyStopResult, DormancyView, DormantObservation};
+use ai_workstation::gui_learning::{self, LearningAction, LearningHandoff, LearningView};
+use ai_workstation::gui_plans::{self, PlanAction, PlanInput, PlanStatus};
+use ai_workstation::gui_pr_review::{self, PrReviewAction, PrReviewView};
+use ai_workstation::gui_pr_triage::{
     self, PrTriageAction, PrTriagePrefetch, PrTriageReads, PrTriageTarget, PrTriageView,
 };
-use agent_mainframe::gui_prompt_overrides::{
+use ai_workstation::gui_prompt_overrides::{
     self, ClearOverride, OverrideContext, OverridesView, PrecallOverrideTarget, SaveOverride,
 };
-use agent_mainframe::gui_prompts::{self, LibraryScope, LibraryView, ResolvePrompt};
-use agent_mainframe::gui_review::{self, ReviewAction, ReviewView};
-use agent_mainframe::gui_screenshots::{
+use ai_workstation::gui_prompts::{self, LibraryScope, LibraryView, ResolvePrompt};
+use ai_workstation::gui_review::{self, ReviewAction, ReviewView};
+use ai_workstation::gui_screenshots::{
     self, EvidenceListing, EvidenceOwner, EvidenceSelection, ImageData,
 };
-use agent_mainframe::gui_sessions::{
+use ai_workstation::gui_sessions::{
     self, AddCustomSessionRequest, AddCustomSessionResponse, CloseEditorsResponse,
     NewSessionOptions, OpenVscodeResponse,
 };
-use agent_mainframe::gui_supervised_edits::{
+use ai_workstation::gui_supervised_edits::{
     self, PendingEditCount, SupervisedEditDecision, SupervisedEditOutcome, SupervisedEditsView,
 };
-use agent_mainframe::gui_syntax::{self, SyntaxInstallView};
-use agent_mainframe::gui_terminal::{
+use ai_workstation::gui_syntax::{self, SyntaxInstallView};
+use ai_workstation::gui_terminal::{
     TerminalFrame, TerminalHandle, TerminalHistory, WheelDirection,
 };
-use agent_mainframe::gui_todos::{self, TodoListView, TodoPriority, TodoScopeRequest, TodoStatus};
-use agent_mainframe::project::{AgentKind, SessionKind, VibeMode};
+use ai_workstation::gui_todos::{self, TodoListView, TodoPriority, TodoScopeRequest, TodoStatus};
+use ai_workstation::project::{AgentKind, SessionKind, VibeMode};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager, State};
 
 #[tauri::command]
-fn theme_catalog() -> agent_mainframe::gui_themes::ThemeCatalog {
-    agent_mainframe::gui_themes::load()
+fn theme_catalog() -> ai_workstation::gui_themes::ThemeCatalog {
+    ai_workstation::gui_themes::load()
 }
 
 struct AppState(Mutex<GuiHandle>);
@@ -266,7 +266,7 @@ fn worktree_hook_prompt(
 
 /// Live terminal attachments, keyed deterministically by `feature_id:session_id`
 /// (not a generated id) so attaching to the same session twice -- the
-/// reconnect case `AMF_PLAN.md` Task 6 asks for -- replaces the old entry
+/// reconnect case `AIW_PLAN.md` Task 6 asks for -- replaces the old entry
 /// rather than accumulating a second one; dropping the replaced
 /// `TerminalHandle` detaches it exactly the same way an explicit
 /// `detach_terminal` would.
@@ -333,7 +333,7 @@ struct HarnessInfo {
     display_name: String,
 }
 
-/// Returns the harnesses AMF supports, straight from the same [`AgentKind`]
+/// Returns the harnesses AIW supports, straight from the same [`AgentKind`]
 /// the TUI and the automation JSON API already use.
 #[tauri::command]
 fn supported_harnesses() -> Vec<HarnessInfo> {
@@ -353,7 +353,7 @@ struct ModeInfo {
     description: String,
 }
 
-/// Returns the vibe modes AMF supports. `slug` is derived from `VibeMode`'s
+/// Returns the vibe modes AIW supports. `slug` is derived from `VibeMode`'s
 /// own `Serialize` impl (its wire format for `CreateFeatureRequest.mode`)
 /// rather than a hand-written match, so it cannot drift from what
 /// `create_feature` actually expects.
@@ -407,7 +407,7 @@ fn set_collapsed(
 /// events are deferred.
 fn emit_workspace_changed(app: &tauri::AppHandle, snapshot: &WorkspaceSnapshot) {
     if let Err(err) = app.emit("workspace-changed", snapshot) {
-        eprintln!("amf-gui: failed to emit workspace-changed: {err}");
+        eprintln!("aiw-gui: failed to emit workspace-changed: {err}");
     }
 }
 
@@ -523,7 +523,7 @@ async fn close_editors(
 fn session_recovery_option(
     state: State<AppState>,
     target: SessionTarget,
-) -> Result<Option<agent_mainframe::gui_contract::SessionRecoveryOption>, GuiError> {
+) -> Result<Option<ai_workstation::gui_contract::SessionRecoveryOption>, GuiError> {
     state
         .0
         .lock()
@@ -535,7 +535,7 @@ fn session_recovery_option(
 fn saved_agent_sessions(
     state: State<AppState>,
     target: SessionTarget,
-) -> Result<Vec<agent_mainframe::gui_contract::SavedAgentSession>, GuiError> {
+) -> Result<Vec<ai_workstation::gui_contract::SavedAgentSession>, GuiError> {
     state
         .0
         .lock()
@@ -548,7 +548,7 @@ fn recover_session(
     app: tauri::AppHandle,
     state: State<AppState>,
     target: SessionTarget,
-    choice: agent_mainframe::gui_contract::SessionRecoveryChoice,
+    choice: ai_workstation::gui_contract::SessionRecoveryChoice,
     picked_id: Option<String>,
     approved: bool,
 ) -> Result<StartFeatureResponse, GuiError> {
@@ -637,7 +637,7 @@ struct TerminalSize {
 }
 
 /// Attach to a session's tmux pane and start streaming updates as
-/// `terminal-output:{key}` events (`AMF_PLAN.md` Task 6). Re-attaching the
+/// `terminal-output:{key}` events (`AIW_PLAN.md` Task 6). Re-attaching the
 /// same `target` (a GUI reconnect after closing and reopening) replaces the
 /// prior attachment rather than erroring or leaking it.
 #[tauri::command]
@@ -653,7 +653,7 @@ fn attach_terminal(
         let resolved = gui.resolve_session_target(&target)?;
         // Opening a session is attention, as the TUI's view entry is.
         if let Err(err) = gui_dormancy::note_opened(&mut gui, &target) {
-            eprintln!("amf-gui: could not record feature access: {}", err.message);
+            eprintln!("aiw-gui: could not record feature access: {}", err.message);
         }
         resolved
     };
@@ -668,7 +668,7 @@ fn attach_terminal(
         size.rows,
         move |frame| {
             if let Err(err) = emit_app.emit(&event_name, frame) {
-                eprintln!("amf-gui: failed to emit {event_name}: {err}");
+                eprintln!("aiw-gui: failed to emit {event_name}: {err}");
             }
         },
     )
@@ -1130,11 +1130,10 @@ async fn pr_triage_begin(
         &target,
     )?;
     let prefetch = pr_triage_read(reads).await?;
-    gui_pr_triage::begin_prefetched(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        target,
-        prefetch,
-    )
+    let mut gui = state.0.lock().expect("gui handle mutex poisoned");
+    // FORK(no-cloud): opening PR Triage is what refreshes PR badges.
+    gui.refresh_pr_badges();
+    gui_pr_triage::begin_prefetched(&mut gui, target, prefetch)
 }
 
 #[tauri::command]
@@ -1244,61 +1243,6 @@ async fn screenshots_cleanup(state: State<'_, AppState>, scope_id: String) -> Re
 }
 
 #[tauri::command]
-async fn screenshots_remote_list(
-    state: State<'_, AppState>,
-    workflow_id: String,
-    selected_run: Option<u64>,
-    run_page: u32,
-    request_id: String,
-) -> Result<gui_screenshots::RemoteListing, GuiError> {
-    let read = gui_screenshots::plan_remote(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-        selected_run,
-        run_page,
-        request_id,
-    )?;
-    let result = tauri::async_runtime::spawn_blocking(move || read.run())
-        .await
-        .map_err(|e| GuiError::from(anyhow::anyhow!("Screenshot retrieval stopped: {e}")))??;
-    gui_screenshots::finish_remote(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        result,
-    )
-}
-#[tauri::command]
-async fn screenshots_remote_image(
-    state: State<'_, AppState>,
-    request_id: String,
-    key: String,
-    thumbnail: bool,
-) -> Result<ImageData, GuiError> {
-    let read = gui_screenshots::plan_remote_image(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        request_id,
-        &key,
-        thumbnail,
-    )?;
-    let (read, result) = tauri::async_runtime::spawn_blocking(move || {
-        let result = read.run();
-        (read, result)
-    })
-    .await
-    .map_err(|e| GuiError::from(anyhow::anyhow!("Screenshot retrieval stopped: {e}")))?;
-    gui_screenshots::finish_remote_image(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &read,
-    )?;
-    result
-}
-#[tauri::command]
-fn screenshots_remote_close(state: State<AppState>, request_id: String) {
-    gui_screenshots::close_remote(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &request_id,
-    );
-}
-#[tauri::command]
 fn screenshots_open_browser(url: String) -> Result<(), GuiError> {
     gui_screenshots::open_gallery_browser(&url)
 }
@@ -1319,54 +1263,6 @@ async fn screenshots_pr_document(
     .await
     .map_err(|e| GuiError::from(anyhow::anyhow!("PR description read stopped: {e}")))?;
     gui_screenshots::finish_pr_document(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &read,
-    )?;
-    result
-}
-
-#[tauri::command]
-async fn screenshots_check_access(
-    state: State<'_, AppState>,
-    workflow_id: String,
-    source: String,
-) -> Result<Vec<gui_screenshots::GithubAccessCheck>, GuiError> {
-    let read = gui_screenshots::plan_inline_image(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-        source,
-    )?;
-    let (read, result) = tauri::async_runtime::spawn_blocking(move || {
-        let result = read.check_access();
-        (read, result)
-    })
-    .await
-    .map_err(|e| GuiError::from(anyhow::anyhow!("GitHub access check stopped: {e}")))?;
-    gui_screenshots::finish_inline_image(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &read,
-    )?;
-    result
-}
-
-#[tauri::command]
-async fn screenshots_inline_image(
-    state: State<'_, AppState>,
-    workflow_id: String,
-    source: String,
-) -> Result<ImageData, GuiError> {
-    let read = gui_screenshots::plan_inline_image(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-        source,
-    )?;
-    let (read, result) = tauri::async_runtime::spawn_blocking(move || {
-        let result = read.run();
-        (read, result)
-    })
-    .await
-    .map_err(|e| GuiError::from(anyhow::anyhow!("Inline image read stopped: {e}")))?;
-    gui_screenshots::finish_inline_image(
         &mut state.0.lock().expect("gui handle mutex poisoned"),
         &read,
     )?;
@@ -1439,12 +1335,19 @@ fn main() {
         // starts a thread.
         unsafe { login_path::adopt_login_shell_path() };
     }
-    // After the PATH adoption above, which the `amf` lookup reads.
-    agent_mainframe::gui_contract::use_cli_for_session_hooks();
-    agent_mainframe::gui_contract::use_configured_tmux_server();
+    // FORK: first run copies an existing AMF setup into AIW's own folders
+    // (AMF's are never touched); the TUI shows the one-time notice. Before
+    // anything below reads config, which would create AIW's folder empty.
+    if let Err(err) = ai_workstation::fork::migrate::migrate_on_first_run() {
+        eprintln!("AI Workstation could not copy your AMF setup on its first run: {err:#}");
+        std::process::exit(1);
+    }
+    // After the PATH adoption above, which the `aiw` lookup reads.
+    ai_workstation::gui_contract::use_cli_for_session_hooks();
+    ai_workstation::gui_contract::use_configured_tmux_server();
     tauri::Builder::default()
         .setup(|app| {
-            let db_path = agent_mainframe::project::db_path();
+            let db_path = ai_workstation::project::db_path();
             let gui = GuiHandle::new(db_path)?;
             app.manage(AppState(Mutex::new(gui)));
             app.manage(TerminalState(Mutex::new(Attachments::new())));
@@ -1454,11 +1357,6 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             theme_catalog,
             screenshots_pr_document,
-            screenshots_inline_image,
-            screenshots_check_access,
-            screenshots_remote_list,
-            screenshots_remote_image,
-            screenshots_remote_close,
             screenshots_open_browser,
             screenshots_list,
             screenshots_image,
@@ -1545,7 +1443,7 @@ fn main() {
             close_editors,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running amf-gui");
+        .expect("error while running aiw-gui");
 }
 
 #[cfg(test)]

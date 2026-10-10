@@ -1,3 +1,3 @@
 fn main() -> anyhow::Result<()> {
-    agent_mainframe::cli::run()
+    ai_workstation::cli::run()
 }

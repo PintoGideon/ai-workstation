@@ -212,7 +212,7 @@ try:
     choose("Dev server")
     capture(
         "001-session-picker.png",
-        "New session lists the TUI picker's choices: the allowed agents, Terminal, Neovim, VS Code (enabled: a `code` stand-in is on PATH) and TODOs, then the two custom sessions configured in the project's amf.json, each with its icon, description, command, working directory, pre-check, on-stop command and autolaunch.",
+        "New session lists the TUI picker's choices: the allowed agents, Terminal, Neovim, VS Code (enabled: a `code` stand-in is on PATH) and TODOs, then the two custom sessions configured in the project's aiw.json, each with its icon, description, command, working directory, pre-check, on-stop command and autolaunch.",
         ["Configured sessions", "Dev server", "Vite with hot reload for the storefront", "npm run dev", "test -f package.json",
          "rm -f .vite-dev.pid", "opens on create", "Database", "docker info --format", "VS Code", "TODOs"],
         f"!{dialog}.querySelector('input[value=vscode]').disabled",
@@ -238,7 +238,7 @@ try:
     wait('(document.querySelector(".xterm-rows")?.innerText??"").includes("ready in 312 ms")', tries=200)
     rows = custom_sessions()
     assert rows == [("Dev server", "dev-server", "npm run dev", "rm -f .vite-dev.pid", "test -f package.json")], rows
-    windows = subprocess.run(tmux + ["list-windows", "-t", "amf-checkout-redesign", "-F", "#{window_name}"],
+    windows = subprocess.run(tmux + ["list-windows", "-t", "aiw-checkout-redesign", "-F", "#{window_name}"],
                              capture_output=True, text=True, check=True).stdout.split()
     assert "dev-server" in windows, windows
     capture(
@@ -263,12 +263,12 @@ try:
     assert "code --new-window" in owned[0][3], owned
     capture(
         "004-vscode-open.png",
-        "VS Code was opened with the TUI's own launch (`code --new-window <worktree>`, here a stand-in). The background resolver found the new window process, so it is recorded as AMF's and closes with the feature. A window the user opened earlier is listed as not AMF's. The sidebar shows the feature's VS Code chip.",
-        ["VS Code", "Open another VS Code window", "Close windows AMF opened", "closes it, with its language servers, when the feature stops",
-         "NOT AMF'S", "AMF never closes it"],
+        "VS Code was opened with the TUI's own launch (`code --new-window <worktree>`, here a stand-in). The background resolver found the new window process, so it is recorded as AIW's and closes with the feature. A window the user opened earlier is listed as not AIW's. The sidebar shows the feature's VS Code chip.",
+        ["VS Code", "Open another VS Code window", "Close windows AIW opened", "closes it, with its language servers, when the feature stops",
+         "NOT AIW'S", "AIW never closes it"],
     )
 
-    click("Close windows AMF opened")
+    click("Close windows AIW opened")
     wait("!!document.querySelector('.vscode-panel [role=alert]')")
     assert standin_windows(), "nothing closes before confirmation"
     capture(
@@ -284,15 +284,15 @@ try:
         if not standin_windows():
             break
         time.sleep(0.1)
-    assert not standin_windows(), "the AMF-owned stand-in window should be closed"
-    assert alive(foreign_pid), "the window AMF did not open must keep running"
+    assert not standin_windows(), "the AIW-owned stand-in window should be closed"
+    assert alive(foreign_pid), "the window AIW did not open must keep running"
     rows = editors()
     assert [row[0] for row in rows] == ["editor-foreign"], rows
     wait("!document.querySelector('.vscode-state-open')")
     capture(
         "006-vscode-closed.png",
-        "The owned window and its child process were closed through the shared tracked-editor cleanup; the window AMF did not open was left running and is still listed.",
-        ["Closed VS Code (2 processes ended)", "Left VS Code running: AMF did not open this window", "NOT AMF'S"],
+        "The owned window and its child process were closed through the shared tracked-editor cleanup; the window AIW did not open was left running and is still listed.",
+        ["Closed VS Code (2 processes ended)", "Left VS Code running: AIW did not open this window", "NOT AIW'S"],
     )
     (out / "capture-notes.jsonl").write_text("".join(json.dumps({"file": n["file"].replace(".png", ".ansi"), "note": n["note"]}) + "\n" for n in notes))
     print("PASS: Custom session picker, pre_check failure, attachment and VS Code open/close verified", flush=True)

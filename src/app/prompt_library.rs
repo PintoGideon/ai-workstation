@@ -13,11 +13,11 @@ use crate::prompt_library::{
 /// Where `export_selected_template` writes a user template.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PromptExportTarget {
-    /// `~/.config/amf/config.json` (the `extension` block).
+    /// `~/.config/ai_workstation/config.json` (the `extension` block).
     Global,
-    /// `{project.repo}/amf.json` — the main repo root.
+    /// `{project.repo}/aiw.json` — the main repo root.
     Project,
-    /// `{feature.workdir}/amf.json` — the active worktree.
+    /// `{feature.workdir}/aiw.json` — the active worktree.
     /// Lets the user commit the template on a feature branch and
     /// promote it to the main repo via git later.
     Worktree,
@@ -28,8 +28,8 @@ impl App {
 
     /// Build the merged, source-tagged template list and enter the
     /// prompt-library picker. Surfaces editable `User` templates from the
-    /// SQLite store alongside read-only `Project` (`{repo}/amf.json`)
-    /// and `Global` (`~/.config/amf/config.json`) declarative templates.
+    /// SQLite store alongside read-only `Project` (`{repo}/aiw.json`)
+    /// and `Global` (`~/.config/ai_workstation/config.json`) declarative templates.
     pub fn open_prompt_library(&mut self, from_view: Option<ViewState>) {
         self.rebuild_prompt_library(from_view, None);
     }
@@ -47,8 +47,8 @@ impl App {
     ) {
         // Always read user templates fresh from the DB, the same reason
         // global templates are re-read from disk below: this table is
-        // shared with every other AMF process pointed at the same
-        // `amf.db`, so the in-memory `self.store.prompt_templates` this
+        // shared with every other AIW process pointed at the same
+        // `aiw.db`, so the in-memory `self.store.prompt_templates` this
         // instance loaded at startup (or last wrote) can be behind a
         // sibling process's edits. `db::prompt_templates` persists writes
         // independently of the generic store save, so reading fresh here
@@ -460,7 +460,7 @@ impl App {
                             template.updated_at = Utc::now();
                         }
                         // Targeted update, not a full store save: this table is
-                        // shared with every other AMF process, and a generic
+                        // shared with every other AIW process, and a generic
                         // save from a stale in-memory snapshot must not be able
                         // to clobber it (see `db::prompt_templates`).
                         if let Some(db) = &self.db
@@ -701,7 +701,7 @@ impl App {
             PromptExportTarget::Project => {
                 let Some(repo) = self.resolve_export_repo(from_view.as_ref()) else {
                     self.push_toast_warning(
-                        "No project to export to — open a session or run AMF in a repo",
+                        "No project to export to — open a session or run AIW in a repo",
                     );
                     return Ok(());
                 };
@@ -751,7 +751,7 @@ impl App {
         Ok(())
     }
 
-    /// Resolve the repo whose `amf.json` project templates should
+    /// Resolve the repo whose `aiw.json` project templates should
     /// appear in the picker: the viewed feature's project repo when opened
     /// from a session, else the currently selected project's repo. Never
     /// falls back to the working directory, so the picker only shows project
@@ -780,7 +780,7 @@ impl App {
 
     /// Resolve the repo to export a project template into. Delegates to
     /// `resolve_library_repo` so display and export always target the same
-    /// main-repo root, regardless of whether AMF was launched from inside a
+    /// main-repo root, regardless of whether AIW was launched from inside a
     /// worktree.
     fn resolve_export_repo(&self, from_view: Option<&ViewState>) -> Option<PathBuf> {
         self.resolve_library_repo(from_view)
@@ -800,7 +800,7 @@ impl App {
             PromptSource::User => {
                 (!self.store_path.as_os_str().is_empty()).then(|| self.store_path.clone())
             }
-            PromptSource::Global => Some(crate::project::amf_config_dir().join("config.json")),
+            PromptSource::Global => Some(crate::project::aiw_config_dir().join("config.json")),
             PromptSource::Project => self
                 .resolve_library_repo(from_view)
                 .map(|repo| crate::extension::project_config_path(&repo)),
@@ -911,19 +911,6 @@ pub(crate) struct LostPromptContext {
 }
 
 impl App {
-    /// The library as the picker would show it for feature `(pi, fi)`,
-    /// read-only and without opening the picker — for Remote Control.
-    pub(crate) fn prompt_library_for_feature(
-        &self,
-        pi: usize,
-        fi: usize,
-    ) -> Vec<PromptLibraryEntry> {
-        if self.store.projects.get(pi).is_none() {
-            return Vec::new();
-        }
-        self.prompt_library_for_scope(Some(pi), Some(fi))
-    }
-
     /// Read-only source merge shared by remote and desktop library browsers.
     pub(crate) fn prompt_library_for_scope(
         &self,
@@ -953,8 +940,8 @@ impl App {
     }
 }
 
-/// Read the `prompt_templates` declared in the project config (`amf.json`,
-/// or the legacy `.amf/config.json`). Returns an empty list when the file
+/// Read the `prompt_templates` declared in the project config (`aiw.json`,
+/// or a legacy AMF `amf.json` / `.amf/config.json`). Returns an empty list when the file
 /// is absent or unparseable, mirroring the tolerant loading in
 /// `merge_project_extension_config`.
 fn load_project_prompt_templates(repo: &Path) -> Vec<PromptTemplate> {
@@ -974,7 +961,7 @@ fn load_project_prompt_templates(repo: &Path) -> Vec<PromptTemplate> {
 ///
 /// No cross-source deduplication is applied. Each source shows its entries
 /// independently so the user can see exactly which scopes hold a copy of a
-/// given name and manage them individually. (The AMF extension-config merge
+/// given name and manage them individually. (The AIW extension-config merge
 /// hierarchy — Worktree > Project > Global — applies when *consuming* the
 /// config for feature presets etc., but is wrong here: silently hiding an
 /// exported template because a higher-priority copy exists makes the export
@@ -1037,7 +1024,7 @@ fn upsert_template(list: &mut Vec<PromptTemplate>, template: PromptTemplate) {
 /// Write `template` into the project config's `prompt_templates` array,
 /// replacing any same-name entry and preserving all other keys in the
 /// file. Reads through the legacy path when that is where config still
-/// lives, but always writes `amf.json`. Returns the path written.
+/// lives, but always writes `aiw.json`. Returns the path written.
 fn export_template_to_project_config(repo: &Path, template: &PromptTemplate) -> Result<PathBuf> {
     let mut root: serde_json::Value = match crate::extension::resolve_project_config_path(repo) {
         Some(existing) => {
@@ -1088,7 +1075,7 @@ fn remove_template_from_config(repo: &Path, name: &str) -> Result<()> {
         arr.retain(|v| v.get("name").and_then(|n| n.as_str()) != Some(name));
     }
     // Writes go through the migrating helper too, so a rename on a repo
-    // still holding the legacy file lands in `amf.json` rather than
+    // still holding the legacy file lands in `aiw.json` rather than
     // rewriting the file the next read will ignore.
     crate::extension::write_project_config(repo, &(serde_json::to_string_pretty(&root)? + "\n"))?;
     Ok(())
@@ -1241,7 +1228,7 @@ mod tests {
         let template = PromptTemplate::new("Fix bug".to_string(), "Fix {{area}}".to_string());
 
         let path = export_template_to_project_config(tmp.path(), &template).unwrap();
-        assert_eq!(path, tmp.path().join("amf.json"));
+        assert_eq!(path, tmp.path().join("aiw.json"));
 
         // Re-read through the real config parser to confirm it loads.
         let contents = std::fs::read_to_string(&path).unwrap();
@@ -1256,8 +1243,8 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let amf = tmp.path().join(".amf");
         std::fs::create_dir_all(&amf).unwrap();
-        // Seeded at the *legacy* path, so this also pins the migration:
-        // the export reads it, writes `amf.json`, and drops the old file.
+        // Seeded at a *legacy AMF* path, so this also pins the copy-forward:
+        // the export reads it and writes `aiw.json`, leaving AMF's file alone.
         std::fs::write(
             amf.join("config.json"),
             r#"{ "allowed_agents": ["claude"], "prompt_templates": [
@@ -1270,10 +1257,10 @@ mod tests {
         updated.description = Some("desc".to_string());
         export_template_to_project_config(tmp.path(), &updated).unwrap();
 
-        let contents = std::fs::read_to_string(tmp.path().join("amf.json")).unwrap();
+        let contents = std::fs::read_to_string(tmp.path().join("aiw.json")).unwrap();
         let value: serde_json::Value = serde_json::from_str(&contents).unwrap();
-        // Migrated: the legacy file is gone, so reads have one answer.
-        assert!(!amf.join("config.json").exists());
+        // FORK: AMF's file is left untouched; `aiw.json` now wins on read.
+        assert!(amf.join("config.json").exists());
         // Unrelated key preserved.
         assert_eq!(value["allowed_agents"][0], "claude");
         // Same-name entry replaced (not duplicated).
@@ -1385,7 +1372,7 @@ mod tests {
     //
     // Regression for the bug where resolve_export_repo fell back to
     // detect_repo_path() (the CWD git root), which points at the worktree
-    // dir when AMF runs inside one, while resolve_library_repo always uses
+    // dir when AIW runs inside one, while resolve_library_repo always uses
     // project.repo (the main repo root). Exporting from the dashboard (no
     // from_view) then reopening the picker would find nothing because the
     // export landed in the wrong directory.
@@ -1439,7 +1426,7 @@ mod tests {
             .unwrap();
 
         // Reopen the library (still no view) and assert the Project-source
-        // entry is present — it should have been written to `repo/amf.json`,
+        // entry is present — it should have been written to `repo/aiw.json`,
         // not to some worktree subdirectory.
         app.open_prompt_library(None);
         let AppMode::PromptLibrary(ref state) = app.mode else {
@@ -1458,7 +1445,7 @@ mod tests {
         assert_eq!(project_entries[0].template.name, "My prompt");
 
         // The config.json must be at the project's main repo root, not CWD.
-        assert!(repo.path().join("amf.json").exists());
+        assert!(repo.path().join("aiw.json").exists());
     }
 
     #[test]
@@ -1496,7 +1483,7 @@ mod tests {
             .expect("project entry");
         assert_eq!(
             project.source_path.as_deref(),
-            Some(repo.path().join("amf.json").as_path()),
+            Some(repo.path().join("aiw.json").as_path()),
         );
 
         // The User entry has no real store path under the test harness
@@ -1524,7 +1511,7 @@ mod tests {
 
         let msg = app.build_export_menu_message(None);
         // The project target names the resolved repo config path.
-        let expected = repo.path().join("amf.json");
+        let expected = repo.path().join("aiw.json");
         assert!(
             msg.contains(&crate::app::util::shorten_path(&expected)),
             "export menu should name the project path, got: {msg}"

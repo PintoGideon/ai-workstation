@@ -153,7 +153,7 @@ try:
         'The native Context section offers Fresh context without a running TUI; the former TUI-only message is absent.',
         ['Claude Sidebar', 'Fresh context', 'Context is filling up.'])
     sidebar_button('context', 'Fresh context')
-    wait("document.querySelector('textarea[aria-label=\"Continuation prompt\"]')?.value.includes('AMF_PLAN.md')")
+    wait("document.querySelector('textarea[aria-label=\"Continuation prompt\"]')?.value.includes('AIW_PLAN.md')")
     seed = evaluate("document.querySelector('textarea[aria-label=\"Continuation prompt\"]').value")
     assert 'Grill me' in seed
     capture('002-editable-continuation.png',

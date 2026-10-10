@@ -18,7 +18,7 @@ fn store_with_running_and_stopped_features() -> ProjectStore {
     stopped.id = "feat-2".to_string();
     stopped.name = "other-feat".to_string();
     stopped.branch = "other-feat".to_string();
-    stopped.tmux_session = "amf-other-feat".to_string();
+    stopped.tmux_session = "aiw-other-feat".to_string();
     stopped.sessions = vec![];
     stopped.status = ProjectStatus::Stopped;
     store.projects[0].features.push(stopped);
@@ -30,7 +30,7 @@ fn store_with_running_and_stopped_features() -> ProjectStore {
 #[must_use]
 fn expect_one_live_harness(tmux: &mut MockTmuxOps) -> BusyPane {
     tmux.expect_list_sessions()
-        .returning(|| Ok(vec!["amf-my-feat".to_string()]));
+        .returning(|| Ok(vec!["aiw-my-feat".to_string()]));
 
     // `& wait` keeps the shell itself alive as the parent instead of exec'ing
     // away, so the pane pid really does have a child.
@@ -52,7 +52,7 @@ fn expect_one_live_harness(tmux: &mut MockTmuxOps) -> BusyPane {
     }
 
     tmux.expect_list_panes()
-        .returning(move || vec![("amf-my-feat".to_string(), "claude".to_string(), pane_pid)]);
+        .returning(move || vec![("aiw-my-feat".to_string(), "claude".to_string(), pane_pid)]);
     BusyPane(child)
 }
 
@@ -250,7 +250,7 @@ fn adding_a_terminal_to_a_stopped_feature_asks_first() {
     let mut tmux = MockTmuxOps::new();
     let _pane = expect_one_live_harness(&mut tmux);
     tmux.expect_session_exists()
-        .withf(|session| session == "amf-other-feat")
+        .withf(|session| session == "aiw-other-feat")
         .return_const(false);
 
     let mut app = App::new_for_test(
@@ -287,7 +287,7 @@ fn entering_a_stopped_feature_asks_first() {
     let mut tmux = MockTmuxOps::new();
     let _pane = expect_one_live_harness(&mut tmux);
     tmux.expect_session_exists()
-        .withf(|session| session == "amf-other-feat")
+        .withf(|session| session == "aiw-other-feat")
         .return_const(false);
 
     let mut app = App::new_for_test(
@@ -375,11 +375,11 @@ fn confirming_a_parked_session_restart_recreates_the_window() {
         .withf(|_, w| w == "claude-2")
         .return_const(false);
     tmux.expect_create_window()
-        .withf(|s, w, _| s == "amf-my-feat" && w == "claude-2")
+        .withf(|s, w, _| s == "aiw-my-feat" && w == "claude-2")
         .times(1)
         .returning(|_, _, _| Ok(()));
     tmux.expect_launch_claude()
-        .withf(|s, w, _, _, _| s == "amf-my-feat" && w == "claude-2")
+        .withf(|s, w, _, _, _| s == "aiw-my-feat" && w == "claude-2")
         .times(1)
         .returning(|_, _, _, _, _| Ok(()));
 
@@ -440,7 +440,7 @@ fn confirming_the_warning_opens_the_stopped_feature() {
     let created = std::sync::Arc::new(AtomicBool::new(false));
     let seen = created.clone();
     tmux.expect_session_exists()
-        .withf(|session| session == "amf-other-feat")
+        .withf(|session| session == "aiw-other-feat")
         .returning(move |_| seen.load(Ordering::SeqCst));
     tmux.expect_create_session_with_window()
         .returning(move |_, _, _| {

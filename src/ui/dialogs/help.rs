@@ -3,11 +3,46 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{
+        Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        Wrap,
+    },
 };
 
 use super::super::dashboard::centered_rect;
 use crate::theme::Theme;
+
+use crate::ui::fork_chrome::{dim_style, key_style};
+
+/// FORK: G11 one key binding: key right-aligned in the accent colour, the
+/// description in the text colour; a continuation line (no key) reads dim.
+fn bind_line<'a>(key: &'a str, desc: &'a str, theme: &Theme) -> Line<'a> {
+    let desc_style = if key.is_empty() {
+        dim_style(theme)
+    } else {
+        Style::default().fg(theme.text.to_color())
+    };
+    Line::from(vec![
+        Span::styled(format!("  {:>16}", key), key_style(theme)),
+        Span::raw("  "),
+        Span::styled(desc, desc_style),
+    ])
+}
+
+/// FORK: G11 a section title in bold text colour.
+fn section_title<'a>(title: &'a str, theme: &Theme) -> Line<'a> {
+    Line::from(Span::styled(
+        title,
+        Style::default()
+            .fg(theme.text.to_color())
+            .add_modifier(Modifier::BOLD),
+    ))
+}
+
+/// FORK: G11 a blank line, then the section title.
+fn section_header<'a>(title: &'a str, theme: &Theme) -> [Line<'a>; 2] {
+    [Line::from(""), section_title(title, theme)]
+}
 
 pub fn draw_help(frame: &mut Frame, scroll_offset: usize, theme: &Theme) -> usize {
     let area = centered_rect(90, 85, frame.area());
@@ -29,7 +64,7 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("n", "Create new feature"),
         ("g", "Browse GitHub issues for the selected project"),
         ("B", "Create batch features"),
-        ("O", "Open AMF settings project"),
+        ("O", "Open AIW settings project"),
         ("A", "Manage agent harnesses"),
         ("d", "Delete project/feature/session"),
         ("D", "View debug log"),
@@ -51,9 +86,18 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "Companion review feature: land its commits on the source branch",
         ),
         ("c", "Start feature / stopped session"),
+        // FORK: split view (DESIGN.md §4.1).
+        (
+            "v",
+            "Split view: tile this feature's agents (project row: one per feature)",
+        ),
+        (
+            "",
+            "  in split view: Ctrl+Space ←↑→↓ focus · z zoom · v leave · [ ] page · i needs you",
+        ),
         ("x", "Stop feature / session (session stays listed)"),
         ("r", "Rename session/feature"),
-        ("R", "Refresh statuses"),
+        ("R", "Refresh statuses + PR badges (runs gh)"),
         ("V", "Check pending diff review"),
         ("u", "Preferred harness / worktree config"),
         ("F", "Fork feature (new branch)"),
@@ -65,58 +109,23 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("I", "On a TODOs row: start the next TODO"),
         ("/", "Search and jump to item"),
         ("Ctrl+Space c", "Config wizard"),
-        (
-            "Ctrl+Space C",
-            "Turn the AMF Remote (phone) server on / off — also in a session",
-        ),
-        (
-            "Ctrl+Space Q",
-            "Pair a phone with AMF Remote; starts the server if needed (v: devices)",
-        ),
         ("Ctrl+Space m", "Compact review memory"),
         ("?", "Toggle this help"),
         ("q / Esc", "Quit"),
     ];
 
-    let mut lines: Vec<Line> = vec![
-        Line::from(vec![
-            Span::styled(
-                "  ESC",
-                Style::default()
-                    .fg(theme.effective_bg())
-                    .bg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                " closes  j/k  scroll",
-                Style::default()
-                    .fg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(""),
-    ];
+    // FORK: G11 — section titles instead of a banner line; the close/scroll
+    // keys moved into the bottom border.
+    let mut lines: Vec<Line> = Vec::with_capacity(256);
+    lines.push(section_title("  On the dashboard:", theme));
 
-    for (key, desc) in &normal_keybinds {
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {:>14}", key),
-                Style::default()
-                    .fg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(*desc, Style::default().fg(theme.text.to_color())),
-        ]));
-    }
+    lines.extend(
+        normal_keybinds
+            .iter()
+            .map(|(key, desc)| bind_line(key, desc, theme)),
+    ); // FORK: G11
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  During a plan interview:",
-        Style::default()
-            .fg(theme.primary.to_color())
-            .add_modifier(Modifier::BOLD),
-    )));
+    lines.extend(section_header("  During a plan interview:", theme)); // FORK: G11
 
     let plan_interview_keybinds: Vec<(&str, &str)> = vec![
         ("r / d", "Resume or discard a saved draft (on entry)"),
@@ -152,26 +161,13 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ),
     ];
 
-    for (key, desc) in &plan_interview_keybinds {
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {:>14}", key),
-                Style::default()
-                    .fg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(*desc, Style::default().fg(theme.text.to_color())),
-        ]));
-    }
+    lines.extend(
+        plan_interview_keybinds
+            .iter()
+            .map(|(key, desc)| bind_line(key, desc, theme)),
+    ); // FORK: G11
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  During plan review:",
-        Style::default()
-            .fg(theme.primary.to_color())
-            .add_modifier(Modifier::BOLD),
-    )));
+    lines.extend(section_header("  During plan review:", theme)); // FORK: G11
 
     let plan_review_keybinds: Vec<(&str, &str)> = vec![
         ("j/k / PgUp/PgDn", "Scroll the rendered plan"),
@@ -206,26 +202,16 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("Esc", "Discard edit or confirm abort"),
     ];
 
-    for (key, desc) in &plan_review_keybinds {
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {:>14}", key),
-                Style::default()
-                    .fg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(*desc, Style::default().fg(theme.text.to_color())),
-        ]));
-    }
+    lines.extend(
+        plan_review_keybinds
+            .iter()
+            .map(|(key, desc)| bind_line(key, desc, theme)),
+    ); // FORK: G11
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
+    lines.extend(section_header(
         "  During an Expert review of the plan:",
-        Style::default()
-            .fg(theme.primary.to_color())
-            .add_modifier(Modifier::BOLD),
-    )));
+        theme,
+    )); // FORK: G11
 
     let plan_critique_keybinds: Vec<(&str, &str)> = vec![
         ("j/k / PgUp/PgDn", "Scroll the review"),
@@ -233,26 +219,16 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("Esc / Enter", "Back to the plan, unchanged"),
     ];
 
-    for (key, desc) in &plan_critique_keybinds {
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {:>14}", key),
-                Style::default()
-                    .fg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(*desc, Style::default().fg(theme.text.to_color())),
-        ]));
-    }
+    lines.extend(
+        plan_critique_keybinds
+            .iter()
+            .map(|(key, desc)| bind_line(key, desc, theme)),
+    ); // FORK: G11
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
+    lines.extend(section_header(
         "  While viewing: Ctrl+Q exits; Ctrl+Space opens leader commands.",
-        Style::default()
-            .fg(theme.primary.to_color())
-            .add_modifier(Modifier::BOLD),
-    )));
+        theme,
+    )); // FORK: G11
 
     let view_keybinds: Vec<(&str, &str)> = vec![
         ("Ctrl+Q", "Exit view"),
@@ -274,15 +250,19 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ),
         ("b", "Show/hide sidebar"),
         ("v", "Expand/collapse todos"),
-        ("z", "Complete this session's referenced TODO"),
+        // FORK: in a tile zoomed from split view, `z` returns to the tiles.
+        (
+            "z",
+            "Complete this session's referenced TODO (zoomed split tile: back to split view)",
+        ),
         ("N", "Quick-capture a TODO for this worktree"),
         ("t / T", "Cycle next/prev session"),
         ("w", "Session switcher"),
         ("h", "Bookmark picker popup"),
         ("H / M", "Bookmark / unbookmark session"),
         ("1-9", "Jump to bookmark slot"),
-        ("/", "Command picker (slash + AMF actions)"),
-        ("a", "AMF local actions picker"),
+        ("/", "Command picker (slash + AIW actions)"),
+        ("a", "AIW local actions picker"),
         ("p", "Prompt library (inject saved prompt)"),
         ("E", "Edit headless AI prompt templates (overrides)"),
         ("R", "Refresh pane sizing"),
@@ -293,26 +273,13 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("W", "Open AI Review for this feature"),
     ];
 
-    for (key, desc) in &view_keybinds {
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {:>14}", key),
-                Style::default()
-                    .fg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(*desc, Style::default().fg(theme.text.to_color())),
-        ]));
-    }
+    lines.extend(
+        view_keybinds
+            .iter()
+            .map(|(key, desc)| bind_line(key, desc, theme)),
+    ); // FORK: G11
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  In the TODOs view:",
-        Style::default()
-            .fg(theme.primary.to_color())
-            .add_modifier(Modifier::BOLD),
-    )));
+    lines.extend(section_header("  In the TODOs view:", theme)); // FORK: G11
 
     let todos_keybinds: Vec<(&str, &str)> = vec![
         ("j/k / \u{2191}/\u{2193}", "Navigate TODOs"),
@@ -330,32 +297,19 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("", "  (an in-progress TODO cannot launch another agent)"),
         ("p", "Show/hide the project TODO list"),
         ("g", "Show/hide the global TODO list"),
-        ("", "  (visibility is shared until AMF exits)"),
+        ("", "  (visibility is shared until AIW exits)"),
         ("Tab / Shift+Tab", "Move between visible TODO lists"),
         ("M / C", "Move / copy the TODO to another list"),
         ("q / Esc / Ctrl+Q", "Exit TODOs view"),
     ];
 
-    for (key, desc) in &todos_keybinds {
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {:>14}", key),
-                Style::default()
-                    .fg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(*desc, Style::default().fg(theme.text.to_color())),
-        ]));
-    }
+    lines.extend(
+        todos_keybinds
+            .iter()
+            .map(|(key, desc)| bind_line(key, desc, theme)),
+    ); // FORK: G11
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  In PR Triage:",
-        Style::default()
-            .fg(theme.primary.to_color())
-            .add_modifier(Modifier::BOLD),
-    )));
+    lines.extend(section_header("  In PR Triage:", theme)); // FORK: G11
 
     let pr_review_keybinds: Vec<(&str, &str)> = vec![
         ("j/k", "Navigate comments"),
@@ -390,7 +344,7 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "m",
             "Mark — Done (local) / Skip (local) / Resolve on GitHub",
         ),
-        ("i", "Install syntax highlighting for file"),
+        ("i", "Download + install syntax parser for file (git clone)"),
         ("r", "Refresh comments from GitHub"),
         ("g", "Pick a different PR to triage"),
         ("A", "Open the AI Review pane for this PR"),
@@ -400,26 +354,13 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("q / Esc", "Close PR Triage"),
     ];
 
-    for (key, desc) in &pr_review_keybinds {
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {:>14}", key),
-                Style::default()
-                    .fg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(*desc, Style::default().fg(theme.text.to_color())),
-        ]));
-    }
+    lines.extend(
+        pr_review_keybinds
+            .iter()
+            .map(|(key, desc)| bind_line(key, desc, theme)),
+    ); // FORK: G11
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  In AI Review:",
-        Style::default()
-            .fg(theme.primary.to_color())
-            .add_modifier(Modifier::BOLD),
-    )));
+    lines.extend(section_header("  In AI Review:", theme)); // FORK: G11
 
     let ai_review_keybinds: Vec<(&str, &str)> = vec![
         ("j/k", "Navigate findings"),
@@ -436,26 +377,13 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ),
     ];
 
-    for (key, desc) in &ai_review_keybinds {
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {:>14}", key),
-                Style::default()
-                    .fg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(*desc, Style::default().fg(theme.text.to_color())),
-        ]));
-    }
+    lines.extend(
+        ai_review_keybinds
+            .iter()
+            .map(|(key, desc)| bind_line(key, desc, theme)),
+    ); // FORK: G11
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  In the PR picker:",
-        Style::default()
-            .fg(theme.primary.to_color())
-            .add_modifier(Modifier::BOLD),
-    )));
+    lines.extend(section_header("  In the PR picker:", theme)); // FORK: G11
 
     let pr_picker_keybinds: Vec<(&str, &str)> = vec![
         ("j/k", "Navigate PRs"),
@@ -471,26 +399,13 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("q / Esc", "Close picker"),
     ];
 
-    for (key, desc) in &pr_picker_keybinds {
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {:>14}", key),
-                Style::default()
-                    .fg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(*desc, Style::default().fg(theme.text.to_color())),
-        ]));
-    }
+    lines.extend(
+        pr_picker_keybinds
+            .iter()
+            .map(|(key, desc)| bind_line(key, desc, theme)),
+    ); // FORK: G11
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  In the PR picker's Review tab:",
-        Style::default()
-            .fg(theme.primary.to_color())
-            .add_modifier(Modifier::BOLD),
-    )));
+    lines.extend(section_header("  In the PR picker's Review tab:", theme)); // FORK: G11
 
     let review_tab_keybinds: Vec<(&str, &str)> = vec![
         ("j/k", "Navigate open PRs (yours and drafts included)"),
@@ -503,18 +418,11 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("", "(draft saved; ? lists every key there)"),
     ];
 
-    for (key, desc) in &review_tab_keybinds {
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {:>14}", key),
-                Style::default()
-                    .fg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("  "),
-            Span::styled(*desc, Style::default().fg(theme.text.to_color())),
-        ]));
-    }
+    lines.extend(
+        review_tab_keybinds
+            .iter()
+            .map(|(key, desc)| bind_line(key, desc, theme)),
+    ); // FORK: G11
 
     let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
     let total_lines = paragraph.line_count(area.width.saturating_sub(2));
@@ -522,10 +430,26 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     let max_scroll = total_lines.saturating_sub(visible_height);
     let scroll = scroll_offset.min(max_scroll) as u16;
 
+    // FORK: G11 rounded panel, bold title, key hints in the bottom border.
     let help = paragraph.scroll((scroll, 0)).block(
         Block::default()
-            .title(" Keybindings ")
+            .title(Span::styled(
+                " Keybindings ",
+                Style::default()
+                    .fg(theme.primary.to_color())
+                    .add_modifier(Modifier::BOLD),
+            ))
+            .title_bottom(
+                Line::from(vec![
+                    Span::styled(" Esc", key_style(theme)),
+                    Span::styled(" close  ", dim_style(theme)),
+                    Span::styled("j/k", key_style(theme)),
+                    Span::styled(" scroll ", dim_style(theme)),
+                ])
+                .right_aligned(),
+            )
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .style(Style::default().bg(theme.effective_bg()))
             .border_style(Style::default().fg(theme.primary.to_color())),
     );

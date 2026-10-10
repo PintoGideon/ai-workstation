@@ -1,5 +1,5 @@
 # plan-interview-pi-headless: visual proof that a Pi feature now prefers Pi
-# for plan-interview headless work when the installed CLI advertises AMF's
+# for plan-interview headless work when the installed CLI advertises AIW's
 # complete safety contract. The capture fixture provides a fake Pi binary that
 # reports those flags and pauses during its no-tools print-mode call. Set
 # PI_SHOT_SEED_FEATURE to the create-feature automation payload; this scenario
@@ -9,7 +9,7 @@
 shot:dashboard-project
 
 # The scratch onboarding enables Claude so the driver can reach the dashboard.
-# Add the fixture's verified Pi installation through AMF's real harness manager.
+# Add the fixture's verified Pi installation through AIW's real harness manager.
 key:A
 wait:400
 key:j
@@ -22,7 +22,7 @@ key:c
 wait:500
 
 # Create the Pi feature only after Pi is enabled for this scratch workspace.
-run:$AMF_BIN automation create-feature --file "$PI_SHOT_SEED_FEATURE"
+run:$AIW_BIN automation create-feature --file "$PI_SHOT_SEED_FEATURE"
 wait:1200
 shot:dashboard-pi-feature
 
@@ -51,7 +51,7 @@ wait:500
 shot:pi-ai-choice
 
 # Ask for follow-ups. The fake Pi process remains in the restricted headless
-# call long enough to capture the engine name in AMF's loading frame.
+# call long enough to capture the engine name in AIW's loading frame.
 key:a
 wait:800
 shot:pi-headless-selected

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed a Claude feature/session directly in a throwaway AMF database.
+"""Seed a Claude feature/session directly in a throwaway AIW database.
 
 Bypasses `automation create-feature` (and its harness-availability gate)
 entirely: no real `claude` process is ever launched, so this works

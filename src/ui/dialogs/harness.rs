@@ -159,3 +159,44 @@ pub fn draw_harness_setup_dialog(
     let hints_widget = Paragraph::new(hints);
     frame.render_widget(hints_widget, chunks[2]);
 }
+
+// FORK: Gemini/Cursor appear in the harness screen, with "not found".
+#[cfg(test)]
+mod fork_tests {
+    use super::*;
+
+    #[test]
+    fn harness_setup_lists_gemini_and_cursor_and_shows_not_found() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let mut state = HarnessSetupState::new(true, &[]);
+        for harness in &mut state.harnesses {
+            if matches!(
+                harness.kind,
+                crate::project::AgentKind::Gemini | crate::project::AgentKind::Cursor
+            ) {
+                harness.status = HarnessCheckStatus::NotFound("missing".into());
+            }
+        }
+        let theme = crate::theme::Theme::default();
+        let mut terminal = Terminal::new(TestBackend::new(140, 40)).unwrap();
+        terminal
+            .draw(|frame| {
+                draw_harness_setup_dialog(
+                    frame,
+                    &state,
+                    &throbber_widgets_tui::ThrobberState::default(),
+                    &theme,
+                )
+            })
+            .unwrap();
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+        assert!(text.contains("Gemini (not found: missing)"), "{text}");
+        assert!(text.contains("Cursor (not found: missing)"), "{text}");
+    }
+}

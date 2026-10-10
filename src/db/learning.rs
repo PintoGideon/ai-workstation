@@ -383,12 +383,12 @@ fn row_to_qa(row: &rusqlite::Row) -> rusqlite::Result<LearningQa> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use tempfile::NamedTempFile;
 
-    fn open_temp_db() -> (NamedTempFile, AmfDb) {
+    fn open_temp_db() -> (NamedTempFile, AiwDb) {
         let tmp = NamedTempFile::new().unwrap();
-        let db = AmfDb::open(tmp.path()).unwrap();
+        let db = AiwDb::open(tmp.path()).unwrap();
         (tmp, db)
     }
 
@@ -426,7 +426,7 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Codex,
                 LearningLevel::Newcomer,
             )
@@ -447,7 +447,7 @@ mod tests {
             .load_or_create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )
@@ -456,7 +456,7 @@ mod tests {
             .load_or_create_learning_session(
                 "proj-1",
                 "feat-9",
-                "amf",
+                "aiw",
                 &AgentKind::Pi,
                 LearningLevel::Familiar,
             )
@@ -474,19 +474,19 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )
             .unwrap();
 
-        session.harness = AgentKind::Opencode;
+        session.harness = AgentKind::Pi;
         session.level = LearningLevel::Familiar;
         session.onboarding_seen = true;
         db.update_learning_session(&session).unwrap();
 
         let loaded = db.learning_session("proj-1").unwrap().unwrap();
-        assert_eq!(loaded.harness, AgentKind::Opencode);
+        assert_eq!(loaded.harness, AgentKind::Pi);
         assert_eq!(loaded.level, LearningLevel::Familiar);
         assert!(loaded.onboarding_seen);
     }
@@ -498,7 +498,7 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )
@@ -519,7 +519,7 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )
@@ -574,7 +574,7 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )
@@ -608,7 +608,7 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )
@@ -644,7 +644,7 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )
@@ -669,7 +669,7 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )
@@ -696,7 +696,7 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )
@@ -727,7 +727,7 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )
@@ -756,7 +756,7 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )
@@ -776,7 +776,7 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )
@@ -808,7 +808,7 @@ mod tests {
             .create_learning_session(
                 "proj-1",
                 "feat-1",
-                "amf",
+                "aiw",
                 &AgentKind::Claude,
                 LearningLevel::Newcomer,
             )

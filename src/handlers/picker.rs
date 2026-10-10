@@ -142,12 +142,7 @@ pub fn handle_command_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
                                     .sessions
                                     .iter()
                                     .find(|s| {
-                                        matches!(
-                                            s.kind,
-                                            SessionKind::Claude
-                                                | SessionKind::Opencode
-                                                | SessionKind::Codex
-                                        )
+                                        matches!(s.kind, SessionKind::Claude | SessionKind::Codex)
                                     })
                                     .map(|s| s.tmux_window.clone())
                                     .unwrap_or_else(|| "terminal".into());
@@ -619,39 +614,6 @@ pub fn handle_session_switcher_key(app: &mut App, key: KeyCode) -> Result<()> {
     Ok(())
 }
 
-pub fn handle_opencode_session_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
-    match key {
-        KeyCode::Esc | KeyCode::Char('q') => {
-            app.cancel_opencode_session_picker();
-        }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if let AppMode::OpencodeSessionPicker(ref mut state) = app.mode {
-                let len = state.sessions.len();
-                if len > 0 {
-                    state.selected = (state.selected + 1) % len;
-                }
-            }
-        }
-        KeyCode::Up | KeyCode::Char('k') => {
-            if let AppMode::OpencodeSessionPicker(ref mut state) = app.mode {
-                let len = state.sessions.len();
-                if len > 0 {
-                    state.selected = if state.selected == 0 {
-                        len - 1
-                    } else {
-                        state.selected - 1
-                    };
-                }
-            }
-        }
-        KeyCode::Enter => {
-            app.confirm_opencode_session();
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
 pub fn handle_claude_session_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
     match key {
         KeyCode::Esc | KeyCode::Char('q') => {
@@ -738,19 +700,6 @@ pub fn handle_codex_session_confirm_key(app: &mut App, key: KeyCode) -> Result<(
         }
         KeyCode::Char('y') => {
             app.confirm_and_start_codex()?;
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
-pub fn handle_opencode_session_confirm_key(app: &mut App, key: KeyCode) -> Result<()> {
-    match key {
-        KeyCode::Esc | KeyCode::Char('n') => {
-            app.cancel_opencode_session_confirm();
-        }
-        KeyCode::Char('y') => {
-            app.confirm_and_start_opencode()?;
         }
         _ => {}
     }
@@ -1098,7 +1047,7 @@ mod tests {
         ViewState::new(
             "demo".into(),
             "feature".into(),
-            "amf-feature".into(),
+            "aiw-feature".into(),
             "claude".into(),
             "Claude 1".into(),
             crate::project::SessionKind::Claude,
@@ -1115,7 +1064,7 @@ mod tests {
             branch: "feature".into(),
             workdir: PathBuf::from("/tmp/demo"),
             is_worktree: false,
-            tmux_session: "amf-feature".into(),
+            tmux_session: "aiw-feature".into(),
             sessions: vec![FeatureSession {
                 id: "codex-1".into(),
                 kind: SessionKind::Codex,
@@ -1443,7 +1392,7 @@ mod tests {
             Box::new(MockWorktreeOps::new()),
         );
         let db_file = NamedTempFile::new().unwrap();
-        app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+        app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
         app.mode = AppMode::MarkdownFilePicker(MarkdownFilePickerState {
             files: vec![selected.clone()],
             selected: 0,
@@ -1472,7 +1421,7 @@ mod tests {
         assert_eq!(app.store.projects[0].features[1].selected_plan_path, None);
         assert!(matches!(app.mode, AppMode::MarkdownLoading(_)));
 
-        let reloaded = crate::db::AmfDb::open(db_file.path())
+        let reloaded = crate::db::AiwDb::open(db_file.path())
             .unwrap()
             .load_store()
             .unwrap();
@@ -1512,7 +1461,7 @@ mod tests {
         app.mode = AppMode::CommandPicker(CommandPickerState {
             commands: vec![CommandEntry {
                 name: "demo-plan".into(),
-                source: "AMF Debug".into(),
+                source: "AIW Debug".into(),
                 path: None,
                 action: CommandAction::CodexLiveDemo(CodexDebugCommand::PlanDemo),
             }],
@@ -1523,7 +1472,7 @@ mod tests {
         handle_command_picker_key(&mut app, KeyCode::Enter).unwrap();
 
         assert_eq!(
-            app.codex_live_thread("amf-feature")
+            app.codex_live_thread("aiw-feature")
                 .unwrap()
                 .plan_text
                 .as_deref(),
@@ -1542,7 +1491,7 @@ mod tests {
         app.mode = AppMode::CommandPicker(CommandPickerState {
             commands: vec![CommandEntry {
                 name: "demo-work-change-reason".into(),
-                source: "AMF Debug".into(),
+                source: "AIW Debug".into(),
                 path: None,
                 action: CommandAction::CodexLiveDemo(CodexDebugCommand::WorkChangeReasonDemo),
             }],
@@ -1553,7 +1502,7 @@ mod tests {
         handle_command_picker_key(&mut app, KeyCode::Enter).unwrap();
 
         assert_eq!(
-            app.codex_live_thread("amf-feature")
+            app.codex_live_thread("aiw-feature")
                 .and_then(|live| live.sidebar_work_text())
                 .as_deref(),
             Some(

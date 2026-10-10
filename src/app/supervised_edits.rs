@@ -1,6 +1,6 @@
 //! Supervised edits: Vibeless mode's per-edit approval. A harness hook
-//! (Claude's `custom-diff-review.sh`, OpenCode's `change-tracker.js`) holds
-//! each file write until AMF answers `proceed`, `reject` or `cancel`. The
+//! (Claude's `custom-diff-review.sh`, Codex's `codex-diff-review.sh`) holds
+//! each file write until AIW answers `proceed`, `reject` or `cancel`. The
 //! TUI answers from `AppMode::DiffReviewPrompt`; the desktop GUI answers the
 //! same file-fallback requests through `gui_supervised_edits`. Both use the
 //! helpers here, so the diff a reviewer sees and the reply a hook reads are
@@ -13,43 +13,6 @@ use anyhow::{Context, Result};
 
 use super::{App, PendingInput};
 
-/// OpenCode keeps a request-specific lease while its pre-write hook polls.
-/// Legacy session-wide paths cannot prove which write is waiting.
-pub(crate) fn opencode_edit_is_waiting(input: &PendingInput) -> bool {
-    #[derive(serde::Deserialize)]
-    struct Waiter {
-        pid: i64,
-        session_id: String,
-        change_id: String,
-    }
-    let Some(response) = input.response_file.as_deref().map(Path::new) else {
-        return false;
-    };
-    let Some(dir) = response.parent() else {
-        return false;
-    };
-    if response != dir.join("response.json")
-        || input.proceed_signal.as_deref().map(Path::new) != Some(dir.join("proceed").as_path())
-    {
-        return false;
-    }
-    let lease = dir.join("waiter.json");
-    let Ok(bytes) = std::fs::read(&lease) else {
-        return false;
-    };
-    let Ok(waiter) = serde_json::from_slice::<Waiter>(&bytes) else {
-        return false;
-    };
-    waiter.session_id == input.session_id
-        && input.change_id.as_deref() == Some(waiter.change_id.as_str())
-        && crate::resources::procs::pid_alive(waiter.pid)
-        && std::fs::metadata(lease)
-            .and_then(|metadata| metadata.modified())
-            .ok()
-            .and_then(|modified| modified.elapsed().ok())
-            .is_some_and(|age| age < std::time::Duration::from_secs(5))
-}
-
 /// A reviewer's answer to one pending edit, in the hook protocol's terms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EditReviewDecision {
@@ -58,8 +21,7 @@ pub(crate) enum EditReviewDecision {
     /// `reject`: block the change, optionally with feedback for the agent.
     Reject,
     /// `cancel` (the TUI's Esc): sent with `skip: true`. Claude's hook blocks
-    /// the change as cancelled; OpenCode's tracker lets it through without
-    /// recording a reason.
+    /// the change as cancelled.
     Cancel,
 }
 
@@ -132,9 +94,22 @@ impl EditReviewClaim {
             .truncate(false)
             .open(&lock_path)
             .with_context(|| format!("Could not open {}", lock_path.display()))?;
-        lock.try_lock().map_err(|_| {
-            anyhow::anyhow!("Another reviewer is answering this edit; refresh and retry")
-        })?;
+        // FORK: a child process spawned by another thread inherits this lock
+        // until it execs, so a just-released lock can look held for a moment.
+        // Retry briefly before calling it contention.
+        let mut attempts = 0;
+        loop {
+            match lock.try_lock() {
+                Ok(()) => break,
+                Err(std::fs::TryLockError::WouldBlock) if attempts < 20 => {
+                    attempts += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(_) => {
+                    anyhow::bail!("Another reviewer is answering this edit; refresh and retry")
+                }
+            }
+        }
         Ok(Self {
             _lock: lock,
             response_file: response_file.to_path_buf(),
@@ -258,7 +233,7 @@ impl App {
         Ok(EditReviewDelivery::Files)
     }
 
-    /// Whether a notification is a per-edit approval request AMF answers
+    /// Whether a notification is a per-edit approval request AIW answers
     /// with its own diff viewer (rather than a plain attention ping).
     pub(crate) fn is_structured_edit_review(&self, notification_type: &str) -> bool {
         notification_type == "change-reason"
@@ -287,7 +262,7 @@ mod tests {
 
     #[test]
     fn competing_process_cannot_replace_a_rejection() {
-        const CHILD: &str = "AMF_EDIT_DELIVERY_CHILD";
+        const CHILD: &str = "AIW_EDIT_DELIVERY_CHILD";
         if let Ok(root) = std::env::var(CHILD) {
             let root = Path::new(&root);
             let result = empty_app().deliver_edit_review_response(

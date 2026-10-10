@@ -1,8 +1,8 @@
 # Final Review history browser
 
-Captured from an isolated AMF instance against a throwaway repository. The
+Captured from an isolated AIW instance against a throwaway repository. The
 fixture contains a real Rust diff, two recent review rounds, and two archived
-rounds; it does not read or modify user projects or the normal AMF database.
+rounds; it does not read or modify user projects or the normal AIW database.
 
 ## 1. History entry point
 

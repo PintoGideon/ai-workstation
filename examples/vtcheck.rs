@@ -1,4 +1,4 @@
-//! Watchdog: replicate AMF's view pipeline (capture-pane -e -> strip
+//! Watchdog: replicate AIW's view pipeline (capture-pane -e -> strip
 //! trailing newline -> \n => \r\n -> vt100 parse) and diff every row
 //! against the plain text tmux reports for the same capture. Logs any
 //! divergence. Run with:
@@ -31,7 +31,7 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let target = args
         .next()
-        .unwrap_or_else(|| "amf-agent-mainframe-cc-screen-bug:claude".to_string());
+        .unwrap_or_else(|| "aiw-ai-workstation-cc-screen-bug:claude".to_string());
     let cols: u16 = args.next().and_then(|s| s.parse().ok()).unwrap_or(157);
     let rows: u16 = args.next().and_then(|s| s.parse().ok()).unwrap_or(43);
 
@@ -43,7 +43,7 @@ fn main() {
             .expect("tmux capture failed");
         let raw = String::from_utf8_lossy(&output.stdout).into_owned();
 
-        // AMF pipeline: normalize_captured_pane + vt100 parse.
+        // AIW pipeline: normalize_captured_pane + vt100 parse.
         let stripped = raw.strip_suffix('\n').unwrap_or(&raw);
         let normalized = stripped.replace('\n', "\r\n");
         let mut parser = vt100::Parser::new(rows, cols, 0);

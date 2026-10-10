@@ -4,8 +4,8 @@ description = "Global and per-project config, resource guards, and theming."
 weight = 90
 +++
 
-AMF creates its global configuration at `~/.config/amf/config.json`. A
-project can add `amf.json` at its repository root; project settings override
+AIW creates its global configuration at `~/.config/ai_workstation/config.json`. A
+project can add `aiw.json` at its repository root; project settings override
 matching global settings.
 
 From an embedded session, press `Ctrl+Space`, then `c` to open the
@@ -19,9 +19,9 @@ configuration wizard. It covers the common customizations, including:
 - key remapping.
 
 See [Project Config Reference](@/docs/project-config.md) for every key
-`amf.json` can hold and how project settings merge with global ones.
+`aiw.json` can hold and how project settings merge with global ones.
 
-Use `T` on the dashboard to choose an AMF theme. If your terminal does not
+Use `T` on the dashboard to choose an AIW theme. If your terminal does not
 have a Nerd Font, enable ASCII fallbacks:
 
 ```json
@@ -30,12 +30,12 @@ have a Nerd Font, enable ASCII fallbacks:
 }
 ```
 
-AMF stores its projects, features, saved prompts, and other application
-state in `~/.config/amf/amf.db`.
+AIW stores its projects, features, saved prompts, and other application
+state in `~/.config/ai_workstation/aiw.db`.
 
 ## Resource guards
 
-These settings govern AMF's agent-count and memory guards:
+These settings govern AIW's agent-count and memory guards:
 
 ```json
 {
@@ -59,7 +59,7 @@ dashboard:
 }
 ```
 
-A question nobody has answered for this long stops being news, so AMF drops
+A question nobody has answered for this long stops being news, so AIW drops
 it back to plain idle. `0` keeps states up until the agent produces output
 again.
 
@@ -71,8 +71,8 @@ ticket, the interview fetches it and treats its contents as part of the
 brief, so you don't have to paste it in. This works only when the interview
 runs on Claude. Other harnesses ignore the setting and log that they did.
 
-This is a **global-only** setting in `~/.config/amf/config.json`. A
-repository's `amf.json` can't turn it on, because MCP servers run programs.
+This is a **global-only** setting in `~/.config/ai_workstation/config.json`. A
+repository's `aiw.json` can't turn it on, because MCP servers run programs.
 
 **claude.ai connectors** (tools named `mcp__claude_ai_<Name>__…`) and
 servers you added with `claude mcp add` load automatically. You only list
@@ -115,7 +115,7 @@ so tickets from either workspace can be read.
 ```json
 {
   "plan_interview_mcp": {
-    "config": "~/.config/amf/plan-mcp.json",
+    "config": "~/.config/ai_workstation/plan-mcp.json",
     "allowed_tools": ["mcp__linear__get_issue"]
   }
 }
@@ -140,13 +140,13 @@ listed MCP tools. Directed revisions and isolated investigations don't use
 them. The interview still can't edit files or run shell commands, and the
 repository's own Claude settings, hooks, `.mcp.json` servers, `CLAUDE.md`,
 skills, and subagents are not loaded (the interview can still read those
-files, like any other file in the repository). AMF passes `--setting-sources ""` for that, plus
+files, like any other file in the repository). AIW passes `--setting-sources ""` for that, plus
 `MCP_CONNECTION_NONBLOCKING=false` so a run waits for claude.ai connectors
 instead of sometimes starting without them. If a tool name or the config
 file is invalid, the interview runs without MCP and shows why.
 
-To test a setup outside AMF, run the same command the interview uses from
-the feature's directory. Like AMF, it sends the prompt on stdin: a prompt
+To test a setup outside AIW, run the same command the interview uses from
+the feature's directory. Like AIW, it sends the prompt on stdin: a prompt
 argument after `--allowedTools` can be read as another tool name. Add
 `--mcp-config <path>` before `--allowedTools` if you set `config`, and
 separate several tools with commas.
@@ -161,10 +161,10 @@ echo "Fetch Asana task 1201234567890 and summarize it" |
 
 ## Built-in customization skills
 
-AMF injects a small set of skills into Claude Code, Codex, and OpenCode
-feature workspaces so the agent can safely customize the project-local AMF
-config for you: `amf:configure` explains the current setup, `amf:add-session`
-adds a dev server or other persistent command, `amf:add-hook` automates
-feature lifecycle events, `amf:add-preset` creates a reusable feature setup,
-and `amf:add-prompt` adds a shared prompt template. You can invoke a skill by
+AIW injects a small set of skills into Claude Code and Codex
+feature workspaces so the agent can safely customize the project-local AIW
+config for you: `aiw:configure` explains the current setup, `aiw:add-session`
+adds a dev server or other persistent command, `aiw:add-hook` automates
+feature lifecycle events, `aiw:add-preset` creates a reusable feature setup,
+and `aiw:add-prompt` adds a shared prompt template. You can invoke a skill by
 name or simply describe the customization you want.

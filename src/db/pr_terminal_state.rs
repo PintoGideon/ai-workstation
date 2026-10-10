@@ -76,12 +76,12 @@ pub fn delete(conn: &Connection, repo: &str, branch: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use tempfile::NamedTempFile;
 
-    fn open_temp_db() -> (NamedTempFile, AmfDb) {
+    fn open_temp_db() -> (NamedTempFile, AiwDb) {
         let tmp = NamedTempFile::new().unwrap();
-        let db = AmfDb::open(tmp.path()).unwrap();
+        let db = AiwDb::open(tmp.path()).unwrap();
         (tmp, db)
     }
 

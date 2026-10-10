@@ -88,13 +88,14 @@ function prTone(pr: SidebarPr): string {
 }
 
 /** The TUI's session-kind icons in its Nerd Font mode; the window bundles
- *  the symbols font (styles.css "AMF Symbols"), so they always render. */
+ *  the symbols font (styles.css "AIW Symbols"), so they always render. */
 export function sessionKindIcon(session: FeatureSession, derived: SidebarSession | undefined): string {
   switch (session.kind) {
     case "claude":
     case "codex":
-    case "opencode":
-    case "pi": return "*";
+    case "pi":
+    case "gemini": // FORK
+    case "cursor": return "*";
     case "terminal": return ">";
     case "nvim": return "\ue6ae";
     case "vscode": return "\ue70c";
@@ -269,7 +270,7 @@ function FeatureNode({
       key: "vscode",
       text: <>{"\ue70c"} {opening ? "VS Code opening…" : editors.length === 1 ? "VS Code" : `VS Code ×${editors.length}`}</>,
       className: "tree-chip-vscode tree-chip-action",
-      title: "VS Code windows AMF opened for this feature",
+      title: "VS Code windows AIW opened for this feature",
       onClick: props.onSelectEditors && (() => props.onSelectEditors?.(project.id, feature.id)),
     });
   }

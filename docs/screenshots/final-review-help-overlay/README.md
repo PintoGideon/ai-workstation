@@ -1,7 +1,7 @@
 # `?` help overlay in Final Review
 
-Captured from an isolated, throwaway AMF instance
-(`scripts/dev/screenshot/amf-capture.sh`, 160x44, scenario
+Captured from an isolated, throwaway AIW instance
+(`scripts/dev/screenshot/aiw-capture.sh`, 160x44, scenario
 `scripts/dev/screenshot/scenarios/final-review-help-overlay.txt`) against a
 scratch demo repo whose `review-demo` branch hardens token verification, bounds
 a session's attempt budget and caps a cache, with matching developer notes in

@@ -521,7 +521,7 @@ impl App {
         }
         if harnesses.is_empty() {
             self.push_toast_error(
-                "No agent harness available to summarize with — check `amf doctor`",
+                "No agent harness available to summarize with — check `aiw doctor`",
             );
             return;
         }
@@ -1423,8 +1423,8 @@ impl App {
     ///
     /// The proposal is a wholesale rewrite of a snapshot taken before the agent
     /// pass, so the doc is re-read here and compared against that snapshot
-    /// first. Every other AMF flow only ever *appends* to these docs, and the
-    /// cross-project doc is shared by every AMF session on the machine, so the
+    /// first. Every other AIW flow only ever *appends* to these docs, and the
+    /// cross-project doc is shared by every AIW session on the machine, so the
     /// common conflict is "another session appended findings while this dialog
     /// was open": those are replayed on top of the rewrite instead of being
     /// clobbered. A change an append can't explain (hand-edited prose, deleted
@@ -1452,7 +1452,7 @@ impl App {
                     state.overwrite_confirmed = true;
                     state.error = Some(
                         "This doc changed on disk since the compact pass read it, in ways \
-                         AMF can't re-apply on top of the rewrite. Confirm again to \
+                         AIW can't re-apply on top of the rewrite. Confirm again to \
                          overwrite it anyway, or esc to discard and re-run the compact pass."
                             .to_string(),
                     );

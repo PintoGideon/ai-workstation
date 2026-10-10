@@ -1,94 +1,41 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import { asGuiError } from "./api";
-import { GithubAccessCheck, ImageData, checkPrImageAccess, inlinePrImage, openScreenshotBrowser, prDescription } from "./screenshotsApi";
+import { ImageData, openScreenshotBrowser, prDescription } from "./screenshotsApi";
 import { Spinner } from "./ui";
 
 export type OpenPrImage = (image: ImageData, caption: string, trigger: HTMLElement) => void;
 
-function InlinePrImage({ workflowId, source, caption, onOpen }: {
-  workflowId: string; source: string; caption: string; onOpen: OpenPrImage;
+/** FORK(no-cloud): AIW downloads no images itself, so a PR image is a
+ * placeholder that hands its link to the user's browser on request. */
+function InlinePrImage({ source, caption, onError }: {
+  source: string; caption: string; onError: (message: string) => void;
 }) {
-  const [image, setImage] = useState<ImageData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [retry, setRetry] = useState(0);
-  const [access, setAccess] = useState<GithubAccessCheck[] | null>(null);
-  const [checkingAccess, setCheckingAccess] = useState(false);
-  const accessRequest = useRef(0);
-  const host = useRef<HTMLSpanElement>(null);
-  const [visible, setVisible] = useState(typeof IntersectionObserver === "undefined");
-  useEffect(() => {
-    if (!host.current || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
-        setVisible(true);
-        observer.disconnect();
-      }
-    }, { rootMargin: "300px" });
-    observer.observe(host.current);
-    return () => observer.disconnect();
-  }, []);
-  useEffect(() => {
-    if (!visible) return;
-    let live = true;
-    setImage(null);
-    setError(null);
-    setAccess(null);
-    setCheckingAccess(false);
-    inlinePrImage(workflowId, source)
-      .then((value) => { if (live) setImage(value); })
-      .catch((err) => { if (live) setError(asGuiError(err).message); });
-    return () => { live = false; accessRequest.current += 1; };
-  }, [workflowId, source, retry, visible]);
-
-  const checkAccess = () => {
-    const request = ++accessRequest.current;
-    setCheckingAccess(true);
-    setAccess(null);
-    checkPrImageAccess(workflowId, source)
-      .then((checks) => { if (request === accessRequest.current) setAccess(checks); })
-      .catch((err) => {
-        if (request === accessRequest.current) {
-          setAccess([{ name: "Access check", passed: false, detail: asGuiError(err).message }]);
-        }
-      })
-      .finally(() => { if (request === accessRequest.current) setCheckingAccess(false); });
-  };
-
-  return <span ref={host} className="pr-inline-image">
-    {image ? <button type="button" className="pr-image-open" aria-label={`Enlarge image: ${caption}`}
-      onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpen(image, caption, event.currentTarget); }}>
-      <img src={image.data_url} alt={caption} draggable={false} />
-    </button> : error ? <span role="alert">
-      {caption}: {error}{" "}
-      <button type="button" className="btn btn-secondary btn-sm" onClick={(event) => {
-        event.preventDefault(); event.stopPropagation(); setRetry((value) => value + 1);
-      }}>Retry image</button>{" "}
-      <button type="button" className="btn btn-secondary btn-sm" disabled={checkingAccess} onClick={(event) => {
-        event.preventDefault(); event.stopPropagation(); checkAccess();
-      }}>{checkingAccess ? "Checking access…" : "Check access"}</button>
-      {access && <span className="pr-image-access" role="status">
-        {access.map((check) => <span className="pr-image-access-row" key={check.name}>
-          {check.passed ? "Passed" : "Failed"} — {check.name}: {check.detail}
-        </span>)}
-      </span>}
-    </span> : <span role="status"><Spinner /> Loading {caption}…</span>}
+  const external = /^https?:\/\//i.test(source);
+  return <span className="pr-inline-image muted">
+    [image: {caption}]{" "}
+    {external && <button type="button" className="btn btn-secondary btn-sm" onClick={(event) => {
+      event.preventDefault(); event.stopPropagation();
+      void openScreenshotBrowser(source).catch((err) => onError(asGuiError(err).message));
+    }}>Open in browser</button>}
   </span>;
 }
 
-/** PR Markdown renders GitHub's HTML image form through sanitized nodes. Image
- * bytes always come from the bounded native adapter, never a remote DOM src. */
-export default function PrMarkdown({ source, workflowId, identity, onOpenImage }: {
+/** PR Markdown renders GitHub's HTML image form through sanitized nodes. Images
+ * are never fetched — not by the DOM and not by AIW (see NO_CLOUD.md). */
+// `workflowId` / `onOpenImage` stay in the props so callers are unchanged; with
+// no image fetching (FORK(no-cloud)) they are no longer read here.
+export default function PrMarkdown({ source, identity }: {
   source: string; workflowId: string; identity: string; onOpenImage: OpenPrImage;
 }) {
   const [linkError, setLinkError] = useState<string | null>(null);
   const components = useMemo(() => ({
     img: ({ src, alt }: { src?: string; alt?: string }) => src
-      ? <InlinePrImage key={`${identity}:${src}`} workflowId={workflowId} source={src}
-        caption={alt || "PR image"} onOpen={onOpenImage} />
+      ? <InlinePrImage key={`${identity}:${src}`} source={src}
+        caption={alt || "PR image"} onError={setLinkError} />
       : <span className="muted">{alt || "Image has no supported source"}</span>,
     a: ({ href, children }: { href?: string; children?: React.ReactNode }) => {
       if (!href || !/^https?:\/\//i.test(href)) return <span>{children}</span>;
@@ -97,7 +44,7 @@ export default function PrMarkdown({ source, workflowId, identity, onOpenImage }
         void openScreenshotBrowser(href).catch((err) => setLinkError(asGuiError(err).message));
       }}>{children}</a>;
     },
-  }), [identity, workflowId, onOpenImage]);
+  }), [identity]);
   return <div className="doc md pr-markdown">
     {linkError && <p role="alert">{linkError}</p>}
     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}

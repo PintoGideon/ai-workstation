@@ -176,7 +176,7 @@ impl App {
                 }
                 // A subtree that couldn't be opened leaves no trace in the
                 // list, so say it out loud: "this project has no such
-                // directory" and "AMF couldn't read it" look identical
+                // directory" and "AIW couldn't read it" look identical
                 // otherwise, and only one of them is true.
                 if !unreadable.is_empty() {
                     load_error.get_or_insert(format!(

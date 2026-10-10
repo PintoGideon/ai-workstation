@@ -341,7 +341,7 @@ describe("terminal scroll-back", () => {
   });
 
   it("forwards the wheel only to a full-screen program that asked for mouse reports", async () => {
-    await attach(frame("opencode", true, true));
+    await attach(frame("nvim", true, true));
 
     await wheelUp();
 

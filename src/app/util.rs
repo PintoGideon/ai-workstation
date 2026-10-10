@@ -1,5 +1,4 @@
 use crate::project::SessionKind;
-use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -225,9 +224,6 @@ fn read_prompts_for_session(
     full: bool,
 ) -> Vec<PromptEntry> {
     let mut entries = match session_kind {
-        Some(SessionKind::Opencode) => {
-            read_prompts_from_opencode_storage(workdir, preferred_session_id)
-        }
         Some(SessionKind::Codex) => read_prompts_from_codex_history(workdir, preferred_session_id),
         _ => read_prompts_from_claude_sessions(workdir, preferred_session_id, full),
     };
@@ -283,17 +279,6 @@ fn read_prompts_from_codex_history(workdir: &Path, session_id: Option<&str>) -> 
     });
 
     entries
-}
-
-fn read_prompts_from_opencode_storage(
-    workdir: &Path,
-    preferred_session_id: Option<&str>,
-) -> Vec<PromptEntry> {
-    let Some(storage_root) = dirs::data_dir().map(|dir| dir.join("opencode").join("storage"))
-    else {
-        return Vec::new();
-    };
-    read_prompts_from_opencode_storage_root(&storage_root, workdir, preferred_session_id)
 }
 
 pub fn read_claude_task_state(workdir: &Path, session_id: Option<&str>) -> Option<ClaudeTaskState> {
@@ -490,112 +475,6 @@ fn parse_user_prompts_from_jsonl(content: &str, file_ts: Option<i64>) -> Vec<Pro
         });
     }
     entries
-}
-
-fn read_prompts_from_opencode_storage_root(
-    storage_root: &Path,
-    workdir: &Path,
-    preferred_session_id: Option<&str>,
-) -> Vec<PromptEntry> {
-    let Some(session_id) = find_opencode_session_id(storage_root, workdir, preferred_session_id)
-    else {
-        return Vec::new();
-    };
-    let message_root = storage_root.join("message").join(&session_id);
-    if !is_real_dir(&message_root) {
-        return Vec::new();
-    }
-
-    let mut entries = Vec::new();
-    for message_path in walk_json_files(&message_root) {
-        let Ok(contents) = std::fs::read_to_string(&message_path) else {
-            continue;
-        };
-        let Ok(message) = serde_json::from_str::<OpencodeMessage>(&contents) else {
-            continue;
-        };
-        if message.role != "user" {
-            continue;
-        }
-
-        let text = read_opencode_prompt_text(storage_root, &message.id).or_else(|| {
-            message
-                .summary
-                .and_then(|summary| summary.title)
-                .map(|title| title.trim().to_string())
-                .filter(|title| !title.is_empty())
-        });
-        let Some(text) = text else {
-            continue;
-        };
-
-        entries.push(PromptEntry {
-            text,
-            timestamp: Some(message.time.created / 1000),
-        });
-    }
-
-    entries
-}
-
-fn find_opencode_session_id(
-    storage_root: &Path,
-    workdir: &Path,
-    preferred_session_id: Option<&str>,
-) -> Option<String> {
-    let session_root = storage_root.join("session");
-    if !is_real_dir(&session_root) {
-        return None;
-    }
-
-    let sessions = walk_json_files(&session_root)
-        .into_iter()
-        .filter_map(|path| parse_opencode_session(&path))
-        .collect::<Vec<_>>();
-
-    if let Some(session_id) = preferred_session_id
-        && sessions.iter().any(|session| session.id == session_id)
-    {
-        return Some(session_id.to_string());
-    }
-
-    sessions
-        .into_iter()
-        .filter(|session| session.directory == workdir)
-        .max_by_key(|session| session.updated)
-        .map(|session| session.id)
-}
-
-fn read_opencode_prompt_text(storage_root: &Path, message_id: &str) -> Option<String> {
-    let part_root = storage_root.join("part").join(message_id);
-    if !is_real_dir(&part_root) {
-        return None;
-    }
-
-    let mut texts = Vec::new();
-    for part_path in walk_json_files(&part_root) {
-        let Ok(contents) = std::fs::read_to_string(part_path) else {
-            continue;
-        };
-        let Ok(part) = serde_json::from_str::<OpencodePart>(&contents) else {
-            continue;
-        };
-        if part.part_type != "text" {
-            continue;
-        }
-        let Some(text) = part.text.map(|text| text.trim().to_string()) else {
-            continue;
-        };
-        if !text.is_empty() {
-            texts.push(text);
-        }
-    }
-
-    if texts.is_empty() {
-        None
-    } else {
-        Some(texts.join("\n"))
-    }
 }
 
 fn claude_projects_dir(workdir: &Path) -> Option<PathBuf> {
@@ -880,96 +759,10 @@ fn encode_claude_path(path: &Path) -> String {
         .collect()
 }
 
-fn walk_json_files(root: &Path) -> Vec<PathBuf> {
-    if !is_real_dir(root) {
-        return Vec::new();
-    }
-
-    let mut files = Vec::new();
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Ok(file_type) = entry.file_type() else {
-                continue;
-            };
-            if file_type.is_dir() {
-                stack.push(path);
-                continue;
-            }
-            if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
-                files.push(path);
-            }
-        }
-    }
-    files.sort();
-    files
-}
-
 fn is_real_dir(path: &Path) -> bool {
     std::fs::symlink_metadata(path)
         .map(|metadata| metadata.is_dir())
         .unwrap_or(false)
-}
-
-#[derive(Debug, Deserialize)]
-struct OpencodeSessionFile {
-    id: String,
-    directory: String,
-    time: OpencodeTime,
-}
-
-#[derive(Debug)]
-struct OpencodeSessionRecord {
-    id: String,
-    directory: PathBuf,
-    updated: i64,
-}
-
-fn parse_opencode_session(path: &Path) -> Option<OpencodeSessionRecord> {
-    let contents = std::fs::read_to_string(path).ok()?;
-    let session = serde_json::from_str::<OpencodeSessionFile>(&contents).ok()?;
-    Some(OpencodeSessionRecord {
-        id: session.id,
-        directory: PathBuf::from(session.directory),
-        updated: session.time.updated,
-    })
-}
-
-#[derive(Debug, Deserialize)]
-struct OpencodeTime {
-    updated: i64,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpencodeMessage {
-    id: String,
-    role: String,
-    time: OpencodeMessageTime,
-    #[serde(default)]
-    summary: Option<OpencodeMessageSummary>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpencodeMessageTime {
-    created: i64,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpencodeMessageSummary {
-    #[serde(default)]
-    title: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpencodePart {
-    #[serde(rename = "type")]
-    part_type: String,
-    #[serde(default)]
-    text: Option<String>,
 }
 
 /// Returns true when running under WSL, where the Windows clipboard is
@@ -1046,7 +839,7 @@ pub fn copy_to_clipboard(text: &str) -> anyhow::Result<()> {
 }
 
 /// Open a URL in the user's default browser. Uses `xdg-open` on Linux and
-/// `open` on macOS; the child is detached so AMF does not block on it.
+/// `open` on macOS; the child is detached so AIW does not block on it.
 pub fn open_in_browser(url: &str) -> anyhow::Result<()> {
     let opener = if cfg!(target_os = "macos") {
         "open"
@@ -1223,7 +1016,7 @@ pub fn copy_image_to_clipboard(data: &[u8], mime: &str) -> anyhow::Result<()> {
 /// invocation prefers an image (e.g. a screenshot), which it saves to a
 /// temp PNG we then read; otherwise it returns the clipboard text.
 fn read_clipboard_wsl() -> Option<ClipboardContent> {
-    let tmp = std::env::temp_dir().join(format!("amf-clip-{}.png", uuid::Uuid::new_v4()));
+    let tmp = std::env::temp_dir().join(format!("aiw-clip-{}.png", uuid::Uuid::new_v4()));
     let win_path = wsl_windows_path(&tmp)?;
     let script = format!(
         "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; \
@@ -1232,8 +1025,8 @@ fn read_clipboard_wsl() -> Option<ClipboardContent> {
          $img=[System.Windows.Forms.Clipboard]::GetImage(); \
          if($img -ne $null){{ \
            $img.Save('{path}',[System.Drawing.Imaging.ImageFormat]::Png); \
-           Write-Output 'AMFIMAGE' \
-         }} else {{ Write-Output 'AMFTEXT'; Get-Clipboard -Raw }}",
+           Write-Output 'AIWIMAGE' \
+         }} else {{ Write-Output 'AIWTEXT'; Get-Clipboard -Raw }}",
         path = win_path.replace('\'', "''")
     );
     let output = std::process::Command::new("powershell.exe")
@@ -1243,14 +1036,14 @@ fn read_clipboard_wsl() -> Option<ClipboardContent> {
 
     let result = if output.status.success() {
         let raw = String::from_utf8_lossy(&output.stdout);
-        if raw.starts_with("AMFIMAGE") {
+        if raw.starts_with("AIWIMAGE") {
             std::fs::read(&tmp)
                 .ok()
                 .map(|data| ClipboardContent::Image {
                     data,
                     mime: "image/png".to_string(),
                 })
-        } else if let Some(rest) = raw.strip_prefix("AMFTEXT") {
+        } else if let Some(rest) = raw.strip_prefix("AIWTEXT") {
             // Drop the marker line and any single trailing newline that
             // PowerShell appends, then normalise CRLF to LF.
             let text = rest
@@ -1301,7 +1094,7 @@ fn read_clipboard_macos() -> Option<ClipboardContent> {
     if info.status.success() {
         let info = String::from_utf8_lossy(&info.stdout);
         if info.contains("PNGf") || info.contains("TIFF") || info.contains("public.png") {
-            let tmp = std::env::temp_dir().join(format!("amf-clip-{}.png", uuid::Uuid::new_v4()));
+            let tmp = std::env::temp_dir().join(format!("aiw-clip-{}.png", uuid::Uuid::new_v4()));
             let script = format!(
                 "set theFile to open for access POSIX file \"{path}\" with write permission\n\
                  set eof of theFile to 0\n\
@@ -1343,7 +1136,7 @@ fn read_clipboard_macos() -> Option<ClipboardContent> {
 /// Place image bytes on the macOS clipboard via `osascript`, so the
 /// harness's own Ctrl+V image paste can ingest them.
 fn copy_image_to_clipboard_macos(data: &[u8]) -> anyhow::Result<()> {
-    let tmp = std::env::temp_dir().join(format!("amf-clip-{}.png", uuid::Uuid::new_v4()));
+    let tmp = std::env::temp_dir().join(format!("aiw-clip-{}.png", uuid::Uuid::new_v4()));
     std::fs::write(&tmp, data)?;
     let script = format!(
         "set the clipboard to (read (POSIX file \"{path}\") as «class PNGf»)",
@@ -1382,7 +1175,7 @@ fn copy_to_clipboard_wsl(text: &str) -> anyhow::Result<()> {
 /// written to a temp file that `powershell.exe` loads and sets via
 /// `Clipboard::SetImage`.
 fn copy_image_to_clipboard_wsl(data: &[u8]) -> anyhow::Result<()> {
-    let tmp = std::env::temp_dir().join(format!("amf-clip-{}.png", uuid::Uuid::new_v4()));
+    let tmp = std::env::temp_dir().join(format!("aiw-clip-{}.png", uuid::Uuid::new_v4()));
     std::fs::write(&tmp, data)?;
     let win_path = wsl_windows_path(&tmp)
         .ok_or_else(|| anyhow::anyhow!("wslpath could not translate temp path"))?;
@@ -1436,9 +1229,9 @@ mod tests {
             ClipboardContent::Text(t) => panic!("expected image, got text: {t:?}"),
         }
 
-        copy_to_clipboard("amf-wsl-roundtrip").expect("copy text to clipboard");
+        copy_to_clipboard("aiw-wsl-roundtrip").expect("copy text to clipboard");
         match read_clipboard().expect("read clipboard") {
-            ClipboardContent::Text(t) => assert_eq!(t, "amf-wsl-roundtrip"),
+            ClipboardContent::Text(t) => assert_eq!(t, "aiw-wsl-roundtrip"),
             ClipboardContent::Image { .. } => panic!("expected text, got image"),
         }
     }
@@ -1470,9 +1263,9 @@ mod tests {
             ClipboardContent::Text(t) => panic!("expected image, got text: {t:?}"),
         }
 
-        copy_to_clipboard("amf-macos-roundtrip").expect("copy text to clipboard");
+        copy_to_clipboard("aiw-macos-roundtrip").expect("copy text to clipboard");
         match read_clipboard().expect("read clipboard") {
-            ClipboardContent::Text(t) => assert_eq!(t, "amf-macos-roundtrip"),
+            ClipboardContent::Text(t) => assert_eq!(t, "aiw-macos-roundtrip"),
             ClipboardContent::Image { .. } => panic!("expected text, got image"),
         }
     }
@@ -1517,95 +1310,6 @@ mod tests {
 
         assert_eq!(state.tasks.len(), 1);
         assert_eq!(state.tasks[0].subject, "Exact session task");
-    }
-
-    #[test]
-    fn reads_opencode_prompts_from_selected_session_storage() {
-        let temp = TempDir::new().unwrap();
-        let workdir = PathBuf::from("/tmp/opencode-prompts");
-        let storage = temp.path();
-
-        std::fs::create_dir_all(storage.join("session").join("project-a")).unwrap();
-        std::fs::create_dir_all(storage.join("message").join("ses-picked")).unwrap();
-        std::fs::create_dir_all(storage.join("part").join("msg-1")).unwrap();
-        std::fs::create_dir_all(storage.join("part").join("msg-2")).unwrap();
-
-        std::fs::write(
-            storage
-                .join("session")
-                .join("project-a")
-                .join("ses-picked.json"),
-            "{\"id\":\"ses-picked\",\"directory\":\"/other\",\"time\":{\"updated\":2}}",
-        )
-        .unwrap();
-        std::fs::write(
-            storage
-                .join("message")
-                .join("ses-picked")
-                .join("msg-1.json"),
-            "{\"id\":\"msg-1\",\"role\":\"user\",\"time\":{\"created\":1000}}",
-        )
-        .unwrap();
-        std::fs::write(
-            storage
-                .join("message")
-                .join("ses-picked")
-                .join("msg-2.json"),
-            "{\"id\":\"msg-2\",\"role\":\"user\",\"time\":{\"created\":3000}}",
-        )
-        .unwrap();
-        std::fs::write(
-            storage.join("part").join("msg-1").join("prt-1.json"),
-            "{\"type\":\"text\",\"text\":\"older prompt\"}",
-        )
-        .unwrap();
-        std::fs::write(
-            storage.join("part").join("msg-2").join("prt-1.json"),
-            "{\"type\":\"text\",\"text\":\"latest prompt\"}",
-        )
-        .unwrap();
-
-        let entries =
-            read_prompts_from_opencode_storage_root(storage, &workdir, Some("ses-picked"));
-
-        assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].text, "older prompt");
-        assert_eq!(entries[1].text, "latest prompt");
-    }
-
-    #[test]
-    fn reads_opencode_prompts_by_workdir_and_falls_back_to_summary_title() {
-        let temp = TempDir::new().unwrap();
-        let workdir = PathBuf::from("/tmp/opencode-prompts");
-        let storage = temp.path();
-
-        std::fs::create_dir_all(storage.join("session").join("project-a")).unwrap();
-        std::fs::create_dir_all(storage.join("message").join("ses-1")).unwrap();
-
-        std::fs::write(
-            storage.join("session").join("project-a").join("ses-1.json"),
-            format!(
-                "{{\"id\":\"ses-1\",\"directory\":\"{}\",\"time\":{{\"updated\":5}}}}",
-                workdir.display()
-            ),
-        )
-        .unwrap();
-        std::fs::write(
-            storage.join("message").join("ses-1").join("msg-1.json"),
-            "{\"id\":\"msg-1\",\"role\":\"assistant\",\"time\":{\"created\":1000}}",
-        )
-        .unwrap();
-        std::fs::write(
-            storage.join("message").join("ses-1").join("msg-2.json"),
-            "{\"id\":\"msg-2\",\"role\":\"user\",\"time\":{\"created\":2000},\"summary\":{\"title\":\"summary prompt\"}}",
-        )
-        .unwrap();
-
-        let entries = read_prompts_from_opencode_storage_root(storage, &workdir, None);
-
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].text, "summary prompt");
-        assert_eq!(entries[0].timestamp, Some(2));
     }
 
     #[test]

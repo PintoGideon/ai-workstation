@@ -1,4 +1,4 @@
-//! Rendering for the AI Review pane — AMF's own review of a PR's diff,
+//! Rendering for the AI Review pane — AIW's own review of a PR's diff,
 //! independent of PR Triage. See `crate::app::ai_review`'s module doc for why
 //! this is a separate workflow/pane rather than bolted onto triage.
 

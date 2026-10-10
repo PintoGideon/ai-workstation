@@ -9,7 +9,7 @@ export default function ProjectsSidebar({ children }: { children: ReactNode }) {
   return (
     <aside className={`sidebar${collapsed ? " sidebar-collapsed" : ""}`} aria-label="Projects sidebar">
       <header className="brand">
-        {!collapsed && <><span className="brand-mark">A</span><span className="brand-name">Agent Mainframe</span></>}
+        {!collapsed && <><span className="brand-mark">A</span><span className="brand-name">AI Workstation</span></>}
         <button type="button" className="btn btn-ghost btn-icon btn-sm projects-sidebar-toggle"
           aria-label={label} aria-expanded={!collapsed}
           title={`${label} (Alt+Shift+P outside terminal and text inputs)`}

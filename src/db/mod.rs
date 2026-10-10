@@ -1,6 +1,7 @@
 mod ai_review_cache;
 mod debug_log;
 pub mod editors;
+mod hook_approvals; // FORK: repo lifecycle hook approvals (src/fork/hook_approval.rs)
 pub mod learning;
 mod migrations;
 pub(crate) mod model_evidence;
@@ -12,8 +13,6 @@ pub mod pr_review_drafts;
 mod pr_terminal_state;
 pub mod prompt_overrides;
 pub mod prompt_templates;
-pub mod remote_devices;
-pub mod remote_push;
 pub(crate) mod screenshot_evidence;
 mod session_status;
 pub mod store;
@@ -29,12 +28,12 @@ use std::path::{Path, PathBuf};
 
 use crate::worktree::WorktreeManager;
 
-pub struct AmfDb {
+pub struct AiwDb {
     conn: Connection,
     pub path: PathBuf,
 }
 
-impl AmfDb {
+impl AiwDb {
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -50,12 +49,12 @@ impl AmfDb {
 
     /// Open an existing database for reading only.
     ///
-    /// [`Self::open`] is a write: it creates `~/.config/amf/`, creates the file,
+    /// [`Self::open`] is a write: it creates `~/.config/ai_workstation/`, creates the file,
     /// switches the journal to WAL, and applies any pending migration. That is
-    /// right for launching AMF and wrong for `amf doctor`, which promises to
+    /// right for launching AIW and wrong for `aiw doctor`, which promises to
     /// change nothing — a diagnostic that has to modify the thing it inspects
     /// can't report on it honestly, and on an older schema it would silently
-    /// upgrade the database out from under whatever AMF version the user is
+    /// upgrade the database out from under whatever AIW version the user is
     /// still running.
     ///
     /// So: no `CREATE` flag (a missing database is an error, not a new file),
@@ -73,7 +72,7 @@ impl AmfDb {
     /// promise is that it changes nothing.
     pub fn open_read_only(path: &Path) -> Result<Self> {
         if !path.exists() {
-            anyhow::bail!("no AMF database at {}", path.display());
+            anyhow::bail!("no AIW database at {}", path.display());
         }
         let conn = Connection::open_with_flags(
             path,
@@ -89,15 +88,15 @@ impl AmfDb {
     /// Open `path`, seeding or merging legacy stores first if needed.
     ///
     /// Merge priority:
-    /// 1. Import a legacy worktree-local `amf.db`.
+    /// 1. Import a legacy worktree-local `aiw.db`.
     /// 2. Import a legacy worktree-local `projects.json`.
-    /// 3. Import from the global `~/.config/amf/projects.json`.
+    /// 3. Import from the global `~/.config/ai_workstation/projects.json`.
     pub fn open_or_seed(path: &Path, _global_path: &Path) -> Result<Self> {
         let legacy_store = load_legacy_worktree_store();
 
         if !path.exists() {
             if let Some(store) = legacy_store {
-                let db = AmfDb::open(path)?;
+                let db = AiwDb::open(path)?;
                 db.save_store(&store)?;
                 return Ok(db);
             }
@@ -138,7 +137,7 @@ impl AmfDb {
     /// [`Self::open_or_seed`] time — nothing else holds a loaded version to
     /// race against yet. Application code saving a live, previously-loaded
     /// store must use [`Self::save_store_checked`] instead so a concurrent
-    /// writer (the GUI, the TUI, or another AMF process) is detected rather
+    /// writer (the GUI, the TUI, or another AIW process) is detected rather
     /// than silently overwritten; see `store::save`'s doc comment.
     ///
     /// Returns the version this save committed, read inside the same write
@@ -486,9 +485,9 @@ impl AmfDb {
     }
 }
 
-/// Editors AMF launched for a feature (see `db/editors.rs`), tracked so
+/// Editors AIW launched for a feature (see `db/editors.rs`), tracked so
 /// stopping the feature can reclaim them.
-impl AmfDb {
+impl AiwDb {
     #[allow(clippy::too_many_arguments)]
     pub fn record_launched_editor(
         &self,
@@ -542,77 +541,13 @@ impl AmfDb {
     }
 }
 
-/// Devices paired to the Remote Control companion app (see
-/// `docs/backlog/remote-control-companion-app-plan.md`, Epic 2): pairing
-/// mints them, the server's auth table is built from them, and the paired
-/// devices view revokes them.
-impl AmfDb {
-    pub fn create_remote_device(
-        &self,
-        name: &str,
-        token_hash: &str,
-    ) -> Result<remote_devices::RemoteDevice> {
-        remote_devices::create(&self.conn, name, token_hash)
-    }
-
-    #[cfg(test)]
-    pub fn find_remote_device_by_id(
-        &self,
-        id: &str,
-    ) -> Result<Option<remote_devices::RemoteDevice>> {
-        remote_devices::find_by_id(&self.conn, id)
-    }
-
-    #[cfg(test)]
-    pub fn find_remote_device_by_token_hash(
-        &self,
-        token_hash: &str,
-    ) -> Result<Option<remote_devices::RemoteDevice>> {
-        remote_devices::find_by_token_hash(&self.conn, token_hash)
-    }
-
-    pub fn list_remote_devices(&self) -> Result<Vec<remote_devices::RemoteDevice>> {
-        remote_devices::list_all(&self.conn)
-    }
-
-    pub fn touch_remote_device_last_seen(&self, id: &str) -> Result<()> {
-        remote_devices::touch_last_seen(&self.conn, id)
-    }
-
-    pub fn revoke_remote_device(&self, id: &str) -> Result<()> {
-        remote_devices::revoke(&self.conn, id)
-    }
-}
-
-/// Web Push state for the Remote Control PWA.
-impl AmfDb {
-    pub fn upsert_push_subscription(
-        &self,
-        subscription: &remote_push::PushSubscription,
-    ) -> Result<()> {
-        remote_push::upsert(&self.conn, subscription)
-    }
-
-    pub fn list_active_push_subscriptions(&self) -> Result<Vec<remote_push::PushSubscription>> {
-        remote_push::list_active(&self.conn)
-    }
-
-    pub fn delete_push_subscription(&self, endpoint: &str) -> Result<()> {
-        remote_push::delete(&self.conn, endpoint)
-    }
-
-    pub fn vapid_private_key(&self) -> Result<Option<String>> {
-        remote_push::vapid_private_key(&self.conn)
-    }
-
-    pub fn claim_vapid_private_key(&self, key: &str) -> Result<String> {
-        remote_push::claim_vapid_private_key(&self.conn, key)
-    }
-}
+// FORK(no-cloud): Remote Control's paired-device and Web Push accessors were
+// removed with the feature. Their tables (migrations 39/43) are left in place,
+// unused, so an existing `aiw.db` keeps opening.
 
 /// Scoped TODO list persistence (worktree / project / global).
 #[allow(dead_code)]
-impl AmfDb {
+impl AiwDb {
     /// The TODO list for `scope`, or `None` if that scope has no list yet.
     pub fn todo_list(&self, scope: &todos::TodoScope) -> Result<Option<todos::TodoList>> {
         todos::load_list(&self.conn, scope)
@@ -770,7 +705,7 @@ impl AmfDb {
 /// `docs/backlog/learning-mode-plan.md`). The overlay lands in later epics, so
 /// parts of this are written before anything reads them.
 #[allow(dead_code)]
-impl AmfDb {
+impl AiwDb {
     /// The project's learning session, or `None` if it has never opened
     /// Learning Mode.
     pub fn learning_session(&self, project_id: &str) -> Result<Option<learning::LearningSession>> {
@@ -865,7 +800,7 @@ impl AmfDb {
 /// `docs/backlog/plan-mode-interview-plan.md`, Epic 5), so part of this is
 /// written but not yet read.
 #[allow(dead_code)]
-impl AmfDb {
+impl AiwDb {
     /// The feature's in-progress interview, if it has one to resume.
     pub fn plan_interview_draft(
         &self,
@@ -942,10 +877,10 @@ impl AmfDb {
 /// PR Triage "Investigate" findings: a read-only headless investigation of one
 /// review comment, persisted per `(project id, PR#, comment id)` and reloaded
 /// with the triage overlay. The persistence layer lands ahead of its UI
-/// consumers (later `AMF_PLAN.md` tasks), so this is allowed to be unused for
+/// consumers (later `AIW_PLAN.md` tasks), so this is allowed to be unused for
 /// now — mirroring the todo / learning blocks above.
 #[allow(dead_code)]
-impl AmfDb {
+impl AiwDb {
     /// Every persisted investigation for one PR in one project, oldest first.
     pub fn load_pr_investigations(
         &self,
@@ -987,15 +922,6 @@ impl AmfDb {
         pr_investigations::set_status(&self.conn, project_id, pr_number, comment_id, status)
     }
 
-    pub fn delete_pr_investigation(
-        &self,
-        project_id: &str,
-        pr_number: u32,
-        comment_id: u64,
-    ) -> Result<()> {
-        pr_investigations::delete(&self.conn, project_id, pr_number, comment_id)
-    }
-
     /// Drop every investigation for a project (called on project deletion —
     /// there is no FK cascade).
     pub fn delete_pr_investigations_for_project(&self, project_id: &str) -> Result<()> {
@@ -1004,15 +930,10 @@ impl AmfDb {
 }
 
 /// Feature- and global-scope headless prompt overrides (see
-/// `db/prompt_overrides.rs`). Project scope is an `amf.json` `prompt_overrides`
+/// `db/prompt_overrides.rs`). Project scope is an `aiw.json` `prompt_overrides`
 /// map, resolved in `src/prompts/`, not here.
 #[allow(dead_code)]
-impl AmfDb {
-    /// Every persisted feature/global prompt override.
-    pub fn prompt_overrides(&self) -> Result<Vec<prompt_overrides::PromptOverride>> {
-        prompt_overrides::load_all(&self.conn)
-    }
-
+impl AiwDb {
     /// Load the persisted overrides into an editable in-memory view.
     pub fn load_prompt_overrides(&self) -> Result<prompt_overrides::PromptOverrides> {
         prompt_overrides::PromptOverrides::load(Some(&self.conn))
@@ -1038,11 +959,6 @@ impl AmfDb {
     ) -> Result<bool> {
         prompt_overrides::delete(&self.conn, prompt_id, scope, harness)
     }
-
-    /// Drop every feature-scope override for a checkout being deleted.
-    pub fn delete_prompt_overrides_for_workdir(&self, workdir: &str) -> Result<()> {
-        prompt_overrides::delete_for_workdir(&self.conn, workdir)
-    }
 }
 
 fn seed_from_json(db_path: &Path, extra_candidates: Vec<PathBuf>) {
@@ -1053,7 +969,7 @@ fn seed_from_json(db_path: &Path, extra_candidates: Vec<PathBuf>) {
             .unwrap_or_default(),
         dirs::config_dir()
             .unwrap_or_default()
-            .join("amf")
+            .join("ai_workstation")
             .join("projects.json"),
         dirs::config_dir()
             .unwrap_or_default()
@@ -1065,7 +981,7 @@ fn seed_from_json(db_path: &Path, extra_candidates: Vec<PathBuf>) {
     for json_path in json_candidates {
         if json_path.exists() {
             if let Ok(store) = crate::project::ProjectStore::load(&json_path)
-                && let Ok(db) = AmfDb::open(db_path)
+                && let Ok(db) = AiwDb::open(db_path)
             {
                 let _ = db.save_store(&store);
             }
@@ -1081,8 +997,8 @@ fn load_legacy_worktree_store() -> Option<crate::project::ProjectStore> {
     }
 
     let root = WorktreeManager::repo_root(&current_dir).ok()?;
-    let db_path = root.join(".amf").join("amf.db");
-    let json_path = root.join(".amf").join("projects.json");
+    let db_path = root.join(".aiw").join("aiw.db");
+    let json_path = root.join(".aiw").join("projects.json");
 
     let mut merged: Option<crate::project::ProjectStore> = None;
 
@@ -1093,7 +1009,7 @@ fn load_legacy_worktree_store() -> Option<crate::project::ProjectStore> {
     }
 
     if db_path.exists()
-        && let Ok(source_db) = AmfDb::open(&db_path)
+        && let Ok(source_db) = AiwDb::open(&db_path)
         && let Ok(store) = source_db.load_store()
     {
         match &mut merged {
@@ -1109,18 +1025,18 @@ fn load_legacy_worktree_store() -> Option<crate::project::ProjectStore> {
 mod read_only_tests {
     use super::*;
 
-    /// `amf doctor` promises to change nothing, so its handle must not create
+    /// `aiw doctor` promises to change nothing, so its handle must not create
     /// the database, migrate it, or switch its journal mode.
     #[test]
     fn a_read_only_handle_refuses_to_create_the_database() {
         let dir = tempfile::TempDir::new().unwrap();
-        let path = dir.path().join("missing").join("amf.db");
+        let path = dir.path().join("missing").join("aiw.db");
 
-        assert!(AmfDb::open_read_only(&path).is_err());
+        assert!(AiwDb::open_read_only(&path).is_err());
         assert!(!path.exists(), "doctor must not create the database");
         assert!(
             !path.parent().unwrap().exists(),
-            "doctor must not create ~/.config/amf either"
+            "doctor must not create ~/.config/ai_workstation either"
         );
     }
 
@@ -1128,7 +1044,7 @@ mod read_only_tests {
     fn a_read_only_handle_neither_migrates_nor_writes() {
         let tmp = tempfile::NamedTempFile::new().unwrap();
         // A database at an older schema: opening it normally would upgrade it
-        // out from under whatever AMF version the user is still running.
+        // out from under whatever AIW version the user is still running.
         {
             let conn = Connection::open(tmp.path()).unwrap();
             conn.execute_batch(
@@ -1139,7 +1055,7 @@ mod read_only_tests {
             .unwrap();
         }
 
-        let db = AmfDb::open_read_only(tmp.path()).unwrap();
+        let db = AiwDb::open_read_only(tmp.path()).unwrap();
         let version: i64 = db
             .conn
             .query_row("SELECT MAX(version) FROM schema_version", [], |row| {
@@ -1173,11 +1089,11 @@ mod read_only_tests {
     #[test]
     fn reading_a_wal_database_leaves_its_bytes_untouched() {
         let dir = tempfile::TempDir::new().unwrap();
-        let path = dir.path().join("amf.db");
+        let path = dir.path().join("aiw.db");
 
         // A writer left open, so the log is still un-checkpointed while the
-        // read happens — the state `amf doctor` finds while AMF is running.
-        let writer = AmfDb::open(&path).unwrap();
+        // read happens — the state `aiw doctor` finds while AIW is running.
+        let writer = AiwDb::open(&path).unwrap();
         writer
             .save_store(&crate::project::ProjectStore::empty())
             .unwrap();
@@ -1188,7 +1104,7 @@ mod read_only_tests {
         let before = std::fs::read(&path).unwrap();
 
         {
-            let reader = AmfDb::open_read_only(&path).unwrap();
+            let reader = AiwDb::open_read_only(&path).unwrap();
             reader.load_store().unwrap();
         }
 

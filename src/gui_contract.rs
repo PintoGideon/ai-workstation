@@ -1,4 +1,4 @@
-//! The GUI's contract layer (`AMF_PLAN.md` Task 4: "Implement shared
+//! The GUI's contract layer (`AIW_PLAN.md` Task 4: "Implement shared
 //! first-slice operations and GUI contracts"): request/response DTOs, a
 //! workspace snapshot for resynchronization, and [`GuiHandle`] — a facade
 //! that owns a private [`App`] so nothing in `app`'s still-partly-TUI-coupled
@@ -49,7 +49,7 @@ pub enum GuiErrorKind {
     /// [`GuiHandle::start_feature`] — that path is idempotent, not a
     /// conflict.
     Conflict,
-    /// The start would exceed AMF's soft resource limits; the caller must
+    /// The start would exceed AIW's soft resource limits; the caller must
     /// present the warning and submit an explicit approval to proceed.
     NeedsApproval,
     /// Anything else: validation failures, I/O, tmux, or git errors.
@@ -83,7 +83,7 @@ impl From<anyhow::Error> for GuiError {
     fn from(err: anyhow::Error) -> Self {
         // `create_project_from_request` / `create_feature_from_request` call
         // `App::save` internally, so a cross-process save conflict
-        // (`AMF_PLAN.md` Task 5) can surface through either of them, not
+        // (`AIW_PLAN.md` Task 5) can surface through either of them, not
         // just through `start_feature`/`stop_feature`'s own direct saves.
         // Exact-matching `App::SAVE_CONFLICT_MESSAGE` (one shared constant,
         // not a duplicated literal) anywhere in the error's cause chain
@@ -128,7 +128,7 @@ pub type GuiResult<T> = Result<T, GuiError>;
 /// already the exact serde shape the store round-trips, and a second shape
 /// would only be one more place to keep in sync as fields are added.
 /// `snapshot_at` is a cheap staleness signal, not a real revision counter;
-/// per-entity revisioning (`AMF_PLAN.md`'s "revisioned updates") is deferred
+/// per-entity revisioning (`AIW_PLAN.md`'s "revisioned updates") is deferred
 /// past this first slice.
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkspaceSnapshot {
@@ -155,7 +155,7 @@ pub struct FeatureTarget {
 }
 
 /// Addresses one agent/terminal session within a feature, for the terminal
-/// transport (`AMF_PLAN.md` Task 6) -- a session has no identity on its own
+/// transport (`AIW_PLAN.md` Task 6) -- a session has no identity on its own
 /// outside its owning feature, the same reasoning `FeatureTarget` documents
 /// for `project_id`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -181,7 +181,7 @@ pub struct StartFeatureResponse {
     pub feature_id: String,
     /// `true` when the feature was already running and this call was a
     /// no-op reconnect rather than a fresh start -- the repeated-submission
-    /// case `AMF_PLAN.md` Task 4 asks to test.
+    /// case `AIW_PLAN.md` Task 4 asks to test.
     pub already_running: bool,
     pub message: String,
 }
@@ -352,7 +352,7 @@ impl GuiHandle {
     }
 
     /// Wrap an already-constructed `App` (typically `App::new_for_test`
-    /// plus a real `AmfDb` attached by hand) -- for sibling modules' own
+    /// plus a real `AiwDb` attached by hand) -- for sibling modules' own
     /// test fixtures (e.g. `gui_todos`'s), which cannot build `GuiHandle`
     /// via a struct literal since `app` has no visibility modifier and they
     /// are not descendants of this module.
@@ -378,7 +378,7 @@ impl GuiHandle {
         }
     }
 
-    /// Refresh the GUI's in-memory workspace when another AMF process has
+    /// Refresh the GUI's in-memory workspace when another AIW process has
     /// committed a newer store version. Tauri events only cover writes made
     /// by this GUI process; an open TUI has its own process and cannot emit
     /// those events into this window.
@@ -389,7 +389,7 @@ impl GuiHandle {
 
     /// [`Self::refresh_snapshot`] without building a snapshot, for callers
     /// that only need the store current: the sidebar it would build reads
-    /// notification directories, the DB, and `amf.json`.
+    /// notification directories, the DB, and `aiw.json`.
     pub fn refresh_store(&mut self) -> GuiResult<()> {
         self.app.poll_learning_answers_bg();
         if let Some(db) = &self.app.db {
@@ -593,8 +593,9 @@ impl GuiHandle {
         let agent = match kind {
             SessionKind::Claude => Some(AgentKind::Claude),
             SessionKind::Codex => Some(AgentKind::Codex),
-            SessionKind::Opencode => Some(AgentKind::Opencode),
             SessionKind::Pi => Some(AgentKind::Pi),
+            SessionKind::Gemini => Some(AgentKind::Gemini), // FORK
+            SessionKind::Cursor => Some(AgentKind::Cursor), // FORK
             SessionKind::Terminal | SessionKind::Nvim => None,
             _ => {
                 return Err(GuiError::conflict(
@@ -666,7 +667,6 @@ impl GuiHandle {
         let harness = match session.kind {
             SessionKind::Claude => "Claude",
             SessionKind::Codex => "Codex",
-            SessionKind::Opencode => "OpenCode",
             _ => return Ok(None),
         };
         let Some(saved_id) = crate::app::session_ops::persisted_resume_id(session) else {
@@ -684,7 +684,7 @@ impl GuiHandle {
             }
         }
         // Unlike the TUI, a feature stopped on purpose still asks: the TUI's
-        // silent restart only resumes Claude, so a Codex or OpenCode
+        // silent restart only resumes Claude, so a Codex
         // conversation would otherwise start over without a word.
         Ok(Some(SessionRecoveryOption {
             harness: harness.to_string(),
@@ -732,10 +732,6 @@ impl GuiHandle {
             SessionKind::Codex => (
                 AgentKind::Codex,
                 crate::token_tracking::TokenUsageProvider::Codex,
-            ),
-            SessionKind::Opencode => (
-                AgentKind::Opencode,
-                crate::token_tracking::TokenUsageProvider::Opencode,
             ),
             _ => return Err(GuiError::conflict("This session cannot be resumed")),
         };
@@ -941,7 +937,7 @@ impl GuiHandle {
     /// coupled to `App`'s project/feature store at all (TODO lists live
     /// outside it -- see `db::todos`'s own module doc) and so has no other
     /// reason to reach into `App`.
-    pub(crate) fn db(&self) -> GuiResult<&crate::db::AmfDb> {
+    pub(crate) fn db(&self) -> GuiResult<&crate::db::AiwDb> {
         self.app.db.as_ref().ok_or_else(|| GuiError {
             kind: GuiErrorKind::Internal,
             message: "No database attached to this session".to_string(),
@@ -983,7 +979,7 @@ impl GuiHandle {
         // directly instead of relying on `From<anyhow::Error>`'s message match.
         if !self.app.save_reporting_conflict()? {
             return Err(GuiError::conflict(
-                "Workspace changed elsewhere (another AMF window or process) before this start \
+                "Workspace changed elsewhere (another AIW window or process) before this start \
                  was saved. The view has been refreshed with the current state -- please retry.",
             ));
         }
@@ -1008,7 +1004,7 @@ impl GuiHandle {
         {
             let reason = describe_tripped(over_limit, low_memory);
             return Err(GuiError::needs_approval(format!(
-                "{action} would exceed AMF's resource warning: {reason}. Start anyway?"
+                "{action} would exceed AIW's resource warning: {reason}. Start anyway?"
             )));
         }
         Ok(())
@@ -1415,7 +1411,7 @@ impl GuiHandle {
 
         let editors = self.app.stop_feature_reporting(pi, fi)?;
         // Carry the editor cleanup's outcome (a window left running because
-        // AMF did not open it, say) instead of dropping it with the status line.
+        // AIW did not open it, say) instead of dropping it with the status line.
         let message = match editors.as_ref().and_then(|report| report.summary()) {
             Some(detail) => format!("Stopped '{name}' - {detail}"),
             None => format!("Stopped '{name}'"),
@@ -1642,7 +1638,7 @@ impl GuiHandle {
     fn save_or_conflict(&mut self) -> GuiResult<()> {
         if !self.app.save_reporting_conflict()? {
             return Err(GuiError::conflict(
-                "Workspace changed elsewhere (another AMF window or process) before this change \
+                "Workspace changed elsewhere (another AIW window or process) before this change \
                  was saved. The view has been refreshed with the current state -- please retry.",
             ));
         }
@@ -1943,13 +1939,13 @@ impl GuiHandle {
     }
 }
 
-/// Point the sessions this process launches at the `amf` CLI rather than at
-/// the GUI itself. Hook scripts run `"${AMF_BIN:-amf}" notify ...` on every
-/// agent event, and `AMF_BIN` defaults to the launching executable -- which,
-/// in the GUI, opens another window per event. Resolves `amf` beside the GUI
+/// Point the sessions this process launches at the `aiw` CLI rather than at
+/// the GUI itself. Hook scripts run `"${AIW_BIN:-aiw}" notify ...` on every
+/// agent event, and `AIW_BIN` defaults to the launching executable -- which,
+/// in the GUI, opens another window per event. Resolves `aiw` beside the GUI
 /// binary (a dev `target/` dir, or an install that ships both) and then on
-/// `PATH`; finding neither leaves `AMF_BIN` unset so the scripts fall back to
-/// `amf` on the session's own `PATH`. Call once at startup, before any
+/// `PATH`; finding neither leaves `AIW_BIN` unset so the scripts fall back to
+/// `aiw` on the session's own `PATH`. Call once at startup, before any
 /// session starts.
 pub fn use_cli_for_session_hooks() {
     let cli = std::env::current_exe()
@@ -1973,7 +1969,7 @@ fn find_cli_binary(
     gui_exe: &std::path::Path,
     path_var: Option<&std::ffi::OsStr>,
 ) -> Option<std::path::PathBuf> {
-    let name = format!("amf{}", std::env::consts::EXE_SUFFIX);
+    let name = format!("aiw{}", std::env::consts::EXE_SUFFIX);
     let sibling = gui_exe.parent().map(|dir| dir.join(&name));
     let on_path = path_var
         .into_iter()
@@ -2002,34 +1998,34 @@ mod tests {
     }
 
     #[test]
-    fn session_hooks_prefer_the_amf_beside_the_gui_then_path() {
+    fn session_hooks_prefer_the_aiw_beside_the_gui_then_path() {
         let tmp = tempfile::tempdir().unwrap();
         let gui_dir = tmp.path().join("target/debug");
-        let gui = gui_dir.join("amf-gui");
+        let gui = gui_dir.join("aiw-gui");
         let path_dir = tmp.path().join("bin");
-        let path_amf = path_dir.join("amf");
+        let path_aiw = path_dir.join("aiw");
         let path_var = std::env::join_paths([tmp.path().join("empty"), path_dir]).unwrap();
         touch(&gui);
 
         assert_eq!(super::find_cli_binary(&gui, Some(&path_var)), None);
 
-        touch(&path_amf);
+        touch(&path_aiw);
         assert_eq!(
             super::find_cli_binary(&gui, Some(&path_var)),
-            Some(path_amf.clone())
+            Some(path_aiw.clone())
         );
 
-        let sibling = gui_dir.join("amf");
+        let sibling = gui_dir.join("aiw");
         touch(&sibling);
         assert_eq!(super::find_cli_binary(&gui, Some(&path_var)), Some(sibling));
     }
 
     #[test]
-    fn session_hooks_never_resolve_to_a_directory_named_amf() {
+    fn session_hooks_never_resolve_to_a_directory_named_aiw() {
         let tmp = tempfile::tempdir().unwrap();
-        let gui = tmp.path().join("amf-gui");
+        let gui = tmp.path().join("aiw-gui");
         touch(&gui);
-        std::fs::create_dir(tmp.path().join("amf")).unwrap();
+        std::fs::create_dir(tmp.path().join("aiw")).unwrap();
 
         assert_eq!(super::find_cli_binary(&gui, None), None);
     }
@@ -2093,16 +2089,16 @@ mod tests {
         }
     }
 
-    /// A `GuiHandle` backed by a *real* `AmfDb` connection, standing in for
+    /// A `GuiHandle` backed by a *real* `AiwDb` connection, standing in for
     /// one process's `App`/`GuiHandle` in a GUI+TUI overlap test: opening the
-    /// same on-disk path from two of these is exactly what two live AMF
+    /// same on-disk path from two of these is exactly what two live AIW
     /// processes (or a GUI window and a TUI, or two TUI instances) do. Mocks
     /// still cover tmux/worktree, since those aren't what Task 5 is testing
     /// here -- `App::new_for_test` plus manually attaching a real `db` is the
     /// same pattern several existing `app::tests` suites already use for
     /// DB-backed coverage without a real `App::new` (see `App::save`'s
     /// `store_version: None` handling, added for exactly this pattern).
-    fn handle_loading_from(db: crate::db::AmfDb, tmux: MockTmuxOps) -> GuiHandle {
+    fn handle_loading_from(db: crate::db::AiwDb, tmux: MockTmuxOps) -> GuiHandle {
         let (store, version) = db.load_store_versioned().unwrap();
         let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
         app.db = Some(db);
@@ -2119,7 +2115,7 @@ mod tests {
     }
 
     fn prepend_project_elsewhere(db_path: &std::path::Path) {
-        let db = crate::db::AmfDb::open(db_path).unwrap();
+        let db = crate::db::AiwDb::open(db_path).unwrap();
         let mut store = db.load_store().unwrap();
         let mut project = Project::new(
             "other".to_string(),
@@ -2635,7 +2631,7 @@ mod tests {
         let db_file = tempfile::NamedTempFile::new().unwrap();
         let mut store = store_with_one_feature(ProjectStatus::Idle);
         store.projects[0].features[0].add_session(SessionKind::Terminal);
-        let writer = crate::db::AmfDb::open(db_file.path()).unwrap();
+        let writer = crate::db::AiwDb::open(db_file.path()).unwrap();
         writer.save_store(&store).unwrap();
         let mut tmux = MockTmuxOps::new();
         tmux.expect_session_exists().return_const(true);
@@ -2647,7 +2643,7 @@ mod tests {
                 Ok(())
             });
         tmux.expect_kill_window().never();
-        let mut gui = handle_loading_from(crate::db::AmfDb::open(db_file.path()).unwrap(), tmux);
+        let mut gui = handle_loading_from(crate::db::AiwDb::open(db_file.path()).unwrap(), tmux);
 
         let added = gui
             .add_session(target(), SessionKind::Terminal, Some("Shell".into()), true)
@@ -2668,7 +2664,7 @@ mod tests {
         let db_file = tempfile::NamedTempFile::new().unwrap();
         let mut store = store_with_one_feature(ProjectStatus::Idle);
         store.projects[0].features[0].add_session(SessionKind::Terminal);
-        let writer = crate::db::AmfDb::open(db_file.path()).unwrap();
+        let writer = crate::db::AiwDb::open(db_file.path()).unwrap();
         writer.save_store(&store).unwrap();
         let mut tmux = MockTmuxOps::new();
         tmux.expect_session_exists().return_const(true);
@@ -2676,12 +2672,12 @@ mod tests {
         tmux.expect_create_window()
             .times(1)
             .returning(move |_, _, _| {
-                let db = crate::db::AmfDb::open(&path).unwrap();
+                let db = crate::db::AiwDb::open(&path).unwrap();
                 db.save_store(&ProjectStore::empty()).unwrap();
                 Ok(())
             });
         tmux.expect_kill_window().times(1).returning(|_, _| Ok(()));
-        let mut gui = handle_loading_from(crate::db::AmfDb::open(db_file.path()).unwrap(), tmux);
+        let mut gui = handle_loading_from(crate::db::AiwDb::open(db_file.path()).unwrap(), tmux);
 
         let error = gui
             .add_session(target(), SessionKind::Terminal, None, true)
@@ -2696,7 +2692,7 @@ mod tests {
         let db_file = tempfile::NamedTempFile::new().unwrap();
         let mut store = store_with_one_feature(ProjectStatus::Stopped);
         store.projects[0].features[0].add_session(SessionKind::Terminal);
-        let writer = crate::db::AmfDb::open(db_file.path()).unwrap();
+        let writer = crate::db::AiwDb::open(db_file.path()).unwrap();
         writer.save_store(&store).unwrap();
         let checks = std::sync::atomic::AtomicUsize::new(0);
         let mut tmux = MockTmuxOps::new();
@@ -2715,13 +2711,13 @@ mod tests {
         tmux.expect_create_window()
             .times(1)
             .returning(move |_, _, _| {
-                let db = crate::db::AmfDb::open(&path).unwrap();
+                let db = crate::db::AiwDb::open(&path).unwrap();
                 db.save_store(&ProjectStore::empty()).unwrap();
                 Ok(())
             });
         tmux.expect_kill_window().times(1).returning(|_, _| Ok(()));
         tmux.expect_kill_session().times(1).returning(|_| Ok(()));
-        let mut gui = handle_loading_from(crate::db::AmfDb::open(db_file.path()).unwrap(), tmux);
+        let mut gui = handle_loading_from(crate::db::AiwDb::open(db_file.path()).unwrap(), tmux);
 
         let error = gui
             .add_session(target(), SessionKind::Terminal, None, true)
@@ -2736,7 +2732,7 @@ mod tests {
         let db_file = tempfile::NamedTempFile::new().unwrap();
         let mut store = store_with_one_feature(ProjectStatus::Stopped);
         store.projects[0].features[0].add_session(SessionKind::Terminal);
-        let writer = crate::db::AmfDb::open(db_file.path()).unwrap();
+        let writer = crate::db::AiwDb::open(db_file.path()).unwrap();
         writer.save_store(&store).unwrap();
         let checks = std::sync::atomic::AtomicUsize::new(0);
         let mut tmux = MockTmuxOps::new();
@@ -2755,7 +2751,7 @@ mod tests {
         });
         tmux.expect_kill_session().times(1).returning(|_| Ok(()));
         tmux.expect_create_window().never();
-        let mut gui = handle_loading_from(crate::db::AmfDb::open(db_file.path()).unwrap(), tmux);
+        let mut gui = handle_loading_from(crate::db::AiwDb::open(db_file.path()).unwrap(), tmux);
 
         let error = gui
             .add_session(target(), SessionKind::Terminal, None, true)
@@ -2935,7 +2931,7 @@ mod tests {
     fn recovery_reapplies_the_choice_after_an_unrelated_store_write() {
         let db_file = tempfile::NamedTempFile::new().unwrap();
         let (store, target) = recoverable_claude_feature();
-        let writer = crate::db::AmfDb::open(db_file.path()).unwrap();
+        let writer = crate::db::AiwDb::open(db_file.path()).unwrap();
         writer.save_store(&store).unwrap();
         let path = db_file.path().to_path_buf();
         let mut tmux = claude_recovery_tmux_with_select(None, move |_, _| {
@@ -2943,7 +2939,7 @@ mod tests {
             Ok(())
         });
         tmux.expect_kill_session().never();
-        let mut gui = handle_loading_from(crate::db::AmfDb::open(db_file.path()).unwrap(), tmux);
+        let mut gui = handle_loading_from(crate::db::AiwDb::open(db_file.path()).unwrap(), tmux);
 
         let response = gui
             .recover_session(target, SessionRecoveryChoice::Clear, None, true)
@@ -2963,16 +2959,16 @@ mod tests {
     fn recovery_stops_its_new_tmux_session_if_target_was_deleted() {
         let db_file = tempfile::NamedTempFile::new().unwrap();
         let (store, target) = recoverable_claude_feature();
-        let writer = crate::db::AmfDb::open(db_file.path()).unwrap();
+        let writer = crate::db::AiwDb::open(db_file.path()).unwrap();
         writer.save_store(&store).unwrap();
         let path = db_file.path().to_path_buf();
         let mut tmux = claude_recovery_tmux_with_select(None, move |_, _| {
-            let db = crate::db::AmfDb::open(&path).unwrap();
+            let db = crate::db::AiwDb::open(&path).unwrap();
             db.save_store(&ProjectStore::empty()).unwrap();
             Ok(())
         });
         tmux.expect_kill_session().times(1).returning(|_| Ok(()));
-        let mut gui = handle_loading_from(crate::db::AmfDb::open(db_file.path()).unwrap(), tmux);
+        let mut gui = handle_loading_from(crate::db::AiwDb::open(db_file.path()).unwrap(), tmux);
 
         let error = gui
             .recover_session(target, SessionRecoveryChoice::Clear, None, true)
@@ -3015,11 +3011,11 @@ mod tests {
     #[test]
     fn todo_launch_associates_one_session_and_returns_an_unsent_draft() {
         let dir = tempfile::tempdir().unwrap();
-        let db_path = dir.path().join("amf.db");
+        let db_path = dir.path().join("aiw.db");
         let mut store = store_with_one_feature(ProjectStatus::Idle);
         store.projects[0].repo = dir.path().to_path_buf();
         store.projects[0].features[0].workdir = dir.path().to_path_buf();
-        let seed = crate::db::AmfDb::open(&db_path).unwrap();
+        let seed = crate::db::AiwDb::open(&db_path).unwrap();
         seed.save_store(&store).unwrap();
         let list = seed
             .create_todo_list(
@@ -3047,7 +3043,7 @@ mod tests {
         tmux.expect_launch_claude()
             .times(1)
             .returning(|_, _, _, _, _| Ok(()));
-        let mut gui = handle_loading_from(crate::db::AmfDb::open(&db_path).unwrap(), tmux);
+        let mut gui = handle_loading_from(crate::db::AiwDb::open(&db_path).unwrap(), tmux);
 
         let launched = gui.launch_todo_agent(&todo.id, target(), false).unwrap();
         assert!(!launched.reused_session);
@@ -3080,11 +3076,11 @@ mod tests {
     #[test]
     fn failed_todo_agent_launch_rolls_back_its_reservation() {
         let dir = tempfile::tempdir().unwrap();
-        let db_path = dir.path().join("amf.db");
+        let db_path = dir.path().join("aiw.db");
         let mut store = store_with_one_feature(ProjectStatus::Idle);
         store.projects[0].repo = dir.path().to_path_buf();
         store.projects[0].features[0].workdir = dir.path().to_path_buf();
-        let seed = crate::db::AmfDb::open(&db_path).unwrap();
+        let seed = crate::db::AiwDb::open(&db_path).unwrap();
         seed.save_store(&store).unwrap();
         let list = seed
             .create_todo_list(
@@ -3110,7 +3106,7 @@ mod tests {
             .times(1)
             .returning(|_, _, _| anyhow::bail!("window failed"));
         tmux.expect_kill_window().times(1).returning(|_, _| Ok(()));
-        let mut gui = handle_loading_from(crate::db::AmfDb::open(&db_path).unwrap(), tmux);
+        let mut gui = handle_loading_from(crate::db::AiwDb::open(&db_path).unwrap(), tmux);
 
         let err = gui
             .launch_todo_agent(&todo.id, target(), false)
@@ -3220,7 +3216,7 @@ mod tests {
         let live = feature.add_session(SessionKind::Terminal).clone();
         let stopped = feature.add_session(SessionKind::Codex).id.clone();
         let list = feature.add_session(SessionKind::Todos).id.clone();
-        let writer = crate::db::AmfDb::open(db_file.path()).unwrap();
+        let writer = crate::db::AiwDb::open(db_file.path()).unwrap();
         writer.save_store(&store).unwrap();
         let mut tmux = MockTmuxOps::new();
         tmux.expect_session_exists().return_const(true);
@@ -3229,7 +3225,7 @@ mod tests {
             .returning(move |_, window| window == live_window);
         tmux.expect_kill_window().never();
         tmux.expect_kill_session().times(1).returning(|_| Ok(()));
-        let mut gui = handle_loading_from(crate::db::AmfDb::open(db_file.path()).unwrap(), tmux);
+        let mut gui = handle_loading_from(crate::db::AiwDb::open(db_file.path()).unwrap(), tmux);
 
         let response = gui.remove_session(session_target_by_id(&live.id)).unwrap();
 
@@ -3319,7 +3315,7 @@ mod tests {
         // keeps the tmux session alive once `live`'s window is gone.
         feature.add_session(SessionKind::Codex);
         feature.add_session(SessionKind::Todos);
-        let writer = crate::db::AmfDb::open(db_file.path()).unwrap();
+        let writer = crate::db::AiwDb::open(db_file.path()).unwrap();
         writer.save_store(&store).unwrap();
         let mut tmux = MockTmuxOps::new();
         tmux.expect_session_exists().return_const(true);
@@ -3328,7 +3324,7 @@ mod tests {
             .returning(move |_, window| window == live_window);
         tmux.expect_kill_window().never();
         tmux.expect_kill_session().times(1).returning(|_| Ok(()));
-        let mut gui = handle_loading_from(crate::db::AmfDb::open(db_file.path()).unwrap(), tmux);
+        let mut gui = handle_loading_from(crate::db::AiwDb::open(db_file.path()).unwrap(), tmux);
 
         let response = gui.stop_session(session_target_by_id(&live.id)).unwrap();
 
@@ -3413,7 +3409,7 @@ mod tests {
                 id: "saved-claude-id".to_string(),
             });
             let original_session = serde_json::to_value(session).unwrap();
-            let writer = crate::db::AmfDb::open(db_file.path()).unwrap();
+            let writer = crate::db::AiwDb::open(db_file.path()).unwrap();
             writer.save_store(&store).unwrap();
             let original_version = writer.current_store_version().unwrap();
             let mut tmux = MockTmuxOps::new();
@@ -3429,7 +3425,7 @@ mod tests {
             tmux.expect_create_window().never();
             tmux.expect_launch_claude().never();
             let mut gui =
-                handle_loading_from(crate::db::AmfDb::open(db_file.path()).unwrap(), tmux);
+                handle_loading_from(crate::db::AiwDb::open(db_file.path()).unwrap(), tmux);
 
             let error = gui
                 .recover_session(target, SessionRecoveryChoice::Clear, None, true)
@@ -3488,7 +3484,7 @@ mod tests {
         // `spawn_kill_session` asks real tmux; a name nothing uses makes it a
         // no-op, as it is for any stopped feature.
         store.projects[0].features[0].tmux_session =
-            "amf-gui-contract-test-no-such-session".to_string();
+            "aiw-gui-contract-test-no-such-session".to_string();
         let mut gui = handle(store, MockTmuxOps::new());
 
         let response = gui.delete_feature(target(), None, None).unwrap();
@@ -3505,7 +3501,7 @@ mod tests {
         let db_file = tempfile::NamedTempFile::new().unwrap();
         let mut store = store_with_one_feature(ProjectStatus::Stopped);
         store.projects[0].features[0].is_worktree = true;
-        let db = crate::db::AmfDb::open(db_file.path()).unwrap();
+        let db = crate::db::AiwDb::open(db_file.path()).unwrap();
         db.save_store(&store).unwrap();
         let list = db
             .load_or_create_todo_list(
@@ -3531,17 +3527,17 @@ mod tests {
         assert_eq!(db.todos(&list.id).unwrap().len(), 1);
     }
 
-    fn deletion_host_fixture(db: crate::db::AmfDb) -> (GuiHandle, String) {
+    fn deletion_host_fixture(db: crate::db::AiwDb) -> (GuiHandle, String) {
         use crate::db::todos::{TodoPriority, TodoScope};
 
         let mut store = store_with_one_feature(ProjectStatus::Stopped);
         store.projects[0].features[0].tmux_session =
-            format!("amf-gui-delete-test-{}", uuid::Uuid::new_v4());
+            format!("aiw-gui-delete-test-{}", uuid::Uuid::new_v4());
         for (id, name) in [("first-host", "First"), ("second-host", "Second")] {
             let mut survivor = store.projects[0].features[0].clone();
             survivor.id = id.to_string();
             survivor.name = name.to_string();
-            survivor.tmux_session = format!("amf-gui-delete-test-{}", uuid::Uuid::new_v4());
+            survivor.tmux_session = format!("aiw-gui-delete-test-{}", uuid::Uuid::new_v4());
             store.projects[0].features.push(survivor);
         }
         db.save_store(&store).unwrap();
@@ -3562,7 +3558,7 @@ mod tests {
     fn deleting_a_project_todo_host_collects_a_choice_without_mutation() {
         let file = tempfile::NamedTempFile::new().unwrap();
         let (mut gui, list_id) =
-            deletion_host_fixture(crate::db::AmfDb::open(file.path()).unwrap());
+            deletion_host_fixture(crate::db::AiwDb::open(file.path()).unwrap());
         let version = gui.app.store_version;
         let response = gui.delete_feature(target(), None, None).unwrap();
         let DeleteFeatureResponse::NeedsTodoHost { prompt } = response else {
@@ -3593,7 +3589,7 @@ mod tests {
         for feature_id in [Some("second-host"), None] {
             let file = tempfile::NamedTempFile::new().unwrap();
             let (mut gui, list_id) =
-                deletion_host_fixture(crate::db::AmfDb::open(file.path()).unwrap());
+                deletion_host_fixture(crate::db::AiwDb::open(file.path()).unwrap());
             let response = gui
                 .delete_feature(
                     target(),
@@ -3631,8 +3627,8 @@ mod tests {
         for stale in ["destination", "list", "host"] {
             let file = tempfile::NamedTempFile::new().unwrap();
             let (mut gui, list_id) =
-                deletion_host_fixture(crate::db::AmfDb::open(file.path()).unwrap());
-            let writer = crate::db::AmfDb::open(file.path()).unwrap();
+                deletion_host_fixture(crate::db::AiwDb::open(file.path()).unwrap());
+            let writer = crate::db::AiwDb::open(file.path()).unwrap();
             let mut choice = TodoHostChoice {
                 list_id: list_id.clone(),
                 feature_id: Some("second-host".to_string()),
@@ -3691,12 +3687,12 @@ mod tests {
         use crate::db::todos::TodoScope;
         let file = tempfile::NamedTempFile::new().unwrap();
         let (mut gui, list_id) =
-            deletion_host_fixture(crate::db::AmfDb::open(file.path()).unwrap());
+            deletion_host_fixture(crate::db::AiwDb::open(file.path()).unwrap());
         assert!(matches!(
             gui.delete_feature(target(), None, None).unwrap(),
             DeleteFeatureResponse::NeedsTodoHost { .. }
         ));
-        let writer = crate::db::AmfDb::open(file.path()).unwrap();
+        let writer = crate::db::AiwDb::open(file.path()).unwrap();
         let mut store = writer.load_store().unwrap();
         store.projects[0].features[2].name = "Renamed second".to_string();
         store.projects[0].features.swap(1, 2);
@@ -3725,7 +3721,7 @@ mod tests {
         for last_feature in [false, true] {
             let file = tempfile::NamedTempFile::new().unwrap();
             let (mut gui, list_id) =
-                deletion_host_fixture(crate::db::AmfDb::open(file.path()).unwrap());
+                deletion_host_fixture(crate::db::AiwDb::open(file.path()).unwrap());
             if last_feature {
                 gui.app.store.projects[0].features.truncate(1);
                 gui.app.save().unwrap();
@@ -3760,7 +3756,7 @@ mod tests {
         use crate::db::todos::{TodoPriority, TodoScope};
         let file = tempfile::NamedTempFile::new().unwrap();
         let (mut gui, project_list_id) =
-            deletion_host_fixture(crate::db::AmfDb::open(file.path()).unwrap());
+            deletion_host_fixture(crate::db::AiwDb::open(file.path()).unwrap());
         gui.app.store.projects[0].features[0].is_worktree = true;
         gui.app.save().unwrap();
         let db = gui.app.db.as_ref().unwrap();
@@ -3909,10 +3905,10 @@ mod tests {
     #[test]
     fn refresh_snapshot_sees_another_processs_committed_change() {
         let tmp = tempfile::NamedTempFile::new().unwrap();
-        let writer = crate::db::AmfDb::open(tmp.path()).unwrap();
+        let writer = crate::db::AiwDb::open(tmp.path()).unwrap();
         writer.save_store(&ProjectStore::empty()).unwrap();
         let mut reader = handle_loading_from(
-            crate::db::AmfDb::open(tmp.path()).unwrap(),
+            crate::db::AiwDb::open(tmp.path()).unwrap(),
             MockTmuxOps::new(),
         );
         assert!(reader.refresh_snapshot().unwrap().projects.is_empty());
@@ -3944,7 +3940,7 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(resolved.tmux_session, "amf-demo-my-feat");
+        assert_eq!(resolved.tmux_session, "aiw-demo-my-feat");
         assert_eq!(resolved.tmux_window, "claude");
     }
 
@@ -3964,9 +3960,9 @@ mod tests {
         assert_eq!(err.kind, GuiErrorKind::NotFound);
     }
 
-    // ── GUI/TUI overlap (AMF_PLAN.md Task 5) ────────────────────────
+    // ── GUI/TUI overlap (AIW_PLAN.md Task 5) ────────────────────────
     //
-    // These simulate two live AMF processes -- concretely, two `AmfDb`
+    // These simulate two live AIW processes -- concretely, two `AiwDb`
     // connections to the same on-disk file, which is exactly what a GUI
     // window and a TUI (or two TUI instances) each have -- one process
     // saving out from under the other's already-loaded, now-stale view.
@@ -3974,19 +3970,19 @@ mod tests {
     #[test]
     fn a_stale_stop_refreshes_and_reuses_the_stopped_feature() {
         let tmp = tempfile::NamedTempFile::new().unwrap();
-        let seed_db = crate::db::AmfDb::open(tmp.path()).unwrap();
+        let seed_db = crate::db::AiwDb::open(tmp.path()).unwrap();
         seed_db
             .save_store(&store_with_one_feature(ProjectStatus::Idle))
             .unwrap();
         drop(seed_db);
 
         // Both "processes" load the same initial snapshot (feature Idle).
-        let mut gui_a = handle_loading_from(crate::db::AmfDb::open(tmp.path()).unwrap(), {
+        let mut gui_a = handle_loading_from(crate::db::AiwDb::open(tmp.path()).unwrap(), {
             let mut tmux = MockTmuxOps::new();
             tmux.expect_kill_session().times(1).returning(|_| Ok(()));
             tmux
         });
-        let mut gui_b = handle_loading_from(crate::db::AmfDb::open(tmp.path()).unwrap(), {
+        let mut gui_b = handle_loading_from(crate::db::AiwDb::open(tmp.path()).unwrap(), {
             // B refreshes from the DB before acting, so no second tmux kill
             // is attempted for the already-stopped feature.
             MockTmuxOps::new()
@@ -4010,19 +4006,19 @@ mod tests {
     #[test]
     fn a_stale_start_refreshes_and_reuses_the_running_feature() {
         let tmp = tempfile::NamedTempFile::new().unwrap();
-        let seed_db = crate::db::AmfDb::open(tmp.path()).unwrap();
+        let seed_db = crate::db::AiwDb::open(tmp.path()).unwrap();
         seed_db
             .save_store(&store_with_one_feature(ProjectStatus::Stopped))
             .unwrap();
         drop(seed_db);
 
         let mut gui_a = handle_loading_from(
-            crate::db::AmfDb::open(tmp.path()).unwrap(),
+            crate::db::AiwDb::open(tmp.path()).unwrap(),
             claude_cold_start_tmux(),
         );
         let mut tmux_b = MockTmuxOps::new();
         tmux_b.expect_session_exists().return_const(true);
-        let mut gui_b = handle_loading_from(crate::db::AmfDb::open(tmp.path()).unwrap(), tmux_b);
+        let mut gui_b = handle_loading_from(crate::db::AiwDb::open(tmp.path()).unwrap(), tmux_b);
 
         let response_a = gui_a.start_feature(target()).unwrap();
         assert!(!response_a.already_running);
@@ -4061,7 +4057,7 @@ mod tests {
         tmux
     }
 
-    // ── the vertical slice, end to end (AMF_PLAN.md Task 7) ─────────
+    // ── the vertical slice, end to end (AIW_PLAN.md Task 7) ─────────
     //
     // Everything above uses `MockTmuxOps`, appropriately for testing
     // `GuiHandle`'s own logic in isolation. This one test instead uses the
@@ -4107,12 +4103,12 @@ mod tests {
     }
 
     /// A `GuiHandle` backed by the real `TmuxManager` (not `MockTmuxOps`)
-    /// plus the given real `AmfDb` connection -- for the one test that needs
+    /// plus the given real `AiwDb` connection -- for the one test that needs
     /// to actually drive a real tmux session rather than assert on mock
     /// call counts. `store_version: None` establishes a baseline on this
     /// handle's first save (see `App::save`'s doc comment); there is no
     /// concurrent writer in this test to race against.
-    fn real_handle(db: crate::db::AmfDb, store: ProjectStore) -> GuiHandle {
+    fn real_handle(db: crate::db::AiwDb, store: ProjectStore) -> GuiHandle {
         let mut app = App::new_for_test(
             store,
             Box::new(crate::tmux::TmuxManager),
@@ -4141,7 +4137,7 @@ mod tests {
         ensure_process_stdin_is_a_pty();
 
         let tmp_db = tempfile::NamedTempFile::new().unwrap();
-        let tmux_session = format!("amf-gui-vertical-slice-{}", uuid::Uuid::new_v4());
+        let tmux_session = format!("aiw-gui-vertical-slice-{}", uuid::Uuid::new_v4());
 
         let mut feature = crate::project::Feature::new_for_project(
             "vslice",
@@ -4173,7 +4169,7 @@ mod tests {
         let mut store = ProjectStore::empty();
         store.projects.push(project);
 
-        let seed_db = crate::db::AmfDb::open(tmp_db.path()).unwrap();
+        let seed_db = crate::db::AiwDb::open(tmp_db.path()).unwrap();
         seed_db.save_store(&store).unwrap();
         drop(seed_db);
 
@@ -4200,7 +4196,7 @@ mod tests {
         // 1. Create + start, from a fresh handle -- as the GUI's first
         //    launch of this session would.
         let mut gui = real_handle(
-            crate::db::AmfDb::open(tmp_db.path()).unwrap(),
+            crate::db::AiwDb::open(tmp_db.path()).unwrap(),
             store.clone(),
         );
 
@@ -4253,7 +4249,7 @@ mod tests {
         //    for "usable from the TUI": this reload uses nothing the GUI
         //    didn't -- the same DB file and the same `TmuxManager`
         //    primitives) can still see and control it.
-        let (reloaded_store, _version) = crate::db::AmfDb::open(tmp_db.path())
+        let (reloaded_store, _version) = crate::db::AiwDb::open(tmp_db.path())
             .unwrap()
             .load_store_versioned()
             .unwrap();
@@ -4263,7 +4259,7 @@ mod tests {
             "the reload must see the running status this same test already saved"
         );
         let mut reloaded = real_handle(
-            crate::db::AmfDb::open(tmp_db.path()).unwrap(),
+            crate::db::AiwDb::open(tmp_db.path()).unwrap(),
             reloaded_store,
         );
 
@@ -4301,7 +4297,7 @@ mod tests {
             });
         }
         let mut app = App::new_for_test(store, Box::new(tmux), Box::new(worktree));
-        let db = crate::db::AmfDb::open(&root.join("amf.db")).unwrap();
+        let db = crate::db::AiwDb::open(&root.join("aiw.db")).unwrap();
         db.save_store(&app.store).unwrap();
         let list = db
             .create_todo_list(
@@ -4471,7 +4467,7 @@ mod tests {
         gui.app.config.extension = prompting_worktree_hook("exit 0");
         let repo = &gui.app.store.projects[0].repo;
         std::fs::write(
-            repo.join("amf.json"),
+            repo.join("aiw.json"),
             serde_json::json!({
                 "lifecycle_hooks": { "on_worktree_created": {
                     "script": "exit 0", "prompt": { "title": "Local choice", "options": ["local"] }
@@ -4551,7 +4547,7 @@ mod tests {
         let workdir = repo.join(".worktrees/todo-work");
         std::fs::create_dir_all(&workdir).unwrap();
         gui.app.config.extension =
-            prompting_worktree_hook("printf '%s' \"$AMF_HOOK_CHOICE\" > hook-choice");
+            prompting_worktree_hook("printf '%s' \"$AIW_HOOK_CHOICE\" > hook-choice");
         request.hook_choice = Some("rust & tools".into());
         // The real shell hook runs; the agent launch is mocked.
         let response = gui.create_feature(request).unwrap();
@@ -4571,7 +4567,7 @@ mod tests {
         let workdir = gui.app.store.projects[0].repo.join(".worktrees/todo-work");
         std::fs::create_dir_all(&workdir).unwrap();
         gui.app.config.extension =
-            prompting_worktree_hook("printf '%s' \"$AMF_HOOK_CHOICE\" > hook-choice");
+            prompting_worktree_hook("printf '%s' \"$AIW_HOOK_CHOICE\" > hook-choice");
         request.hook_choice = Some("rust & tools".into());
         let response = gui
             .launch_todo_in_new_feature(&todo_id, request, false)

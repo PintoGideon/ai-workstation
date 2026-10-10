@@ -98,6 +98,8 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
             }
             _ => {}
         },
+        // FORK: split view — tile the selected feature's (or project's) agents.
+        KeyCode::Char('v') => app.open_split_view(),
         KeyCode::Char('x') => match &app.selection {
             Selection::Session(_, _, _) => {
                 app.stop_session()?;
@@ -153,8 +155,8 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char('S') => {
             // `S` stays on the saved-transcript picker even for a stopped
             // feature: the pickers start the feature themselves, and they are
-            // the only way to reach transcripts older than the ID AMF recorded.
-            let (is_opencode, is_claude, is_codex) = match &app.selection {
+            // the only way to reach transcripts older than the ID AIW recorded.
+            let (is_claude, is_codex) = match &app.selection {
                 Selection::Feature(pi, fi) => {
                     let agent = app
                         .store
@@ -163,7 +165,6 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
                         .and_then(|p| p.features.get(*fi))
                         .map(|f| f.agent.clone());
                     (
-                        agent.as_ref().map(|a| *a == AgentKind::Opencode),
                         agent.as_ref().map(|a| *a == AgentKind::Claude),
                         agent.as_ref().map(|a| *a == AgentKind::Codex),
                     )
@@ -177,22 +178,19 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
                         .and_then(|f| f.sessions.get(*si))
                         .map(|s| s.kind.clone());
                     (
-                        kind.as_ref().map(|k| *k == SessionKind::Opencode),
                         kind.as_ref().map(|k| *k == SessionKind::Claude),
                         kind.as_ref().map(|k| *k == SessionKind::Codex),
                     )
                 }
-                _ => (Some(false), Some(false), Some(false)),
+                _ => (Some(false), Some(false)),
             };
 
-            if is_opencode.unwrap_or(false) {
-                app.pick_opencode_session();
-            } else if is_claude.unwrap_or(false) {
+            if is_claude.unwrap_or(false) {
                 app.pick_claude_session();
             } else if is_codex.unwrap_or(false) {
                 app.pick_codex_session();
             } else {
-                app.push_toast_warning("S only works for opencode, claude, or codex sessions");
+                app.push_toast_warning("S only works for claude or codex sessions");
             }
         }
         KeyCode::Char('u') => match &app.selection {
@@ -446,12 +444,8 @@ fn handle_normal_leader_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char('r') => {
             app.refresh_status_and_notifications();
         }
-        KeyCode::Char('C') => {
-            app.toggle_remote_server();
-        }
-        KeyCode::Char('Q') => {
-            app.start_pairing();
-        }
+        // FORK(no-cloud): leader+C (AIW Remote server) and leader+Q (phone
+        // pairing) were removed with Remote Control.
         _ => {}
     }
 

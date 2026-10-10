@@ -1,4 +1,4 @@
-//! AI PR review: AMF generates its own review of a PR's diff (`A` to
+//! AI PR review: AIW generates its own review of a PR's diff (`A` to
 //! generate, `W` to post as a GitHub review) as its own workflow, independent
 //! of PR Triage.
 //!
@@ -53,7 +53,7 @@ const AI_FINDING_HUNK_CONTEXT_LINES: usize = 6;
 /// ([`run_ai_pr_review`]), persisted with the findings ([`AiReviewCacheEntry`]),
 /// and surfaced everywhere the review appears — the in-app pane and the posted
 /// GitHub comment — so a review carries one consistent attribution instead of
-/// the bare "— AI review via AMF" marker.
+/// the bare "— AI review via AIW" marker.
 ///
 /// Every field past the harness is best-effort: a harness that reports no
 /// usage degrades to model-only attribution rather than showing a fabricated
@@ -61,7 +61,7 @@ const AI_FINDING_HUNK_CONTEXT_LINES: usize = 6;
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AiReviewAttribution {
     /// Display name of the harness that ran the review. Always set for a run
-    /// AMF dispatched; `None` only for a legacy cache row written before
+    /// AIW dispatched; `None` only for a legacy cache row written before
     /// attribution existed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub harness: Option<String>,
@@ -86,7 +86,7 @@ pub struct AiReviewAttribution {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_tokens: Option<u64>,
     /// Preformatted USD cost (`token_tracking::format_token_cost`, so the same
-    /// configured rates and rounding as AMF's usage meters), or `None` when
+    /// configured rates and rounding as AIW's usage meters), or `None` when
     /// the harness reported no usage to price.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub estimated_cost: Option<String>,
@@ -282,7 +282,7 @@ fn session_usage_from_counts(
 }
 
 /// Attribution for an AI review finding or summary posted to GitHub: the
-/// stable `— AI review via AMF` marker, preceded by a
+/// stable `— AI review via AIW` marker, preceded by a
 /// [`AiReviewAttribution::usage_summary`] (model, elapsed time, tokens, and
 /// estimated cost) when a run's provenance is available. Legacy callers with
 /// no attribution still get the bare marker.
@@ -461,7 +461,7 @@ pub struct AiReviewOutcome {
 }
 
 /// Record of the most recent `A` run, persisted alongside the findings in
-/// `ai_review_cache` so the outcome survives leaving the pane, closing AMF,
+/// `ai_review_cache` so the outcome survives leaving the pane, closing AIW,
 /// or a same-head-SHA cache-hit reopen. Without this, a review that already
 /// ran (found nothing, or errored) looks identical to one that never ran.
 /// Cleared implicitly on a new head SHA — a fresh [`App::open_ai_review_for_pr`]
@@ -553,11 +553,11 @@ impl AiReviewCacheEntry {
 ///
 /// `skill`, from `AppConfig::ai_review_skill`, is a Claude Code skill/command
 /// name (no leading `/`, e.g. `"review"`) to run first as the primary review
-/// methodology when set. AMF ships no bundled skill for reviewing a PR diff
+/// methodology when set. AIW ships no bundled skill for reviewing a PR diff
 /// itself, so this lets a user with a richer installed review skill (the
 /// built-in `/review`, or a marketplace one) supply the review judgment while
-/// AMF still owns parsing the findings back out via the fixed-format
-/// instruction that follows. `None` (the default) skips straight to AMF's own
+/// AIW still owns parsing the findings back out via the fixed-format
+/// instruction that follows. `None` (the default) skips straight to AIW's own
 /// review instructions.
 /// The full built-in AI PR-review prompt. Production goes through the
 /// resolver ([`run_ai_pr_review`] renders the resolved template); this keeps
@@ -867,7 +867,7 @@ fn build_ai_review(
                     start_line: None,
                     start_side: None,
                     // Usage belongs to the one overall review body, never an
-                    // inline finding. Keep the generic AMF marker only.
+                    // inline finding. Keep the generic AIW marker only.
                     body: append_ai_review_attribution(&f.body, None),
                 })
             }
@@ -879,7 +879,7 @@ fn build_ai_review(
     let generated_summary = generated_summary.filter(|summary| !summary.trim().is_empty());
     let mut body = generated_summary
         .map(|summary| summary.trim().to_string())
-        .unwrap_or_else(|| "AI review, via AMF.".to_string());
+        .unwrap_or_else(|| "AI review, via AIW.".to_string());
     if !general.is_empty() {
         body.push_str("\n\n");
         body.push_str(&general.join("\n"));
@@ -3560,10 +3560,10 @@ diff --git a/src/boundary.rs b/src/boundary.rs\n\
         );
         assert_eq!(inline.len(), 1);
         assert_eq!(inline[0].path, "src/lib.rs");
-        assert!(inline[0].body.contains("AI review via AMF"));
+        assert!(inline[0].body.contains("AI review via AIW"));
         assert!(summary.contains("general note"));
         assert!(summary.starts_with("The patch has an anchored and a broad risk."));
-        assert!(summary.ends_with("— AI review via AMF"));
+        assert!(summary.ends_with("— AI review via AIW"));
     }
 
     #[test]
@@ -3576,7 +3576,7 @@ diff --git a/src/boundary.rs b/src/boundary.rs\n\
         );
         let (summary, inline) = build_ai_review(&[&anchored], None, None);
         assert_eq!(inline.len(), 1);
-        assert_eq!(summary, "AI review, via AMF.");
+        assert_eq!(summary, "AI review, via AIW.");
     }
 
     #[test]
@@ -3618,7 +3618,7 @@ diff --git a/src/boundary.rs b/src/boundary.rs\n\
     #[test]
     fn append_ai_review_attribution_appends_footer_and_trims_trailing_whitespace() {
         let body = append_ai_review_attribution("finding text  \n\n", None);
-        assert_eq!(body, "finding text\n\n— AI review via AMF");
+        assert_eq!(body, "finding text\n\n— AI review via AIW");
     }
 
     fn sample_attribution() -> AiReviewAttribution {
@@ -3643,7 +3643,7 @@ diff --git a/src/boundary.rs b/src/boundary.rs\n\
         let body = append_ai_review_attribution("finding text", Some(&attribution));
         assert_eq!(
             body,
-            "finding text\n\n<details>\n<summary>AI review usage · harness claude · model sonnet · ~12.3k in / ~4.5k out · est. $0.10</summary>\n\n- Harness: claude\n- Model: sonnet\n- Elapsed: 2m 05s\n- Input tokens: 12.3k\n- Output tokens: 4.5k\n- Cached tokens: 3.2k\n- Total tokens: 20.0k\n- Estimated cost: $0.10\n\n</details>\n\n— AI review via AMF"
+            "finding text\n\n<details>\n<summary>AI review usage · harness claude · model sonnet · ~12.3k in / ~4.5k out · est. $0.10</summary>\n\n- Harness: claude\n- Model: sonnet\n- Elapsed: 2m 05s\n- Input tokens: 12.3k\n- Output tokens: 4.5k\n- Cached tokens: 3.2k\n- Total tokens: 20.0k\n- Estimated cost: $0.10\n\n</details>\n\n— AI review via AIW"
         );
     }
 
@@ -3717,7 +3717,7 @@ diff --git a/src/boundary.rs b/src/boundary.rs\n\
             ..Default::default()
         };
         let attribution = AiReviewAttribution::from_run(
-            &AgentKind::Opencode,
+            &AgentKind::Pi,
             None,
             None,
             Some(&usage),
@@ -3750,13 +3750,13 @@ diff --git a/src/boundary.rs b/src/boundary.rs\n\
         // The summary body is editable right up to `W`; a user who trims the
         // seeded attribution while editing must still get an attributed post.
         let body = ensure_ai_review_attribution("Fixed the summary text.", None);
-        assert_eq!(body, "Fixed the summary text.\n\n— AI review via AMF");
+        assert_eq!(body, "Fixed the summary text.\n\n— AI review via AIW");
     }
 
     #[test]
     fn ensure_ai_review_attribution_does_not_duplicate_an_existing_marker() {
-        let body = ensure_ai_review_attribution("Summary.\n\n— AI review via AMF", None);
-        assert_eq!(body, "Summary.\n\n— AI review via AMF");
+        let body = ensure_ai_review_attribution("Summary.\n\n— AI review via AIW", None);
+        assert_eq!(body, "Summary.\n\n— AI review via AIW");
     }
 
     #[test]
@@ -3771,7 +3771,7 @@ diff --git a/src/boundary.rs b/src/boundary.rs\n\
         };
         let body = ensure_ai_review_attribution(&seeded, Some(&repriced));
         assert_eq!(body.matches("AI review usage").count(), 1);
-        assert!(body.ends_with("Estimated cost: $0.20\n\n</details>\n\n— AI review via AMF"));
+        assert!(body.ends_with("Estimated cost: $0.20\n\n</details>\n\n— AI review via AIW"));
     }
 
     #[test]
@@ -3780,10 +3780,10 @@ diff --git a/src/boundary.rs b/src/boundary.rs\n\
         // its own trailing paragraph) must not be truncated as if it were the
         // real deterministic usage block.
         let body = "Findings should avoid emitting a literal \"<summary>AI review usage · \" \
-                     line inside generated text.\n\n— AI review via AMF";
+                     line inside generated text.\n\n— AI review via AIW";
         assert_eq!(
             strip_ai_review_attribution(body),
-            body.strip_suffix("\n\n— AI review via AMF").unwrap()
+            body.strip_suffix("\n\n— AI review via AIW").unwrap()
         );
     }
 
@@ -3830,7 +3830,7 @@ diff --git a/src/boundary.rs b/src/boundary.rs\n\
 
     #[test]
     fn non_claude_cached_tokens_are_not_double_counted_into_cost() {
-        // Codex/Opencode/Pi report `cached_tokens` via generic fallback keys
+        // Codex/Pi report `cached_tokens` via generic fallback keys
         // that are typically already a subset of `input_tokens`, unlike
         // Anthropic's separate, additive `cache_read_input_tokens`.
         let with_cache = crate::headless::HeadlessUsage {
@@ -3884,12 +3884,12 @@ diff --git a/src/boundary.rs b/src/boundary.rs\n\
     #[test]
     fn ai_review_finding_footer_is_distinct_from_the_reply_flow_ai_footer() {
         // A finding posted by this module must not be mistaken for a reply
-        // AMF's `R`/`n` dialog posted (see `reply_posted_via_amf`), even
+        // AIW's `R`/`n` dialog posted (see `reply_posted_via_aiw`), even
         // though both disclose AI authorship.
         let comment = crate::app::pr_review::PrComment {
             id: 1,
             kind: crate::app::pr_review::CommentKind::Inline,
-            author: "amf".into(),
+            author: "aiw".into(),
             is_bot: false,
             path: Some("src/lib.rs".into()),
             line: Some(10),
@@ -3908,7 +3908,7 @@ diff --git a/src/boundary.rs b/src/boundary.rs\n\
             github_id: None,
             github_review_id: None,
         };
-        assert!(!crate::app::pr_review::reply_posted_via_amf(&comment));
+        assert!(!crate::app::pr_review::reply_posted_via_aiw(&comment));
     }
 
     fn sample_diff_files() -> Vec<crate::diff::DiffFile> {

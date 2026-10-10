@@ -4,7 +4,7 @@
 
 use super::support::*;
 use crate::app::*;
-use crate::db::AmfDb;
+use crate::db::AiwDb;
 use crate::db::todos::{TodoPriority, TodoScope, TodoStatus, TodoWorkState};
 use crate::project::{Project, SessionKind};
 use crate::traits::{MockTmuxOps, MockWorktreeOps};
@@ -21,7 +21,7 @@ fn seeded_store() -> ProjectStore {
 /// An `App` that loaded `path` the way startup does: data and version from
 /// one snapshot.
 fn app_on(path: &std::path::Path, tmux: MockTmuxOps) -> App {
-    let db = AmfDb::open(path).unwrap();
+    let db = AiwDb::open(path).unwrap();
     let (store, version) = db.load_store_versioned().unwrap();
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
     app.store_version = Some(version);
@@ -31,7 +31,7 @@ fn app_on(path: &std::path::Path, tmux: MockTmuxOps) -> App {
 
 /// Another process's write: a project inserted *ahead* of the existing one,
 /// so every index the `App` holds shifts by one.
-fn prepend_project_elsewhere(writer: &AmfDb) {
+fn prepend_project_elsewhere(writer: &AiwDb) {
     let mut store = writer.load_store().unwrap();
     let mut other = Project::new(
         "other".into(),
@@ -47,7 +47,7 @@ fn prepend_project_elsewhere(writer: &AmfDb) {
 #[test]
 fn a_conflicting_save_reloads_one_snapshot_and_keeps_the_selection_on_its_row() {
     let tmp = NamedTempFile::new().unwrap();
-    let writer = AmfDb::open(tmp.path()).unwrap();
+    let writer = AiwDb::open(tmp.path()).unwrap();
     writer.save_store(&seeded_store()).unwrap();
     let mut app = app_on(tmp.path(), MockTmuxOps::new());
     app.selection = Selection::Session(0, 0, 0);
@@ -73,7 +73,7 @@ fn a_conflicting_save_reloads_one_snapshot_and_keeps_the_selection_on_its_row() 
 #[test]
 fn save_reapplying_re_adds_the_change_onto_the_other_writers_state() {
     let tmp = NamedTempFile::new().unwrap();
-    let writer = AmfDb::open(tmp.path()).unwrap();
+    let writer = AiwDb::open(tmp.path()).unwrap();
     writer.save_store(&seeded_store()).unwrap();
     let mut app = app_on(tmp.path(), MockTmuxOps::new());
 
@@ -113,7 +113,7 @@ fn save_reapplying_re_adds_the_change_onto_the_other_writers_state() {
 #[test]
 fn save_reapplying_reports_a_target_removed_elsewhere() {
     let tmp = NamedTempFile::new().unwrap();
-    let writer = AmfDb::open(tmp.path()).unwrap();
+    let writer = AiwDb::open(tmp.path()).unwrap();
     writer.save_store(&seeded_store()).unwrap();
     let mut app = app_on(tmp.path(), MockTmuxOps::new());
 
@@ -132,7 +132,7 @@ fn save_reapplying_reports_a_target_removed_elsewhere() {
 #[test]
 fn a_new_agent_session_survives_a_concurrent_write_instead_of_orphaning_its_window() {
     let tmp = NamedTempFile::new().unwrap();
-    let writer = AmfDb::open(tmp.path()).unwrap();
+    let writer = AiwDb::open(tmp.path()).unwrap();
     writer.save_store(&seeded_store()).unwrap();
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists().return_const(true);
@@ -141,7 +141,7 @@ fn a_new_agent_session_survives_a_concurrent_write_instead_of_orphaning_its_wind
     // window exists, before its record is saved.
     let path = tmp.path().to_path_buf();
     tmux.expect_launch_claude().returning(move |_, _, _, _, _| {
-        prepend_project_elsewhere(&AmfDb::open(&path).unwrap());
+        prepend_project_elsewhere(&AiwDb::open(&path).unwrap());
         Ok(())
     });
     // Nothing may be torn down: the record is re-applied, not dropped.
@@ -166,14 +166,14 @@ fn a_new_agent_session_survives_a_concurrent_write_instead_of_orphaning_its_wind
 #[test]
 fn a_new_agent_session_whose_feature_was_deleted_elsewhere_is_torn_down() {
     let tmp = NamedTempFile::new().unwrap();
-    let writer = AmfDb::open(tmp.path()).unwrap();
+    let writer = AiwDb::open(tmp.path()).unwrap();
     writer.save_store(&seeded_store()).unwrap();
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists().return_const(true);
     tmux.expect_create_window().returning(|_, _, _| Ok(()));
     let path = tmp.path().to_path_buf();
     tmux.expect_launch_claude().returning(move |_, _, _, _, _| {
-        AmfDb::open(&path)
+        AiwDb::open(&path)
             .unwrap()
             .save_store(&ProjectStore::empty())
             .unwrap();
@@ -193,7 +193,7 @@ fn a_new_agent_session_whose_feature_was_deleted_elsewhere_is_torn_down() {
 #[test]
 fn the_tui_adopts_external_writes_only_where_no_indices_are_held() {
     let tmp = NamedTempFile::new().unwrap();
-    let writer = AmfDb::open(tmp.path()).unwrap();
+    let writer = AiwDb::open(tmp.path()).unwrap();
     writer.save_store(&seeded_store()).unwrap();
     let mut app = app_on(tmp.path(), MockTmuxOps::new());
     app.selection = Selection::Feature(0, 0);
@@ -219,7 +219,7 @@ fn the_tui_adopts_external_writes_only_where_no_indices_are_held() {
 #[test]
 fn a_launch_that_linked_its_session_before_failing_still_rolls_back_on_disk() {
     let tmp = NamedTempFile::new().unwrap();
-    let db = AmfDb::open(tmp.path()).unwrap();
+    let db = AiwDb::open(tmp.path()).unwrap();
     db.save_store(&seeded_store()).unwrap();
     let list = db
         .create_todo_list(

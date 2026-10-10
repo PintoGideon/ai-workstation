@@ -46,7 +46,7 @@ impl App {
     pub fn start_create_project(&mut self) {
         let mut state = CreateProjectState::auto_detect();
         state.agent = self.default_project_preferred_agent();
-        let path = PathBuf::from(&state.path);
+        let path = crate::fork::paths::expand_user_path(&state.path); // FORK: expand ~ / $HOME
         let (agent, agent_index) = self.normalize_agent_for_project_path(&path, &state.agent);
         state.agent = agent;
         state.agent_index = agent_index;
@@ -97,7 +97,7 @@ impl App {
     }
 
     pub fn open_settings_project(&mut self) -> Result<()> {
-        let settings_dir = crate::project::amf_config_dir();
+        let settings_dir = crate::project::aiw_config_dir();
 
         if !settings_dir.exists() {
             std::fs::create_dir_all(&settings_dir)?;
@@ -112,12 +112,12 @@ impl App {
         {
             self.selection = Selection::Project(pi);
             self.store.projects[pi].collapsed = false;
-            self.message = Some("Opened AMF settings project".into());
+            self.message = Some("Opened AIW settings project".into());
             return Ok(());
         }
 
         let project = Project::new(
-            "amf-settings".into(),
+            "aiw-settings".into(),
             settings_dir.clone(),
             false,
             AgentKind::default(),
@@ -127,7 +127,7 @@ impl App {
 
         let pi = self.store.projects.len().saturating_sub(1);
         self.selection = Selection::Project(pi);
-        self.message = Some("Created AMF settings project".into());
+        self.message = Some("Created AIW settings project".into());
 
         Ok(())
     }
@@ -239,7 +239,7 @@ impl App {
         };
 
         let request = CreateProjectRequest {
-            path: PathBuf::from(&state.path),
+            path: crate::fork::paths::expand_user_path(&state.path), // FORK: expand ~ / $HOME
             project_name: state.name.clone(),
             preferred_agent: Some(state.agent.clone()),
             dry_run: false,

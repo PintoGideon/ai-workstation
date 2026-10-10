@@ -1,13 +1,13 @@
 # learning-mode-file-tree: Epic 7's collapsible file tree, driven against
-# AMF's own repository — which is the case the epic was written about. The
+# AIW's own repository — which is the case the epic was written about. The
 # flat list rendered ~500 rows into a pane ~32 columns wide, so the first
-# screenful read `…ude/commands/amf/ai-review.m`, `…e/commands/amf/pr-continue.m`,
-# `…ude/commands/amf/pr-create.m`: three near-identical stubs, with `src/`
+# screenful read `…ude/commands/aiw/ai-review.m`, `…e/commands/aiw/pr-continue.m`,
+# `…ude/commands/aiw/pr-create.m`: three near-identical stubs, with `src/`
 # dozens of `j` presses below.
 #
 # Nothing here asks a question, so no harness is needed and the run costs
 # nothing. Seed this repository itself as the project:
-#   ./amf-capture.sh --scenario scenarios/learning-mode-file-tree.txt \
+#   ./aiw-capture.sh --scenario scenarios/learning-mode-file-tree.txt \
 #     --seed <scratch>/seed-project.json --geometry 140x44
 #
 # 140x44 on purpose: that is the width the footer is rationed against, and

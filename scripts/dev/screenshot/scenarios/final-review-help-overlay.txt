@@ -3,7 +3,7 @@
 # `?` opens a scrollable, grouped listing of the whole review key surface.
 #
 # Run with:
-#   ./amf-capture.sh --scenario <this file> \
+#   ./aiw-capture.sh --scenario <this file> \
 #     --seed <seed-project.json> --seed-feature <seed-feature.json> \
 #     --geometry 160x44
 
@@ -28,7 +28,7 @@ text:f
 wait:4000
 
 # Advance to src/auth/token.rs -- the substantive file, and one with a
-# developer note, so the frames show a real review rather than AMF's own
+# developer note, so the frames show a real review rather than AIW's own
 # review-mode setup files.
 text:n
 wait:300

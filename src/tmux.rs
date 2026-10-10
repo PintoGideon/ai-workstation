@@ -23,19 +23,19 @@ use uuid::Uuid;
 use crate::debug::{LogLevel, log_to_file};
 use crate::traits::TmuxOps;
 
-/// The path hooks should run as `$AMF_BIN`, given `current_exe()`.
+/// The path hooks should run as `$AIW_BIN`, given `current_exe()`.
 ///
 /// On Linux `current_exe()` reads `/proc/self/exe`, which reports a binary
-/// replaced while AMF runs (every `cargo build` of a dev checkout) or
+/// replaced while AIW runs (every `cargo build` of a dev checkout) or
 /// deleted with its worktree as `<path> (deleted)`. Baking that into a
 /// session's environment breaks every hook for the session's lifetime,
 /// silently: the scripts swallow the failure. Strip the marker and use the
 /// path if a binary sits there again (the rebuilt one); otherwise return
-/// `None` so the scripts fall back to `amf` on `PATH`.
+/// `None` so the scripts fall back to `aiw` on `PATH`.
 ///
 /// "A binary sits there" is the scripts' own `[ -x ]` test, so a path this
 /// accepts is never one they would then discard. Whatever sits at the path
-/// is trusted to be amf: it is where this very process was started from, and
+/// is trusted to be aiw: it is where this very process was started from, and
 /// confirming more would mean running it.
 fn usable_cli_binary(exe: PathBuf) -> Option<PathBuf> {
     let path = match exe.to_str().and_then(|s| s.strip_suffix(" (deleted)")) {
@@ -120,6 +120,30 @@ impl PaneTerminalModes {
 pub struct TmuxManager;
 
 static TMUX_CONTROL_MODE_ENABLED: AtomicBool = AtomicBool::new(true);
+/// FORK: prefix of the cursor line `capture_pane_ansi_with_cursor` appends.
+const CURSOR_MARKER: &str = "\u{1f}aiw-cursor ";
+
+/// FORK: split `capture-pane` output followed by the cursor marker line.
+fn split_capture_and_cursor(output: std::borrow::Cow<'_, str>) -> (String, (u16, u16)) {
+    let text = output.as_ref();
+    let body = text.strip_suffix('\n').unwrap_or(text);
+    let (content, last) = match body.rfind('\n') {
+        Some(index) => (&text[..=index], &body[index + 1..]),
+        None => ("", body),
+    };
+    let Some(cursor) = last.strip_prefix(CURSOR_MARKER) else {
+        return (output.into_owned(), (0, 0));
+    };
+    let mut parts = cursor.split_whitespace();
+    let cursor = match (parts.next(), parts.next(), parts.next()) {
+        (Some(x), Some(y), None) => (x.parse().unwrap_or(0), y.parse().unwrap_or(0)),
+        _ => (0, 0),
+    };
+    (content.to_string(), cursor)
+}
+
+// FORK: see `TmuxManager::processes_started`.
+static TMUX_PROCESSES_STARTED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Strip a tmux control-mode line's trailing CR/LF and the `-CC` PTY
 /// wrapper's DCS framing (`\eP1000p` ... `\e\`) some tmux versions add
@@ -250,8 +274,6 @@ impl Drop for PersistentTmuxInputClient {
 }
 
 enum TmuxInputWriter {
-    #[allow(dead_code)] // alternate transport, not constructed currently
-    Pipe(std::process::ChildStdin),
     #[cfg(unix)]
     Pty(File),
 }
@@ -259,12 +281,6 @@ enum TmuxInputWriter {
 impl TmuxInputWriter {
     fn write_command(&mut self, command: &str) -> Result<()> {
         match self {
-            Self::Pipe(stdin) => {
-                stdin
-                    .write_all(command.as_bytes())
-                    .context("Failed to write tmux input command")?;
-                stdin.flush().context("Failed to flush tmux input command")
-            }
             #[cfg(unix)]
             Self::Pty(writer) => {
                 writer
@@ -343,13 +359,13 @@ struct TmuxRuntime {
 impl TmuxRuntime {
     fn detect() -> Self {
         let tmux_env = std::env::var("TMUX").ok();
-        let socket_override = std::env::var_os("AMF_TMUX_SOCKET").map(PathBuf::from);
-        let binary_override = std::env::var_os("AMF_TMUX_BIN");
+        let socket_override = std::env::var_os("AIW_TMUX_SOCKET").map(PathBuf::from);
+        let binary_override = std::env::var_os("AIW_TMUX_BIN");
         Self::detect_from_env(
             tmux_env.as_deref(),
             socket_override,
             binary_override,
-            Self::env_flag_enabled("AMF_TMUX_DEDICATED_SOCKET")
+            Self::env_flag_enabled("AIW_TMUX_DEDICATED_SOCKET")
                 || TMUX_CONTROL_MODE_ENABLED.load(AtomicOrdering::Relaxed),
         )
     }
@@ -438,9 +454,7 @@ impl TmuxRuntime {
     }
 
     fn state_dir() -> PathBuf {
-        dirs::state_dir()
-            .unwrap_or_else(|| PathBuf::from("/tmp"))
-            .join("amf")
+        crate::ipc::state_dir()
     }
 
     fn private_socket_path() -> PathBuf {
@@ -453,11 +467,11 @@ impl TmuxRuntime {
 
     /// Points a test binary at a tmux server of its own. Without this, tests
     /// that drive real tmux (the `gui_terminal` control-client suite) share
-    /// whatever server `detect` resolves to -- the user's live AMF socket by
-    /// default, and also when run from inside an AMF session, which exports
-    /// `AMF_TMUX_SOCKET` -- so a tmux crash they trigger takes the user's
+    /// whatever server `detect` resolves to -- the user's live AIW socket by
+    /// default, and also when run from inside an AIW session, which exports
+    /// `AIW_TMUX_SOCKET` -- so a tmux crash they trigger takes the user's
     /// sessions with it (tmux 3.2a segfaults under that suite's control-client
-    /// churn). That is also why `AMF_TMUX_SOCKET` is deliberately not honored
+    /// churn). That is also why `AIW_TMUX_SOCKET` is deliberately not honored
     /// here. The socket is per process, so concurrent `cargo test` runs don't
     /// share one either; the server exits on its own once the last test
     /// session is killed.
@@ -514,7 +528,7 @@ impl TmuxManager {
     }
 
     fn input_transport_mode() -> TmuxInputTransportMode {
-        if let Ok(value) = std::env::var("AMF_TMUX_INPUT_TRANSPORT") {
+        if let Ok(value) = std::env::var("AIW_TMUX_INPUT_TRANSPORT") {
             match value.trim() {
                 "control-pty" | "pty" => return TmuxInputTransportMode::ControlPty,
                 _ => return TmuxInputTransportMode::Direct,
@@ -525,7 +539,7 @@ impl TmuxManager {
             return TmuxInputTransportMode::Direct;
         }
 
-        if TmuxRuntime::env_flag_enabled("AMF_EXPERIMENTAL_PERSISTENT_TMUX_INPUT") {
+        if TmuxRuntime::env_flag_enabled("AIW_EXPERIMENTAL_PERSISTENT_TMUX_INPUT") {
             return TmuxInputTransportMode::ControlPty;
         }
 
@@ -622,11 +636,11 @@ impl TmuxManager {
         &CLI_BINARY
     }
 
-    /// Name the `amf` CLI that sessions' hook scripts run as `$AMF_BIN`
-    /// (`amf notify`, the diff-review hooks, ...). Only a host that is *not*
+    /// Name the `aiw` CLI that sessions' hook scripts run as `$AIW_BIN`
+    /// (`aiw notify`, the diff-review hooks, ...). Only a host that is *not*
     /// the CLI needs this -- the GUI, whose own executable would open a new
-    /// window per hook event. `None` omits `AMF_BIN`, so the scripts fall back
-    /// to `amf` on `PATH`. First call wins; call it before launching sessions.
+    /// window per hook event. `None` omits `AIW_BIN`, so the scripts fall back
+    /// to `aiw` on `PATH`. First call wins; call it before launching sessions.
     pub(crate) fn set_cli_binary(path: Option<PathBuf>) {
         let _ = Self::cli_binary_override().set(path);
     }
@@ -652,11 +666,34 @@ impl TmuxManager {
     #[cfg(test)]
     pub(crate) fn isolated_test_socket(pid: u32) -> PathBuf {
         std::env::temp_dir()
-            .join(format!("amf-test-tmux-{pid}"))
+            .join(format!("aiw-test-tmux-{pid}"))
             .join("tmux.sock")
     }
 
+    // FORK: `aiw grid` hands AIW's tmux binary and socket to the tmux clients
+    // it starts inside its own grid server, and probes AIW's default sockets
+    // when the current environment (e.g. an unrelated `$TMUX`) points elsewhere.
+    pub(crate) fn runtime_binary_and_socket() -> (OsString, Option<PathBuf>) {
+        let runtime = Self::runtime();
+        (runtime.binary.clone(), runtime.socket.clone())
+    }
+
+    // FORK: see `runtime_binary_and_socket`.
+    pub(crate) fn default_socket_paths() -> [PathBuf; 2] {
+        [
+            TmuxRuntime::private_socket_path(),
+            TmuxRuntime::dedicated_socket_path(),
+        ]
+    }
+
+    /// FORK: how many tmux processes AIW has started (every one goes through
+    /// [`Self::command`]); the perf pass measures view refresh cost with it.
+    pub(crate) fn processes_started() -> u64 {
+        TMUX_PROCESSES_STARTED.load(AtomicOrdering::Relaxed)
+    }
+
     pub(crate) fn command() -> Command {
+        TMUX_PROCESSES_STARTED.fetch_add(1, AtomicOrdering::Relaxed); // FORK: perf counter
         let runtime = Self::runtime();
         let mut command = Command::new(&runtime.binary);
         if let Some(socket) = &runtime.socket {
@@ -665,9 +702,9 @@ impl TmuxManager {
             }
             command.arg("-S").arg(socket);
         }
-        command.env("AMF_TMUX_BIN", &runtime.binary);
+        command.env("AIW_TMUX_BIN", &runtime.binary);
         if let Some(socket) = &runtime.socket {
-            command.env("AMF_TMUX_SOCKET", socket);
+            command.env("AIW_TMUX_SOCKET", socket);
         }
         command
     }
@@ -679,20 +716,20 @@ impl TmuxManager {
     fn shell_env_parts(include_path: bool) -> Vec<String> {
         let runtime = Self::runtime();
         let mut parts = vec![format!(
-            "AMF_TMUX_BIN={}",
+            "AIW_TMUX_BIN={}",
             Self::shell_quote(&runtime.binary.to_string_lossy())
         )];
 
         if let Some(exe) = Self::cli_binary() {
             parts.push(format!(
-                "AMF_BIN={}",
+                "AIW_BIN={}",
                 Self::shell_quote(&exe.to_string_lossy())
             ));
         }
 
         if let Some(socket) = &runtime.socket {
             parts.push(format!(
-                "AMF_TMUX_SOCKET={}",
+                "AIW_TMUX_SOCKET={}",
                 Self::shell_quote(&socket.to_string_lossy())
             ));
         }
@@ -728,13 +765,18 @@ impl TmuxManager {
     }
 
     fn agent_launch_env(session: &str, window: &str, feature_session_id: &str) -> String {
-        Self::shell_launch_env_with(&[
-            ("AMF_ACTIVE", "1"),
-            ("AMF_SESSION", session),
-            ("AMF_TMUX_SESSION", session),
-            ("AMF_TMUX_WINDOW", window),
-            ("AMF_FEATURE_SESSION_ID", feature_session_id),
-        ])
+        // FORK: also pass the feature's port block to the agent itself, so it
+        // has AIW_PORT even in a pane whose shell predates the reservation.
+        let fork_env = crate::fork::ports::env_for_tmux_session(session);
+        let mut extra = vec![
+            ("AIW_ACTIVE", "1"),
+            ("AIW_SESSION", session),
+            ("AIW_TMUX_SESSION", session),
+            ("AIW_TMUX_WINDOW", window),
+            ("AIW_FEATURE_SESSION_ID", feature_session_id),
+        ];
+        extra.extend(fork_env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        Self::shell_launch_env_with(&extra)
     }
 
     fn agent_launch_command(cmd: String) -> String {
@@ -742,7 +784,7 @@ impl TmuxManager {
     }
 
     fn pane_default_terminal() -> Option<String> {
-        if let Some(value) = std::env::var_os("AMF_TMUX_DEFAULT_TERMINAL") {
+        if let Some(value) = std::env::var_os("AIW_TMUX_DEFAULT_TERMINAL") {
             let value = value.to_string_lossy().trim().to_string();
             return if value.is_empty() { None } else { Some(value) };
         }
@@ -758,7 +800,7 @@ impl TmuxManager {
 
     fn should_set_global_default_terminal() -> bool {
         Self::runtime().manages_private_socket
-            || std::env::var_os("AMF_TMUX_DEFAULT_TERMINAL").is_some()
+            || std::env::var_os("AIW_TMUX_DEFAULT_TERMINAL").is_some()
     }
 
     #[allow(dead_code)] // exercised only by unit tests
@@ -805,7 +847,7 @@ impl TmuxManager {
 
         let bootstrap_session = Self::runtime()
             .manages_private_socket
-            .then(|| format!("__amf-bootstrap-{}", Uuid::new_v4().simple()));
+            .then(|| format!("__aiw-bootstrap-{}", Uuid::new_v4().simple()));
 
         if let Some(session) = bootstrap_session.as_deref() {
             Self::run_with_private_socket_recovery(
@@ -845,7 +887,7 @@ impl TmuxManager {
     }
 
     /// tmux argv that declares control-client terminals hyperlink-capable, or
-    /// `None` when AMF does not own the tmux server (an external server keeps
+    /// `None` when AIW does not own the tmux server (an external server keeps
     /// whatever the user configured).
     fn control_client_terminal_features_args(manages_private_socket: bool) -> Option<Vec<String>> {
         manages_private_socket.then(|| {
@@ -970,7 +1012,7 @@ impl TmuxManager {
                 LogLevel::Warn,
                 "tmux",
                 &format!(
-                    "Refusing to remove AMF tmux socket path because it is not a socket: {}",
+                    "Refusing to remove AIW tmux socket path because it is not a socket: {}",
                     socket.display()
                 ),
             );
@@ -983,7 +1025,7 @@ impl TmuxManager {
                     LogLevel::Warn,
                     "tmux",
                     &format!(
-                        "Removed stale AMF tmux socket and will retry session start: {}",
+                        "Removed stale AIW tmux socket and will retry session start: {}",
                         socket.display()
                     ),
                 );
@@ -994,7 +1036,7 @@ impl TmuxManager {
                     LogLevel::Warn,
                     "tmux",
                     &format!(
-                        "Failed to remove stale AMF tmux socket {}: {err}",
+                        "Failed to remove stale AIW tmux socket {}: {err}",
                         socket.display()
                     ),
                 );
@@ -1391,7 +1433,7 @@ impl TmuxManager {
             writer: TmuxInputWriter::Pty(master),
             output_rx: rx,
         };
-        let ready_token = format!("__AMF_INPUT_READY__{}__", std::process::id());
+        let ready_token = format!("__AIW_INPUT_READY__{}__", std::process::id());
         client.send_command(&format!("display-message -p {ready_token}\n"))?;
         client.wait_for_token(&ready_token, Duration::from_millis(250))?;
 
@@ -1498,7 +1540,7 @@ impl TmuxManager {
         client.send_command(&format!("select-window -t {quoted_target}\n"))?;
         client.send_command(&Self::refresh_client_pane_command(pane_id, "on"))?;
         client.send_command(&format!("refresh-client -C {cols},{rows}\n"))?;
-        let ready_token = format!("__AMF_VIEW_READY__{}__", std::process::id());
+        let ready_token = format!("__AIW_VIEW_READY__{}__", std::process::id());
         client.send_command(&format!("display-message -p {ready_token}\n"))?;
         client.wait_for_token(&ready_token, Duration::from_millis(250))?;
 
@@ -1642,7 +1684,7 @@ impl TmuxManager {
     }
 
     fn write_agent_launch_script(command: &str) -> Result<PathBuf> {
-        let path = std::env::temp_dir().join(format!("amf-agent-launch-{}.sh", Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!("aiw-agent-launch-{}.sh", Uuid::new_v4()));
         let script = format!("#!/bin/sh\nrm -f -- \"$0\"\n{command}\n");
         fs::write(&path, script).with_context(|| {
             format!(
@@ -1747,7 +1789,7 @@ impl TmuxManager {
     ///
     /// tmux's own `window_activity` is the cheapest honest answer to "when did
     /// this agent last do anything": it is the time of the window's last
-    /// output, it survives AMF restarts, and it needs no pane scraping.
+    /// output, it survives AIW restarts, and it needs no pane scraping.
     pub fn window_activity() -> Vec<(String, String, i64)> {
         Self::command()
             .args([
@@ -1807,20 +1849,46 @@ impl TmuxManager {
         let workdir_str = workdir.to_string_lossy();
         Self::set_global_default_terminal_if_needed()?;
 
-        Self::run_with_private_socket_recovery(
-            &[
-                "new-session",
-                "-d",
-                "-s",
-                session,
-                "-n",
-                first_window,
-                "-c",
-                &workdir_str,
-            ],
+        // FORK: the feature's port block (AIW_PORT/AIW_PORT_COUNT) goes into the
+        // session environment from the start, so every window's shell has it.
+        let fork_env: Vec<String> = crate::fork::ports::env_for_tmux_session(session)
+            .into_iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect();
+        let mut new_session_args = vec![
+            "new-session",
+            "-d",
+            "-s",
+            session,
+            "-n",
+            first_window,
+            "-c",
+            &workdir_str,
+        ];
+        for pair in &fork_env {
+            new_session_args.extend(["-e", pair.as_str()]);
+        }
+        let created = Self::run_with_private_socket_recovery(
+            &new_session_args,
             "Failed to create tmux session",
             "tmux new-session failed",
-        )?;
+        );
+        if created.is_err() && !fork_env.is_empty() && !Self::session_exists(session) {
+            // tmux < 3.2 has no `new-session -e`: create plainly, then set the
+            // session environment for the windows created after it.
+            Self::run_with_private_socket_recovery(
+                &new_session_args[..8],
+                "Failed to create tmux session",
+                "tmux new-session failed",
+            )?;
+            for pair in &fork_env {
+                if let Some((key, value)) = pair.split_once('=') {
+                    let _ = Self::set_session_env(session, key, value);
+                }
+            }
+        } else {
+            created?;
+        }
 
         Self::set_session_default_terminal_if_needed(session)?;
         Self::configure_control_client_terminal_features();
@@ -1893,7 +1961,7 @@ impl TmuxManager {
         resume_session_id: Option<&str>,
         extra_args: &[&str],
     ) -> Result<()> {
-        // Use `env` to set AMF_SESSION so PreToolUse/Stop hooks
+        // Use `env` to set AIW_SESSION so PreToolUse/Stop hooks
         // can identify the session. `env VAR=val cmd` works in
         // all shells including fish (unlike `VAR=val cmd`).
         // Use the resolved binary path so a broken auto-update can't
@@ -1919,40 +1987,6 @@ impl TmuxManager {
             window,
             &cmd_str,
             "Failed to send claude command to tmux",
-            "tmux send-keys failed",
-        )
-    }
-
-    /// Launch opencode in a specific window of a session
-    pub fn launch_opencode(session: &str, window: &str, feature_session_id: &str) -> Result<()> {
-        Self::launch_opencode_with_session(session, window, feature_session_id, None)
-    }
-
-    /// Launch opencode in a specific window, optionally resuming a session
-    pub fn launch_opencode_with_session(
-        session: &str,
-        window: &str,
-        feature_session_id: &str,
-        resume_session_id: Option<&str>,
-    ) -> Result<()> {
-        let cmd = match resume_session_id {
-            Some(id) => format!(
-                "{} opencode -s {}",
-                Self::agent_launch_env(session, window, feature_session_id),
-                id
-            ),
-            None => format!(
-                "{} opencode",
-                Self::agent_launch_env(session, window, feature_session_id)
-            ),
-        };
-
-        let cmd = Self::agent_launch_command(cmd);
-        Self::run_shell_command_via_script_direct(
-            session,
-            window,
-            &cmd,
-            "Failed to send opencode command to tmux",
             "tmux send-keys failed",
         )
     }
@@ -2004,6 +2038,34 @@ impl TmuxManager {
         )
     }
 
+    // FORK: generic agent launcher used by Gemini and Cursor (src/fork).
+    /// Launch `program args…` in a window with AIW's agent environment.
+    pub fn launch_program(
+        session: &str,
+        window: &str,
+        feature_session_id: &str,
+        program: &str,
+        args: &[String],
+    ) -> Result<()> {
+        let mut cmd = format!(
+            "{} {}",
+            Self::agent_launch_env(session, window, feature_session_id),
+            Self::shell_quote(program)
+        );
+        for arg in args {
+            cmd.push(' ');
+            cmd.push_str(&Self::shell_quote(arg));
+        }
+        let cmd = Self::agent_launch_command(cmd);
+        Self::run_shell_command_via_script_direct(
+            session,
+            window,
+            &cmd,
+            "Failed to send agent command to tmux",
+            "tmux send-keys failed",
+        )
+    }
+
     /// Set an environment variable in a tmux session so it is
     /// inherited by all processes started in that session.
     pub fn set_session_env(session: &str, key: &str, value: &str) -> Result<()> {
@@ -2039,7 +2101,9 @@ impl TmuxManager {
         )?))
     }
 
-    /// List all amf-* tmux sessions
+    /// List the managed feature sessions on AIW's tmux server: `aiw-*`, plus
+    /// `amf-*` for features migrated from AMF that keep their stored names
+    /// (see [`crate::project::is_managed_tmux_session`]).
     pub fn list_sessions() -> Result<Vec<String>> {
         let output = Self::command()
             .args(["list-sessions", "-F", "#{session_name}"])
@@ -2049,7 +2113,7 @@ impl TmuxManager {
             Ok(o) if o.status.success() => {
                 let sessions: Vec<String> = String::from_utf8_lossy(&o.stdout)
                     .lines()
-                    .filter(|s| s.starts_with("amf-"))
+                    .filter(|s| crate::project::is_managed_tmux_session(s))
                     .map(String::from)
                     .collect();
                 Ok(sessions)
@@ -2124,7 +2188,7 @@ impl TmuxManager {
     /// (`gui_terminal::TerminalHandle::history`): the last
     /// [`SCROLLBACK_HISTORY_LINES`] lines of tmux history plus the screen.
     ///
-    /// A program on the alternate screen (Neovim, OpenCode, `less`) has no
+    /// A program on the alternate screen (Neovim, `less`) has no
     /// history in tmux -- tmux stops recording while the alternate screen is
     /// up, and what `capture-pane -S` would return is the shell output from
     /// *before* the program started -- so that case is reported rather than
@@ -2157,7 +2221,7 @@ impl TmuxManager {
         Ok((content, lines))
     }
 
-    /// Check if the pane is using alternate screen mode (like vim/opencode)
+    /// Check if the pane is using alternate screen mode (like vim/less)
     pub fn is_alternate_screen(session: &str, window: &str) -> bool {
         let target = format!("{}:{}", session, window);
         Self::command()
@@ -2168,6 +2232,29 @@ impl TmuxManager {
                 s == "1"
             })
             .unwrap_or(false)
+    }
+
+    /// FORK: the pane's visible content with ANSI (as [`Self::capture_pane_ansi`])
+    /// and its cursor (as [`Self::cursor_position`]) from **one** tmux process:
+    /// `capture-pane … ; display-message …`. The live views need both on every
+    /// refresh, and the process start is most of what a refresh costs.
+    ///
+    /// Like `cursor_position`, a cursor tmux did not report (window gone)
+    /// reads as `(0, 0)`; the content is then whatever tmux printed.
+    pub fn capture_pane_ansi_with_cursor(
+        session: &str,
+        window: &str,
+    ) -> Result<(String, (u16, u16))> {
+        let target = format!("{}:{}", session, window);
+        let marker_format = format!("{CURSOR_MARKER}#{{cursor_x}} #{{cursor_y}}");
+        let output = Self::command()
+            .args(["capture-pane", "-t", &target, "-e", "-p", ";"])
+            .args(["display-message", "-t", &target, "-p", &marker_format])
+            .output()
+            .context("Failed to capture pane with cursor")?;
+        Ok(split_capture_and_cursor(String::from_utf8_lossy(
+            &output.stdout,
+        )))
     }
 
     /// Get the cursor position in a tmux pane (x, y)
@@ -2192,31 +2279,6 @@ impl TmuxManager {
             Ok((x, y))
         } else {
             Ok((0, 0))
-        }
-    }
-
-    /// Size and cursor of a window's active pane:
-    /// `(cols, rows, cursor_x, cursor_y, cursor_visible)`.
-    pub fn pane_geometry(session: &str, window: &str) -> Result<(u16, u16, u16, u16, bool)> {
-        let target = format!("{}:{}", session, window);
-        let output = Self::command()
-            .args([
-                "display-message",
-                "-t",
-                &target,
-                "-p",
-                "#{pane_width} #{pane_height} #{cursor_x} #{cursor_y} #{cursor_flag}",
-            ])
-            .output()
-            .context("Failed to get pane geometry")?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let parts: Vec<u16> = stdout
-            .split_whitespace()
-            .filter_map(|part| part.parse().ok())
-            .collect();
-        match parts[..] {
-            [cols, rows, x, y, flag] => Ok((cols, rows, x, y, flag != 0)),
-            _ => bail!("tmux did not return pane geometry for {target}"),
         }
     }
 
@@ -2245,7 +2307,7 @@ impl TmuxManager {
     }
 
     /// True if a regular (non-control-mode) client is attached to the
-    /// session. AMF's own view/input clients attach in control mode, so
+    /// session. AIW's own view/input clients attach in control mode, so
     /// they are excluded.
     pub fn has_attached_client(session: &str) -> bool {
         Self::command()
@@ -2515,25 +2577,6 @@ impl TmuxOps for TmuxManager {
         )
     }
 
-    fn launch_opencode(&self, session: &str, window: &str, feature_session_id: &str) -> Result<()> {
-        TmuxManager::launch_opencode(session, window, feature_session_id)
-    }
-
-    fn launch_opencode_with_session(
-        &self,
-        session: &str,
-        window: &str,
-        feature_session_id: &str,
-        resume_id: Option<String>,
-    ) -> Result<()> {
-        TmuxManager::launch_opencode_with_session(
-            session,
-            window,
-            feature_session_id,
-            resume_id.as_deref(),
-        )
-    }
-
     fn launch_codex(
         &self,
         session: &str,
@@ -2554,6 +2597,18 @@ impl TmuxOps for TmuxManager {
 
     fn launch_pi(&self, session: &str, window: &str, feature_session_id: &str) -> Result<()> {
         TmuxManager::launch_pi(session, window, feature_session_id)
+    }
+
+    // FORK: Gemini/Cursor launcher
+    fn launch_program(
+        &self,
+        session: &str,
+        window: &str,
+        feature_session_id: &str,
+        program: &str,
+        args: Vec<String>,
+    ) -> Result<()> {
+        TmuxManager::launch_program(session, window, feature_session_id, program, &args)
     }
 
     fn run_shell_command(&self, session: &str, window: &str, command: &str) -> Result<()> {
@@ -2590,6 +2645,44 @@ impl TmuxOps for TmuxManager {
 
     fn kill_session(&self, session: &str) -> Result<()> {
         TmuxManager::kill_session(session)
+    }
+}
+
+#[cfg(test)]
+mod fork_capture_tests {
+    use super::*;
+
+    #[test]
+    fn capture_and_cursor_split_cleanly() {
+        let out = format!("line one\n\u{1b}[31mred\u{1b}[0m\n\n{CURSOR_MARKER}4 2\n");
+        let (content, cursor) = split_capture_and_cursor(out.into());
+        assert_eq!(content, "line one\n\u{1b}[31mred\u{1b}[0m\n\n");
+        assert_eq!(cursor, (4, 2));
+    }
+
+    #[test]
+    fn an_empty_pane_still_reports_its_cursor() {
+        let (content, cursor) = split_capture_and_cursor(format!("{CURSOR_MARKER}0 0\n").into());
+        assert_eq!(content, "");
+        assert_eq!(cursor, (0, 0));
+    }
+
+    #[test]
+    fn a_missing_cursor_line_keeps_the_content_and_reads_as_origin() {
+        // capture-pane failed, so the `;` chain never ran display-message.
+        let (content, cursor) = split_capture_and_cursor("partial\n".into());
+        assert_eq!(content, "partial\n");
+        assert_eq!(cursor, (0, 0));
+        let (content, cursor) = split_capture_and_cursor("".into());
+        assert_eq!(content, "");
+        assert_eq!(cursor, (0, 0));
+    }
+
+    #[test]
+    fn pane_text_that_looks_like_numbers_is_not_taken_for_the_cursor() {
+        let (content, cursor) = split_capture_and_cursor("12 34\n".into());
+        assert_eq!(content, "12 34\n");
+        assert_eq!(cursor, (0, 0));
     }
 }
 
@@ -2654,7 +2747,7 @@ mod tests {
         let received = server.dir.path().join("received");
         let ready = server.dir.path().join("ready");
         let done = server.dir.path().join("done");
-        let text = "$HOME ${x} $UNSET_AMF_LITERAL_TEST \\ \" ' #{pane_id}\n\r\t\u{1b}[A 世界; display-message injected";
+        let text = "$HOME ${x} $UNSET_AIW_LITERAL_TEST \\ \" ' #{pane_id}\n\r\t\u{1b}[A 世界; display-message injected";
         let fixture = format!(
             "stty raw -echo; touch {}; dd bs=1 count={} of={} 2>/dev/null; touch {}; exec sleep 30",
             TmuxManager::shell_quote(ready.to_str().unwrap()),
@@ -2745,14 +2838,14 @@ mod tests {
     }
 
     #[test]
-    fn a_rebuilt_or_deleted_binary_never_becomes_a_dead_amf_bin() {
+    fn a_rebuilt_or_deleted_binary_never_becomes_a_dead_aiw_bin() {
         let dir = tempfile::tempdir().unwrap();
-        let exe = dir.path().join("amf");
+        let exe = dir.path().join("aiw");
         fs::write(&exe, "").unwrap();
         let deleted = std::path::PathBuf::from(format!("{} (deleted)", exe.display()));
 
         // Not executable: the scripts' `[ -x ]` would discard it, so omit it
-        // here too rather than set an AMF_BIN nothing will run.
+        // here too rather than set an AIW_BIN nothing will run.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -2879,14 +2972,14 @@ mod tests {
     fn explicit_tmux_socket_overrides_dedicated_socket_mode() {
         let runtime = TmuxRuntime::detect_from_env(
             Some("/tmp/ambient-tmux.sock,1,0"),
-            Some(std::path::PathBuf::from("/tmp/amf-explicit.sock")),
+            Some(std::path::PathBuf::from("/tmp/aiw-explicit.sock")),
             None,
             true,
         );
 
         assert_eq!(
             runtime.socket.as_ref().unwrap(),
-            &std::path::PathBuf::from("/tmp/amf-explicit.sock")
+            &std::path::PathBuf::from("/tmp/aiw-explicit.sock")
         );
         assert!(!runtime.manages_private_socket);
     }
@@ -2895,7 +2988,7 @@ mod tests {
     fn dedicated_socket_runtime_does_not_claim_outer_tmux_client() {
         let runtime = TmuxRuntime {
             binary: OsString::from("tmux"),
-            socket: Some(std::path::PathBuf::from("/tmp/amf-managed.sock")),
+            socket: Some(std::path::PathBuf::from("/tmp/aiw-managed.sock")),
             manages_private_socket: true,
         };
 
@@ -2906,11 +2999,11 @@ mod tests {
     fn runtime_claims_tmux_client_on_same_socket() {
         let runtime = TmuxRuntime {
             binary: OsString::from("tmux"),
-            socket: Some(std::path::PathBuf::from("/tmp/amf-managed.sock")),
+            socket: Some(std::path::PathBuf::from("/tmp/aiw-managed.sock")),
             manages_private_socket: true,
         };
 
-        assert!(runtime.owns_tmux_env_client(Some("/tmp/amf-managed.sock,1,0")));
+        assert!(runtime.owns_tmux_env_client(Some("/tmp/aiw-managed.sock,1,0")));
     }
 
     #[test]
@@ -2927,12 +3020,12 @@ mod tests {
     fn tmux_input_transport_uses_expected_platform_default() {
         let _lock = env_lock().lock().unwrap();
         let _env = EnvGuard::new(&[
-            "AMF_EXPERIMENTAL_PERSISTENT_TMUX_INPUT",
-            "AMF_TMUX_INPUT_TRANSPORT",
+            "AIW_EXPERIMENTAL_PERSISTENT_TMUX_INPUT",
+            "AIW_TMUX_INPUT_TRANSPORT",
         ]);
         unsafe {
-            std::env::remove_var("AMF_TMUX_INPUT_TRANSPORT");
-            std::env::remove_var("AMF_EXPERIMENTAL_PERSISTENT_TMUX_INPUT");
+            std::env::remove_var("AIW_TMUX_INPUT_TRANSPORT");
+            std::env::remove_var("AIW_EXPERIMENTAL_PERSISTENT_TMUX_INPUT");
         }
         let expected = if cfg!(target_os = "macos") {
             TmuxInputTransportMode::Direct
@@ -2946,12 +3039,12 @@ mod tests {
     fn tmux_input_transport_config_can_disable_control_mode() {
         let _lock = env_lock().lock().unwrap();
         let _env = EnvGuard::new(&[
-            "AMF_EXPERIMENTAL_PERSISTENT_TMUX_INPUT",
-            "AMF_TMUX_INPUT_TRANSPORT",
+            "AIW_EXPERIMENTAL_PERSISTENT_TMUX_INPUT",
+            "AIW_TMUX_INPUT_TRANSPORT",
         ]);
         unsafe {
-            std::env::remove_var("AMF_TMUX_INPUT_TRANSPORT");
-            std::env::remove_var("AMF_EXPERIMENTAL_PERSISTENT_TMUX_INPUT");
+            std::env::remove_var("AIW_TMUX_INPUT_TRANSPORT");
+            std::env::remove_var("AIW_EXPERIMENTAL_PERSISTENT_TMUX_INPUT");
         }
         TmuxManager::configure_control_mode(false);
         assert_eq!(
@@ -3052,7 +3145,7 @@ mod tests {
     fn managed_socket_global_default_terminal_bootstraps_with_new_session_first() {
         let commands = TmuxManager::global_default_terminal_args(
             "screen-256color",
-            Some("__amf-bootstrap-test"),
+            Some("__aiw-bootstrap-test"),
         );
 
         assert_eq!(
@@ -3062,7 +3155,7 @@ mod tests {
                     "new-session".to_string(),
                     "-d".to_string(),
                     "-s".to_string(),
-                    "__amf-bootstrap-test".to_string(),
+                    "__aiw-bootstrap-test".to_string(),
                 ],
                 vec![
                     "set-option".to_string(),
@@ -3073,7 +3166,7 @@ mod tests {
                 vec![
                     "kill-session".to_string(),
                     "-t".to_string(),
-                    "__amf-bootstrap-test".to_string(),
+                    "__aiw-bootstrap-test".to_string(),
                 ],
             ]
         );
@@ -3121,53 +3214,53 @@ mod tests {
 
     #[test]
     fn shell_env_prefix_does_not_export_path() {
-        let prefix = TmuxManager::shell_env_prefix(&[("AMF_SESSION", "amf-test")]);
+        let prefix = TmuxManager::shell_env_prefix(&[("AIW_SESSION", "aiw-test")]);
         assert!(prefix.starts_with("env "));
-        assert!(prefix.contains("AMF_TMUX_BIN="));
-        assert!(prefix.contains("AMF_SESSION='amf-test'"));
+        assert!(prefix.contains("AIW_TMUX_BIN="));
+        assert!(prefix.contains("AIW_SESSION='aiw-test'"));
         assert!(!prefix.contains("PATH="));
     }
 
     #[test]
     fn agent_launch_env_exports_explicit_session_context() {
-        let prefix = TmuxManager::agent_launch_env("amf-test", "codex", "session-123");
+        let prefix = TmuxManager::agent_launch_env("aiw-test", "codex", "session-123");
 
         assert!(prefix.starts_with("env "));
-        assert!(prefix.contains("AMF_ACTIVE='1'"));
-        assert!(prefix.contains("AMF_SESSION='amf-test'"));
-        assert!(prefix.contains("AMF_TMUX_SESSION='amf-test'"));
-        assert!(prefix.contains("AMF_TMUX_WINDOW='codex'"));
-        assert!(prefix.contains("AMF_FEATURE_SESSION_ID='session-123'"));
+        assert!(prefix.contains("AIW_ACTIVE='1'"));
+        assert!(prefix.contains("AIW_SESSION='aiw-test'"));
+        assert!(prefix.contains("AIW_TMUX_SESSION='aiw-test'"));
+        assert!(prefix.contains("AIW_TMUX_WINDOW='codex'"));
+        assert!(prefix.contains("AIW_FEATURE_SESSION_ID='session-123'"));
         assert!(prefix.contains("PATH="));
     }
 
     #[test]
     fn parses_pane_rows_and_drops_ones_without_a_pid() {
-        let raw = "amf-alpha\tclaude\t1234\n\
-                   amf-alpha\tterminal\t1235\n\
-                   amf-beta\tclaude\t\n\
+        let raw = "aiw-alpha\tclaude\t1234\n\
+                   aiw-alpha\tterminal\t1235\n\
+                   aiw-beta\tclaude\t\n\
                    garbage\n";
 
         assert_eq!(
             super::parse_pane_list(raw),
             vec![
-                ("amf-alpha".to_string(), "claude".to_string(), 1234),
-                ("amf-alpha".to_string(), "terminal".to_string(), 1235),
+                ("aiw-alpha".to_string(), "claude".to_string(), 1234),
+                ("aiw-alpha".to_string(), "terminal".to_string(), 1235),
             ]
         );
     }
 
     #[test]
     fn agent_launch_command_clears_shell_echo_before_starting_harness() {
-        let cmd = TmuxManager::agent_launch_command("env AMF_SESSION='amf-test' codex".into());
+        let cmd = TmuxManager::agent_launch_command("env AIW_SESSION='aiw-test' codex".into());
 
         assert!(cmd.starts_with("printf '\\033[2J\\033[H'; "));
-        assert!(cmd.ends_with("env AMF_SESSION='amf-test' codex"));
+        assert!(cmd.ends_with("env AIW_SESSION='aiw-test' codex"));
     }
 
     #[test]
     fn agent_launch_script_contains_full_command_and_self_removes() {
-        let command = "printf '\\033[2J\\033[H'; env AMF_FEATURE_SESSION_ID='session-123' claude";
+        let command = "printf '\\033[2J\\033[H'; env AIW_FEATURE_SESSION_ID='session-123' claude";
         let path = TmuxManager::write_agent_launch_script(command).unwrap();
         let script = fs::read_to_string(&path).unwrap();
         let _ = fs::remove_file(&path);
@@ -3180,9 +3273,9 @@ mod tests {
     #[test]
     fn pane_default_terminal_can_be_overridden() {
         let _lock = env_lock().lock().unwrap();
-        let _guard = EnvGuard::new(&["AMF_TMUX_DEFAULT_TERMINAL"]);
+        let _guard = EnvGuard::new(&["AIW_TMUX_DEFAULT_TERMINAL"]);
         unsafe {
-            std::env::set_var("AMF_TMUX_DEFAULT_TERMINAL", "xterm-256color");
+            std::env::set_var("AIW_TMUX_DEFAULT_TERMINAL", "xterm-256color");
         }
 
         assert_eq!(
@@ -3194,9 +3287,9 @@ mod tests {
     #[test]
     fn empty_pane_default_terminal_override_disables_override() {
         let _lock = env_lock().lock().unwrap();
-        let _guard = EnvGuard::new(&["AMF_TMUX_DEFAULT_TERMINAL"]);
+        let _guard = EnvGuard::new(&["AIW_TMUX_DEFAULT_TERMINAL"]);
         unsafe {
-            std::env::set_var("AMF_TMUX_DEFAULT_TERMINAL", "");
+            std::env::set_var("AIW_TMUX_DEFAULT_TERMINAL", "");
         }
 
         assert_eq!(TmuxManager::pane_default_terminal(), None);

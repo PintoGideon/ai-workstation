@@ -19,7 +19,7 @@ export function useGuiTheme() {
   useEffect(() => { applyTheme(resolveTheme(catalog.data, choice)); }, [catalog.data, choice]);
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key === "amf.gui.theme" || event.key === null) {
+      if (event.key === "aiw.gui.theme" || event.key === null) {
         // Another GUI window already saved this; adopt it without writing back.
         receiveThemePreference(event.newValue || "follow-tui");
       }

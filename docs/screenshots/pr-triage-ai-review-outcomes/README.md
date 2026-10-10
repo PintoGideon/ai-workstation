@@ -1,6 +1,6 @@
 # PR Triage AI Review outcomes
 
-Captured from an isolated AMF instance against the read-only PR-review test
+Captured from an isolated AIW instance against the read-only PR-review test
 fixture (#343). The scratch AI Review cache was keyed to the fixture's exact
 head SHA; no AI agent ran and nothing was written to GitHub.
 
@@ -19,5 +19,5 @@ in the single-line PR Triage header.
 ![PR Triage header showing a failed AI Review](failed.png)
 
 Both frames were captured at 120×40 with the isolated
-`scripts/dev/screenshot/amf-capture.sh` harness. The matching text captures
+`scripts/dev/screenshot/aiw-capture.sh` harness. The matching text captures
 were asserted before the PNGs were visually inspected for color and clipping.

@@ -5,11 +5,11 @@
 //! effective template across four layers and interpolates the caller's
 //! context:
 //!
-//! 1. **feature** — a `prompt_overrides` row in `amf.db` keyed by the
+//! 1. **feature** — a `prompt_overrides` row in `aiw.db` keyed by the
 //!    feature's workdir path;
-//! 2. **project** — an entry in `amf.json`'s `prompt_overrides`
+//! 2. **project** — an entry in `aiw.json`'s `prompt_overrides`
 //!    ([`crate::prompts::project`]);
-//! 3. **global** — a keyless `prompt_overrides` row in `amf.db`;
+//! 3. **global** — a keyless `prompt_overrides` row in `aiw.db`;
 //! 4. **built-in** — the registered [`super::PromptSpec::default_template`].
 //!
 //! Nearest layer wins. Within the winning layer, a per-harness template beats
@@ -24,7 +24,7 @@
 //! every `{{name}}` for which `ctx` has a value and leaves everything else —
 //! a token the caller did not supply, an unknown token an override
 //! introduced, a stray `{{` — exactly as written. A user override can drop a
-//! required token or add a meaningless one and AMF will render it as-is.
+//! required token or add a meaningless one and AIW will render it as-is.
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -54,16 +54,8 @@ impl PromptContext {
         self
     }
 
-    pub fn insert(&mut self, key: impl Into<String>, value: impl Into<String>) {
-        self.values.insert(key.into(), value.into());
-    }
-
     pub fn get(&self, key: &str) -> Option<&str> {
         self.values.get(key).map(String::as_str)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
     }
 }
 
@@ -87,7 +79,7 @@ where
 pub enum PromptSource {
     /// A `prompt_overrides` row keyed by the feature's workdir.
     Feature,
-    /// An entry in `amf.json`'s `prompt_overrides`.
+    /// An entry in `aiw.json`'s `prompt_overrides`.
     Project,
     /// A keyless (machine-wide) `prompt_overrides` row.
     Global,
@@ -100,7 +92,7 @@ impl PromptSource {
     pub fn label(self) -> &'static str {
         match self {
             PromptSource::Feature => "feature override",
-            PromptSource::Project => "project override (amf.json)",
+            PromptSource::Project => "project override (aiw.json)",
             PromptSource::Global => "global override",
             PromptSource::BuiltIn => "built-in default",
         }
@@ -123,7 +115,7 @@ pub struct PromptLayers<'a> {
     /// In-memory view of the `prompt_overrides` table (feature **and** global
     /// rows). `None` when there is no database.
     pub db: Option<&'a PromptOverrides>,
-    /// The repo's `amf.json` `prompt_overrides` map. `None` when the feature
+    /// The repo's `aiw.json` `prompt_overrides` map. `None` when the feature
     /// has no project config.
     pub project: Option<&'a ProjectPromptOverrides>,
 }
@@ -153,7 +145,7 @@ pub fn resolve_template_layered<'a>(
         }
     }
 
-    // 2. project — amf.json prompt_overrides
+    // 2. project — aiw.json prompt_overrides
     if let Some(project) = layers.project
         && let Some(template) = super::project::effective(project, id, harness)
     {

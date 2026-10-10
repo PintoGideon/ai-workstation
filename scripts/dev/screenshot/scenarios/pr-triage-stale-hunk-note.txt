@@ -20,21 +20,21 @@
 # than injecting, so no agent session is ever spawned.
 #
 # Run with:
-#   scripts/dev/screenshot/amf-capture.sh \
+#   scripts/dev/screenshot/aiw-capture.sh \
 #     --scenario scripts/dev/screenshot/scenarios/pr-triage-stale-hunk-note.txt \
 #     --out-dir <dir>
 
 run:printf '{"path":"%s","project_name":"pr-triage-stale-hunk-demo","dry_run":false}\n' "$REPO_ROOT" > "$XDG_STATE_HOME/stale-project.json"
-run:$AMF_BIN automation create-project --file "$XDG_STATE_HOME/stale-project.json"
+run:$AIW_BIN automation create-project --file "$XDG_STATE_HOME/stale-project.json"
 wait:900
 # `gh` in a `run:` step needs the real config dir pointed at explicitly — the
 # driver only pins GH_CONFIG_DIR for the tmux instance, not this shell.
-run:GH_CONFIG_DIR="${GH_CONFIG_DIR:-$HOME/.config/gh}" python3 scripts/dev/screenshot/seed-stale-hunk-fixture.py "$XDG_CONFIG_HOME/amf/amf.db" "$REPO_ROOT" 434
+run:GH_CONFIG_DIR="${GH_CONFIG_DIR:-$HOME/.config/gh}" python3 scripts/dev/screenshot/seed-stale-hunk-fixture.py "$XDG_CONFIG_HOME/ai_workstation/aiw.db" "$REPO_ROOT" 434
 wait:400
 
 # Automation ran against the already-loaded TUI; restart it so the seeded
 # project, feature, cache row, and triage row are read from the scratch DB.
-run:tmux respawn-pane -k -t "$SESSION" "$AMF_BIN"
+run:tmux respawn-pane -k -t "$SESSION" "$AIW_BIN"
 run:for i in {1..60}; do tmux capture-pane -p -t "$SESSION" > "$XDG_STATE_HOME/stale-pane.txt"; grep -q "pr-triage-stale-hunk-demo" "$XDG_STATE_HOME/stale-pane.txt" && break; sleep 0.2; done
 wait:6000
 

@@ -61,7 +61,7 @@ pub fn evict_stale(conn: &Connection) -> Result<()> {
 mod tests {
     use super::*;
     use crate::app::ai_review::{AiReviewFinding, AiReviewRun, AiReviewRunOutcome};
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use chrono::Local;
     use tempfile::NamedTempFile;
 
@@ -85,9 +85,9 @@ mod tests {
         }
     }
 
-    fn open_temp_db() -> (NamedTempFile, AmfDb) {
+    fn open_temp_db() -> (NamedTempFile, AiwDb) {
         let tmp = NamedTempFile::new().unwrap();
-        let db = AmfDb::open(tmp.path()).unwrap();
+        let db = AiwDb::open(tmp.path()).unwrap();
         (tmp, db)
     }
 

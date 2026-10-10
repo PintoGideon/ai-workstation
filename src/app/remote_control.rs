@@ -5,7 +5,7 @@
 //! session to claude.ai/code and the Claude mobile app. A connected session
 //! shows a footer indicator — `/rc active` on v2.1.172+, or the older
 //! `Remote Control active` — that links to the session on claude.ai. The
-//! embedded TUI cannot click that link, so AMF parses the captured pane to
+//! embedded TUI cannot click that link, so AIW parses the captured pane to
 //! surface the state (a badge) and, when the URL appears as plain text, to
 //! copy / open it.
 //!

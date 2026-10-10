@@ -31,9 +31,9 @@ pub(crate) const REVIEW_FEEDBACK_PROMPT: &str = "A reviewer left feedback on the
 
 /// Cap on how many files' notes stay in `.claude/review-notes.md`. In Review
 /// Mode the feature agent blind-appends sections and never reads the file back
-/// (`ensure_review_claude_md`); AMF collapses it to the newest note per file
+/// (`ensure_review_claude_md`); AIW collapses it to the newest note per file
 /// after every agent turn, keeping only the `MAX_LIVE_REVIEW_NOTE_FILES` most
-/// recently documented. Older and superseded sections remain available to AMF
+/// recently documented. Older and superseded sections remain available to AIW
 /// in the archive.
 pub(super) const MAX_LIVE_REVIEW_NOTE_FILES: usize = 50;
 
@@ -41,7 +41,7 @@ pub(super) const REVIEW_NOTES_ARCHIVE_TITLE: &str = "# Review Notes Archive\n\n"
 
 /// The resumable parts of an in-flight final review, persisted to
 /// `.claude/final-review-progress.json` so a long review can be paused
-/// (or survive an AMF quit / crash) and picked up where it left off.
+/// (or survive an AIW quit / crash) and picked up where it left off.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub(super) struct ReviewProgress {
     #[serde(default)]
@@ -131,7 +131,7 @@ pub(crate) fn checked_review_progress(workdir: &Path) -> Result<Option<Vec<u8>>>
     }
 }
 
-/// Review bookkeeping AMF writes into `.claude/` during a round, including a
+/// Review bookkeeping AIW writes into `.claude/` during a round, including a
 /// staging file a crash left behind mid-save. Never a file to review, even
 /// when the repository does not ignore `.claude/`.
 pub(crate) fn is_review_bookkeeping_path(path: &str) -> bool {
@@ -234,11 +234,11 @@ pub(super) fn file_fingerprint(file: &crate::diff::DiffFile) -> String {
 }
 
 impl App {
-    /// Open AMF's native diff viewer in final-review mode: walk every file
+    /// Open AIW's native diff viewer in final-review mode: walk every file
     /// changed since the base ref, approving / rejecting / skipping each, then
     /// write `.claude/final-review-feedback.md` for any rejected files. This
     /// replaces the old tmux-session + vimdiff-popup script, which could not
-    /// work against AMF's bundled control-mode tmux server.
+    /// work against AIW's bundled control-mode tmux server.
     pub fn trigger_final_review(&mut self) -> Result<()> {
         let view = match &self.mode {
             AppMode::Viewing(view) => view.clone(),
@@ -269,7 +269,7 @@ impl App {
     /// and file position to `.claude/final-review-progress.json`. A no-op when
     /// not in a final review. Called after each state-changing review action so
     /// progress is never lost — the only exit from the review viewer finishes
-    /// it, but an AMF quit/crash mid-review would otherwise discard everything.
+    /// it, but an AIW quit/crash mid-review would otherwise discard everything.
     pub fn persist_review_progress(&mut self) {
         if self.defer_review_progress_persist {
             return;
@@ -492,7 +492,7 @@ impl App {
     ///    an in-review `r` refresh or base-ref change. Leave it alone; a reload
     ///    must never clobber work in progress.
     /// 2. A `.claude/final-review-progress.json` exists — a review that was
-    ///    paused (or interrupted by an AMF quit / crash). Restore it verbatim.
+    ///    paused (or interrupted by an AIW quit / crash). Restore it verbatim.
     ///    Its `line_comments` already contain any threads carried in at the open
     ///    that started it, so case 3 must not also run.
     /// 3. Otherwise this is a fresh round after a finished one. Seed the line
@@ -1266,8 +1266,8 @@ pub(crate) fn archive_review_notes(workdir: &Path) -> Result<usize> {
     Ok(archived_count)
 }
 
-/// Load all developer notes for AMF's review surfaces. The feature agent
-/// blind-appends to the live file and never reads it back; AMF folds in
+/// Load all developer notes for AIW's review surfaces. The feature agent
+/// blind-appends to the live file and never reads it back; AIW folds in
 /// archived sections here so older files keep their walkthrough context. Live
 /// notes win over archived notes for the same path.
 pub(crate) fn load_review_notes(workdir: &Path) -> std::collections::HashMap<String, String> {

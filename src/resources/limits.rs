@@ -104,8 +104,8 @@ pub(crate) fn wait_for_in_flight(target: usize) -> usize {
 /// prompt. Both look identical to `list-windows`.
 ///
 /// What separates them is the pane's process tree. tmux starts a shell in each
-/// pane and reports its pid; AMF launches a harness as a child of that shell
-/// (`sh /tmp/amf-agent-launch-*.sh`, which in turn runs the agent), so the
+/// pane and reports its pid; AIW launches a harness as a child of that shell
+/// (`sh /tmp/aiw-agent-launch-*.sh`, which in turn runs the agent), so the
 /// shell has a child for exactly as long as the harness lives. A pane sitting
 /// at a prompt — never launched, or exited — has none.
 ///
@@ -173,7 +173,7 @@ impl LiveHarnesses {
 }
 
 /// One running harness, identified well enough to name it in a warning dialog
-/// or an `amf doctor` report.
+/// or an `aiw doctor` report.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActiveHarness {
     pub project_name: String,
@@ -275,7 +275,7 @@ mod tests {
             branch: name.to_string(),
             workdir: PathBuf::from("/tmp").join(name),
             is_worktree: true,
-            tmux_session: format!("amf-{name}"),
+            tmux_session: format!("aiw-{name}"),
             sessions,
             collapsed: true,
             mode: VibeMode::default(),
@@ -339,13 +339,13 @@ mod tests {
             ],
         );
         let live = LiveHarnesses::from_pairs([
-            ("amf-alpha", "claude"),
-            ("amf-alpha", "codex"),
-            ("amf-alpha", "terminal"),
-            ("amf-alpha", "nvim"),
-            ("amf-alpha", "vscode"),
-            ("amf-alpha", "dev-server"),
-            ("amf-alpha", "todos"),
+            ("aiw-alpha", "claude"),
+            ("aiw-alpha", "codex"),
+            ("aiw-alpha", "terminal"),
+            ("aiw-alpha", "nvim"),
+            ("aiw-alpha", "vscode"),
+            ("aiw-alpha", "dev-server"),
+            ("aiw-alpha", "todos"),
         ]);
         let store = store(vec![project("p", vec![feat])]);
 
@@ -366,7 +366,7 @@ mod tests {
                     feature(
                         "beta",
                         ProjectStatus::Idle,
-                        vec![session("s2", SessionKind::Opencode, "opencode")],
+                        vec![session("s2", SessionKind::Codex, "codex")],
                     ),
                 ],
             ),
@@ -380,9 +380,9 @@ mod tests {
             ),
         ]);
         let live = LiveHarnesses::from_pairs([
-            ("amf-alpha", "claude"),
-            ("amf-beta", "opencode"),
-            ("amf-gamma", "pi"),
+            ("aiw-alpha", "claude"),
+            ("aiw-beta", "codex"),
+            ("aiw-gamma", "pi"),
         ]);
 
         assert_eq!(count_active_harness_sessions(&store, &live), 3);
@@ -399,7 +399,7 @@ mod tests {
             )],
         )]);
         // Even if a stale window were reported, a stopped feature never counts.
-        let live = LiveHarnesses::from_pairs([("amf-alpha", "claude")]);
+        let live = LiveHarnesses::from_pairs([("aiw-alpha", "claude")]);
 
         assert_eq!(count_active_harness_sessions(&store, &live), 0);
     }
@@ -419,7 +419,7 @@ mod tests {
                 ],
             )],
         )]);
-        let live = LiveHarnesses::from_pairs([("amf-alpha", "claude")]);
+        let live = LiveHarnesses::from_pairs([("aiw-alpha", "claude")]);
 
         assert_eq!(count_active_harness_sessions(&store, &live), 1);
     }
@@ -439,13 +439,13 @@ mod tests {
     #[test]
     fn an_idle_pane_is_not_a_running_harness() {
         let panes = vec![
-            ("amf-alpha".to_string(), "claude".to_string(), 100),
-            ("amf-alpha".to_string(), "claude-2".to_string(), 200),
-            ("amf-alpha".to_string(), "claude-3".to_string(), 300),
+            ("aiw-alpha".to_string(), "claude".to_string(), 100),
+            ("aiw-alpha".to_string(), "claude-2".to_string(), 200),
+            ("aiw-alpha".to_string(), "claude-3".to_string(), 300),
         ];
         let processes = vec![
             proc(100, 1, "-zsh"),
-            proc(101, 100, "sh /tmp/amf-agent-launch-abc.sh"),
+            proc(101, 100, "sh /tmp/aiw-agent-launch-abc.sh"),
             proc(102, 101, "/home/me/.local/share/claude/versions/2.1.226"),
             // Never launched: tmux made the window, nothing was ever run.
             proc(200, 1, "-zsh"),
@@ -455,29 +455,29 @@ mod tests {
 
         let live = LiveHarnesses::from_census(&panes, &processes);
 
-        assert!(live.is_running("amf-alpha", "claude"));
-        assert!(!live.is_running("amf-alpha", "claude-2"));
-        assert!(!live.is_running("amf-alpha", "claude-3"));
+        assert!(live.is_running("aiw-alpha", "claude"));
+        assert!(!live.is_running("aiw-alpha", "claude-2"));
+        assert!(!live.is_running("aiw-alpha", "claude-3"));
     }
 
     #[test]
     fn a_window_tmux_no_longer_reports_is_not_running() {
         let live = LiveHarnesses::from_census(&[], &[proc(100, 1, "-zsh")]);
 
-        assert!(!live.is_running("amf-alpha", "claude"));
+        assert!(!live.is_running("aiw-alpha", "claude"));
     }
 
     /// A window with several panes counts as busy when any one of them is.
     #[test]
     fn a_split_window_counts_once_if_either_pane_is_busy() {
         let panes = vec![
-            ("amf-alpha".to_string(), "claude".to_string(), 100),
-            ("amf-alpha".to_string(), "claude".to_string(), 200),
+            ("aiw-alpha".to_string(), "claude".to_string(), 100),
+            ("aiw-alpha".to_string(), "claude".to_string(), 200),
         ];
         let processes = vec![
             proc(100, 1, "-zsh"),
             proc(200, 1, "-zsh"),
-            proc(201, 200, "sh /tmp/amf-agent-launch-abc.sh"),
+            proc(201, 200, "sh /tmp/aiw-agent-launch-abc.sh"),
         ];
 
         let store = store(vec![project(
@@ -497,28 +497,28 @@ mod tests {
     /// that would silently switch the gate off.
     #[test]
     fn an_unreadable_process_list_falls_back_to_pane_existence() {
-        let panes = vec![("amf-alpha".to_string(), "claude".to_string(), 100)];
+        let panes = vec![("aiw-alpha".to_string(), "claude".to_string(), 100)];
 
         let live = LiveHarnesses::from_census(&panes, &[]);
 
-        assert!(live.is_running("amf-alpha", "claude"));
+        assert!(live.is_running("aiw-alpha", "claude"));
     }
 
     #[test]
     fn reports_who_is_running() {
         let store = store(vec![project(
-            "mainframe",
+            "workstation",
             vec![feature(
                 "alpha",
                 ProjectStatus::Active,
                 vec![session("s1", SessionKind::Claude, "claude")],
             )],
         )]);
-        let live = LiveHarnesses::from_pairs([("amf-alpha", "claude")]);
+        let live = LiveHarnesses::from_pairs([("aiw-alpha", "claude")]);
 
         let active = active_harness_sessions(&store, &live);
         assert_eq!(active.len(), 1);
-        assert_eq!(active[0].project_name, "mainframe");
+        assert_eq!(active[0].project_name, "workstation");
         assert_eq!(active[0].feature_name, "alpha");
         assert_eq!(active[0].kind, SessionKind::Claude);
     }
@@ -580,7 +580,7 @@ mod tests {
                 vec![session("s1", SessionKind::Claude, "claude")],
             )],
         )]);
-        let live = LiveHarnesses::from_pairs([("amf-alpha", "claude")]);
+        let live = LiveHarnesses::from_pairs([("aiw-alpha", "claude")]);
 
         // Wait for any lease leaked by an earlier test to drain before reading
         // the baseline. A run abandoned elsewhere in the suite (closing the

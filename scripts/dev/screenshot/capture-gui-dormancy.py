@@ -6,8 +6,8 @@ socket) are private to this run. Dormancy is made real rather than faked: the
 features' `last_accessed` is seeded in the past and their tmux windows run
 silent `sleep` processes, so tmux itself reports them idle once the configured
 one-minute threshold passes. The two "editors" are stand-in processes this
-script starts: one recorded as AMF-owned (AMF closes it), one recorded as not
-owned (AMF must leave it running). No real editor or user process is ever
+script starts: one recorded as AIW-owned (AIW closes it), one recorded as not
+owned (AIW must leave it running). No real editor or user process is ever
 recorded, signalled or killed; only owned GUI/Vite process groups, the
 stand-ins and the private tmux server are stopped on exit.
 """
@@ -35,7 +35,7 @@ def iso(delta):
     return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-with tempfile.TemporaryDirectory(prefix="amf-gui-dormancy-") as temporary:
+with tempfile.TemporaryDirectory(prefix="aiw-gui-dormancy-") as temporary:
     scratch = pathlib.Path(temporary)
     with socket.socket() as inspector_socket:
         inspector_socket.bind(("127.0.0.1", 0))
@@ -43,12 +43,12 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-dormancy-") as temporary:
     config = scratch / "config"
     state = scratch / "state"
     repo = scratch / "billing-api"
-    (config / "amf").mkdir(parents=True)
-    (state / "amf").mkdir(parents=True)
+    (config / "ai_workstation").mkdir(parents=True)
+    (state / "ai_workstation").mkdir(parents=True)
     repo.mkdir()
     # The smallest thresholds the config allows: idle over one minute and
     # unopened over one hour.
-    (config / "amf/config.json").write_text(
+    (config / "ai_workstation/config.json").write_text(
         '{"dormant_idle_minutes": 1, "dormant_last_accessed_hours": 1, "kill_editor_on_stop": true}\n'
     )
     env = os.environ.copy()
@@ -57,14 +57,14 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-dormancy-") as temporary:
         XDG_STATE_HOME=str(state),
         GDK_BACKEND="x11",
         WEBKIT_INSPECTOR_HTTP_SERVER=inspector_address,
-        AMF_TMUX_SOCKET=str(scratch / "dormancy-tmux.sock"),
+        AIW_TMUX_SOCKET=str(scratch / "dormancy-tmux.sock"),
     )
     git_env = env | {
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "AMF demo",
+        "GIT_AUTHOR_NAME": "AIW demo",
         "GIT_AUTHOR_EMAIL": "demo@example.com",
-        "GIT_COMMITTER_NAME": "AMF demo",
+        "GIT_COMMITTER_NAME": "AIW demo",
         "GIT_COMMITTER_EMAIL": "demo@example.com",
     }
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, env=git_env, check=True)
@@ -85,7 +85,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-dormancy-") as temporary:
         worktrees[fid] = scratch / "worktrees" / fid
         worktrees[fid].mkdir(parents=True)
 
-    tmux = ["tmux", "-S", env["AMF_TMUX_SOCKET"]]
+    tmux = ["tmux", "-S", env["AIW_TMUX_SOCKET"]]
     # Stand-in editors. The owned one has VS Code's shape (a `code` binary,
     # `--new-window <worktree>`, a child holding the "language server").
     fake_code = scratch / "bin" / "code"
@@ -99,21 +99,21 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-dormancy-") as temporary:
     try:
         for fid, _, _, command in features:
             subprocess.run(
-                tmux + ["new-session", "-d", "-s", f"amf-{fid}", "-n", "claude", "-x", "120", "-y", "30",
+                tmux + ["new-session", "-d", "-s", f"aiw-{fid}", "-n", "claude", "-x", "120", "-y", "30",
                         "bash -c " + shlex.quote(command)],
                 check=True,
             )
         tmux_started = time.monotonic()
         # Detached through a short-lived shell, as a real window outlives the
-        # `code` CLI: once AMF closes it, init reaps it rather than leaving a
+        # `code` CLI: once AIW closes it, init reaps it rather than leaving a
         # zombie of this script's that still looks alive.
         owned_editor = int(subprocess.check_output(
             ["setsid", "sh", "-c", '"$@" >/dev/null 2>&1 </dev/null & echo $!', "sh",
              str(fake_code), "-c", "sleep 600 & wait", "--new-window", str(worktrees["billing-retry"])],
             text=True,
         ).strip())
-        # A window the user opened themselves: AMF has a record, but it is
-        # not AMF's to close.
+        # A window the user opened themselves: AIW has a record, but it is
+        # not AIW's to close.
         foreign_editor = subprocess.Popen(
             ["sleep", "600"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
         )
@@ -139,10 +139,10 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-dormancy-") as temporary:
         else:
             raise RuntimeError("The isolated frontend did not become ready")
         gui = subprocess.Popen(
-            [str(workspace / "target/debug/amf-gui")], cwd=scratch, env=env,
+            [str(workspace / "target/debug/aiw-gui")], cwd=scratch, env=env,
             stdout=gui_log, stderr=subprocess.STDOUT, start_new_session=True,
         )
-        dbpath = config / "amf/amf.db"
+        dbpath = config / "ai_workstation/aiw.db"
         for _ in range(60):
             if gui.poll() is not None:
                 raise RuntimeError(f"The isolated GUI exited ({gui.returncode}):\n" + (out / "gui.log").read_text())
@@ -166,7 +166,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-dormancy-") as temporary:
             for index, (fid, name, hours, _) in enumerate(features):
                 db.execute(
                     "INSERT INTO features(id,project_id,name,branch,workdir,is_worktree,tmux_session,status,created_at,last_accessed,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                    (fid, "shot-project", name, fid, str(worktrees[fid]), 1, f"amf-{fid}", "idle",
+                    (fid, "shot-project", name, fid, str(worktrees[fid]), 1, f"aiw-{fid}", "idle",
                      created, iso(datetime.timedelta(hours=hours)), index),
                 )
                 db.execute(
@@ -193,8 +193,8 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-dormancy-") as temporary:
             time.sleep(remaining)
 
         subprocess.run(
-            ["/usr/bin/python3", os.environ.get("AMF_GUI_CAPTURE_FRAMES", str(workspace / "scripts/dev/screenshot/capture-gui-dormancy-frames.py")),
-             str(out), str(gui.pid), inspector_address, str(dbpath), env["AMF_TMUX_SOCKET"],
+            ["/usr/bin/python3", os.environ.get("AIW_GUI_CAPTURE_FRAMES", str(workspace / "scripts/dev/screenshot/capture-gui-dormancy-frames.py")),
+             str(out), str(gui.pid), inspector_address, str(dbpath), env["AIW_TMUX_SOCKET"],
              str(owned_editor), str(foreign_editor.pid)],
             env=env, check=True,
         )
@@ -206,14 +206,14 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-dormancy-") as temporary:
             }, statuses
             remaining_editors = [row[0] for row in db.execute("SELECT id FROM launched_editors")]
             # The closed window's record is forgotten; the foreign one is kept
-            # so `amf doctor` can still point at it.
+            # so `aiw doctor` can still point at it.
             assert remaining_editors == ["editor-foreign"], remaining_editors
-        assert foreign_editor.poll() is None, "AMF must never close a window it did not open"
+        assert foreign_editor.poll() is None, "AIW must never close a window it did not open"
         print("PASS: Owned stand-in editor closed, foreign editor and active features left running", flush=True)
     finally:
         subprocess.run(tmux + ["kill-server"], check=False, stderr=subprocess.DEVNULL)
         if owned_editor:
-            # Normally already closed by AMF. Otherwise end the stand-in and
+            # Normally already closed by AIW. Otherwise end the stand-in and
             # its child, checking it is still ours so a recycled PID is safe.
             try:
                 cmdline = pathlib.Path(f"/proc/{owned_editor}/cmdline").read_bytes()

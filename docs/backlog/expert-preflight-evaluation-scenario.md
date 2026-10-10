@@ -27,7 +27,7 @@ schema, state, UI, compatibility, and test boundaries. It should trigger the
 
 ## Run protocol
 
-1. Pin one AMF commit and record the exact implementer and Expert model IDs.
+1. Pin one AIW commit and record the exact implementer and Expert model IDs.
 2. Create three clean worktrees from that commit: `off`, `suggest`, and
    `require`.
 3. Give each implementer the identical task text above and no additional
@@ -43,7 +43,7 @@ schema, state, UI, compatibility, and test boundaries. It should trigger the
 
 6. Have a blinded reviewer apply the same acceptance checklist to each diff.
 7. Export the preflight record with
-   `AmfDb::export_plan_preflight_evaluation(feature_id)` and attach it to the
+   `AiwDb::export_plan_preflight_evaluation(feature_id)` and attach it to the
    run record.
 
 ## Measurements

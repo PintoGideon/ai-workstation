@@ -7,13 +7,13 @@
 #
 # Needs a seeded project and TWO features so the "which feature?" picker
 # has something to choose between:
-#   ./amf-capture.sh --scenario scenarios/todo-scopes.txt \
+#   ./aiw-capture.sh --scenario scenarios/todo-scopes.txt \
 #       --seed <project.json> --seed-feature <feature1.json> \
 #       --geometry 140x40
 # with $TODO_SHOT_FEATURE2 pointing at a second create-feature payload.
 
 # A second feature, so the spawn-target picker lists more than one.
-run:$AMF_BIN automation create-feature --file "$TODO_SHOT_FEATURE2"
+run:$AIW_BIN automation create-feature --file "$TODO_SHOT_FEATURE2"
 wait:1500
 shot:dashboard
 
@@ -101,7 +101,7 @@ wait:1200
 shot:picker-cancelled
 
 # Out of the editor, back to the dashboard. Escape rather than `q`:
-# both close the overlay, but `q` on the dashboard underneath quits AMF
+# both close the overlay, but `q` on the dashboard underneath quits AIW
 # if the Escape has not landed yet.
 key:Escape
 wait:1500

@@ -1,21 +1,21 @@
-/* AMF GUI — one stylesheet, token-driven. Light by default, dark when the
+/* AIW GUI — one stylesheet, token-driven. Light by default, dark when the
    system asks for it. */
 
 /* Terminal glyph fallbacks for whatever monospace font the machine has:
    Nerd Font icons and powerline separators, then the technical symbols and
    dingbats agent TUIs draw (⎿, ⏵, ✻, ✔ ...). See assets/fonts/README.md. */
 @font-face {
-  font-family: "AMF Symbols";
+  font-family: "AIW Symbols";
   src: url("./assets/fonts/SymbolsNerdFontMono-Regular.woff2") format("woff2");
   font-display: swap;
 }
 @font-face {
-  font-family: "AMF Symbols 2";
+  font-family: "AIW Symbols 2";
   src: url("./assets/fonts/NotoSansSymbols2-subset.woff2") format("woff2");
   font-display: swap;
 }
 @font-face {
-  font-family: "AMF Symbols 3";
+  font-family: "AIW Symbols 3";
   src: url("./assets/fonts/NotoSansSymbols-subset.woff2") format("woff2");
   font-display: swap;
 }
@@ -357,13 +357,12 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
   width: 14px;
   flex-shrink: 0;
   text-align: center;
-  font-family: var(--mono), "AMF Symbols";
+  font-family: var(--mono), "AIW Symbols";
   font-weight: 700;
   color: var(--text-muted);
 }
 .kind-claude { color: #d97757; }
 .kind-codex, .kind-pi { color: #10a37f; }
-.kind-opencode { color: #6e7bff; }
 .kind-terminal { color: var(--green); }
 .kind-nvim { color: #57a143; }
 .kind-vscode { color: #23a9f2; }
@@ -1388,7 +1387,6 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
   }
   :root:not([data-theme="light"]) .kind-claude { color: #ffb69b; }
   :root:not([data-theme="light"]) .kind-codex, :root:not([data-theme="light"]) .kind-pi, :root:not([data-theme="light"]) .kind-nvim { color: var(--green); }
-  :root:not([data-theme="light"]) .kind-opencode { color: var(--accent); }
   :root:not([data-theme="light"]) .kind-vscode { color: #9cd7ff; }
   :root:not([data-theme="light"]) .switch::after { background: var(--accent-fg); }
   :root:not([data-theme="light"]) .ctx-stale { opacity: 1; }
@@ -1438,7 +1436,6 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
 }
 :root[data-theme="dark"] .kind-claude { color: #ffb69b; }
 :root[data-theme="dark"] .kind-codex, :root[data-theme="dark"] .kind-pi, :root[data-theme="dark"] .kind-nvim { color: var(--green); }
-:root[data-theme="dark"] .kind-opencode { color: var(--accent); }
 :root[data-theme="dark"] .kind-vscode { color: #9cd7ff; }
 :root[data-theme="dark"] .switch::after { background: var(--accent-fg); }
 :root[data-theme="dark"] .ctx-stale { opacity: 1; }

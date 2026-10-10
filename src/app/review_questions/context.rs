@@ -291,10 +291,10 @@ pub(crate) fn git(workdir: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8(output.stdout)?.trim_end().to_string())
 }
 
-/// Paths that make a pinned checkout differ from its commit, ignoring what AMF
-/// itself wrote: a file whose only difference from `HEAD` is an AMF-managed
+/// Paths that make a pinned checkout differ from its commit, ignoring what AIW
+/// itself wrote: a file whose only difference from `HEAD` is an AIW-managed
 /// block (plan / review instructions, the matching `.gitignore` entry), or an
-/// untracked file that is nothing but one. Without this, every feature AMF set
+/// untracked file that is nothing but one. Without this, every feature AIW set
 /// up for Plan or Review Mode refuses PR questions on its own checkout.
 fn local_changes(workdir: &Path) -> Result<Vec<String>> {
     let root = PathBuf::from(git(workdir, &["rev-parse", "--show-toplevel"])?);
@@ -313,10 +313,10 @@ fn local_changes(workdir: &Path) -> Result<Vec<String>> {
         if code.starts_with(['R', 'C']) {
             entries.next(); // the rename/copy source; the change stands
         }
-        let unmanaged = |text: &str| crate::app::setup::strip_amf_managed_blocks(text);
+        let unmanaged = |text: &str| crate::app::setup::strip_aiw_managed_blocks(text);
         let working = || std::fs::read_to_string(root.join(path)).ok();
-        // Only an unstaged edit or an untracked file can be AMF's own doing.
-        let amf_only = match code {
+        // Only an unstaged edit or an untracked file can be AIW's own doing.
+        let aiw_only = match code {
             " M" => working().is_some_and(|now| {
                 git(workdir, &["show", &format!("HEAD:{path}")])
                     .is_ok_and(|then| unmanaged(&now).trim_end() == unmanaged(&then).trim_end())
@@ -324,7 +324,7 @@ fn local_changes(workdir: &Path) -> Result<Vec<String>> {
             "??" => working().is_some_and(|now| unmanaged(&now).trim().is_empty()),
             _ => false,
         };
-        if !amf_only {
+        if !aiw_only {
             changed.push(path.to_string());
         }
     }

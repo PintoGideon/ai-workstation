@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Replace the marked AMF screenshot section while preserving the PR body."""
+"""Replace the marked AIW screenshot section while preserving the PR body."""
 
 import argparse
 import re
 from pathlib import Path
 
 
-START = "<!-- amf:screenshots:start -->"
-END = "<!-- amf:screenshots:end -->"
+START = "<!-- aiw:screenshots:start -->"
+END = "<!-- aiw:screenshots:end -->"
 
 
 def update_body(body: str, fragment: str) -> str:
     pattern = re.compile(re.escape(START) + r".*?" + re.escape(END), re.DOTALL)
     matches = list(pattern.finditer(body))
     if len(matches) > 1:
-        raise ValueError("PR body contains multiple AMF screenshot sections")
+        raise ValueError("PR body contains multiple AIW screenshot sections")
     if matches:
         return body[: matches[0].start()] + fragment.strip() + body[matches[0].end() :]
 

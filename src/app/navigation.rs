@@ -132,7 +132,6 @@ impl App {
         match &self.session_filter {
             SessionFilter::All => true,
             SessionFilter::Claude => session.kind == SessionKind::Claude,
-            SessionFilter::Opencode => session.kind == SessionKind::Opencode,
             SessionFilter::Codex => session.kind == SessionKind::Codex,
             SessionFilter::Terminal => session.kind == SessionKind::Terminal,
             SessionFilter::Nvim => session.kind == SessionKind::Nvim,

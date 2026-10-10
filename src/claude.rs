@@ -141,7 +141,7 @@ impl ClaudeLauncher {
 
     /// Resolve why Remote Control is unavailable, or `None` if it can be
     /// offered. `zai_configured` is supplied by the caller because the
-    /// z.ai endpoint lives in AMF's own config rather than the environment.
+    /// z.ai endpoint lives in AIW's own config rather than the environment.
     ///
     /// Checks, in order: z.ai / third-party provider config, then the
     /// installed Claude Code version. An undetectable version does not

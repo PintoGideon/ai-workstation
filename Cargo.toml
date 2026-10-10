@@ -1,21 +1,19 @@
 [workspace]
 members = ["gui/src-tauri"]
 # The workspace root is this package itself (the common root-crate-as-member
-# layout) rather than a virtual manifest, so `amf`'s existing Cargo.toml
-# location and publishing behavior are unchanged. No `resolver` override: the
+# layout) rather than a virtual manifest, so the root Cargo.toml location
+# is unchanged. No `resolver` override: the
 # workspace inherits the root package's edition-2024 default (resolver "3").
 
 [package]
-name = "agent-mainframe"
+name = "ai-workstation"
 version = "0.49.0"
 edition = "2024"
-description = "Terminal dashboard for running many AI coding agents in parallel — each on its own branch, in its own tmux session"
+description = "AI Workstation: terminal dashboard for running many AI coding agents in parallel — each on its own branch, in its own tmux session"
 license = "MIT"
-repository = "https://github.com/eldridgerdev/agent-mainframe"
 readme = "README.md"
 keywords = ["tui", "tmux", "agents", "claude", "worktree"]
 categories = ["command-line-utilities", "development-tools"]
-homepage = "https://agentmainframe.dev"
 # Keep the packaged .crate under crates.io's 10MB compressed hard cap (an
 # oversized upload gets rejected with a 413 that their CDN mangles into an
 # opaque 503 — see docs/backlog/crate-package-size-plan.md). Everything
@@ -23,10 +21,6 @@ homepage = "https://agentmainframe.dev"
 # reference from src/; docs/tsx-syntax-test.tsx and docs/syntax-tests/ are
 # kept because src/highlight and src/ui/dialogs/diff.rs embed them.
 exclude = [
-    ".opencode/settings.json",
-    ".opencode/commands",
-    ".opencode/opencode.json",
-    ".opencode/themes",
     "/.agents",
     "/.claude",
     "/.codex",
@@ -47,11 +41,12 @@ exclude = [
 ]
 
 [lib]
-name = "agent_mainframe"
+name = "ai_workstation"
 path = "src/lib.rs"
 
+# FORK: the single `aiw` command (AI Workstation).
 [[bin]]
-name = "amf"
+name = "aiw"
 path = "src/main.rs"
 
 [dependencies]
@@ -71,7 +66,6 @@ anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
 vt100 = "0.15"
 ratatui-explorer = "0.2"
-ureq = { version = "3", default-features = false, features = ["gzip", "platform-verifier", "rustls"] }
 unicode-width = "0.1"
 regex = "1"
 toml = "0.8"
@@ -83,30 +77,22 @@ tempfile = "3"
 libc = "0.2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 notify = "8.2.0"
-# Dedicated async runtime for the Remote Control companion-app server
-# (docs/backlog/remote-control-companion-app-plan.md, Epic 1). Runs only on
-# its own thread, started/stopped by an explicit user toggle — the rest of
-# AMF stays synchronous.
-tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "sync", "time"] }
-axum = { version = "0.8", features = ["ws"] }
-# Pairing (Epic 4): rendering the pairing QR in the terminal. Token hashing
-# (`src/db/remote_devices.rs` never sees a plaintext token) reuses the `sha2`
-# dependency above.
-qrcode = { version = "0.14", default-features = false }
-# Web Push for the Remote Control PWA: payload encryption only. The crate's
-# `vapid` feature would pull in jwt-simple (RSA, Ed25519, P-384, ML-DSA, …) to
-# make one ES256 signature; `src/remote_push.rs` signs it with `p256` instead.
-web-push-native = { version = "0.5", default-features = false }
-p256 = { version = "0.13", features = ["ecdsa"] }
+# FORK(no-cloud): the Remote Control server stack (tokio, axum, qrcode,
+# web-push-native, p256), the HTTP client (ureq) and the GitHub screenshot
+# downloader's crates (zip, scraper) are gone — AIW links no HTTP client or
+# server library. See NO_CLOUD.md and scripts/check-no-network.sh.
+# Data-URL encoding for local screenshot evidence (`src/screenshot_evidence.rs`).
 base64ct = { version = "1", features = ["alloc"] }
-# Codex's existing daemon uses WebSocket frames over its local control socket.
-# Already in the dependency tree through axum's `ws` feature.
-tungstenite = "0.29"
+# Sec-WebSocket-Accept check for the local Codex control-socket handshake
+# (`src/app/model_analysis/session_control.rs`, which speaks WebSocket framing
+# itself over the `codex app-server proxy` stdio pipe — no network).
+sha1 = "0.10"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
-zip = { version = "6", default-features = false, features = ["deflate"] }
 url = "2"
-scraper = "0.27.0"
 
 [dev-dependencies]
+# FORK(no-cloud): test-only reference WebSocket server for the hand-rolled
+# Codex control-socket client. Not linked into the binaries.
+tungstenite = "0.29"
 mockall = "0.13"
 pretty_assertions = "1"

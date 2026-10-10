@@ -972,7 +972,7 @@ fn todo_line<'a>(
             if nerd_font {
                 "  \u{f036}"
             } else {
-                "  ≡"
+                "  =" // FORK: ASCII fallback (was ≡)
             }
         }
         _ => "",
@@ -980,7 +980,7 @@ fn todo_line<'a>(
 
     // Marker for a TODO that has launched an agent session.
     let launched_indicator = if todo.work.agent_session_id.is_some() {
-        if nerd_font { "  \u{f135}" } else { "  ▸" }
+        if nerd_font { "  \u{f135}" } else { "  >" } // FORK: ASCII fallback
     } else {
         ""
     };
@@ -988,7 +988,7 @@ fn todo_line<'a>(
     // A TODO planned into its own feature. Distinct from the session marker:
     // `g` goes to the feature, not to a session in this one.
     let planned_indicator = if todo.linked_feature_id.is_some() {
-        if nerd_font { "  \u{e0a0}" } else { "  ⑂" }
+        if nerd_font { "  \u{e0a0}" } else { "  Y" } // FORK: ASCII fallback (⑂ is missing from most fonts)
     } else {
         ""
     };

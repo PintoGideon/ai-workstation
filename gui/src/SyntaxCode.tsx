@@ -93,12 +93,12 @@ export function SyntaxBadge({ info, onInstalled }: { info: SyntaxInfo | null | u
     {installable && !running && !confirming && <button type="button" className="btn btn-ghost btn-sm"
       onClick={() => { setError(null); setConfirming(true); }}>{verb} {info.language} parser…</button>}
     {installable && confirming && !running && <span className="syntax-install callout callout-warning" role="group" aria-label={`${verb} ${info.language} parser`}>
-      <p>{verb} the {info.language} parser? AMF clones its tree-sitter grammar from GitHub and compiles it with your C compiler (<code>cc</code>) into AMF's config directory. The TUI uses the same parser.</p>
+      <p>{verb} the {info.language} parser? AIW clones its tree-sitter grammar from GitHub and compiles it with your C compiler (<code>cc</code>) into AIW's config directory. The TUI uses the same parser.</p>
       <button type="button" className="btn btn-secondary btn-sm" disabled={requesting} onClick={() => setConfirming(false)}>Cancel</button>
       <button type="button" className="btn btn-primary btn-sm" disabled={requesting} onClick={() => void start()}>{requesting && <Spinner />} {verb} parser</button>
     </span>}
     {running && <span className="syntax-install" role="status">
-      <Spinner /> Installing the {install?.language} parser…
+      <Spinner /> Downloading (git clone) and building the {install?.language} parser…
       {install?.output && <span className="syntax-install-output">{install.output}</span>}
     </span>}
     {installable && !running && install?.error && install.language_key === info.language_key && <span className="syntax-install" role="alert">

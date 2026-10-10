@@ -9,7 +9,7 @@
 # capturing, since that is the case that clipped.
 #
 # Run the same file at several geometries to see the width dependence:
-#   ./amf-capture.sh --scenario <this file> \
+#   ./aiw-capture.sh --scenario <this file> \
 #     --seed <project.json> --seed-feature <feature.json> \
 #     --geometry 200x44 | 160x44 | 120x40 | 80x36
 

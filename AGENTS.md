@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository.
 
 ## Build and validation
 
-The package is `agent-mainframe`; its binary is `amf`. Use the current stable
+The package is `ai-workstation`; its binary is `aiw`. Use the current stable
 Rust toolchain (edition 2024), with a C compiler for bundled SQLite/tree-sitter.
 
 ```bash
@@ -25,8 +25,8 @@ dependency-advisory triage and the exact baseline comparison procedure.
 
 ## Runtime and architecture
 
-AMF is a Rust TUI built on ratatui/crossterm/vt100. It supports Claude Code,
-Codex, OpenCode and Pi sessions in tmux. Source installations need `tmux` on PATH;
+AIW is a Rust TUI built on ratatui/crossterm/vt100. It supports Claude Code,
+Codex, Gemini CLI, Cursor agent and Pi sessions in tmux. Source installations need `tmux` on PATH;
 install the harnesses you intend to use. Tests mock paid harness execution.
 
 Use [the architecture guide](docs/development/architecture.md) to choose a module.
@@ -43,8 +43,8 @@ tmux/worktree operations through `TmuxOps`/`WorktreeOps`; do not add persistence
 process launching to renderers. Keep temporary directories, databases and child
 guards owned by each test, using `App::new_for_test` and group defaults.
 
-State is persisted in the global SQLite store at `~/.config/amf/amf.db` for every
-checkout. Tmux sessions use the `amf-` prefix. Configuration controls leader-key
+State is persisted in the global SQLite store at `~/.config/ai_workstation/aiw.db` for every
+checkout. Tmux sessions use the `aiw-` prefix. Configuration controls leader-key
 and refresh timings; consult the code/config instead of assuming fixed intervals.
 
 ### Debug Logging
@@ -54,11 +54,11 @@ the terminal display. Use the built-in debug log instead.
 
 To view the debug log at runtime, press `D` from the dashboard.
 
-**Log file location:** `~/.local/state/amf/debug.log`
+**Log file location:** `~/.local/state/ai_workstation/debug.log`
 
 You can tail this file in a separate terminal:
 ```bash
-tail -f ~/.local/state/amf/debug.log
+tail -f ~/.local/state/ai_workstation/debug.log
 ```
 
 **Usage in code:**
@@ -78,7 +78,7 @@ app.log_error("context", format!("failed: {}", err));
 - `ERROR` (red) - failures
 
 **Context strings** should be short identifiers like:
-- `"amf"` - app lifecycle
+- `"aiw"` - app lifecycle
 - `"sync"` - status sync operations
 - `"tmux"` - tmux interactions
 - `"worktree"` - git worktree operations
@@ -90,9 +90,9 @@ debug log with level ERROR.
 ### Local harness configuration
 
 - **Never modify `~/.claude/settings.json` (global) or
-  `~/.config/opencode/` (global opencode config) to inject
+  `~/.codex/config.toml` (global Codex config) to inject
   hooks or settings.** Instead, write to the worktree's
-  local `.claude/settings.local.json` (or `.opencode/` equivalent)
+  local `.claude/settings.local.json` (or the agent's per-worktree equivalent)
   via `ensure_notification_hooks()`. For non-worktree
   features (first feature that uses the repo dir directly),
   write to `{repo}/.claude/settings.local.json`. On startup,
@@ -101,7 +101,7 @@ debug log with level ERROR.
 
 ## Screenshot proof publication
 
-Use the repository `amf-screenshot` skill only when the user explicitly asks
+Use the repository `aiw-screenshot` skill only when the user explicitly asks
 for visual proof. When the user also explicitly asks to publish that proof to
 an open PR, use `scripts/dev/screenshot/publish-pages.sh --strict` after the
 ref and scenario are pushed. The publisher requires the `eldridgerdev` GitHub
@@ -109,8 +109,8 @@ identity and writes only the marked PR-body region. It dispatches the isolated
 capture workflow (the only job that checks out the ref), then downloads that
 run's rendered frames and deploys the private Cloudflare Pages gallery from the
 local machine — so it needs `CLOUDFLARE_API_TOKEN` in the environment (the owner
-keeps it in `~/.secrets/cf-amf-pages.env`, sourced by the
-`amf-publish-screenshots` shell wrapper; don't run `wrangler login`, it is
+keeps it in `~/.secrets/cf-aiw-pages.env`, sourced by the
+`aiw-publish-screenshots` shell wrapper; don't run `wrangler login`, it is
 unreliable here), `CLOUDFLARE_ACCOUNT_ID` set, plus `wrangler` (or
 `npx`). There is no `screenshot-pages`
 environment or per-run approval: the Pages credentials never enter CI, and the

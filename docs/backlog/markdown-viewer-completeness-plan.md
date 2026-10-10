@@ -7,10 +7,10 @@
 
 ## Why / problem
 
-AMF's in-app Markdown viewer is good enough for headings, lists, code
+AIW's in-app Markdown viewer is good enough for headings, lists, code
 blocks, and basic tables, but table headers currently disappear. The root
 cause is in the table event handling: `pulldown-cmark` emits header cells
-directly inside `TableHead`, while AMF only saves rows on `TableRow`.
+directly inside `TableHead`, while AIW only saves rows on `TableRow`.
 The collected header cells are overwritten by the first body row before
 rendering.
 
@@ -84,11 +84,11 @@ GitHub rendering.
     - Include headings, lists, task lists, tables, links, images,
       footnotes, code blocks, blockquotes, rules, and long lines.
     - Assert important text is present and raw Markdown syntax is not
-      leaked where AMF claims to render it.
+      leaked where AIW claims to render it.
 
 ## Table testing fixture
 
-Use this section as a manual smoke-test file in AMF's Markdown viewer.
+Use this section as a manual smoke-test file in AIW's Markdown viewer.
 The fixture tables are intentionally not fenced as code blocks, so the
 viewer should render them as box-drawn grids instead of raw pipe syntax.
 
@@ -96,12 +96,12 @@ viewer should render them as box-drawn grids instead of raw pipe syntax.
 
 | Name | Status |
 | --- | --- |
-| AMF | Ready |
+| AIW | Ready |
 
 Expected:
 - Header cells `Name` and `Status` are visible.
 - A divider row appears between the header and body.
-- Body row `AMF` / `Ready` remains visible.
+- Body row `AIW` / `Ready` remains visible.
 
 ### Alignment and narrow truncation
 
@@ -155,7 +155,7 @@ Expected:
 
 > | Name | Status |
 > | --- | --- |
-> | AMF | Ready |
+> | AIW | Ready |
 
 Expected:
 - Every border and row keeps the blockquote gutter.
@@ -168,7 +168,7 @@ Expected:
 - Table:
   | Name | Status |
   | --- | --- |
-  | AMF | Ready |
+  | AIW | Ready |
 
 Expected:
 - Every border and row aligns under the list item's continuation
@@ -179,7 +179,7 @@ Expected:
 
 ## Math testing fixture
 
-Use this section as a manual smoke-test for math rendering in AMF's
+Use this section as a manual smoke-test for math rendering in AIW's
 Markdown viewer.
 
 Inline math should render with visible delimiters: $E = mc^2$.

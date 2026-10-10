@@ -2,18 +2,18 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 <target> <amf-binary> <output-archive>" >&2
+  echo "Usage: $0 <target> <aiw-binary> <output-archive>" >&2
   exit 1
 }
 
 [ $# -eq 3 ] || usage
 
 TARGET="$1"
-AMF_BIN="$2"
+AIW_BIN="$2"
 OUT_ARCHIVE="$3"
 
-[ -f "$AMF_BIN" ] || {
-  echo "amf binary not found: $AMF_BIN" >&2
+[ -f "$AIW_BIN" ] || {
+  echo "aiw binary not found: $AIW_BIN" >&2
   exit 1
 }
 
@@ -27,8 +27,8 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$BUNDLE_DIR"
-cp "$AMF_BIN" "$BUNDLE_DIR/amf"
-chmod +x "$BUNDLE_DIR/amf"
+cp "$AIW_BIN" "$BUNDLE_DIR/aiw"
+chmod +x "$BUNDLE_DIR/aiw"
 
 write_linux_wrapper() {
   cat >"$BUNDLE_DIR/tmux" <<'EOF'

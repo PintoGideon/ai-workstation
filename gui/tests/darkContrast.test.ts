@@ -73,7 +73,7 @@ it("keeps independent agent-sidebar accents and VS Code glyphs readable", () => 
   const sidebar = blocks(readFileSync(new URL("../src/sessionSidebar.css", import.meta.url), "utf8")).dark;
   const sessions = readFileSync(new URL("../src/sessions.css", import.meta.url), "utf8");
   const vscode = blocks(sessions).dark.match(/color: (#[\da-f]+);/)![1];
-  for (const role of ["harness-claude", "harness-codex", "harness-opencode", "accent-pr", "accent-summary", "accent-prompt"]) {
+  for (const role of ["harness-claude", "harness-codex", "accent-pr", "accent-summary", "accent-prompt"]) {
     for (const [name, bg] of Object.entries(backgrounds)) {
       check(`agent sidebar ${role} on ${name}`, parse(token(sidebar, `sb-${role}`)).rgb, bg);
     }

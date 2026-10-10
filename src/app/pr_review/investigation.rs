@@ -325,7 +325,7 @@ impl App {
         };
 
         const INTERRUPTED: &str =
-            "investigation interrupted (AMF restarted or the pane closed before it finished)";
+            "investigation interrupted (AIW restarted or the pane closed before it finished)";
         let stale: Vec<u64> = rows
             .iter()
             .filter(|r| r.status == PrInvestigationStatus::Running)
@@ -372,7 +372,7 @@ impl App {
         };
         if !actionable {
             self.message =
-                Some("AMF follow-up replies cannot be fixed or investigated".to_string());
+                Some("AIW follow-up replies cannot be fixed or investigated".to_string());
             return;
         }
 
@@ -386,7 +386,7 @@ impl App {
         }
         if harnesses.is_empty() {
             self.push_toast_error(
-                "No agent harness available to run an investigation — check `amf doctor`",
+                "No agent harness available to run an investigation — check `aiw doctor`",
             );
             return;
         }
@@ -503,7 +503,7 @@ impl App {
             _ => return,
         };
         let Some((pi, _)) = self.feature_indices_for_workdir(&workdir) else {
-            self.push_toast_error("Can't investigate: this worktree isn't a tracked AMF feature");
+            self.push_toast_error("Can't investigate: this worktree isn't a tracked AIW feature");
             return;
         };
         let project_id = self.store.projects[pi].id.clone();
@@ -603,7 +603,7 @@ impl App {
 
         let (tx, rx) = std::sync::mpsc::channel();
         self.pr_review_work.begin_investigation(rx);
-        // STRICTLY READ-ONLY (`AMF_PLAN.md`). This worker may only: read the PR
+        // STRICTLY READ-ONLY (`AIW_PLAN.md`). This worker may only: read the PR
         // over `gh`, build the prompt, and run `HeadlessRunner::run_investigation`
         // (a read-only repo pass repo config cannot loosen). It must never write
         // the worktree, switch tmux sessions, deliver a prompt to an interactive

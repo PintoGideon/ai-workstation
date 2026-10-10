@@ -14,11 +14,11 @@
 # has to happen mid-scenario; it edits the seeded repo directly, which is
 # also how a real user's agent would have changed it.
 #
-# Needs a seeded project + feature at /tmp/amf-drift-demo and asks one
+# Needs a seeded project + feature at /tmp/aiw-drift-demo and asks one
 # real question, so the harness must be authenticated:
-#   ./amf-capture.sh --scenario scenarios/learning-mode-anchor-drift.txt \
-#       --seed /tmp/amf-drift-proj.json \
-#       --seed-feature /tmp/amf-drift-feat.json \
+#   ./aiw-capture.sh --scenario scenarios/learning-mode-anchor-drift.txt \
+#       --seed /tmp/aiw-drift-proj.json \
+#       --seed-feature /tmp/aiw-drift-feat.json \
 #       --geometry 140x44
 #
 # 140x44 to match the rest of the Learning Mode captures: the drift
@@ -71,7 +71,7 @@ shot:answered
 # which puts it at lines 7-10.
 key:q
 wait:1000
-run:cp /tmp/amf-drift-demo-after.rs /tmp/amf-drift-demo/src/main.rs
+run:cp /tmp/aiw-drift-demo-after.rs /tmp/aiw-drift-demo/src/main.rs
 wait:600
 
 # Reopening re-checks every stored anchor. The row is marked, and the
@@ -95,7 +95,7 @@ key:Escape
 wait:500
 key:q
 wait:1000
-run:git -C /tmp/amf-drift-demo mv src/main.rs src/app.rs
+run:git -C /tmp/aiw-drift-demo mv src/main.rs src/app.rs
 wait:600
 
 key:K

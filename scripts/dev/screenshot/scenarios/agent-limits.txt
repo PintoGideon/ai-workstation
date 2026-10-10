@@ -5,7 +5,7 @@
 # limit, and a real machine rarely has four agents running during a
 # capture), so run it with --config:
 #
-#   ./amf-capture.sh --scenario <this file> \
+#   ./aiw-capture.sh --scenario <this file> \
 #     --config <config with "max_concurrent_agents": 1> \
 #     --seed <seed-project.json> --seed-feature <seed-feature-1.json> \
 #     --geometry 150x40
@@ -20,7 +20,7 @@ shot:one-agent-running
 # Creation never raises the dialog -- a batch create would queue one per
 # feature, and the automation API has nobody to answer them -- so the
 # feature is created and left stopped, with a warning saying why.
-run:"$AMF_BIN" automation create-feature --file "$AMF_SHOT_SEED_2" >/dev/null
+run:"$AIW_BIN" automation create-feature --file "$AIW_SHOT_SEED_2" >/dev/null
 wait:3000
 shot:autostart-skipped-with-warning
 
@@ -48,7 +48,7 @@ text:y
 wait:6000
 shot:started-anyway
 
-# Stopping a feature also reclaims the editor AMF opened for it (there is
+# Stopping a feature also reclaims the editor AIW opened for it (there is
 # none in a scratch instance, so this frame is just the ordinary stop).
 text:x
 wait:2500

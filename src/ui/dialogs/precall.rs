@@ -90,7 +90,7 @@ pub fn draw_prompt_precall(frame: &mut Frame, pending: &PendingPrecall, theme: &
     let body = vec![
         Line::raw(""),
         Line::from(Span::styled(
-            " AMF is about to make a headless AI call.",
+            " AIW is about to make a headless AI call.",
             Style::default()
                 .fg(theme.text.to_color())
                 .add_modifier(Modifier::BOLD),

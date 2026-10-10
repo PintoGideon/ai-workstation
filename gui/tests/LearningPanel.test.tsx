@@ -11,7 +11,7 @@ const view: LearningView = {
   entries: [{ key: "file:README.md", label: "README.md", kind: "file", depth: 0, expanded: false }],
   content_path: "README.md", content: ["first", "second", "third"], content_line_labels: ["1", "2", "3"],
   content_error: null, anchor: "all of README.md", selection: null, hunks: [], starters: [], can_keep_todo: true,
-  harness: "claude", harnesses: ["claude", "codex", "opencode", "pi"],
+  harness: "claude", harnesses: ["claude", "codex", "pi"],
   level: "newcomer", history_saved: true, error: null, notice: null,
   qa: [{ id: "qa-1", parent_id: null, question: "Original question", answer: "**Original answer**", anchor: "line 2 of README.md",
     status: "answered", intent: "explain", run_mode: "this file only", harness: "claude", error: null, drift: null, spawned_session_id: null,

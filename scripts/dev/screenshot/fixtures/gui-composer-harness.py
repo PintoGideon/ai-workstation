@@ -9,7 +9,7 @@ import tty
 tty.setraw(sys.stdin.fileno())
 received = pathlib.Path(sys.argv[1])
 received.write_text("[]")
-print("\x1b[?2004hAMF capture fixture · " + sys.argv[2] + "\r\n", end="", flush=True)
+print("\x1b[?2004hAIW capture fixture · " + sys.argv[2] + "\r\n", end="", flush=True)
 print("Ready. Nothing is sent while you compose in the GUI.\r\n", end="", flush=True)
 buffer = b""
 messages = []

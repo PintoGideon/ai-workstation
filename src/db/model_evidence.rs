@@ -1,10 +1,10 @@
-use super::AmfDb;
+use super::AiwDb;
 use crate::model_evidence::ResearchNote;
 use anyhow::{Result, ensure};
 use rusqlite::params;
 use std::path::Path;
 
-impl AmfDb {
+impl AiwDb {
     pub(crate) fn save_model_research(
         &self,
         project_id: &str,
@@ -55,16 +55,16 @@ mod tests {
         let path = dir.path().join("db");
         let repo = dir.path().join("repo");
         {
-            let db = AmfDb::open(&path).unwrap();
+            let db = AiwDb::open(&path).unwrap();
             // Simulate an existing installation before new model research.
             db.save_model_research("project", &repo, &research_notes()[..2])
                 .unwrap();
         }
-        let db = AmfDb::open(&path).unwrap();
+        let db = AiwDb::open(&path).unwrap();
         db.save_model_research("project", &repo, &research_notes())
             .unwrap();
         drop(db);
-        let db = AmfDb::open(&path).unwrap();
+        let db = AiwDb::open(&path).unwrap();
         // Loading orders by evidence ID; the registry is in review order.
         let mut expected = research_notes();
         expected.sort_by(|a, b| a.id.cmp(&b.id));
@@ -87,11 +87,11 @@ mod tests {
     fn write_failures_and_invented_provenance_are_errors() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("db");
-        let db = AmfDb::open(&path).unwrap();
+        let db = AiwDb::open(&path).unwrap();
         let mut notes = research_notes();
         notes[0].statement = "generated claim".into();
         assert!(db.save_model_research("p", dir.path(), &notes).is_err());
-        let ro = AmfDb::open_read_only(&path).unwrap();
+        let ro = AiwDb::open_read_only(&path).unwrap();
         assert!(
             ro.save_model_research("p", dir.path(), &research_notes())
                 .is_err()
@@ -108,10 +108,10 @@ mod tests {
     fn upgrades_existing_schema_without_replacing_project_data() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("db");
-        let db = AmfDb::open(&path).unwrap();
+        let db = AiwDb::open(&path).unwrap();
         db.conn.execute_batch("DROP TABLE screenshot_scopes; DROP TABLE model_research; ALTER TABLE feature_sessions DROP COLUMN stopped; DELETE FROM schema_version WHERE version>=44; CREATE TABLE upgrade_sentinel(value TEXT); INSERT INTO upgrade_sentinel VALUES ('keep');").unwrap();
         drop(db);
-        let db = AmfDb::open(&path).unwrap();
+        let db = AiwDb::open(&path).unwrap();
         assert_eq!(
             db.conn
                 .query_row("SELECT value FROM upgrade_sentinel", [], |r| r

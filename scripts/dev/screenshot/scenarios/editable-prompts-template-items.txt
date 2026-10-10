@@ -9,7 +9,7 @@
 # editor for a single-placeholder prompt (plan_interview.round) -> the
 # updated help panel.
 #
-#   scripts/dev/screenshot/amf-capture.sh \
+#   scripts/dev/screenshot/aiw-capture.sh \
 #     --scenario     scripts/dev/screenshot/scenarios/editable-prompts-template-items.txt \
 #     --seed         scripts/dev/screenshot/scenarios/editable-prompts-seed-project.json \
 #     --seed-feature scripts/dev/screenshot/scenarios/editable-prompts-seed-feature.json \
@@ -25,7 +25,7 @@ shot:feature-selected
 # `E` opens the prompt-override manager.
 key:E
 wait:500
-note:The prompt-override manager lists every headless prompt AMF sends; all 15 start on the built-in default.
+note:The prompt-override manager lists every headless prompt AIW sends; all 15 start on the built-in default.
 shot:manager-list
 
 # Down to "Learning Mode: answer" (row 7 of the list: six `j` from the top).

@@ -135,8 +135,8 @@ fn app_with_todo_host_deleted(remove_all_features: bool) -> App {
     let db_dir = TempDir::new().unwrap();
     // Keep the tempdir alive for the app's lifetime by leaking it; tests are
     // short-lived processes.
-    let db_path = db_dir.keep().join("amf.db");
-    let db = crate::db::AmfDb::open(&db_path).unwrap();
+    let db_path = db_dir.keep().join("aiw.db");
+    let db = crate::db::AiwDb::open(&db_path).unwrap();
     db.save_store(&store).unwrap();
     let list = db
         .create_todo_list(&test_project_scope("proj-1"), Some("feat-1"))
@@ -815,7 +815,7 @@ fn todos_add_via_handler_appends_and_selects() {
 fn pasting_into_a_todo_title_inserts_text_and_saves() {
     let mut app = todos_app();
     let db_file = tempfile::NamedTempFile::new().unwrap();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     app.todos_begin_add();
 
     crate::handlers::handle_paste(&mut app, "buy oat milk").unwrap();
@@ -1725,7 +1725,7 @@ fn mark_in_progress_persists_all_scopes_and_is_idempotent() {
 
     let mut app = todos_app();
     let db_file = tempfile::NamedTempFile::new().unwrap();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
 
     let scopes = [
         worktree_scope("proj-1", "/tmp/test-workdir"),
@@ -1866,7 +1866,7 @@ fn active_todo_completion_keybind_updates_db_and_retains_reference() {
         Box::new(MockWorktreeOps::new()),
     );
     let tmp = tempfile::NamedTempFile::new().unwrap();
-    let db = crate::db::AmfDb::open(tmp.path()).unwrap();
+    let db = crate::db::AiwDb::open(tmp.path()).unwrap();
     let list = db
         .create_todo_list(&test_project_scope("proj-1"), Some("feat-1"))
         .unwrap();
@@ -1899,7 +1899,7 @@ fn active_todo_completion_keybind_updates_db_and_retains_reference() {
     app.mode = AppMode::Viewing(ViewState::new(
         "my-project".into(),
         "my-feat".into(),
-        "amf-my-feat".into(),
+        "aiw-my-feat".into(),
         "claude".into(),
         "Agent".into(),
         SessionKind::Claude,
@@ -1970,7 +1970,7 @@ fn planning_a_todo_into_a_new_feature_attaches_the_active_todo_sidebar_reference
         .clone();
 
     let tmp = tempfile::NamedTempFile::new().unwrap();
-    let db = crate::db::AmfDb::open(tmp.path()).unwrap();
+    let db = crate::db::AiwDb::open(tmp.path()).unwrap();
     let list = db
         .create_todo_list(&test_project_scope("proj-1"), Some("feat-1"))
         .unwrap();
@@ -2043,7 +2043,7 @@ fn starting_a_host_feature_plan_session_attaches_the_active_todo_sidebar_referen
     app.config.low_memory_warn_mb = 0;
 
     let tmp = tempfile::NamedTempFile::new().unwrap();
-    let db = crate::db::AmfDb::open(tmp.path()).unwrap();
+    let db = crate::db::AiwDb::open(tmp.path()).unwrap();
     let list = db
         .create_todo_list(&test_project_scope("proj-1"), Some("feat-1"))
         .unwrap();
@@ -2106,7 +2106,7 @@ fn attach_launched_todo_reference_records_provenance_and_reports_a_missing_sessi
         .clone();
 
     let tmp = tempfile::NamedTempFile::new().unwrap();
-    let db = crate::db::AmfDb::open(tmp.path()).unwrap();
+    let db = crate::db::AiwDb::open(tmp.path()).unwrap();
     let list = db
         .create_todo_list(&test_project_scope("proj-1"), Some("feat-1"))
         .unwrap();
@@ -2165,7 +2165,7 @@ fn request_todo_reference_completion_without_db_warns_instead_of_opening_dialog(
     app.mode = AppMode::Viewing(ViewState::new(
         "my-project".into(),
         "my-feat".into(),
-        "amf-my-feat".into(),
+        "aiw-my-feat".into(),
         "claude".into(),
         "Agent".into(),
         SessionKind::Claude,
@@ -2234,7 +2234,7 @@ fn failed_agent_session_startup_and_prompt_setup_both_roll_back_todo_reservation
 fn find_todo_by_id_resolves_after_a_move_when_no_overlay_is_open() {
     let mut app = todos_app();
     let tmp = tempfile::NamedTempFile::new().unwrap();
-    app.db = Some(crate::db::AmfDb::open(tmp.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(tmp.path()).unwrap());
 
     let (dst_id, todo_id) = {
         let db = app.db.as_ref().unwrap();
@@ -2267,7 +2267,7 @@ fn find_todo_by_id_resolves_after_a_move_when_no_overlay_is_open() {
 #[test]
 fn reconciliation_clears_missing_session_but_keeps_in_progress_status() {
     let tmp = tempfile::NamedTempFile::new().unwrap();
-    let db = crate::db::AmfDb::open(tmp.path()).unwrap();
+    let db = crate::db::AiwDb::open(tmp.path()).unwrap();
     let list = db
         .create_todo_list(&test_project_scope("proj-1"), Some("feat-1"))
         .unwrap();
@@ -2899,8 +2899,8 @@ fn quick_capture_overlay_names_its_target_list() {
 fn app_with_worktree_todos(unfinished: usize, done: usize) -> (App, String) {
     let store = store_with_feature(ProjectStatus::Active);
     let db_dir = TempDir::new().unwrap();
-    let db_path = db_dir.keep().join("amf.db");
-    let db = crate::db::AmfDb::open(&db_path).unwrap();
+    let db_path = db_dir.keep().join("aiw.db");
+    let db = crate::db::AiwDb::open(&db_path).unwrap();
     db.save_store(&store).unwrap();
 
     let scope = worktree_scope("proj-1", "/tmp/test-workdir");

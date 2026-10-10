@@ -1,37 +1,37 @@
-# AMF screenshot harness
+# AIW screenshot harness
 
 Tools for getting reviewable proof-of-work (PNG screenshots, optionally a
-GIF) out of a throwaway `amf` instance, without touching a real
-`~/.config/amf/amf.db` or any real `amf-*` tmux session. Background and
+GIF) out of a throwaway `aiw` instance, without touching a real
+`~/.config/ai_workstation/aiw.db` or any real `aiw-*` tmux session. Background and
 design rationale: `docs/backlog/screenshot-review-plan.md`.
 
 Three scripts:
 
-- `amf-capture.sh` — the driver. Launches an isolated `amf`, drives it
+- `aiw-capture.sh` — the driver. Launches an isolated `aiw`, drives it
   through a scenario, dumps raw ANSI captures.
 - `render_ansi.py` — turns one `tmux capture-pane -e -p` dump into a PNG.
 - `assemble_gif.py` — stitches PNG frames into an animated GIF (used
-  internally by `amf-capture.sh --gif`; can also be run standalone).
+  internally by `aiw-capture.sh --gif`; can also be run standalone).
 
 ## Usage
 
-Basic smoke test, no flags — builds `amf` if needed, launches it in a
+Basic smoke test, no flags — builds `aiw` if needed, launches it in a
 scratch tmux session, presses `j` once, writes two `.ansi` captures, then
 tears everything down:
 
 ```bash
-./scripts/dev/screenshot/amf-capture.sh
+./scripts/dev/screenshot/aiw-capture.sh
 ```
 
 Output looks like:
 
 ```
-scratch root: /tmp/amf-shots/20260719-121610-294766
-tmux session: amf-shot-20260719-121610-294766 (120x40)
+scratch root: /tmp/aiw-shots/20260719-121610-294766
+tmux session: aiw-shot-20260719-121610-294766 (120x40)
 dashboard ready
-shot: /tmp/amf-shots/20260719-121610-294766/shots/001-dashboard-ready.ansi
-shot: /tmp/amf-shots/20260719-121610-294766/shots/002-after-j.ansi
-shots written to: /tmp/amf-shots/20260719-121610-294766/shots
+shot: /tmp/aiw-shots/20260719-121610-294766/shots/001-dashboard-ready.ansi
+shot: /tmp/aiw-shots/20260719-121610-294766/shots/002-after-j.ansi
+shots written to: /tmp/aiw-shots/20260719-121610-294766/shots
 ```
 
 On exit, the scratch root is deleted and the scratch tmux session is
@@ -43,7 +43,7 @@ Each flag:
   two-shot smoke test. See "Scenario format" below.
 
   ```bash
-  ./scripts/dev/screenshot/amf-capture.sh \
+  ./scripts/dev/screenshot/aiw-capture.sh \
       --scenario scripts/dev/screenshot/scenarios/dashboard-tour.txt --keep
   ```
 
@@ -54,7 +54,7 @@ Each flag:
   means `create-project`, a top-level `branch` key means `create-feature`.
 
   ```bash
-  ./scripts/dev/screenshot/amf-capture.sh \
+  ./scripts/dev/screenshot/aiw-capture.sh \
       --seed scripts/dev/screenshot/scenarios/seed-project.json --keep
   ```
 
@@ -64,7 +64,7 @@ Each flag:
   flags together, `project_name` matching between the two files:
 
   ```bash
-  ./scripts/dev/screenshot/amf-capture.sh \
+  ./scripts/dev/screenshot/aiw-capture.sh \
       --seed scripts/dev/screenshot/scenarios/seed-project.json \
       --seed-feature scripts/dev/screenshot/scenarios/seed-feature.json --keep
   ```
@@ -75,7 +75,7 @@ Each flag:
   to `<out-dir>/capture.gif`.
 
   ```bash
-  ./scripts/dev/screenshot/amf-capture.sh \
+  ./scripts/dev/screenshot/aiw-capture.sh \
       --scenario scripts/dev/screenshot/scenarios/dashboard-tour.txt --gif
   ```
 
@@ -87,7 +87,7 @@ Each flag:
   Default `120x40`. Fixed geometry keeps screenshots reproducible.
 
   ```bash
-  ./scripts/dev/screenshot/amf-capture.sh --geometry 160x50 --keep
+  ./scripts/dev/screenshot/aiw-capture.sh --geometry 160x50 --keep
   ```
 
 - `--out-dir <dir>` — where numbered `.ansi` captures land. Defaults to
@@ -96,21 +96,21 @@ Each flag:
   want captures to survive independent of `--keep`.
 
   ```bash
-  ./scripts/dev/screenshot/amf-capture.sh --out-dir /tmp/my-shots
+  ./scripts/dev/screenshot/aiw-capture.sh --out-dir /tmp/my-shots
   ```
 
-- `--amf-bin <path>` — path to the `amf` binary. Defaults to
-  `target/debug/amf` relative to the repo root; if that doesn't exist yet
+- `--aiw-bin <path>` — path to the `aiw` binary. Defaults to
+  `target/debug/aiw` relative to the repo root; if that doesn't exist yet
   the driver builds it with `cargo build -j 2` (capped at `-j 2` — see
   the WSL2 OOM note if you're on a memory-constrained box) before
   launching.
 
   ```bash
-  ./scripts/dev/screenshot/amf-capture.sh --amf-bin target/release/amf
+  ./scripts/dev/screenshot/aiw-capture.sh --aiw-bin target/release/aiw
   ```
 
-Also respected: the `AMF_SHOT_DIR` env var overrides the scratch root
-parent (default `/tmp/amf-shots`).
+Also respected: the `AIW_SHOT_DIR` env var overrides the scratch root
+parent (default `/tmp/aiw-shots`).
 
 ## Native GUI diff proof
 
@@ -121,15 +121,15 @@ unified and side-by-side layouts, whole-file context, one commit and a binary
 notice; assertions run before each frame is saved.
 
 ```bash
-scripts/dev/screenshot/amf-capture.sh \
+scripts/dev/screenshot/aiw-capture.sh \
   --scenario scripts/dev/screenshot/scenarios/gui-standalone-diffs.txt \
-  --out-dir /tmp/amf-gui-diff-proof
+  --out-dir /tmp/aiw-gui-diff-proof
 ```
 
 Local captures need the Linux GUI build dependencies, an X11 display (or Xvfb),
 and system Python's GTK introspection, `websocket` and `Xlib` modules. The helper
 installs these in the capture-only CI job, builds the frontend and GUI, then
-cleans up its own GUI and Vite process groups. `HOME` stays unchanged; both AMF
+cleans up its own GUI and Vite process groups. `HOME` stays unchanged; both AIW
 configuration/state directories are private. Port 1420 must be free. The TUI
 setup frame remains internal, and only native PNG frames reach the gallery.
 Publish this scenario with the same `publish-pages.sh --strict` path as TUI
@@ -142,9 +142,9 @@ pause/reopen, changed-patch rejection and approval invalidation after refresh.
 It checks both the visible UI and saved review progress without starting an agent.
 
 ```bash
-scripts/dev/screenshot/amf-capture.sh \
+scripts/dev/screenshot/aiw-capture.sh \
   --scenario scripts/dev/screenshot/scenarios/gui-manual-review.txt \
-  --out-dir /tmp/amf-gui-review-proof
+  --out-dir /tmp/aiw-gui-review-proof
 ```
 
 The Final Review AI scenario uses offline Claude/Codex executables in a private
@@ -165,9 +165,9 @@ isolated offline capture. The helper owns its GUI/Vite process groups and a
 private tmux socket.
 
 ```bash
-scripts/dev/screenshot/amf-capture.sh \
+scripts/dev/screenshot/aiw-capture.sh \
   --scenario scripts/dev/screenshot/scenarios/gui-review-ai.txt \
-  --out-dir /tmp/amf-gui-review-ai-proof
+  --out-dir /tmp/aiw-gui-review-ai-proof
 ```
 
 ## Capture contract
@@ -175,7 +175,7 @@ scripts/dev/screenshot/amf-capture.sh \
 The driver and the two Python helpers have deliberately separate output
 contracts:
 
-- `amf-capture.sh` always captures terminal state as numbered
+- `aiw-capture.sh` always captures terminal state as numbered
   `<NNN>-<label>.ansi` files using `tmux capture-pane -e -p`. It also writes a
   same-named `.txt` file from `capture-pane -p`; the text twin is escape-free
   and is intended for cheap content assertions. The default smoke test writes
@@ -185,12 +185,12 @@ contracts:
 
   ```bash
   python3 scripts/dev/screenshot/render_ansi.py \
-      /tmp/amf-shots/<run>/shots/001-dashboard-ready.ansi \
-      --out /tmp/amf-shots/<run>/dashboard-ready.png \
+      /tmp/aiw-shots/<run>/shots/001-dashboard-ready.ansi \
+      --out /tmp/aiw-shots/<run>/dashboard-ready.png \
       --cols 120 --rows 40
   ```
 
-- `amf-capture.sh --gif [path]` is the convenience path: after all shots are
+- `aiw-capture.sh --gif [path]` is the convenience path: after all shots are
   captured, it renders every numbered `.ansi` file to a same-directory `.png`
   using the requested `--geometry`, then calls `assemble_gif.py` to produce
   `capture.gif` (or the optional path). Thus `--gif` produces both the PNG
@@ -224,8 +224,8 @@ scenario needs another fixed size. The invoking agent needs an authenticated
 `gh` CLI session with permission to dispatch Actions and edit the PR, and — for
 the deploy step, which now runs locally — `CLOUDFLARE_API_TOKEN` in the
 environment, `CLOUDFLARE_ACCOUNT_ID` set, and `wrangler` on `PATH` (or `npx`).
-The owner keeps the token in `~/.secrets/cf-amf-pages.env`; the
-`amf-publish-screenshots` shell wrapper sources that file and calls
+The owner keeps the token in `~/.secrets/cf-aiw-pages.env`; the
+`aiw-publish-screenshots` shell wrapper sources that file and calls
 `publish-pages.sh`, so prefer the wrapper (or `source` the file yourself).
 `wrangler login` also satisfies the check but is unreliable here — use the
 token. The scenario must exist on the pushed ref; screenshots never need to be
@@ -234,9 +234,9 @@ committed.
 The workflow must already be present on the repository's default branch before
 the command can dispatch it; the capture itself may target any pushed ref.
 
-The command dispatches `.github/workflows/amf-screenshot-artifact.yml`, which
-is **capture-only**: one unprivileged job builds AMF on an isolated runner,
-runs `amf-capture.sh`, renders PNGs, and uploads them as a 14-day internal
+The command dispatches `.github/workflows/aiw-screenshot-artifact.yml`, which
+is **capture-only**: one unprivileged job builds AIW on an isolated runner,
+runs `aiw-capture.sh`, renders PNGs, and uploads them as a 14-day internal
 artifact. It holds no deployment credentials and there is no environment gate.
 
 `publish-pages.sh` then waits for that run, downloads its artifact with
@@ -256,7 +256,7 @@ The internal capture artifact contains:
 - a self-contained `gallery.html` with images embedded in the HTML.
 
 After the deploy, the publisher replaces only the PR body region between
-`<!-- amf:screenshots:start -->` and `<!-- amf:screenshots:end -->` with the
+`<!-- aiw:screenshots:start -->` and `<!-- aiw:screenshots:end -->` with the
 stable private Pages URL. In the Pages project, enable **Settings > General >
 Enable access policy** before publishing evidence; raw ANSI/text captures remain
 in the internal artifact. Repeated runs update the same branch alias while
@@ -282,7 +282,7 @@ must use that account's authenticated `gh` session.
 
 The Cloudflare Pages deploy runs on the operator's machine, from
 `publish-pages.sh`. Provide a Pages-scoped `CLOUDFLARE_API_TOKEN` — the owner
-keeps it in `~/.secrets/cf-amf-pages.env`, and the `amf-publish-screenshots`
+keeps it in `~/.secrets/cf-aiw-pages.env`, and the `aiw-publish-screenshots`
 shell wrapper sources that file before invoking the script — and set
 `CLOUDFLARE_ACCOUNT_ID` (an identifier, not a secret). `wrangler login` (OAuth,
 nothing stored by us) also passes the check, but it is unreliable on this box;
@@ -293,7 +293,7 @@ artifact — it never checks out or executes the captured ref. If auth or
 `wrangler` is missing, the script warns and stops before dispatching a capture
 it could not publish.
 
-The runner installs the Codex CLI so a fresh scratch instance can pass AMF's
+The runner installs the Codex CLI so a fresh scratch instance can pass AIW's
 harness setup for UI-only scenarios. Scenarios that launch an agent still need
 the corresponding provider credentials and harness-specific setup available
 to the workflow.
@@ -321,7 +321,7 @@ list of one or more of:
   This is what turned the September 2026 "every screenshot was actually the
   syntax-parser picker, not the feature under test" incident into a failed
   CI run instead of a silently-wrong published gallery: the scenario assumed
-  a seeded project/feature that a bare `amf-publish-screenshots` call (no
+  a seeded project/feature that a bare `aiw-publish-screenshots` call (no
   `--seed`/`--seed-feature`) never provided, so the intended key sequence
   drove the dashboard's default keybindings instead of the flow the scenario
   claimed to show.
@@ -352,7 +352,7 @@ title, label, or state must be backed by an assertion that would actually
 fail if that state were wrong.
 - `run:<cmd>` — `eval` an arbitrary shell command. The escape hatch for
   anything the grammar above can't express: a second automation call
-  (this shell has `AMF_BIN` and the scratch instance's XDG vars
+  (this shell has `AIW_BIN` and the scratch instance's XDG vars
   exported, so it talks to the same running instance), seeding
   working-tree content a JSON payload can't carry, or **mouse input**,
   which has no step of its own. Send the SGR bytes a real terminal
@@ -402,35 +402,35 @@ Copy any of these as a starting point for a new scenario or seed file.
 
 ## Isolation model
 
-The driver is safe to run against a real, in-use AMF setup because it
-never touches the paths or process your real `amf` uses:
+The driver is safe to run against a real, in-use AIW setup because it
+never touches the paths or process your real `aiw` uses:
 
 - **Scratch XDG dirs.** `XDG_CONFIG_HOME` and `XDG_STATE_HOME` are
-  exported to fresh directories under `${AMF_SHOT_DIR:-/tmp/amf-shots}/<timestamp>-<pid>/`.
-  AMF resolves its config dir, state dir, DB, and IPC socket through the
+  exported to fresh directories under `${AIW_SHOT_DIR:-/tmp/aiw-shots}/<timestamp>-<pid>/`.
+  AIW resolves its config dir, state dir, DB, and IPC socket through the
   `dirs` crate under these vars, so the scratch instance gets its own
-  `amf.db`, socket, and log — completely separate from
-  `~/.config/amf/amf.db`.
+  `aiw.db`, socket, and log — completely separate from
+  `~/.config/ai_workstation/aiw.db`.
 - **Real `HOME` preserved.** Only `XDG_CONFIG_HOME`/`XDG_STATE_HOME` are
   overridden; `HOME` itself is left alone, so `claude` auth and git
   identity still work inside the scratch instance if a scenario actually
   launches an agent session.
-- **Dedicated tmux session.** The scratch `amf` runs in its own session
-  named `amf-shot-<timestamp>-<pid>`, distinct from any real `amf-*`
+- **Dedicated tmux session.** The scratch `aiw` runs in its own session
+  named `aiw-shot-<timestamp>-<pid>`, distinct from any real `aiw-*`
   session, and is killed on exit regardless of `--keep`.
 - **`-e` on `tmux new-session` is load-bearing, not decorative.** If a
   tmux server is already running (e.g. because you have your own
-  `amf-*` sessions open), `new-session` attaches to that *existing*
+  `aiw-*` sessions open), `new-session` attaches to that *existing*
   server, and the new session's process environment is **not**
   refreshed from the driver's just-exported vars — it inherits whatever
   environment the server was originally started with. Without passing
   `-e XDG_CONFIG_HOME=... -e XDG_STATE_HOME=...` explicitly on the
-  `tmux new-session` command, the scratch `amf` would silently launch
-  against your real `~/.config/amf` instead of the scratch one.
-- **The XDG amf subdir must exist before `amf` starts.** The driver runs
-  `mkdir -p "$CONFIG_DIR/amf" "$STATE_DIR/amf"` before launching, not
-  just the scratch root. AMF's `amf_config_dir_with()` falls back to the
-  legacy `~/.config/amf` path whenever the real `HOME` already has one
+  `tmux new-session` command, the scratch `aiw` would silently launch
+  against your real `~/.config/ai_workstation` instead of the scratch one.
+- **The XDG aiw subdir must exist before `aiw` starts.** The driver runs
+  `mkdir -p "$CONFIG_DIR/ai_workstation" "$STATE_DIR/ai_workstation"` before launching, not
+  just the scratch root. AIW's `aiw_config_dir_with()` falls back to the
+  legacy `~/.config/ai_workstation` path whenever the real `HOME` already has one
   *and* the XDG-resolved dir doesn't exist yet — and since this harness
   deliberately keeps the real `HOME`, skipping this pre-create would mean
   the scratch instance silently opens the user's real database.
@@ -438,7 +438,7 @@ never touches the paths or process your real `amf` uses:
   is always killed; the scratch root directory is deleted unless
   `--keep` was passed.
 
-One caveat worth knowing: a truly fresh scratch config shows AMF's
+One caveat worth knowing: a truly fresh scratch config shows AIW's
 one-time "Configure Agent Harnesses" onboarding dialog before the
 dashboard. The driver detects this and drives it automatically (selects
 the first harness entry, waits for its availability check, confirms with
@@ -476,7 +476,7 @@ Known v1 limitation, documented in the file itself: double-width
 CJK/emoji cells are drawn single-width (one codepoint per cell), so wide
 glyphs will visually overlap or clip.
 
-`amf-capture.sh --gif` automates render+assemble for an entire scenario
+`aiw-capture.sh --gif` automates render+assemble for an entire scenario
 run: every `NNN-<label>.ansi` capture in the output dir is rendered to a
 same-size PNG (explicit `--cols`/`--rows` taken from `--geometry`, for
 exactly the mismatched-size reason above), then `assemble_gif.py` stitches
@@ -512,5 +512,5 @@ and would need, none of which are installed in this environment:
 
 If double-width glyph fidelity or true video output ever becomes a hard
 requirement, revisit this path — but the lightweight ANSI-grid renderer
-covers AMF's actual dashboard UI (no wide glyphs in the chrome itself)
+covers AIW's actual dashboard UI (no wide glyphs in the chrome itself)
 today.

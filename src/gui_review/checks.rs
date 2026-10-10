@@ -148,7 +148,7 @@ fn outside_note(paths: &[String]) -> String {
 }
 
 /// Validation a finished check's result must pass before it is shown.
-/// Deferred to completion on purpose: re-reading `amf.json` and re-diffing
+/// Deferred to completion on purpose: re-reading `aiw.json` and re-diffing
 /// the checkout on every poll is real I/O for a long check, and the `git`
 /// calls can take `index.lock` under a check that runs git itself.
 fn validate_result(
@@ -400,7 +400,7 @@ mod tests {
             .as_ref()
             .unwrap()
             .id();
-        let db = crate::db::AmfDb::open(&dir.path().join("amf.db")).unwrap();
+        let db = crate::db::AiwDb::open(&dir.path().join("aiw.db")).unwrap();
         let original = db.load_store().unwrap();
         let mut deleted = original.clone();
         deleted.projects[0].features.clear();
@@ -505,7 +505,7 @@ mod tests {
             let (dir, mut gui, view) = opened("sleep 30");
             let running = run(&mut gui, &view);
             let pid = check_pid(&gui);
-            let db = crate::db::AmfDb::open(&dir.path().join("amf.db")).unwrap();
+            let db = crate::db::AiwDb::open(&dir.path().join("aiw.db")).unwrap();
             let mut store = db.load_store().unwrap();
             if scenario == "delete" {
                 store.projects[0].features.clear();

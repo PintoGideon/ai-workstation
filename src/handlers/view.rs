@@ -76,7 +76,13 @@ fn flush_view_input_batch(app: &mut App) -> Result<()> {
     Ok(())
 }
 
-fn forward_tmux_key(app: &mut App, key: &KeyEvent, session: &str, window: &str) -> Result<bool> {
+// FORK: pub(super) so split view (`handlers/fork_split.rs`) routes keys the same way.
+pub(super) fn forward_tmux_key(
+    app: &mut App,
+    key: &KeyEvent,
+    session: &str,
+    window: &str,
+) -> Result<bool> {
     let Some(tmux_key) = crossterm_key_to_tmux(key) else {
         return Ok(false);
     };
@@ -263,6 +269,11 @@ fn handle_scroll_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<
 fn handle_leader_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()> {
     app.deactivate_leader();
 
+    // FORK: in a tile zoomed from split view, `z` goes back to the tiles.
+    if key.code == KeyCode::Char('z') && app.unzoom_split_tile() {
+        return Ok(());
+    }
+
     // Next/prev feature navigation has no default binding. Dispatch it only
     // when the user has configured a key for it. This runs before the static
     // match so a configured key wins over any static binding on that char.
@@ -290,7 +301,9 @@ fn handle_leader_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<
         }
         KeyCode::Char('r') => {
             app.sync_statuses();
-            app.push_toast_success("Refreshed statuses");
+            // FORK(no-cloud): PR badges refresh only on explicit request.
+            app.sync_active_prs_background();
+            app.push_toast_success("Refreshed statuses; refreshing PR badges via gh");
         }
         KeyCode::Char('V') => {
             app.check_pending_diff_review()?;
@@ -472,12 +485,8 @@ fn handle_leader_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<
         KeyCode::Char('c') => {
             app.copy_remote_control_url()?;
         }
-        KeyCode::Char('C') => {
-            app.toggle_remote_server();
-        }
-        KeyCode::Char('Q') => {
-            app.start_pairing();
-        }
+        // FORK(no-cloud): leader+C (AIW Remote server) and leader+Q (phone
+        // pairing) were removed with Remote Control.
         KeyCode::Char('O') => {
             app.open_remote_control_url()?;
         }
@@ -681,7 +690,7 @@ mod tests {
     #[test]
     fn leader_n_opens_the_default_current_plan() {
         let repo = init_repo_with_branch_change();
-        let plan = repo.path().join("AMF_PLAN.md");
+        let plan = repo.path().join("AIW_PLAN.md");
         std::fs::write(&plan, "# Current plan\n\n- Ship it\n").unwrap();
         let mut app = app_for_viewing_repo(repo.path());
 
@@ -746,7 +755,7 @@ mod tests {
         }
         // The new plan hasn't been accepted, so nothing was written yet and
         // the pre-existing markdown file is untouched.
-        assert!(!repo.path().join("AMF_PLAN.md").exists());
+        assert!(!repo.path().join("AIW_PLAN.md").exists());
         assert!(notes.exists());
     }
 
@@ -815,7 +824,7 @@ mod tests {
         app.mode = AppMode::Viewing(ViewState::new(
             "demo".to_string(),
             "feature".to_string(),
-            "amf-feature".to_string(),
+            "aiw-feature".to_string(),
             session.tmux_window.clone(),
             session.label.clone(),
             SessionKind::Claude,
@@ -927,13 +936,13 @@ mod tests {
     #[test]
     fn leader_shift_f_starts_a_fresh_context_session_seeded_with_plan_and_diff() {
         let repo = init_repo_with_branch_change();
-        std::fs::write(repo.path().join("AMF_PLAN.md"), "# Plan\n").unwrap();
+        std::fs::write(repo.path().join("AIW_PLAN.md"), "# Plan\n").unwrap();
         let mut app = app_for_fresh_context_test(repo.path());
 
         open_and_submit_fresh_context_prompt(&mut app, "Fix the login bug.");
 
         let text = composed_text(&app);
-        assert!(text.starts_with("Read AMF_PLAN.md for full context on this feature. "));
+        assert!(text.starts_with("Read AIW_PLAN.md for full context on this feature. "));
         assert!(text.contains("Changed/new files to look at:"));
         assert!(text.contains("src.txt"));
         assert!(text.contains("z_new.txt"));
@@ -950,11 +959,11 @@ mod tests {
     #[test]
     fn context_hint_f_starts_one_fresh_session_with_the_generated_continuation() {
         let repo = init_repo_with_branch_change();
-        std::fs::write(repo.path().join("AMF_PLAN.md"), "# Plan\n").unwrap();
+        std::fs::write(repo.path().join("AIW_PLAN.md"), "# Plan\n").unwrap();
         let mut app = app_for_fresh_context_test(repo.path());
         app.store.projects[0].features[0].summary = Some("Finish the sidebar work.".into());
         app.latest_prompt_cache
-            .insert("amf-feature".into(), "Add the context hint.".into());
+            .insert("aiw-feature".into(), "Add the context hint.".into());
         let original_session_id = app.store.projects[0].features[0].sessions[0].id.clone();
         let now = chrono::Utc::now();
         let mut context = crate::context_tracking::SessionContextState::default();
@@ -981,7 +990,7 @@ mod tests {
         crate::handlers::handle_fresh_context_prompt_key(&mut app, key(KeyCode::Enter)).unwrap();
 
         let text = composed_text(&app);
-        assert!(text.contains("Read AMF_PLAN.md for full context on this feature."));
+        assert!(text.contains("Read AIW_PLAN.md for full context on this feature."));
         assert!(text.contains("Changed/new files to look at:"));
         assert!(text.contains("Feature summary: Finish the sidebar work."));
         assert!(text.contains("Latest known prompt: Add the context hint."));
@@ -1021,7 +1030,7 @@ mod tests {
     #[test]
     fn leader_shift_f_omits_changed_files_for_a_non_git_project() {
         let repo = TempDir::new().unwrap();
-        std::fs::write(repo.path().join("AMF_PLAN.md"), "# Plan\n").unwrap();
+        std::fs::write(repo.path().join("AIW_PLAN.md"), "# Plan\n").unwrap();
         let mut app = app_for_fresh_context_test(repo.path());
 
         open_and_submit_fresh_context_prompt(&mut app, "Fix the login bug.");
@@ -1029,7 +1038,7 @@ mod tests {
         let text = composed_text(&app);
         assert_eq!(
             text,
-            "Read AMF_PLAN.md for full context on this feature. Fix the login bug. \
+            "Read AIW_PLAN.md for full context on this feature. Fix the login bug. \
              Grill me with any questions to clarify before implementing"
         );
     }
@@ -1135,7 +1144,7 @@ mod tests {
 
         match &app.mode {
             AppMode::SteeringPrompt(state) => {
-                assert_eq!(state.view.session, "amf-feature");
+                assert_eq!(state.view.session, "aiw-feature");
                 assert_eq!(state.workdir, repo.path());
                 assert_eq!(
                     state.editor.text(),
@@ -1150,75 +1159,18 @@ mod tests {
         }
     }
 
-    /// Drain server events until `done` holds or two seconds pass.
-    fn poll_remote_server_until(app: &mut App, done: impl Fn(&App) -> bool) {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-        while !done(app) && std::time::Instant::now() < deadline {
-            app.poll_remote_server_bg();
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-    }
-
-    #[test]
-    fn leader_c_in_a_session_toggles_amfs_server_not_claudes_rc() {
-        let repo = TempDir::new().unwrap();
-        // No send expectations on the mock: typing `/rc` into the pane
-        // would panic the test.
-        let mut app = app_for_viewing_repo(repo.path());
-
-        app.activate_leader();
-        handle_view_key(&mut app, key(KeyCode::Char('C')), 20).unwrap();
-
-        assert!(app.remote_server.is_some());
-        assert!(matches!(&app.mode, AppMode::Viewing(_)));
-
-        app.activate_leader();
-        handle_view_key(&mut app, key(KeyCode::Char('C')), 20).unwrap();
-        poll_remote_server_until(&mut app, |app| app.remote_server.is_none());
-        assert!(app.remote_server.is_none());
-    }
-
-    #[test]
-    fn leader_q_in_a_session_pairs_and_returns_to_the_session() {
-        let repo = TempDir::new().unwrap();
-        let mut app = app_for_viewing_repo(repo.path());
-
-        app.activate_leader();
-        handle_view_key(&mut app, key(KeyCode::Char('Q')), 20).unwrap();
-        poll_remote_server_until(&mut app, |app| {
-            matches!(app.mode, AppMode::RemotePairing(_))
-        });
-
-        let AppMode::RemotePairing(state) = &app.mode else {
-            panic!("expected the pairing dialog once the server was listening");
-        };
-        assert_eq!(
-            state.from_view.as_ref().map(|view| view.session.as_str()),
-            Some("amf-feature")
-        );
-
-        app.regenerate_pairing_code();
-        app.cancel_pairing();
-        match &app.mode {
-            AppMode::Viewing(view) => assert_eq!(view.session, "amf-feature"),
-            _ => panic!("closing the dialog should return to the session"),
-        }
-
-        app.toggle_remote_server();
-        poll_remote_server_until(&mut app, |app| app.remote_server.is_none());
-    }
-
     #[test]
     fn typing_printable_char_opens_compose_seeded() {
         let repo = TempDir::new().unwrap();
         let mut app = app_for_viewing_repo(repo.path());
+        app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
 
         handle_view_key(&mut app, key(KeyCode::Char('h')), 20).unwrap();
 
         match &app.mode {
             AppMode::Compose(state) => {
                 assert_eq!(state.editor.text(), "h");
-                assert_eq!(state.view.session, "amf-feature");
+                assert_eq!(state.view.session, "aiw-feature");
                 assert_eq!(state.workdir, repo.path());
             }
             _ => panic!("expected Compose mode"),
@@ -1229,12 +1181,14 @@ mod tests {
     fn typing_printable_char_opens_compose_for_every_agent_harness() {
         for kind in [
             SessionKind::Claude,
-            SessionKind::Opencode,
             SessionKind::Codex,
             SessionKind::Pi,
+            SessionKind::Gemini, // FORK
+            SessionKind::Cursor, // FORK
         ] {
             let repo = TempDir::new().unwrap();
             let mut app = app_for_viewing_repo(repo.path());
+            app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
             if let AppMode::Viewing(view) = &mut app.mode {
                 view.session_kind = kind.clone();
                 view.window = kind_label(&kind).to_string();
@@ -1252,9 +1206,10 @@ mod tests {
     fn kind_label(kind: &SessionKind) -> &'static str {
         match kind {
             SessionKind::Claude => "claude",
-            SessionKind::Opencode => "opencode",
             SessionKind::Codex => "codex",
             SessionKind::Pi => "pi",
+            SessionKind::Gemini => "gemini", // FORK
+            SessionKind::Cursor => "cursor", // FORK
             _ => "other",
         }
     }
@@ -1263,6 +1218,7 @@ mod tests {
     fn compose_draft_survives_close_and_reopen() {
         let repo = TempDir::new().unwrap();
         let mut app = app_for_viewing_repo(repo.path());
+        app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
 
         handle_view_key(&mut app, key(KeyCode::Char('h')), 20).unwrap();
         crate::handlers::handle_compose_key(&mut app, key(KeyCode::Char('i'))).unwrap();
@@ -1280,17 +1236,18 @@ mod tests {
     fn ctrl_e_in_compose_switches_to_direct_input_and_keeps_draft() {
         let repo = TempDir::new().unwrap();
         let mut app = app_for_viewing_repo(repo.path());
+        app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
 
         handle_view_key(&mut app, key(KeyCode::Char('h')), 20).unwrap();
         crate::handlers::handle_compose_key(&mut app, ctrl(KeyCode::Char('e'))).unwrap();
 
         assert!(matches!(&app.mode, AppMode::Viewing(_)));
-        assert!(app.compose_direct_targets.contains("amf-feature:claude"));
+        assert!(app.compose_direct_targets.contains("aiw-feature:claude"));
 
         // leader+e re-enables compose; the draft comes back.
         app.activate_leader();
         handle_view_key(&mut app, key(KeyCode::Char('e')), 20).unwrap();
-        assert!(!app.compose_direct_targets.contains("amf-feature:claude"));
+        assert!(!app.compose_direct_targets.contains("aiw-feature:claude"));
 
         handle_view_key(&mut app, key(KeyCode::Char('i')), 20).unwrap();
         match &app.mode {
@@ -1303,6 +1260,7 @@ mod tests {
     fn ctrl_space_in_compose_opens_leader_menu_and_keeps_draft() {
         let repo = TempDir::new().unwrap();
         let mut app = app_for_viewing_repo(repo.path());
+        app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
 
         handle_view_key(&mut app, key(KeyCode::Char('h')), 20).unwrap();
         crate::handlers::handle_compose_key(&mut app, key(KeyCode::Char('i'))).unwrap();
@@ -1314,7 +1272,7 @@ mod tests {
         // Leader command runs against the view, then typing restores
         // the draft.
         handle_view_key(&mut app, key(KeyCode::Char('e')), 20).unwrap();
-        assert!(app.compose_direct_targets.contains("amf-feature:claude"));
+        assert!(app.compose_direct_targets.contains("aiw-feature:claude"));
         app.activate_leader();
         handle_view_key(&mut app, key(KeyCode::Char('e')), 20).unwrap();
 
@@ -1331,7 +1289,7 @@ mod tests {
         let mut tmux = MockTmuxOps::new();
         tmux.expect_send_key_name()
             .withf(|session, window, name| {
-                session == "amf-feature" && window == "claude" && name == "Enter"
+                session == "aiw-feature" && window == "claude" && name == "Enter"
             })
             .times(1)
             .returning(|_, _, _| Ok(()));
@@ -1361,12 +1319,13 @@ mod tests {
     fn leader_e_toggles_direct_input_for_claude_view() {
         let repo = TempDir::new().unwrap();
         let mut app = app_for_viewing_repo(repo.path());
+        app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
 
         // Re-activating the leader flushes the buffered "h" below.
         let mut tmux = MockTmuxOps::new();
         tmux.expect_send_literal()
             .withf(|session, window, text| {
-                session == "amf-feature" && window == "claude" && text == "h"
+                session == "aiw-feature" && window == "claude" && text == "h"
             })
             .times(1)
             .returning(|_, _, _| Ok(()));
@@ -1374,7 +1333,7 @@ mod tests {
 
         app.activate_leader();
         handle_view_key(&mut app, key(KeyCode::Char('e')), 20).unwrap();
-        assert!(app.compose_direct_targets.contains("amf-feature:claude"));
+        assert!(app.compose_direct_targets.contains("aiw-feature:claude"));
 
         // With direct input on, printable keys forward (buffer) again.
         handle_view_key(&mut app, key(KeyCode::Char('h')), 20).unwrap();
@@ -1383,16 +1342,17 @@ mod tests {
 
         app.activate_leader();
         handle_view_key(&mut app, key(KeyCode::Char('e')), 20).unwrap();
-        assert!(!app.compose_direct_targets.contains("amf-feature:claude"));
+        assert!(!app.compose_direct_targets.contains("aiw-feature:claude"));
     }
 
     #[test]
     fn leader_e_toggles_direct_input_for_every_agent_harness() {
         for kind in [
             SessionKind::Claude,
-            SessionKind::Opencode,
             SessionKind::Codex,
             SessionKind::Pi,
+            SessionKind::Gemini, // FORK
+            SessionKind::Cursor, // FORK
         ] {
             let repo = TempDir::new().unwrap();
             let mut app = app_for_viewing_repo(repo.path());
@@ -1406,7 +1366,7 @@ mod tests {
             handle_view_key(&mut app, key(KeyCode::Char('e')), 20).unwrap();
             assert!(
                 app.compose_direct_targets
-                    .contains(&format!("amf-feature:{window}")),
+                    .contains(&format!("aiw-feature:{window}")),
                 "direct input did not enable for {kind:?}"
             );
 
@@ -1414,7 +1374,7 @@ mod tests {
             handle_view_key(&mut app, key(KeyCode::Char('e')), 20).unwrap();
             assert!(
                 !app.compose_direct_targets
-                    .contains(&format!("amf-feature:{window}")),
+                    .contains(&format!("aiw-feature:{window}")),
                 "composer did not re-enable for {kind:?}"
             );
         }
@@ -1465,7 +1425,7 @@ mod tests {
                     state.prompts.first().map(|entry| entry.text()),
                     Some("Resume the current task from the saved prompt.")
                 );
-                assert_eq!(state.view.session, "amf-feature");
+                assert_eq!(state.view.session, "aiw-feature");
             }
             _ => panic!("expected LatestPrompt mode"),
         }
@@ -1474,8 +1434,8 @@ mod tests {
     #[test]
     fn leader_l_leads_with_an_unsent_prompt_stashed_for_this_workdir() {
         let repo = init_repo_with_branch_change();
-        let db_file = TempDir::new().unwrap().path().join("amf.db");
-        let db = crate::db::AmfDb::open(&db_file).unwrap();
+        let db_file = TempDir::new().unwrap().path().join("aiw.db");
+        let db = crate::db::AiwDb::open(&db_file).unwrap();
         db.insert_unsent_prompt(
             "unsent-1",
             repo.path(),
@@ -1565,7 +1525,7 @@ mod tests {
         let notify_dir = repo.path().join(".claude").join("notifications");
         std::fs::create_dir_all(&notify_dir).unwrap();
         let notification = serde_json::json!({
-            "session_id": "amf-feature",
+            "session_id": "aiw-feature",
             "cwd": repo.path().display().to_string(),
             "message": "Review: src/lib.rs",
             "type": "diff-review",
@@ -1644,23 +1604,71 @@ mod tests {
         }
     }
 
+    // FORK: AI Workstation's default — no compose box, keys go to the agent.
+    #[test]
+    fn typing_goes_straight_to_the_agent_by_default() {
+        let repo = TempDir::new().unwrap();
+        let mut tmux = MockTmuxOps::new();
+        tmux.expect_send_literal()
+            .withf(|session, window, text| {
+                session == "aiw-feature" && window == "claude" && text == "hi"
+            })
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+
+        let mut app = app_for_viewing_repo(repo.path());
+        assert!(
+            !app.config.compose_box,
+            "compose box must be off by default"
+        );
+        app.tmux = Box::new(tmux);
+
+        handle_view_key(&mut app, key(KeyCode::Char('h')), 20).unwrap();
+        handle_view_key(&mut app, key(KeyCode::Char('i')), 20).unwrap();
+        assert!(
+            matches!(app.mode, AppMode::Viewing(_)),
+            "typing must not open the compose box"
+        );
+        app.flush_view_input_batch().unwrap();
+    }
+
+    // FORK: the compose box is still one leader+e away, and leader+e again
+    // returns to direct typing.
+    #[test]
+    fn leader_e_turns_the_compose_box_on_and_off_when_default_is_direct() {
+        let repo = TempDir::new().unwrap();
+        let mut app = app_for_viewing_repo(repo.path());
+        let view = match &app.mode {
+            AppMode::Viewing(view) => view.clone(),
+            _ => panic!("expected viewing"),
+        };
+        assert!(!app.compose_intercept_active(&view));
+
+        app.toggle_compose_intercept();
+        assert!(app.compose_intercept_active(&view));
+
+        app.toggle_compose_intercept();
+        assert!(!app.compose_intercept_active(&view));
+    }
+
     #[test]
     fn literal_keys_are_buffered_until_flush() {
         let repo = TempDir::new().unwrap();
         let mut tmux = MockTmuxOps::new();
         tmux.expect_send_literal()
             .withf(|session, window, text| {
-                session == "amf-feature" && window == "claude" && text == "abc"
+                session == "aiw-feature" && window == "claude" && text == "abc"
             })
             .times(1)
             .returning(|_, _, _| Ok(()));
 
         let mut app = app_for_viewing_repo(repo.path());
+        app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
         app.tmux = Box::new(tmux);
         // Literal forwarding only happens in direct mode; compose
         // interception would otherwise capture these keys.
         app.compose_direct_targets
-            .insert("amf-feature:claude".to_string());
+            .insert("aiw-feature:claude".to_string());
 
         handle_view_key(&mut app, key(KeyCode::Char('a')), 20).unwrap();
         handle_view_key(&mut app, key(KeyCode::Char('b')), 20).unwrap();
@@ -1681,25 +1689,26 @@ mod tests {
         let mut tmux = MockTmuxOps::new();
         tmux.expect_send_literal()
             .withf(|session, window, text| {
-                session == "amf-feature" && window == "claude" && text == "ab"
+                session == "aiw-feature" && window == "claude" && text == "ab"
             })
             .times(1)
             .in_sequence(&mut seq)
             .returning(|_, _, _| Ok(()));
         tmux.expect_send_key_name()
             .withf(|session, window, key| {
-                session == "amf-feature" && window == "claude" && key == "Enter"
+                session == "aiw-feature" && window == "claude" && key == "Enter"
             })
             .times(1)
             .in_sequence(&mut seq)
             .returning(|_, _, _| Ok(()));
 
         let mut app = app_for_viewing_repo(repo.path());
+        app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
         app.tmux = Box::new(tmux);
         // Literal forwarding only happens in direct mode; compose
         // interception would otherwise capture these keys.
         app.compose_direct_targets
-            .insert("amf-feature:claude".to_string());
+            .insert("aiw-feature:claude".to_string());
 
         handle_view_key(&mut app, key(KeyCode::Char('a')), 20).unwrap();
         handle_view_key(&mut app, key(KeyCode::Char('b')), 20).unwrap();
@@ -1720,14 +1729,14 @@ mod tests {
             .times(1)
             .in_sequence(&mut seq)
             .withf(|session, window, cols, rows| {
-                session == "amf-feature" && window == "claude" && *cols == 88 && *rows == 23
+                session == "aiw-feature" && window == "claude" && *cols == 88 && *rows == 23
             })
             .returning(|_, _, _, _| Ok(()));
         tmux.expect_resize_pane()
             .times(1)
             .in_sequence(&mut seq)
             .withf(|session, window, cols, rows| {
-                session == "amf-feature" && window == "claude" && *cols == 88 && *rows == 24
+                session == "aiw-feature" && window == "claude" && *cols == 88 && *rows == 24
             })
             .returning(|_, _, _, _| Ok(()));
         app.tmux = Box::new(tmux);
@@ -1758,7 +1767,7 @@ mod tests {
         // and the header (rows), matching the leader-R bounce dimensions.
         assert_eq!(
             app.reanchor_bounce_target(),
-            Some(("amf-feature".to_string(), "claude".to_string(), 88, 24)),
+            Some(("aiw-feature".to_string(), "claude".to_string(), 88, 24)),
         );
 
         // Other harnesses fully repaint and must be excluded so they
@@ -1837,7 +1846,7 @@ mod tests {
             AppMode::TodoQuickCapture(state) => {
                 assert_eq!(state.project_name, "demo");
                 assert_eq!(state.input, "");
-                assert_eq!(state.view.session, "amf-feature");
+                assert_eq!(state.view.session, "aiw-feature");
             }
             _ => panic!("expected TodoQuickCapture mode"),
         }
@@ -1915,8 +1924,8 @@ mod tests {
     fn init_repo_with_branch_change() -> TempDir {
         let repo = TempDir::new().unwrap();
         git(repo.path(), &["init", "--initial-branch=main"]);
-        git(repo.path(), &["config", "user.name", "AMF Test"]);
-        git(repo.path(), &["config", "user.email", "amf@example.com"]);
+        git(repo.path(), &["config", "user.name", "AIW Test"]);
+        git(repo.path(), &["config", "user.email", "aiw@example.com"]);
         std::fs::write(repo.path().join("src.txt"), "base\n").unwrap();
         git(repo.path(), &["add", "src.txt"]);
         git(repo.path(), &["commit", "-m", "initial"]);
@@ -1968,7 +1977,7 @@ mod tests {
         app.mode = AppMode::Viewing(ViewState::new(
             "demo".to_string(),
             "feature".to_string(),
-            "amf-feature".to_string(),
+            "aiw-feature".to_string(),
             session.tmux_window.clone(),
             session.label.clone(),
             SessionKind::Claude,

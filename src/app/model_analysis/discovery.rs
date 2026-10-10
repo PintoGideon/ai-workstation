@@ -148,7 +148,7 @@ fn discover_codex(workdir: &Path, cancelled: &AtomicBool) -> Result<Vec<HarnessC
         request(
             1,
             "initialize",
-            json!({"clientInfo":{"name":"amf","version":env!("CARGO_PKG_VERSION")}}),
+            json!({"clientInfo":{"name":"aiw","version":env!("CARGO_PKG_VERSION")}}),
         )?;
         // The notification must precede the subsequent API calls. Write through
         // the same stdin owner after the handshake.

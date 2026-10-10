@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Inject a PR-Triage "stale hunk" fixture into a scratch AMF DB.
+"""Inject a PR-Triage "stale hunk" fixture into a scratch AIW DB.
 
 Usage: seed-stale-hunk-fixture.py <db_path> <repo_root> <pr_number>
 
 Fully offline once `gh pr view <pr_number>` resolves the PR's real, current
-head SHA — that read-only call is the same one AMF itself makes when the
+head SHA — that read-only call is the same one AIW itself makes when the
 manual PR-number prompt (`#`) submits, so the seeded `pr_review_cache` row is
 a cache hit the moment the scenario types that number in: the pane shows
 hand-written review comments with no live comment fetch.
@@ -82,7 +82,7 @@ untouched_comment = dict(
     touched_comment,
     id=UNTOUCHED_ID,
     line=830,
-    diff_hunk="@@ -937,6 +937,10 @@\n pub fn reply_posted_via_amf(reply: &PrComment) -> bool {\n     let body = reply.body.trim_end();\n     body.ends_with(AMF_ATTRIBUTION_FOOTER) || body.ends_with(AI_ATTRIBUTION_FOOTER)\n }\n+\n+pub(super) const STALE_HUNK_NOTE: &str = \"...\";",
+    diff_hunk="@@ -937,6 +937,10 @@\n pub fn reply_posted_via_aiw(reply: &PrComment) -> bool {\n     let body = reply.body.trim_end();\n     body.ends_with(AIW_ATTRIBUTION_FOOTER) || body.ends_with(AI_ATTRIBUTION_FOOTER)\n }\n+\n+pub(super) const STALE_HUNK_NOTE: &str = \"...\";",
     body="Should this note also mention the combined-batch case explicitly, or is that covered by the shared wording?",
     snippet="Should this note also mention the combined-batch case explicitly...",
     thread_id="PRRT_stale_untouched",
@@ -123,7 +123,7 @@ conn.execute(
     "INSERT OR REPLACE INTO features "
     "(id, project_id, name, branch, workdir, is_worktree, tmux_session, mode, agent, status, collapsed, created_at, last_accessed) "
     "VALUES ('stale-hunk-demo-feature', ?, 'stale hunk demo', 'bug-pr-triage-comments-if-i-fix', ?, 0, "
-    "'amf-stale-hunk-demo', 'vibe', 'claude', 'stopped', 0, datetime('now'), datetime('now'))",
+    "'aiw-stale-hunk-demo', 'vibe', 'claude', 'stopped', 0, datetime('now'), datetime('now'))",
     (project_id, repo_root),
 )
 

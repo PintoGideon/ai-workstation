@@ -672,7 +672,7 @@ fn language_from_shebang(source: &str) -> Option<HighlightLanguage> {
 }
 
 fn syntax_root_dir() -> PathBuf {
-    crate::project::amf_config_dir().join("tree-sitter")
+    crate::project::aiw_config_dir().join("tree-sitter")
 }
 
 #[cfg(target_os = "macos")]

@@ -275,7 +275,7 @@ try:
     assert received("transcript") == [], received("transcript")
     print("PASS: scrolling xterm's own viewport to the bottom resumed the live view", flush=True)
 
-    tab("OpenCode")
+    tab("Neovim")
     wait("!!document.querySelector('.xterm-rows') && document.querySelector('.xterm-rows').innerText.includes('full-screen program')")
     wait("document.querySelector('.xterm-rows').innerText.includes('wheel reports received: 0')")
     for _ in range(3):
@@ -287,7 +287,7 @@ try:
     assert reports and re.fullmatch(r"(\x1b\[<64;\d+;\d+M)+", reports), repr(reports)
     capture(
         "005-full-screen-program-wheel.png",
-        "A full-screen program that asked for mouse reporting (an OpenCode-like fixture) scrolls its own view: the GUI forwarded wheel-up reports only, never keystrokes, and showed no history overlay.",
+        "A full-screen program that asked for mouse reporting (a Neovim-like fixture) scrolls its own view: the GUI forwarded wheel-up reports only, never keystrokes, and showed no history overlay.",
         ["full-screen program", "wheel reports received"],
         f"!{OVERLAY}",
     )

@@ -10,7 +10,7 @@
 
 ## Why / problem
 
-AMF should show two different usage scopes:
+AIW should show two different usage scopes:
 
 - Feature total usage on the dashboard feature row, next to the feature
   name.
@@ -22,7 +22,7 @@ The data model already points in the right direction: each
 and transient `status_text`. The sync path also builds one usage job per
 session. The problem is that source discovery falls back to workdir +
 timestamp inference when a session does not have an exact harness session
-ID. With multiple same-harness windows in one feature, more than one AMF
+ID. With multiple same-harness windows in one feature, more than one AIW
 session can resolve to the newest provider transcript, making the visible
 usage effectively feature-scoped or ambiguous.
 
@@ -53,29 +53,29 @@ part is feature-level aggregation for the feature row.
 
 ### Claude
 
-Feasible. Claude hooks expose a Claude `session_id`, and AMF already
+Feasible. Claude hooks expose a Claude `session_id`, and AIW already
 parses Claude transcript usage by that id. For newly launched sessions,
-AMF currently exports `AMF_SESSION` as the feature tmux session name; it
-does not export the AMF `FeatureSession.id`, so hook events cannot reliably
+AIW currently exports `AIW_SESSION` as the feature tmux session name; it
+does not export the AIW `FeatureSession.id`, so hook events cannot reliably
 bind the Claude session id back to the specific dashboard session row.
 
 ### Codex
 
-Feasible. Codex rollout events include token counts, and AMF can resolve
+Feasible. Codex rollout events include token counts, and AIW can resolve
 exact rollout paths from the Codex state database when it knows the Codex
-thread id. Current notify handling prefers `AMF_SESSION`, which identifies
+thread id. Current notify handling prefers `AIW_SESSION`, which identifies
 the feature tmux session. Exact per-window usage needs the real Codex
-session id preserved and mapped to the AMF `FeatureSession.id`.
+session id preserved and mapped to the AIW `FeatureSession.id`.
 
 ### opencode
 
-Feasible. opencode plugins see `sessionID`, and AMF already reads
+Feasible. opencode plugins see `sessionID`, and AIW already reads
 step-finish token records by that id. New opencode windows need a way for
-plugin events to tell AMF which `FeatureSession` they belong to.
+plugin events to tell AIW which `FeatureSession` they belong to.
 
 ### Pi
 
-Not currently feasible from AMF's existing integration. Pi is launched as
+Not currently feasible from AIW's existing integration. Pi is launched as
 an agent harness, but there is no `TokenUsageProvider::Pi`, no known local
 usage artifact reader, and no hook/plugin integration for token usage.
 Treat Pi as unsupported for this project until its CLI exposes usable
@@ -83,7 +83,7 @@ session usage metadata.
 
 ## Proposed design
 
-Bind provider session IDs to AMF session IDs as early and exactly as each
+Bind provider session IDs to AIW session IDs as early and exactly as each
 harness allows. Use inference only for old sessions and recovery. Store
 formatted per-session usage on each `FeatureSession` as today, but also
 carry raw usage data long enough to compute a feature aggregate without
@@ -107,17 +107,17 @@ Goal: stop newly launched sessions from relying on workdir/newest
 inference when provider events can tell us the real session id.
 
 - [x] Add launcher environment for agent windows:
-  `AMF_FEATURE_SESSION_ID`, `AMF_TMUX_SESSION`, and `AMF_TMUX_WINDOW`.
-- [x] Keep `AMF_SESSION` for backward compatibility while moving new code
+  `AIW_FEATURE_SESSION_ID`, `AIW_TMUX_SESSION`, and `AIW_TMUX_WINDOW`.
+- [x] Keep `AIW_SESSION` for backward compatibility while moving new code
   to the more explicit variables.
-- [x] Update Claude hook scripts to include both the AMF feature-session id
+- [x] Update Claude hook scripts to include both the AIW feature-session id
   and Claude hook `session_id` in IPC payloads.
 - [x] Update Codex notify handling to preserve the real Codex session id
-  separately from the AMF tmux session id.
-- [x] Update opencode plugins to include `AMF_FEATURE_SESSION_ID` when
+  separately from the AIW tmux session id.
+- [x] Update opencode plugins to include `AIW_FEATURE_SESSION_ID` when
   emitting sidebar/input/session events.
 - [x] Add IPC handling that maps
-  `AMF_FEATURE_SESSION_ID -> TokenUsageSource` and marks the source
+  `AIW_FEATURE_SESSION_ID -> TokenUsageSource` and marks the source
   `Exact`.
 - [x] Add regression tests for exact binding for Claude, Codex, and
   opencode.
@@ -141,7 +141,7 @@ behaviorally secondary.
   the same feature when there are multiple plausible provider sessions.
 - [x] Prefer unmatched provider sessions closest to each
   `FeatureSession.created_at`.
-- [x] For Codex, ignore inferred sources updated before the AMF session was
+- [x] For Codex, ignore inferred sources updated before the AIW session was
   created, and clear any stale inferred Codex binding on refresh.
 - [ ] Keep `TokenUsageSourceMatch::Inferred` visible for Codex and extend
   confidence text to other providers if useful.
@@ -202,7 +202,7 @@ Acceptance criteria:
 
 Goal: make the integration debuggable and robust across provider versions.
 
-- [ ] Log source binding changes with provider, match confidence, AMF
+- [ ] Log source binding changes with provider, match confidence, AIW
   session id, and provider session id.
 - [ ] Add debug log entries when inference is skipped because a match is
   ambiguous.
@@ -214,7 +214,7 @@ Goal: make the integration debuggable and robust across provider versions.
 
 Acceptance criteria:
 
-- A wrong or missing usage line can be diagnosed from AMF debug logs.
+- A wrong or missing usage line can be diagnosed from AIW debug logs.
 - Unsupported providers fail quietly in the UI but are explicit in docs.
 
 ## Suggested release slices

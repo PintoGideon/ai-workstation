@@ -1,11 +1,11 @@
-# Zola config for the AMF marketing + docs site.
+# Zola config for the AIW marketing + docs site.
 # https://www.getzola.org/documentation/getting-started/configuration/
 #
-# Custom domain for the agent-mainframe-site Pages project (issue #635).
+# The site is built locally only (`zola serve`); AIW has no public domain.
 # Zola uses this to build every absolute link, canonical tag, and sitemap
 # entry.
-base_url = "https://agentmainframe.dev"
-title = "Agent Mainframe"
+base_url = "http://127.0.0.1:1111"
+title = "AI Workstation"
 description = "Run multiple AI coding agents in parallel, each on its own branch and in its own terminal, without losing track of them."
 default_language = "en"
 compile_sass = true
@@ -23,5 +23,5 @@ theme = "github-dark"
 include_content = true
 
 [extra]
-github_url = "https://github.com/eldridgerdev/agent-mainframe"
-releases_url = "https://github.com/eldridgerdev/agent-mainframe/releases"
+github_url = "/docs/installation/"
+releases_url = "/docs/installation/"

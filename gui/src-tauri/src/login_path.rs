@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 /// Printed right before `$PATH` so output from the user's rc files (banners,
 /// `echo`s) can't be mistaken for it.
-const MARKER: &str = "__AMF_LOGIN_PATH__";
+const MARKER: &str = "__AIW_LOGIN_PATH__";
 
 /// A slow or interactive rc file must not hang the app's startup.
 const TIMEOUT: Duration = Duration::from_secs(3);
@@ -138,7 +138,7 @@ mod tests {
     #[test]
     fn login_shell_path_is_none_for_a_missing_shell() {
         assert_eq!(
-            login_shell_path(&OsString::from("/nonexistent/amf-shell")),
+            login_shell_path(&OsString::from("/nonexistent/aiw-shell")),
             None
         );
     }

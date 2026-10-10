@@ -277,6 +277,9 @@ impl App {
             self.show_error(e);
             return;
         }
+        // FORK(no-cloud): opening PR Triage is one of the two explicit
+        // triggers for the PR badge sweep (the other is the refresh key).
+        self.sync_active_prs_background();
 
         match GhCli::resolve_pr(&workdir) {
             Ok(PrResolution::Found(pr)) => self.enter_pr_review(workdir, pr),

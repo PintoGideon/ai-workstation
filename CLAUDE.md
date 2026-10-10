@@ -7,8 +7,8 @@ advisory guidance is in [checks.md](docs/development/checks.md).
 
 The feature notes below retain Claude Code's detailed implementation context.
 Use them alongside the architecture guide; source is authoritative when a feature
-changes. Tests live in feature suites and beside small units, and all four agent
-harnesses (Claude Code, Codex, OpenCode, Pi) are supported.
+changes. Tests live in feature suites and beside small units, and all five agent
+harnesses (Claude Code, Codex, Pi, Gemini CLI, Cursor agent) are supported.
 
 ## Model selection (Claude Code working in this repo)
 
@@ -31,7 +31,7 @@ Lineup checked 2026-10-09. Prices are per million input/output tokens, Anthropic
   - `sonnet`: implementing from a concrete plan, writing tests for a stated
     behavior, doc updates, a focused review of a small diff.
   - Inherit (omit `model`): design, debugging with an unknown cause, and any
-    change touching migrations, the shared `amf.db`, process/child lifetimes,
+    change touching migrations, the shared `aiw.db`, process/child lifetimes,
     worker identity checks, or the invariants in the feature notes below.
   - `fable`: only when the user asks for it.
 - **Suggest Fable, but don't switch to it yourself.** For a large refactor
@@ -41,16 +41,16 @@ Lineup checked 2026-10-09. Prices are per million input/output tokens, Anthropic
 - **Lower effort before a smaller model.** For routine steps, lowering a
   capable model's `effort` often holds quality better than dropping a tier.
 - **Wired in:** `.claude/agents/Explore.md` runs exploration on Haiku, and
-  `/amf:pr-status` forks onto Haiku. Session-scoped commands such as
-  `/build`, `/check`, `/lint`, `/amf:pr-create` and `/amf:pr-continue`
+  `/aiw:pr-status` forks onto Haiku. Session-scoped commands such as
+  `/build`, `/check`, `/lint`, `/aiw:pr-create` and `/aiw:pr-continue`
   deliberately inherit the session model, because they depend on context
   from the session.
-- This section covers Claude Code's own model use. AMF's product-side model
+- This section covers Claude Code's own model use. AIW's product-side model
   pickers and advice (`model_evidence.rs`, `model_analysis/`) are separate.
 
 **HeadlessRunner** (headless.rs):
 
-- Harness-neutral one-shot runs for Claude, Codex, OpenCode, and Pi
+- Harness-neutral one-shot runs for Claude, Codex, and Pi
 - Restricted no-tools mode for context-complete prompts
 - Read-only repository tools for directed plan revisions, and for the
   round/synthesis/critique passes when the interview has attached reference
@@ -58,16 +58,16 @@ Lineup checked 2026-10-09. Prices are per million input/output tokens, Anthropic
 - Harness selection and fallback for plan interviews
 
 **Prompt registry** (`src/prompts/`): the single home for every headless
-prompt AMF sends (see "Editable Headless Prompts" below). `mod.rs` holds
+prompt AIW sends (see "Editable Headless Prompts" below). `mod.rs` holds
 `PromptId` (24 stable ids), `PromptSpec` (title/summary/placeholders/
 `default_template`/`harness_variants`), and `resolve_template_layered` /
 `resolve_prompt_layered`. `defaults.rs` is the built-in template text moved
 out of the call sites. `resolve.rs` has `PromptContext` +
 `render_template` (unvalidated `{{token}}` substitution — missing/unknown
 tokens render literally). `project.rs` reads project-scope overrides from
-`amf.json`. Call sites resolve via `App::resolve_headless_prompt` /
+`aiw.json`. Call sites resolve via `App::resolve_headless_prompt` /
 `resolve_headless_template` (`app/mod.rs`), which assemble the feature (DB) →
-project (`amf.json`) → global (DB) → built-in layers.
+project (`aiw.json`) → global (DB) → built-in layers.
 
 ### Feature TODOs
 
@@ -392,12 +392,12 @@ explicit, opt-in exception: those passes then run through
 - **Reachability:** `plan_interview::prepare_attached_docs(workdir, &[PathBuf])`
   runs right before each pass. An in-workdir doc is referenced where it lies; an
   external one is copied into a **per-pass** subdirectory
-  `<workdir>/.amf/interview-docs/<pid>-<seq>/` (generated scratch via
-  `extension::generated_amf_subdir`) so a CWD-scoped read-only harness can open
+  `<workdir>/.aiw/interview-docs/<pid>-<seq>/` (generated scratch via
+  `extension::generated_aiw_subdir`) so a CWD-scoped read-only harness can open
   it. Each call gets its own subdir on purpose: a dismissed plan review leaves
   its worker running, and a later pass (or teardown) must not delete the copies
-  it is still reading. Before the first external copy, `ensure_amf_ignored`
-  adds `.amf/` to the repo's `.git/info/exclude` (untracked, per-repo) unless it
+  it is still reading. Before the first external copy, `ensure_aiw_ignored`
+  adds `.aiw/` to the repo's `.git/info/exclude` (untracked, per-repo) unless it
   is already ignored, so an agent's `git add -A` cannot commit a private doc.
   The whole `interview-docs` tree is cleared by
   `App::clear_plan_interview_doc_staging` on interview accept / abort **and on
@@ -418,7 +418,7 @@ explicit, opt-in exception: those passes then run through
 
 - **Opt-in, global only:** `AppConfig::plan_interview_mcp`
   (`headless::HeadlessMcpConfig { config?, allowed_tools }`), never
-  `amf.json` — MCP servers run programs. `HeadlessMcpConfig::validate`
+  `aiw.json` — MCP servers run programs. `HeadlessMcpConfig::validate`
   requires exact `mcp__<server>__<tool>` names (no wildcards) and, when
   `config` is set, an absolute (`~/`-expanded) file. `App::plan_interview_mcp`
   resolves it per pass, returning `None` for non-Claude harnesses and for an
@@ -479,7 +479,7 @@ show a short plan, or escalate into the full interview.
   `{"outcome":"direct","summary":"..."}` (trivial — proceed with no plan
   artifact), `{"outcome":"plan","plan":"<markdown>"}` (the nested markdown
   follows the exact full-mode plan contract, so it drops into the same
-  `AMF_PLAN.md` / Review-gate path unchanged), or
+  `AIW_PLAN.md` / Review-gate path unchanged), or
   `{"outcome":"escalate","reason":"..."}`. Parsed by
   `plan_interview::parse_quick_synthesis_outcome` into `QuickSynthesisOutcome`
   (`Direct`/`Plan`/`Escalate`/`Unparseable`); `Unparseable` — and a harness
@@ -529,10 +529,10 @@ show a short plan, or escalate into the full interview.
 
 ### Editable Headless Prompts
 
-Every one-shot ("headless") AI call AMF makes runs a template from a central
+Every one-shot ("headless") AI call AIW makes runs a template from a central
 registry that the user can view and override. See
 `docs/backlog/editable-prompts-call-site-inventory.md` for the call-site map
-and `AMF_PLAN.md` for the design decisions.
+and `AIW_PLAN.md` for the design decisions.
 
 - **Registry (`src/prompts/`).** `PromptId::ALL` is the 24 stable ids
   (`plan_interview.round`/`.synthesis`/`.critique`/`.directed_revision`/
@@ -555,15 +555,15 @@ and `AMF_PLAN.md` for the design decisions.
   literally, and substituted values are never re-scanned. An override may drop
   or add tokens freely.
 - **Three override scopes.** Feature (keyed by workdir path) and global
-  overrides live in `amf.db`'s `prompt_overrides` table (`MIGRATION_034`,
+  overrides live in `aiw.db`'s `prompt_overrides` table (`MIGRATION_034`,
   `src/db/prompt_overrides.rs`: `OverrideScope::{Feature,Global}`, CRUD +
   `PromptOverrides` in-memory view with a no-DB fallback). Project overrides
-  live in `amf.json` under `ExtensionConfig::prompt_overrides`
+  live in `aiw.json` under `ExtensionConfig::prompt_overrides`
   (`HashMap<prompt_id, PromptOverrideEntry{ template?, harnesses }>`,
-  `src/prompts/project.rs`) — **not** `.amf/prompts/`, because `.amf/` is
+  `src/prompts/project.rs`) — **not** `.aiw/prompts/`, because `.aiw/` is
   gitignored dir-wide, and **not** merged from the global `extension` block.
-  Harnesses are keyed by `AgentKind::slug()` (`claude`/`codex`/`opencode`/
-  `pi`).
+  Harnesses are keyed by `AgentKind::slug()` (`claude`/`codex`/`pi`/
+  `gemini`/`cursor`).
 - **Precedence.** `resolve_template_layered` (`src/prompts/resolve.rs`):
   feature → project → global → built-in, nearest wins; within the winning
   layer a per-harness template beats the shared one, so a nearer *shared*
@@ -594,12 +594,12 @@ and `AMF_PLAN.md` for the design decisions.
 
 ### Reasoning level (headless runs)
 
-Wherever AMF lets you pick a headless model, it also lets you pick how hard
+Wherever AIW lets you pick a headless model, it also lets you pick how hard
 the model thinks.
 
 - **One vocabulary, per-harness flags.** `headless::ReasoningLevel`
   (`minimal`..`max`) maps through `reasoning_args`: Claude `--effort`, Codex
-  `-c model_reasoning_effort="…"`, OpenCode `--variant`. Pi has no verified flag,
+  `-c model_reasoning_effort="…"`. Pi has no verified flag,
   so it offers none. `ReasoningLevel::supported_for(harness)` is the verified
   set; a level the harness cannot express is **dropped, never passed through**
   (Codex has no `max`; Claude has no `minimal`).
@@ -610,7 +610,7 @@ the model thinks.
   `AiModelPickState::{reasoning_levels, reasoning}`; `h`/`l` (or ←/→) cycle
   Default → each level on the same screen. The row is hidden for a harness
   with no levels. Expert reasoning is **not persisted** with the interview
-  draft (it would need a migration on the shared `amf.db`); a resumed draft
+  draft (it would need a migration on the shared `aiw.db`); a resumed draft
   falls back to the `plan_preflight` config entry.
 - **Config.** `review_reasoning` / `review_reasonings` mirror `review_model` /
   `review_models` (`AppConfig::review_reasoning_for`; Expert plan review never
@@ -623,7 +623,7 @@ the model thinks.
 
 When an AI review's diff would overflow the model, it is split into bounded
 prompts and the findings recombined. Full rationale in
-`docs/batched-review.md`; `AMF_PLAN.md` has the design decisions.
+`docs/batched-review.md`; `AIW_PLAN.md` has the design decisions.
 
 - **`src/diff_split.rs`** — lossless text-level splitting. `SplitDiff::parse`
   (`split_inclusive('\n')`, CRLF- and no-trailing-newline-safe) →
@@ -647,7 +647,7 @@ prompts and the findings recombined. Full rationale in
   `BatchProgress` enum feeds the UI.
 - **Size estimation / typed error** live in `src/headless.rs`:
   `estimate_prompt_tokens` (bytes ÷ `PROMPT_ESTIMATE_BYTES_PER_TOKEN`),
-  `default_prompt_budget_tokens` (Claude/Codex 128k, OpenCode/Pi 96k),
+  `default_prompt_budget_tokens` (Claude/Codex 128k, Pi 96k),
   `will_overflow` / `will_overflow_with_budget` (budget `0` = gate off), and
   `PromptTooLong` + `is_prompt_too_long_message` / `as_prompt_too_long`
   (best-effort classifier over the four CLIs' overflow phrasings), emitted by
@@ -667,12 +667,12 @@ prompts and the findings recombined. Full rationale in
   interview has a non-diff guard instead: `plan_interview::guard_context_for_prompt`
   drops the README/`CLAUDE.md` excerpts and notes it in the dialog footer.
 - **Config**: `AppConfig::review_prompt_budget_tokens` (global) /
-  `ExtensionConfig::review_prompt_budget_tokens` (project `amf.json`,
+  `ExtensionConfig::review_prompt_budget_tokens` (project `aiw.json`,
   project-over-global), resolved by `App::review_prompt_budget(repo, harness)`.
 
 ### Agent Limits & Resource Health (resources/)
 
-Guards against AMF quietly exhausting host memory. Everything here
+Guards against AIW quietly exhausting host memory. Everything here
 is advisory: a tripped gate asks, it never refuses, and a missing
 signal is always "no gate" rather than a block.
 
@@ -686,8 +686,8 @@ resources/
 ├── procs.rs    # ps-backed process list/tree, pid liveness,
 │               # SIGTERM-then-SIGKILL tree termination, VS Code
 │               # window attribution
-└── doctor.rs   # `amf doctor` checks + text/JSON rendering
-                # (reads via AmfDb::open_read_only + setup::read_config:
+└── doctor.rs   # `aiw doctor` checks + text/JSON rendering
+                # (reads via AiwDb::open_read_only + setup::read_config:
                 #  no file creation, no migration, no journal change)
 ```
 

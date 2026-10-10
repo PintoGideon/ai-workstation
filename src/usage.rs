@@ -1,5 +1,4 @@
-use crate::debug::{LogLevel, log_to_file, set_user_alert};
-use crate::http_client;
+use crate::debug::{LogLevel, log_to_file};
 use crate::project::AgentKind;
 use crate::token_tracking::read_appended_lines;
 use chrono::{DateTime, Datelike, TimeZone, Utc};
@@ -73,7 +72,6 @@ pub struct ZaiUsageData {
     pub weekly_usage_pct: Option<f64>,
     pub five_hour_token_limit: Option<u64>,
     pub five_hour_usage_pct: Option<f64>,
-    pub last_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -119,7 +117,7 @@ pub struct UsageWindow {
 
 /// Read-only view of all known usage windows for a harness, sourced from
 /// the same cached `UsageData` the dashboard status bar reads. Returns an
-/// empty vec when the harness has no usage support (OpenCode, Pi) or no
+/// empty vec when the harness has no usage support (Pi) or no
 /// data has been fetched yet — callers should omit the harness entirely
 /// in that case, never render a placeholder.
 pub fn usage_windows_for(agent: &AgentKind, data: &UsageData) -> Vec<UsageWindow> {
@@ -167,7 +165,9 @@ pub fn usage_windows_for(agent: &AgentKind, data: &UsageData) -> Vec<UsageWindow
         }
         // No usage/quota API is known for these harnesses today; fail
         // silently rather than guessing at a shape.
-        AgentKind::Opencode | AgentKind::Pi => {}
+        AgentKind::Pi => {}
+        // FORK: no usage data for Gemini/Cursor (degrades like Pi).
+        AgentKind::Gemini | AgentKind::Cursor => {}
     }
     windows
 }
@@ -189,9 +189,10 @@ pub fn usage_windows_for_session_kind(
     use crate::project::SessionKind;
     let agent = match kind {
         SessionKind::Claude => AgentKind::Claude,
-        SessionKind::Opencode => AgentKind::Opencode,
         SessionKind::Codex => AgentKind::Codex,
         SessionKind::Pi => AgentKind::Pi,
+        SessionKind::Gemini => AgentKind::Gemini, // FORK
+        SessionKind::Cursor => AgentKind::Cursor, // FORK
         _ => return Vec::new(),
     };
     usage_windows_for(&agent, data)
@@ -323,31 +324,6 @@ struct ConversationUsage {
 }
 
 #[derive(Debug, Deserialize)]
-struct RateLimitResponse {
-    five_hour: Option<RateLimitWindow>,
-    seven_day: Option<RateLimitWindow>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct RateLimitWindow {
-    utilization: f64,
-    resets_at: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Credentials {
-    claude_ai_oauth: Option<OAuthCreds>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct OAuthCreds {
-    access_token: String,
-    subscription_type: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
 struct CodexSessionEvent {
     timestamp: Option<String>,
     #[serde(rename = "type")]
@@ -391,14 +367,10 @@ struct CodexRateLimitWindow {
 pub struct UsageManager {
     data: Arc<Mutex<UsageData>>,
     last_stats_refresh: Option<Instant>,
-    last_oauth_refresh: Option<Instant>,
     last_cycle: Instant,
     cycle_interval_secs: u64,
     zai_enabled: bool,
     codex_enabled: bool,
-    zai_monthly_limit: Option<u64>,
-    zai_weekly_limit: Option<u64>,
-    zai_five_hour_limit: Option<u64>,
     stats_state: Arc<Mutex<StatsRefreshState>>,
     stats_refresh_inflight: Arc<AtomicBool>,
     /// Set when the filesystem watcher reported transcript changes that
@@ -443,14 +415,10 @@ impl UsageManager {
         Self {
             data: Arc::new(Mutex::new(data)),
             last_stats_refresh: None,
-            last_oauth_refresh: None,
             last_cycle: Instant::now(),
             cycle_interval_secs: 5,
             zai_enabled,
             codex_enabled: true,
-            zai_monthly_limit,
-            zai_weekly_limit,
-            zai_five_hour_limit,
             stats_state: Arc::new(Mutex::new(StatsRefreshState::default())),
             stats_refresh_inflight: Arc::new(AtomicBool::new(false)),
             stats_dirty_pending: false,
@@ -554,54 +522,11 @@ impl UsageManager {
             }
         }
 
-        let should_refresh_oauth = self
-            .last_oauth_refresh
-            .map(|t| now.duration_since(t).as_secs() >= 60)
-            .unwrap_or(true);
-
-        if should_refresh_oauth {
-            self.last_oauth_refresh = Some(now);
-            let data = Arc::clone(&self.data);
-            let zai_enabled = self.zai_enabled;
-            let monthly = self.zai_monthly_limit;
-            let weekly = self.zai_weekly_limit;
-            let five_hour = self.zai_five_hour_limit;
-            let spawn = std::thread::Builder::new()
-                .name("usage-refresh".to_string())
-                .spawn(move || {
-                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        fetch_rate_limits(&data);
-                        if zai_enabled {
-                            fetch_zai_usage(&data, monthly, weekly, five_hour);
-                        }
-                    }));
-
-                    if result.is_err() {
-                        let mut d = data.lock().unwrap();
-                        d.claude.last_error = Some("usage refresh thread panicked".to_string());
-                        if zai_enabled {
-                            d.zai.last_error = Some("usage refresh thread panicked".to_string());
-                        }
-                        log_to_file(
-                            LogLevel::Error,
-                            "usage",
-                            "usage-refresh thread panicked; see panic log entry for details",
-                        );
-                        set_user_alert(
-                            "Error: Usage refresh failed. Check debug log for details.".to_string(),
-                        );
-                    }
-                });
-
-            if let Err(err) = spawn {
-                log_to_file(
-                    LogLevel::Error,
-                    "usage",
-                    &format!("failed to spawn usage-refresh thread: {err}"),
-                );
-                set_user_alert("Error: Usage refresh failed. Check debug log for details.".into());
-            }
-        }
+        // FORK(no-cloud): AIW also polled `api.anthropic.com/api/oauth/usage`
+        // here every minute with the user's Claude OAuth token to fill the
+        // Claude 5h/7d windows. AIW makes no network calls of its own, so
+        // that poll is gone; Claude windows stay empty unless a local source
+        // reports them.
     }
 
     fn model_enabled(&self, model: Model) -> bool {
@@ -717,144 +642,6 @@ fn refresh_codex_stats(data: &Arc<Mutex<UsageData>>, state: &Arc<Mutex<StatsRefr
     data.codex.five_hour_resets = stats.five_hour_resets.clone();
     data.codex.weekly_resets = stats.weekly_resets.clone();
     data.codex.plan_type = stats.plan_type.clone();
-}
-
-fn fetch_rate_limits(data: &Arc<Mutex<UsageData>>) {
-    let Some(claude_dir) = dirs::home_dir().map(|h| h.join(".claude")) else {
-        log_to_file(
-            LogLevel::Debug,
-            "usage",
-            "claude oauth usage: home_dir unavailable",
-        );
-        return;
-    };
-
-    let creds_path = claude_dir.join(".credentials.json");
-    let Ok(contents) = std::fs::read_to_string(&creds_path) else {
-        log_to_file(
-            LogLevel::Debug,
-            "usage",
-            &format!(
-                "claude oauth usage: credentials file missing/unreadable at {}",
-                creds_path.display()
-            ),
-        );
-        return;
-    };
-
-    let Ok(creds) = serde_json::from_str::<Credentials>(&contents) else {
-        log_to_file(
-            LogLevel::Warn,
-            "usage",
-            "claude oauth usage: failed to parse credentials JSON",
-        );
-        return;
-    };
-
-    let Some(oauth) = creds.claude_ai_oauth else {
-        log_to_file(
-            LogLevel::Debug,
-            "usage",
-            "claude oauth usage: claude_ai_oauth not present in credentials",
-        );
-        return;
-    };
-
-    log_to_file(
-        LogLevel::Debug,
-        "usage",
-        &format!(
-            "claude oauth usage: requesting oauth usage endpoint (sub={:?})",
-            oauth.subscription_type
-        ),
-    );
-
-    {
-        let mut d = data.lock().unwrap();
-        d.claude.subscription_type = oauth.subscription_type;
-    }
-
-    let result = http_client::https_agent()
-        .get("https://api.anthropic.com/api/oauth/usage")
-        .header("Authorization", &format!("Bearer {}", oauth.access_token))
-        .header("anthropic-beta", "oauth-2025-04-20")
-        .header("User-Agent", "claude-code/2.1.42")
-        .header("Content-Type", "application/json")
-        .call();
-
-    match result {
-        Ok(mut response) => {
-            log_to_file(
-                LogLevel::Debug,
-                "usage",
-                "claude oauth usage: HTTP request succeeded; parsing body",
-            );
-            let body = match response.body_mut().read_to_string() {
-                Ok(b) => b,
-                Err(e) => {
-                    let mut d = data.lock().unwrap();
-                    d.claude.last_error = Some(format!("Read error: {}", e));
-                    log_to_file(
-                        LogLevel::Warn,
-                        "usage",
-                        &format!("claude oauth usage: body read error: {e}"),
-                    );
-                    return;
-                }
-            };
-
-            match serde_json::from_str::<RateLimitResponse>(&body) {
-                Ok(resp) => {
-                    let mut d = data.lock().unwrap();
-                    d.claude.five_hour_pct = resp.five_hour.as_ref().map(|w| w.utilization);
-                    d.claude.five_hour_resets =
-                        resp.five_hour.as_ref().and_then(|w| w.resets_at.clone());
-                    d.claude.seven_day_pct = resp.seven_day.as_ref().map(|w| w.utilization);
-                    d.claude.seven_day_resets =
-                        resp.seven_day.as_ref().and_then(|w| w.resets_at.clone());
-                    d.claude.last_error = None;
-                    log_to_file(
-                        LogLevel::Debug,
-                        "usage",
-                        &format!(
-                            "claude oauth usage: parsed windows 5h={:?} 7d={:?}",
-                            d.claude.five_hour_pct, d.claude.seven_day_pct
-                        ),
-                    );
-                }
-                Err(e) => {
-                    let mut d = data.lock().unwrap();
-                    d.claude.last_error = Some(format!("Parse error: {}", e));
-                    let snippet: String = body.chars().take(240).collect();
-                    log_to_file(
-                        LogLevel::Warn,
-                        "usage",
-                        &format!(
-                            "claude oauth usage: parse error: {e}; body_prefix={}",
-                            snippet.replace('\n', "\\n")
-                        ),
-                    );
-                }
-            }
-        }
-        Err(e) => {
-            let mut d = data.lock().unwrap();
-            d.claude.last_error = Some(format!("HTTP error: {}", e));
-            log_to_file(
-                LogLevel::Warn,
-                "usage",
-                &format!("claude oauth usage: HTTP error: {e}"),
-            );
-        }
-    }
-}
-
-fn fetch_zai_usage(
-    _data: &Arc<Mutex<UsageData>>,
-    _monthly_limit: Option<u64>,
-    _weekly_limit: Option<u64>,
-    _five_hour_limit: Option<u64>,
-) {
 }
 
 fn calculate_claude_today_tokens(today: &str, cache: &mut ClaudeTodayCache) -> u64 {
@@ -1469,27 +1256,21 @@ mod usage_window_tests {
     }
 
     #[test]
-    fn opencode_and_pi_have_no_usage_source_and_always_report_empty() {
+    fn pi_has_no_usage_source_and_always_reports_empty() {
         let mut data = UsageData::default();
-        // Even with unrelated fields populated, these harnesses have no
+        // Even with unrelated fields populated, this harness has no
         // known accessor path — must stay empty, not fall through to
         // some other harness's numbers.
         data.claude.five_hour_pct = Some(1.0);
         data.codex.five_hour_usage_pct = Some(1.0);
 
-        assert!(usage_windows_for(&AgentKind::Opencode, &data).is_empty());
         assert!(usage_windows_for(&AgentKind::Pi, &data).is_empty());
     }
 
     #[test]
     fn no_cached_data_at_all_reports_empty_for_every_harness() {
         let data = UsageData::default();
-        for agent in [
-            AgentKind::Claude,
-            AgentKind::Opencode,
-            AgentKind::Codex,
-            AgentKind::Pi,
-        ] {
+        for agent in [AgentKind::Claude, AgentKind::Codex, AgentKind::Pi] {
             assert!(usage_windows_for(&agent, &data).is_empty());
         }
     }

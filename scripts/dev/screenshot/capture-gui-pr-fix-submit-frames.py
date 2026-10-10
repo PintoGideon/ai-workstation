@@ -168,8 +168,8 @@ def choose_comment(author_prefix):
     evaluate(f'Array.from(document.querySelectorAll(".pr-comment")).find(b=>b.textContent.startsWith({json.dumps(author_prefix)})).click()')
 
 
-state = pathlib.Path(os.environ["AMF_GUI_GH_STATE"])
-calls_path = pathlib.Path(os.environ["AMF_GUI_AI_CALLS"])
+state = pathlib.Path(os.environ["AIW_GUI_GH_STATE"])
+calls_path = pathlib.Path(os.environ["AIW_GUI_AI_CALLS"])
 
 
 def ai_calls():
@@ -199,8 +199,8 @@ try:
     fill("Fix prompt", "Fix negative invoice rounding and add regression coverage.")
     click("Preview send to agent…")
     wait(has_button("Send fix to agent"))
-    capture("001-send-confirmation.png", "An explicit confirmation previews the exact edited fix and its correlated reply-draft command before any terminal delivery or Fixing mark.", ["Send fix to agent", "amf reply-draft --pr-number 12", "Back to fix prompt"])
-    assert not pathlib.Path(os.environ["AMF_GUI_FIX_PROMPTS"]).exists()
+    capture("001-send-confirmation.png", "An explicit confirmation previews the exact edited fix and its correlated reply-draft command before any terminal delivery or Fixing mark.", ["Send fix to agent", "aiw reply-draft --pr-number 12", "Back to fix prompt"])
+    assert not pathlib.Path(os.environ["AIW_GUI_FIX_PROMPTS"]).exists()
     click("Back to fix prompt")
     wait(has_button("Preview send to agent…"))
     capture("002-cancel-retains-edit.png", "Cancelling the send preview restores the edited fix without sending to the agent.", ["Preview send to agent…", "Fix prompt"], 'document.querySelector(".review-editor textarea").value==="Fix negative invoice rounding and add regression coverage."')
@@ -210,19 +210,19 @@ try:
     click("Send fix to agent")
     wait('!!document.querySelector("[role=alert]")')
     capture("003-stale-send-refusal.png", "A new PR head refuses sending while retaining the exact confirmation. No agent receives the instruction.", ["The PR has new commits", "Send fix to agent"], allow_alert=True)
-    assert not pathlib.Path(os.environ["AMF_GUI_FIX_PROMPTS"]).exists()
+    assert not pathlib.Path(os.environ["AIW_GUI_FIX_PROMPTS"]).exists()
     (state / "head.txt").write_text("c0ffee" + "0" * 34 + "\n")
     click("Send fix to agent")
     wait('document.body.innerText.includes("Fix sent to the agent.")')
     capture("004-fixing.png", "Confirmed delivery to the private offline Codex fixture marks the comment Fixing and keeps PR Triage open. GitHub remains untouched.", ["Fix sent to the agent.", "fixing", "Reply: fixed"])
     for _ in range(100):
-        if pathlib.Path(os.environ["AMF_GUI_FIX_PROMPTS"]).exists(): break
+        if pathlib.Path(os.environ["AIW_GUI_FIX_PROMPTS"]).exists(): break
         time.sleep(0.1)
-    assert pathlib.Path(os.environ["AMF_GUI_FIX_PROMPTS"]).read_text().startswith("Fix negative invoice rounding and add regression coverage.")
+    assert pathlib.Path(os.environ["AIW_GUI_FIX_PROMPTS"]).read_text().startswith("Fix negative invoice rounding and add regression coverage.")
     time.sleep(0.5)
     click("Reply: fixed")
     wait('document.querySelector(".review-editor textarea")?.value.includes("Fixed negative invoice rounding.")')
-    capture("005-agent-reply-draft.png", "The offline fixing agent returns its correlated reply through the real amf CLI without a TUI socket. Reply: fixed loads it as an attributed editable draft; posting still needs confirmation.", ["Drafted by the fixing agent", "Reply: fixed"], 'document.querySelector(".review-editor textarea").value.includes("Added regression coverage.")')
+    capture("005-agent-reply-draft.png", "The offline fixing agent returns its correlated reply through the real aiw CLI without a TUI socket. Reply: fixed loads it as an attributed editable draft; posting still needs confirmation.", ["Drafted by the fixing agent", "Reply: fixed"], 'document.querySelector(".review-editor textarea").value.includes("Added regression coverage.")')
     assert gh_writes() == [] and ai_calls() == []
     (out / "capture-notes.jsonl").write_text("".join(json.dumps({"file": n["file"].replace(".png", ".ansi"), "note": n["note"]}) + "\n" for n in notes))
 finally:

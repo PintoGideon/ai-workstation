@@ -14,12 +14,12 @@
 #
 # Needs a seeded project + feature and asks three real questions, so the
 # harness must be authenticated:
-#   ./amf-capture.sh --scenario scenarios/learning-mode-thread-reload.txt \
+#   ./aiw-capture.sh --scenario scenarios/learning-mode-thread-reload.txt \
 #       --seed <scratch>/seed-project.json \
 #       --seed-feature <scratch>/seed-feature.json \
 #       --geometry 160x44 --keep
 #
-# --keep on purpose: the scratch amf.db is the interesting artifact. The
+# --keep on purpose: the scratch aiw.db is the interesting artifact. The
 # same stored history rendered by a pre-fix binary is the "before" frame,
 # with no further questions asked.
 

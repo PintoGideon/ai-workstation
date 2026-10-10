@@ -100,10 +100,10 @@ def click(text):
 def tauri(command, args=None):
     """Runs a Tauri command from the page and returns its JSON result."""
     evaluate(
-        f"window.__amfShot=undefined;window.__TAURI_INTERNALS__.invoke({json.dumps(command)},{json.dumps(args or {})}).then(v=>window.__amfShot={{ok:v}},e=>window.__amfShot={{err:e}})"
+        f"window.__aiwShot=undefined;window.__TAURI_INTERNALS__.invoke({json.dumps(command)},{json.dumps(args or {})}).then(v=>window.__aiwShot={{ok:v}},e=>window.__aiwShot={{err:e}})"
     )
-    wait("window.__amfShot!==undefined")
-    result = evaluate("window.__amfShot")
+    wait("window.__aiwShot!==undefined")
+    result = evaluate("window.__aiwShot")
     assert "err" not in result, result
     return result["ok"]
 
@@ -174,7 +174,7 @@ def capture(name, note, expects, expression=None):
 
 import os
 import sqlite3
-config_dir = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "amf"
+config_dir = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "ai_workstation"
 config_path = config_dir / "config.json"
 
 def tui_theme(name):
@@ -202,7 +202,7 @@ try:
     x.sync()
     wait('typeof window.__TAURI_INTERNALS__?.invoke === "function"')
     wait('!!document.querySelector("nav[aria-label=Workspace]")')
-    with sqlite3.connect(config_dir / "amf.db") as db:
+    with sqlite3.connect(config_dir / "aiw.db") as db:
         db.execute("UPDATE projects SET collapsed=0")
         db.execute("UPDATE features SET collapsed=0")
         db.execute("UPDATE store_meta SET value=CAST(value AS INTEGER)+1 WHERE key='store_version'")
@@ -253,7 +253,7 @@ try:
     choose_theme("follow-tui")
     bg("#fbf1c7")
     assert json.loads(config_path.read_text())["theme"]=="gruvbox-light"
-    assert evaluate('localStorage.getItem("amf.gui.theme")===null')
+    assert evaluate('localStorage.getItem("aiw.gui.theme")===null')
     for name in ["claude-received.json", "codex-received.json"]:
         assert json.loads((repo / name).read_text()) == [], "A prompt reached the fixture"
     (out / "capture-notes.jsonl").write_text("".join(json.dumps(n)+"\n" for n in notes))

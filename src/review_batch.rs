@@ -85,10 +85,6 @@ pub struct BatchReviewOutput {
 }
 
 impl BatchReviewOutput {
-    pub fn is_empty(&self) -> bool {
-        self.findings.is_empty() && self.uncovered.is_empty()
-    }
-
     /// Every batch failed to produce findings — the caller should surface a
     /// hard error rather than presenting an all-gaps "review".
     pub fn only_uncovered(&self) -> bool {

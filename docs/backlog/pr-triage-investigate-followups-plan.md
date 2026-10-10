@@ -5,7 +5,7 @@
 - **Relates to:** [PR Triage](pr-comment-review-plan.md) (the shipped
   "Investigate a review comment" backlog entry), PR #602. The working
   plan and task-by-task notes that drove the initial build lived in a
-  local `AMF_PLAN.md`; its settled decisions are folded into the PR
+  local `AIW_PLAN.md`; its settled decisions are folded into the PR
   Triage plan's backlog entry, and the open items are collected here.
 
 ## Why / problem
@@ -75,7 +75,7 @@ now advertises `^d/^u scroll`. Remaining niceties:
   against the PR and repo (not a fact to assume), shown in a banner so
   it can be reviewed or cleared, and consumed by the run it applies to.
   Empty box keeps the prior behaviour byte-for-byte. Built from a local
-  `AMF_PLAN.md`; the Investigate prompt is an inline builder
+  `AIW_PLAN.md`; the Investigate prompt is an inline builder
   (`build_investigation_prompt`), not a registry template, so the note
   is threaded as a `user_context` field on `InvestigationPromptContext`.
 
@@ -84,7 +84,7 @@ now advertises `^d/^u scroll`. Remaining niceties:
 - Should posting an investigation reply (from `R` or `a`) offer to also
   **dismiss** the investigation in the same step, since a reply is often
   the end of it?
-- If the comment already has an AMF-authored reply, should the
+- If the comment already has an AIW-authored reply, should the
   investigation reply thread under it or post fresh (same question the
   Done/Not-needed replies already answer via `reply_target`)?
 

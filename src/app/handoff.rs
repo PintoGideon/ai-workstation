@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn prompt_includes_plan_and_changed_files_when_both_present() {
         let prompt = build_fresh_context_prompt(
-            Some("AMF_PLAN.md"),
+            Some("AIW_PLAN.md"),
             &["src/foo.rs".to_string(), "src/bar.rs".to_string()],
             None,
             None,
@@ -403,7 +403,7 @@ mod tests {
 
         assert_eq!(
             prompt,
-            "Read AMF_PLAN.md for full context on this feature. \
+            "Read AIW_PLAN.md for full context on this feature. \
              Changed/new files to look at: src/foo.rs, src/bar.rs. \
              Fix the login bug. \
              Grill me with any questions to clarify before implementing"
@@ -431,11 +431,11 @@ mod tests {
     #[test]
     fn prompt_omits_changed_files_line_when_there_are_none() {
         let prompt =
-            build_fresh_context_prompt(Some("AMF_PLAN.md"), &[], None, None, "Fix the login bug.");
+            build_fresh_context_prompt(Some("AIW_PLAN.md"), &[], None, None, "Fix the login bug.");
 
         assert_eq!(
             prompt,
-            "Read AMF_PLAN.md for full context on this feature. \
+            "Read AIW_PLAN.md for full context on this feature. \
              Fix the login bug. \
              Grill me with any questions to clarify before implementing"
         );
@@ -546,8 +546,8 @@ mod tests {
     #[test]
     fn relative_display_path_strips_the_workdir_prefix() {
         let workdir = Path::new("/repo/worktree");
-        let plan = Path::new("/repo/worktree/AMF_PLAN.md");
+        let plan = Path::new("/repo/worktree/AIW_PLAN.md");
 
-        assert_eq!(relative_display_path(workdir, plan), "AMF_PLAN.md");
+        assert_eq!(relative_display_path(workdir, plan), "AIW_PLAN.md");
     }
 }

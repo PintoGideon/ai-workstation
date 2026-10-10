@@ -6,11 +6,11 @@
 # whose PR comment was fixed in a combined batch shows the shared
 # "Fix cost (est.): $X · combined (N)" line and the ⧉ marker.
 #
-# Local run needs: export AMF_SCREENSHOT_PR_NUMBER=<n> GITHUB_REPOSITORY=owner/name
+# Local run needs: export AIW_SCREENSHOT_PR_NUMBER=<n> GITHUB_REPOSITORY=owner/name
 
-run:AMF_BIN="$AMF_BIN" "$SCRIPT_DIR/seed-ai-review-fixture.sh" >/dev/null
+run:AIW_BIN="$AIW_BIN" "$SCRIPT_DIR/seed-ai-review-fixture.sh" >/dev/null
 wait:400
-run:python3 "$SCRIPT_DIR/seed-batch-fix-cost-fixture.py" "$XDG_CONFIG_HOME/amf/amf.db" "$AMF_SCREENSHOT_PR_NUMBER" "$(git rev-parse HEAD)"
+run:python3 "$SCRIPT_DIR/seed-batch-fix-cost-fixture.py" "$XDG_CONFIG_HOME/ai_workstation/aiw.db" "$AIW_SCREENSHOT_PR_NUMBER" "$(git rev-parse HEAD)"
 wait:600
 # Nudge the selection so the pane recomputes the per-finding fix costs, and
 # let the first-run "harness configured" toast expire before capturing.

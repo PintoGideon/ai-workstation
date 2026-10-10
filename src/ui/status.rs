@@ -3,7 +3,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::Paragraph, // FORK: G11 panel from `fork_chrome`
 };
 
 use crate::app::{
@@ -58,18 +58,13 @@ fn format_tokens(n: u64) -> String {
     }
 }
 
-fn shorten_path(path: &std::path::Path) -> String {
-    if let Some(home) = dirs::home_dir()
-        && let Ok(rest) = path.strip_prefix(&home)
-    {
-        return format!("~/{}", rest.display());
-    }
-    path.display().to_string()
-}
+// FORK: one copy (`list::shorten_path`, home looked up once).
+use super::list::shorten_path;
 
 pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let theme = &app.theme;
-    let key_style = || Style::default().fg(theme.warning.to_color());
+    // FORK: G11 keys in the single accent colour (bold), labels dim.
+    let key_style = || super::fork_chrome::key_style(theme);
     let hint_style = || Style::default().fg(theme.text_muted.to_color());
 
     let filter_spans =
@@ -455,7 +450,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         AppMode::NotificationPicker(_, _)
         | AppMode::SessionSwitcher(_)
-        | AppMode::OpencodeSessionPicker(_)
         | AppMode::ClaudeSessionPicker(_)
         | AppMode::CodexSessionPicker(_)
         | AppMode::StoppedSessionDialog(_)
@@ -474,14 +468,14 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("Esc", key_style()),
             Span::raw(" back"),
         ]),
-        AppMode::ConfirmingOpencodeSession { .. }
-        | AppMode::ConfirmingClaudeSession { .. }
-        | AppMode::ConfirmingCodexSession { .. } => Line::from(vec![
-            Span::styled("y", key_style()),
-            Span::raw(" restart  "),
-            Span::styled("n/Esc", key_style()),
-            Span::raw(" cancel"),
-        ]),
+        AppMode::ConfirmingClaudeSession { .. } | AppMode::ConfirmingCodexSession { .. } => {
+            Line::from(vec![
+                Span::styled("y", key_style()),
+                Span::raw(" restart  "),
+                Span::styled("n/Esc", key_style()),
+                Span::raw(" cancel"),
+            ])
+        }
         AppMode::DiffReviewPrompt(state) => {
             if state.explanation_child.is_some() {
                 Line::from(Span::styled(
@@ -524,6 +518,8 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 ])
             }
         }
+        // FORK: split view draws its own footer (`ui/fork_split.rs`).
+        AppMode::SplitView(_) => Line::default(),
         AppMode::Viewing(view) => {
             let mut spans = Vec::new();
             if view.session_kind.is_agent_harness() {
@@ -596,6 +592,15 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::raw(" move  "),
             Span::styled("Enter", key_style()),
             Span::raw(" confirm  "),
+            Span::styled("Esc", key_style()),
+            Span::raw(" cancel"),
+        ]),
+        // FORK: repo hook approval dialog.
+        AppMode::ApprovingRepoHook(_) => Line::from(vec![
+            Span::styled(" y", key_style()),
+            Span::raw(" approve & run  "),
+            Span::styled("s", key_style()),
+            Span::raw(" skip this time  "),
             Span::styled("Esc", key_style()),
             Span::raw(" cancel"),
         ]),
@@ -888,7 +893,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled(" j/k", key_style()),
             Span::raw(" navigate  "),
             Span::styled("Enter/i", key_style()),
-            Span::raw(" install  "),
+            Span::raw(" download + install  "),
             Span::styled("x", key_style()),
             Span::raw(" remove  "),
             Span::styled("r", key_style()),
@@ -999,35 +1004,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("Esc", key_style()),
             Span::raw(" cancel"),
         ]),
-        AppMode::RemotePairing(state) => {
-            let paired = matches!(state.status, crate::app::PairingDialogStatus::Paired { .. });
-            if matches!(state.view, crate::app::PairingDialogView::Setup { .. }) {
-                Line::from(vec![
-                    Span::styled(" j/k", key_style()),
-                    Span::raw(" scroll  "),
-                    Span::styled("t", key_style()),
-                    Span::raw(" serve  "),
-                    Span::styled("c", key_style()),
-                    Span::raw(" copy policy  "),
-                    Span::styled("Esc", key_style()),
-                    Span::raw(" back"),
-                ])
-            } else if paired {
-                Line::from(vec![
-                    Span::styled(" Enter/Esc", key_style()),
-                    Span::raw(" close"),
-                ])
-            } else {
-                Line::from(vec![
-                    Span::styled(" r", key_style()),
-                    Span::raw(" new code  "),
-                    Span::styled("s", key_style()),
-                    Span::raw(" setup  "),
-                    Span::styled("Esc", key_style()),
-                    Span::raw(" cancel"),
-                ])
-            }
-        }
         AppMode::IssueBrowser(_) => Line::from(vec![
             Span::styled(" h/l", key_style()),
             Span::raw(" page  "),
@@ -1112,9 +1088,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 let session = &feature.sessions[*si];
                 let kind_label = match session.kind {
                     SessionKind::Claude => "claude",
-                    SessionKind::Opencode => "opencode",
                     SessionKind::Codex => "codex",
                     SessionKind::Pi => "pi",
+                    SessionKind::Gemini => "gemini", // FORK
+                    SessionKind::Cursor => "cursor", // FORK
                     SessionKind::Terminal => "terminal",
                     SessionKind::Nvim => "nvim",
                     SessionKind::Vscode => "vscode",
@@ -1153,12 +1130,20 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         }
     };
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme.border.to_color()));
+    // FORK: G11 rounded panel with the contextual key hints in its bottom
+    // border. The panel is three rows tall, so its single inner row only ever
+    // showed the message line and the hints below it were clipped away.
+    let mut keybinds = keybinds.style(hint_style());
+    if !keybinds.spans.is_empty() {
+        if !keybinds.spans[0].content.starts_with(' ') {
+            keybinds.spans.insert(0, Span::raw(" "));
+        }
+        keybinds.spans.push(Span::raw(" "));
+    }
+    let block = super::fork_chrome::plain_panel(theme).title_bottom(keybinds);
     let inner = block.inner(area);
 
-    let status = Paragraph::new(vec![message_line, keybinds]).block(block);
+    let status = Paragraph::new(message_line).block(block);
     frame.render_widget(status, area);
 
     // Feedback needs the full line; usage otherwise paints over its right edge.

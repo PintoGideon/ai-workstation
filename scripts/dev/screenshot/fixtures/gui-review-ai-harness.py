@@ -14,7 +14,7 @@ if "--help" in sys.argv:
     print("--sandbox --ephemeral --skip-git-repo-check --color --json --output-format --tools --safe-mode --permission-mode --no-session-persistence --pure")
     raise SystemExit(0)
 repo = pathlib.Path.cwd()
-assert (repo / ".git/amf-gui-ai-fixture").is_file(), "Refusing a non-fixture checkout"
+assert (repo / ".git/aiw-gui-ai-fixture").is_file(), "Refusing a non-fixture checkout"
 prompt = sys.stdin.read()
 if "Write a concise, constructive review comment based on the answer below." in prompt:
     kind = "comment_draft"
@@ -37,7 +37,7 @@ elif "Why does this round" in prompt:
     answer = "## Rounding and currency formatting\n\nRounding happens in `invoiceTotal`; `Intl.NumberFormat` only controls presentation.\n\nI inspected the invoice diff and positive-total test. Add tests for negative totals and half-cent boundaries before relying on the rounding rule. The selected USD formatter also fixes the locale to en-US."
 else:
     raise SystemExit("Unsupported fixture prompt")
-with pathlib.Path(os.environ["AMF_GUI_AI_CALLS"]).open("a") as calls:
+with pathlib.Path(os.environ["AIW_GUI_AI_CALLS"]).open("a") as calls:
     calls.write(json.dumps({"harness": harness, "kind": kind}) + "\n")
 # Leave a real worker in flight long enough for the ordinary GUI poll to run.
 time.sleep(1.4)

@@ -1,0 +1,4 @@
+interface:
+  display_name: "AIW Screenshot"
+  short_description: "Capture visual proof of AIW TUI changes"
+  default_prompt: "Use $aiw-screenshot to capture screenshots proving this AIW UI behavior works."

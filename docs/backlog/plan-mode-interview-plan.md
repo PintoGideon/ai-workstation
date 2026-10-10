@@ -3,7 +3,7 @@
 - **Status:** Complete. Extended by Quick Plan, a lighter dynamically-sized
   sibling interview that reuses this epic's `PlanInterviewState`/round-and-
   synthesis machinery (`kind: PlanInterviewMode`) — see `CLAUDE.md`'s
-  "Quick Plan mode" section and `AMF_PLAN.md` for that feature's own design
+  "Quick Plan mode" section and `AIW_PLAN.md` for that feature's own design
   decisions.
 - **Owner:** unassigned
 - **Relates to:** current plan mode (`ensure_plan_mode_claude_md` in
@@ -28,7 +28,7 @@ no intake of goals, no probing of architecture or UI decisions, no
 structured plan the user has actually agreed to. The agent starts from
 a one-line feature name and improvises.
 
-The goal is a fully fledged discovery flow: AMF asks the user about
+The goal is a fully fledged discovery flow: AIW asks the user about
 the feature — through curated built-in questions, per-project
 question templates, and AI-generated adaptive follow-ups — then
 synthesizes the answers into a structured plan the user reviews and
@@ -38,17 +38,17 @@ edits **before** the implementing agent launches seeded with it.
 
 Settled with the project owner (2026-07-13):
 
-1. **Interview runs natively in AMF's TUI** — questions render as
+1. **Interview runs natively in AIW's TUI** — questions render as
    native dialogs/overlays before any tmux session launches; answers
-   are collected and owned by AMF, not by the agent.
+   are collected and owned by AIW, not by the agent.
 2. **All three question sources**, layered: built-in bank →
    user-defined per-project templates → AI-generated adaptive rounds.
 3. **Two triggers**: automatically during feature creation when plan
    mode is on, and on-demand for an existing feature (re-runnable).
 4. **Output is an AI-synthesized plan doc behind a review gate**: the
-   user reviews/edits the generated plan in AMF before the agent
+   user reviews/edits the generated plan in AIW before the agent
    session launches. The on-disk home is the workdir's
-   root-level `AMF_PLAN.md` (superseded on 2026-08-19 from the
+   root-level `AIW_PLAN.md` (superseded on 2026-08-19 from the
    `.claude/plan.md` location chosen in the 2026-07-13 audit below).
 
 ## Existing plan mode: audit verdict (2026-07-13)
@@ -108,11 +108,11 @@ The July audit correctly rejected one `PLAN.md` shared from the project
 repository by every worktree, but its replacement remained unnecessarily
 Claude-specific. A feature worktree's own root is already isolated from every
 other feature, so its plan is per-feature without living under
-`.claude/`. The first non-worktree feature also remains safe because AMF allows
+`.claude/`. The first non-worktree feature also remains safe because AIW allows
 only one non-worktree feature per project.
 
-The accepted plan therefore now lives at `<workdir>/AMF_PLAN.md`, with a
-matching root `.gitignore` entry. The AMF-specific name avoids overwriting a
+The accepted plan therefore now lives at `<workdir>/AIW_PLAN.md`, with a
+matching root `.gitignore` entry. The AIW-specific name avoids overwriting a
 repository's conventional `PLAN.md`. The sidebar and markdown viewer prefer
 the namespaced file while retaining `PLAN.md` and `.claude/plan.md` as
 fallbacks. The approved-plan kickoff is also carried through the common launch
@@ -147,7 +147,7 @@ On-demand command on a feature ─┴─> PlanInterview mode
              Tasks / Risks); loading overlay
     Phase 4  Review gate: plan opens in the markdown viewer with
              edit (TextEditor), accept, regenerate, and abort actions
-    Accept ─> write AMF_PLAN.md, persist transcript,
+    Accept ─> write AIW_PLAN.md, persist transcript,
               launch/seed session
 ```
 
@@ -157,7 +157,7 @@ questions for the user to answer, while the second ends questioning
 and generates the plan immediately from the answers already saved.
 Interview answers are persisted as a **draft** in SQLite as they're
 given (decided
-2026-07-13): abandoning the mode or restarting AMF keeps the draft,
+2026-07-13): abandoning the mode or restarting AIW keeps the draft,
 and re-entering the interview for that feature offers to resume or
 discard it. Accepting the plan finalizes the draft into the
 transcript; drafts for deleted features are cleaned up with the
@@ -290,7 +290,7 @@ The synthesis prompt produces markdown with a fixed skeleton:
 
 On **accept**:
 
-1. Write the doc to the workdir's root-level `AMF_PLAN.md` (per-feature —
+1. Write the doc to the workdir's root-level `AIW_PLAN.md` (per-feature —
    see the 2026-08-19 follow-up; the sidebar preview and markdown viewer
    prefer this path), ensure it's gitignored in the workdir root, and
    inject the plan-instructions block into the file
@@ -302,7 +302,7 @@ On **accept**:
    `CLAUDE.local.md` for claude, `AGENTS.md` for codex/opencode/pi,
    same marker-block inject/strip approach. AGENTS.md hygiene
    (decided 2026-07-13): strip the block when plan mode is disabled
-   and on feature stop/delete; gitignore AGENTS.md only when AMF
+   and on feature stop/delete; gitignore AGENTS.md only when AIW
    created the file from scratch (never gitignore a user's committed
    AGENTS.md). Residual risk — the block landing in a user's commit
    mid-feature — is accepted; the markers make it obvious and
@@ -315,7 +315,7 @@ On **accept**:
    can show prior answers and offer "keep / change" per question.
 3. Feature-creation trigger: continue the normal launch
    (`start_feature`), then seed the agent's composer with a short
-   kickoff prompt pointing at `AMF_PLAN.md` (editable, not
+   kickoff prompt pointing at `AIW_PLAN.md` (editable, not
    auto-submitted — same pattern as TODO spawn's
    `open_compose_seeded`).
    On-demand trigger: just rewrite the plan file and notify; if the
@@ -372,7 +372,7 @@ demoable. Check items off as they merge.
 ### Epic 1 — Interview engine + native UI (static questions only)
 
 Demo: plan-mode feature creation walks through the built-in bank and
-writes answers verbatim into the workdir's `AMF_PLAN.md` under a
+writes answers verbatim into the workdir's `AIW_PLAN.md` under a
 `## Q&A` heading (no AI yet), then launches; the sidebar preview
 picks the plan up with no display-layer changes.
 
@@ -386,7 +386,7 @@ picks the plan up with no display-layer changes.
       "draft plan now" once Epic 4 lands)
 - [x] Feature-creation integration: defer `PreparedFeatureLaunch`
       until interview completes; abort path (launch-anyway vs cancel)
-- [x] Write brief + answers into the workdir's `AMF_PLAN.md`
+- [x] Write brief + answers into the workdir's `AIW_PLAN.md`
       (gitignored in the workdir root)
 - [x] Replace `ensure_plan_mode_claude_md` with
       `ensure_plan_mode_instructions(workdir, agent, enabled)`:
@@ -399,7 +399,7 @@ picks the plan up with no display-layer changes.
       (per audit verdict); the accepted plan is instead written to the
       feature workdir's own root after the interview
 - [x] Unit test: non-worktree first feature (workdir == repo root)
-      reads/writes the same `AMF_PLAN.md` the sidebar
+      reads/writes the same `AIW_PLAN.md` the sidebar
       finds — no duplicate plan files
 - [x] Help overlay + keybinding docs for the new mode
 
@@ -412,8 +412,8 @@ interview shows them merged with (or replacing) the built-in bank.
       merge by `id` (project wins), `skip_builtin_questions` flag
 - [x] Select-option questions authored in config (HookPrompt-style)
 - [x] Normalized ID overrides and accurate Global/Project template labels
-- [x] Config-wizard / docs coverage (`amf-add-plan-question` remains an
-      optional follow-up, mirroring `amf-add-prompt`)
+- [x] Config-wizard / docs coverage (`aiw-add-plan-question` remains an
+      optional follow-up, mirroring `aiw-add-prompt`)
 - [x] Merge + parse unit tests
 
 ### Epic 3 — AI adaptive questioning
@@ -452,7 +452,7 @@ with no headless-capable harness silently proceeds without them.
 ### Epic 4 — Synthesis + review gate
 
 Demo: interview ends in a generated structured plan the user can
-edit, regenerate, accept (writes `AMF_PLAN.md`, launches session
+edit, regenerate, accept (writes `AIW_PLAN.md`, launches session
 with
 seeded kickoff composer), or abort.
 
@@ -473,7 +473,7 @@ seeded kickoff composer), or abort.
       dropped whenever the plan changes. `Esc` during the review returns
       to the plan rather than opening the interview's abort confirmation,
       so a generated plan can't be lost to a stray keypress
-- [x] Accept path: write `AMF_PLAN.md`, augment the instruction
+- [x] Accept path: write `AIW_PLAN.md`, augment the instruction
       block ("plan is user-approved"), run deferred launch, seed
       composer kickoff prompt via `open_compose_seeded` — the launch's
       `ensure_feature_running` already injects the approved-plan block,
@@ -499,7 +499,7 @@ seeded kickoff composer), or abort.
 
 Demo: press the keybinding on an existing feature, re-run the
 interview with prior answers pre-filled, get an updated
-`AMF_PLAN.md`.
+`AIW_PLAN.md`.
 
 - [x] Migration + `src/db/plan_interviews.rs`: interview store keyed
       by feature id (questions, answers, source, plan, timestamps,
@@ -561,7 +561,7 @@ interview with prior answers pre-filled, get an updated
       which previously fell back to the process cwd), so accept writes the
       plan into the feature's own workdir rather than bailing out. Accept
       also calls `ensure_plan_mode_instructions` and sets
-      `feature.plan_mode`: writing `AMF_PLAN.md` alone leaves the agent
+      `feature.plan_mode`: writing `AIW_PLAN.md` alone leaves the agent
       never told the plan exists, and a restart would stop injecting the
       block. Abort is non-destructive — there is no launch to cancel, so
       the confirm offers only "leave the plan unchanged" and `n` is inert.
@@ -604,7 +604,7 @@ interview with prior answers pre-filled, get an updated
       interrupting a session that may be mid-task; the seed is editable and
       unsubmitted like every other compose seed. "Live" means both halves,
       feature not `Stopped` **and** `session_exists`: status is only reconciled
-      every few seconds, so a session killed outside AMF still reads as running
+      every few seconds, so a session killed outside AIW still reads as running
       and would otherwise be offered a prompt into nothing. The target is held
       by session **id**, not index, because the accept saves the store before
       the prompt is answered. The feature-creation trigger is unchanged — it
@@ -772,8 +772,8 @@ interview with prior answers pre-filled, get an updated
       allowed (dir / oversize / binary rejected with a reason,
       `plan_interview::validate_attachment`). `prepare_attached_docs` references
       an in-workdir doc where it lies and copies an external one into
-      `.amf/interview-docs/` (gitignored scratch, via
-      `extension::generated_amf_subdir`) so a CWD-scoped read-only harness can
+      `.aiw/interview-docs/` (gitignored scratch, via
+      `extension::generated_aiw_subdir`) so a CWD-scoped read-only harness can
       reach it; the staging dir is wiped at the start of every pass and on
       interview teardown. The five interview input builders gained an
       `attached_documents` JSON array; round / synthesis / critique gained a
@@ -784,13 +784,13 @@ interview with prior answers pre-filled, get an updated
       re-validates each path at dispatch.
 - [x] New entry point: the sidebar plan selector (`AppMode::MarkdownFilePicker`
       with `purpose: SelectPlan`, reached via leader `n` when neither the
-      conventional `AMF_PLAN.md` nor a manually selected plan resolves for the
+      conventional `AIW_PLAN.md` nor a manually selected plan resolves for the
       current feature) can now start the interview directly: `p` in that
       picker calls a new `App::start_plan_interview_for_feature_id`, the same
       on-demand interview `start_plan_interview_for_selected_feature` already
-      runs (no launch, writes `AMF_PLAN.md`), but keyed off the picker's own
+      runs (no launch, writes `AIW_PLAN.md`), but keyed off the picker's own
       feature id rather than the dashboard selection. No new `AppMode`,
-      storage, or draft concept was needed: `AMF_PLAN.md` already outranks a
+      storage, or draft concept was needed: `AIW_PLAN.md` already outranks a
       manually selected plan (`resolve_effective_plan`), and the existing
       `plan_interviews` draft table already survives a cancel.
 
@@ -804,7 +804,7 @@ None. The original design questions are recorded below with their resolutions.
   contract: `-p` consumes piped stdin and exits, `--no-session` keeps calls
   ephemeral, `--no-tools` disables all tools, and
   `--tools read,grep,find,ls` provides the read-only investigation surface.
-  AMF also disables discovered extensions, skills, prompt templates, and
+  AIW also disables discovered extensions, skills, prompt templates, and
   context files and ignores project-local config for these runs. The runtime
   availability probe requires every relied-on flag, preserving the former
   fallback behavior for older Pi installations.
@@ -812,7 +812,7 @@ None. The original design questions are recorded below with their resolutions.
 - **Cross-restart resume** → persist drafts to SQLite; resume/discard
   offered on re-entry (see UX flow; lands with Epic 5).
 - **AGENTS.md hygiene** → marker block + strip on disable/stop/delete;
-  gitignore only if AMF created the file (see handoff section).
+  gitignore only if AIW created the file (see handoff section).
 - **Headless flags** → pinned against installed CLIs (see AI
   plumbing); re-verify at implementation.
 - **Question budget UX** → yes: dedicated "draft plan now" /
@@ -825,9 +825,9 @@ None. The original design questions are recorded below with their resolutions.
 
 ## Reasoning / when to build
 
-Plan mode is the natural differentiator for AMF's "manage many
+Plan mode is the natural differentiator for AIW's "manage many
 agents" story: the cheapest way to raise multi-agent output quality
-is better up-front specification, and AMF owns the moment right
+is better up-front specification, and AIW owns the moment right
 before a session launches. The design deliberately reuses existing
 machinery (HookPrompt-style dialogs, extension-config merging,
 existing headless launch code, markdown viewer, compose seeding) so

@@ -10,8 +10,8 @@
 
 The published package was far larger than it needed to be:
 `cargo publish --dry-run` reported **703 files, 20.0MiB uncompressed /
-11.1MiB compressed**. Inspecting `target/package/agent-mainframe-<ver>/`
-showed most of that wasn't needed to build the `amf` binary:
+11.1MiB compressed**. Inspecting `target/package/ai-workstation-<ver>/`
+showed most of that wasn't needed to build the `aiw` binary:
 
 - `docs/screenshots/` alone was **~11MB** — over half the package, and
   pure documentation imagery with no `include_str!`/`include_bytes!`
@@ -43,8 +43,8 @@ missing embed fails loudly, which is useful). The known embed targets,
 as of this writing:
 
 - `themes/opencode/*.json` (`src/theme.rs`)
-- `skills/amf-add-session/SKILL.md`, `amf-add-hook`, `amf-add-preset`,
-  `amf-add-prompt`, `amf-configure`, `amf-release-notes` (`src/app/setup.rs`)
+- `skills/aiw-add-session/SKILL.md`, `aiw-add-hook`, `aiw-add-preset`,
+  `aiw-add-prompt`, `aiw-configure`, `aiw-release-notes` (`src/app/setup.rs`)
 - `scripts/*.sh` (`src/app/setup.rs`)
 - `.opencode/plugins/*.js` (`src/app/setup.rs`)
 - `plugins/diff-review/scripts/custom-diff-review.sh` (`src/app/setup.rs`)

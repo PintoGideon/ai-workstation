@@ -1,4 +1,4 @@
-//! `amf doctor` — a read-only look at what AMF is putting on this machine.
+//! `aiw doctor` — a read-only look at what AIW is putting on this machine.
 //!
 //! Strictly advisory: it never stops a session, kills a process, deletes a
 //! worktree, or writes to the database. Every finding says what it saw and,
@@ -12,12 +12,11 @@ use serde::Serialize;
 
 use crate::app::AppConfig;
 use crate::db::editors::LaunchedEditor;
-use crate::extension::{legacy_project_config_path, project_config_path};
+use crate::extension::{legacy_project_config_paths, project_config_path};
 use crate::project::{ProjectStatus, ProjectStore};
 use crate::resources::limits::{ActiveHarness, LiveHarnesses, active_harness_sessions};
 use crate::resources::mem::MemorySnapshot;
 use crate::resources::procs;
-use crate::tailscale::{self, TailscaleCli, TailscaleStatus};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -86,7 +85,7 @@ pub struct Report {
 impl Report {
     /// Human-readable report.
     pub fn render(&self) -> String {
-        let mut out = String::from("amf doctor\n\n");
+        let mut out = String::from("aiw doctor\n\n");
         for finding in &self.findings {
             out.push_str(&format!(
                 "[{}] {}\n",
@@ -126,21 +125,17 @@ pub struct Inputs<'a> {
     /// Which tmux windows actually have a process running, for the harness
     /// census.
     pub live: &'a LiveHarnesses,
-    /// Every `amf-*` tmux session on the server.
+    /// Every `aiw-*` tmux session on the server.
     pub tmux_sessions: &'a [String],
     pub memory: Option<MemorySnapshot>,
     /// True when running under WSL.
     pub is_wsl: bool,
     /// Worktree directories found on disk, per project repo.
     pub worktrees: &'a [PathBuf],
-    /// Editor records AMF is still tracking.
+    /// Editor records AIW is still tracking.
     pub editors: &'a [LaunchedEditor],
     /// Liveness probe, injectable so tests need no real processes.
     pub pid_alive: &'a dyn Fn(i64) -> bool,
-    /// What the local Tailscale reported, for the AMF Remote check.
-    pub tailscale: &'a TailscaleStatus,
-    /// Phones paired with AMF Remote and not revoked.
-    pub paired_devices: usize,
 }
 
 /// Run every check.
@@ -155,7 +150,7 @@ pub fn diagnose(inputs: &Inputs<'_>) -> Report {
     findings.push(check_orphan_worktrees(inputs));
     findings.push(check_stale_editors(inputs));
     findings.push(check_legacy_project_config(inputs));
-    findings.push(check_remote_access(inputs));
+    findings.push(check_network());
     Report { findings }
 }
 
@@ -353,14 +348,14 @@ fn check_orphan_sessions(inputs: &Inputs<'_>) -> Finding {
         return Finding::new(
             "tmux-sessions",
             Severity::Ok,
-            "no orphaned amf-* tmux sessions",
+            "no orphaned aiw-* (or migrated amf-*) tmux sessions",
         );
     }
     Finding::new(
         "tmux-sessions",
         Severity::Warn,
         format!(
-            "{} amf-* tmux session(s) with no matching feature",
+            "{} aiw-*/amf-* tmux session(s) with no matching feature",
             orphans.len()
         ),
     )
@@ -420,7 +415,7 @@ fn check_stale_editors(inputs: &Inputs<'_>) -> Finding {
                 if editor.dedicated {
                     ""
                 } else {
-                    " — not opened by AMF"
+                    " — not opened by AIW"
                 }
             )
         })
@@ -450,20 +445,19 @@ fn check_stale_editors(inputs: &Inputs<'_>) -> Finding {
 
 /// Whether this is WSL. The kernel release carries the marker on both WSL1 and
 /// WSL2, and `/proc/sys/kernel/osrelease` is readable without spawning anything.
-/// Report project directories still keeping config at the pre-`amf.json`
-/// path, so the migration is visible before someone trips over it.
+/// Report project directories still configured only by upstream AMF's
+/// `amf.json` (or its older `.amf/config.json`), so it is visible which repos
+/// AIW reads through the legacy path.
 ///
-/// Two distinct states, because the advice differs. A repo with only
-/// `.amf/config.json` is still fully working — AMF reads it, and the next
-/// config write migrates it. A repo with **both** is the one worth
-/// knowing about: the legacy file is no longer read, so edits to it do
-/// nothing while it sits there looking like config.
+/// FORK: two states. A repo with only an AMF config is fully working — AIW
+/// reads it until the repo has its own `aiw.json` (the first config write
+/// creates one). A repo with both is fine too: AIW reads `aiw.json` and
+/// leaves AMF's file alone for AMF, so it is listed for information only.
 fn check_legacy_project_config(inputs: &Inputs<'_>) -> Finding {
-    // Project repos only, not feature workdirs. A worktree's
-    // `.amf/config.json` is the *tracked* file as its branch has it, so it
-    // cannot be migrated on its own — it arrives when the branch merges.
-    // Listing every worktree would bury the one actionable line under a
-    // page of copies of it.
+    // Project repos only, not feature workdirs. A worktree's config is the
+    // *tracked* file as its branch has it, so it cannot be changed on its own
+    // — it arrives when the branch merges. Listing every worktree would bury
+    // the one actionable line under a page of copies of it.
     let mut seen: HashSet<&Path> = HashSet::new();
     let dirs: Vec<&Path> = inputs
         .store
@@ -473,199 +467,71 @@ fn check_legacy_project_config(inputs: &Inputs<'_>) -> Finding {
         .filter(|repo| seen.insert(repo))
         .collect();
 
-    let mut unmigrated: Vec<String> = Vec::new();
+    let mut legacy_only: Vec<String> = Vec::new();
     let mut shadowed: Vec<String> = Vec::new();
     for dir in dirs {
-        let legacy = legacy_project_config_path(dir);
-        if !legacy.exists() {
-            continue;
-        }
-        if project_config_path(dir).exists() {
-            shadowed.push(format!(
-                "{} (shadowed by amf.json — no longer read)",
-                legacy.display()
-            ));
-        } else {
-            unmigrated.push(legacy.display().to_string());
+        let has_aiw_json = project_config_path(dir).exists();
+        for legacy in legacy_project_config_paths(dir) {
+            if !legacy.exists() {
+                continue;
+            }
+            if has_aiw_json {
+                shadowed.push(format!(
+                    "{} (aiw.json is used; this AMF file is left for AMF)",
+                    legacy.display()
+                ));
+            } else {
+                legacy_only.push(legacy.display().to_string());
+                // Only the first existing legacy file is read.
+                break;
+            }
         }
     }
 
-    let total = unmigrated.len() + shadowed.len();
-    if total == 0 {
-        return Finding::new(
+    if legacy_only.is_empty() {
+        let finding = Finding::new(
             "config-path",
             Severity::Ok,
-            "no project config left at the legacy .amf/config.json path",
+            "every project with a config has its own aiw.json",
         );
+        return if shadowed.is_empty() {
+            finding
+        } else {
+            finding.with_detail(shadowed)
+        };
     }
 
-    let advice = if unmigrated.is_empty() {
-        "the legacy file is dead weight: delete it, or keep it only as a backup"
-    } else {
-        "still read, and migrated on the next config write — or move it now: git mv .amf/config.json amf.json"
-    };
-
-    let mut detail = unmigrated;
+    let total = legacy_only.len();
+    let mut detail = legacy_only;
     detail.extend(shadowed);
     Finding::new(
         "config-path",
         Severity::Notice,
-        format!("{total} project config file(s) at the legacy .amf/config.json path"),
+        format!(
+            "{total} project(s) configured only by an AMF config (amf.json / .amf/config.json)"
+        ),
     )
     .with_detail(detail)
-    .with_advice(advice)
-}
-
-/// Can a phone reach AMF Remote over HTTPS? Mirrors the pairing dialog's
-/// setup steps (`app/remote_tailscale.rs`), one finding with the next step
-/// as advice. AMF Remote is optional, so an unfinished setup is only a
-/// notice, and someone who hasn't paired a phone and has no Tailscale is
-/// told nothing is set up. The one warning is a setup that looks finished
-/// but can't work: AMF is served, yet no other device can reach it.
-fn check_remote_access(inputs: &Inputs<'_>) -> Finding {
-    const ID: &str = "remote-access";
-    let config = inputs.config;
-    let port = tailscale::bind_port(&config.remote_bind);
-    let cli = TailscaleCli::new(
-        config.remote_tailscale_cli.as_deref(),
-        config.remote_tailscale_socket.as_deref(),
-    );
-    let serve_cmd = cli.display_command(&format!("serve --bg {port}"));
-    let serve_url = inputs.tailscale.serve_url();
-    let untagged =
-        matches!(inputs.tailscale, TailscaleStatus::Running(node) if !node.tagged_for_amf);
-    let lock_down = format!(
-        "limit it to your own devices: tag this computer {} and add the policy in docs/remote-control.md",
-        tailscale::ACCESS_TAG
-    );
-
-    if let Some(url) = config
-        .remote_public_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|url| !url.is_empty())
-    {
-        if !url.starts_with("https://") {
-            return Finding::new(
-                ID,
-                Severity::Notice,
-                format!("AMF Remote pairs phones at {url}, which isn't HTTPS"),
-            )
-            .with_advice(
-                "phones can pair but can't install AMF Remote or get notifications without HTTPS",
-            );
-        }
-        if let Some(serve_url) =
-            serve_url.filter(|serve| serve.trim_end_matches('/') != url.trim_end_matches('/'))
-        {
-            return Finding::new(
-                ID,
-                Severity::Notice,
-                format!(
-                    "remote_public_url ({url}) differs from what Tailscale serves ({serve_url})"
-                ),
-            )
-            .with_advice(
-                "remove remote_public_url to use Tailscale's address automatically, or correct it",
-            );
-        }
-        if let TailscaleStatus::Running(node) = inputs.tailscale
-            && node.isolated()
-            && serve_url.is_some()
-        {
-            return isolated_finding(url);
-        }
-        let finding = Finding::new(
-            ID,
-            Severity::Ok,
-            format!("AMF Remote pairs phones at {url}"),
-        );
-        return if untagged {
-            finding.with_advice(lock_down)
-        } else {
-            finding
-        };
-    }
-
-    match inputs.tailscale {
-        TailscaleStatus::Running(node) if node.serve_url.is_some() && node.isolated() => {
-            isolated_finding(node.serve_url.as_deref().unwrap_or_default())
-        }
-        TailscaleStatus::Running(node) => match (&node.serve_url, node.https_enabled) {
-            (Some(url), _) => {
-                let finding =
-                    Finding::new(ID, Severity::Ok, format!("AMF Remote reachable over Tailscale at {url}"));
-                if untagged { finding.with_advice(lock_down) } else { finding }
-            }
-            (None, false) => Finding::new(
-                ID,
-                Severity::Notice,
-                "Tailscale is running, but HTTPS certificates are off for your tailnet",
-            )
-            .with_advice(format!(
-                "enable MagicDNS and HTTPS Certificates at {}, then: {serve_cmd}",
-                tailscale::ADMIN_DNS_URL
-            )),
-            (None, true) => Finding::new(
-                ID,
-                Severity::Notice,
-                format!("Tailscale is running, but isn't serving AMF Remote's port {port}"),
-            )
-            .with_advice(format!(
-                "{serve_cmd} — or press t in the pairing dialog (Ctrl+Space Q)"
-            )),
-        },
-        TailscaleStatus::NeedsLogin => Finding::new(
-            ID,
-            Severity::Notice,
-            "Tailscale is installed but not signed in",
-        )
-        .with_advice(cli.display_command("up")),
-        TailscaleStatus::Stopped => Finding::new(ID, Severity::Notice, "Tailscale is switched off")
-            .with_advice(cli.display_command("up")),
-        TailscaleStatus::Unavailable(why) => Finding::new(
-            ID,
-            Severity::Notice,
-            "Tailscale is installed but didn't answer",
-        )
-        .with_detail(vec![why.clone()])
-        .with_advice(
-            "start Tailscale (its app, or the tailscaled service); if tailscaled uses its \
-             own --socket, set remote_tailscale_socket to it",
-        ),
-        TailscaleStatus::NotInstalled if inputs.paired_devices == 0 => Finding::new(
-            ID,
-            Severity::Ok,
-            "AMF Remote (phone access) isn't set up — optional",
-        ),
-        TailscaleStatus::NotInstalled => Finding::new(
-            ID,
-            Severity::Notice,
-            format!(
-                "{} phone(s) paired, but no HTTPS address: the pairing QR points at this machine only",
-                inputs.paired_devices
-            ),
-        )
-        .with_advice(format!(
-            "install Tailscale ({}) or set remote_public_url; see docs/remote-control.md",
-            tailscale::DOWNLOAD_URL
-        )),
-    }
-}
-
-/// Served, but Tailscale shows no other device that may reach this computer:
-/// no phone is signed in, or the access policy shuts them all out.
-fn isolated_finding(url: &str) -> Finding {
-    Finding::new(
-        "remote-access",
-        Severity::Warn,
-        format!("AMF Remote is served at {url}, but no other device on your tailnet can reach this computer"),
+    .with_advice(
+        "AIW reads it until the repo has aiw.json; to give AIW its own copy: cp amf.json aiw.json \
+         (AMF keeps using amf.json)",
     )
-    .with_advice(format!(
-        "sign in on your phone with the same Tailscale account (log out and back in if it already says connected); \
-         if you limited access, the policy needs a grant from your devices to {}:443",
-        tailscale::ACCESS_TAG
-    ))
+}
+
+/// FORK(no-cloud): AIW's network stance, stated rather than measured. The
+/// Remote Control check that used to sit here (Tailscale, paired phones) went
+/// with the feature; `scripts/check-no-network.sh` is what enforces this line.
+fn check_network() -> Finding {
+    Finding::new(
+        "network",
+        Severity::Ok,
+        "AI Workstation (AIW) makes no network connections itself (no HTTP client or server is built in)",
+    )
+    .with_detail(vec![
+        "gh / git run only when you start a PR or Git action (PR badges refresh on R or when you open PR Triage)".to_string(),
+        "syntax parsers are downloaded (git clone) only when you choose to install one".to_string(),
+        "agents (Claude, Codex, …) talk to their own providers; that is their business, not AIW's".to_string(),
+    ])
 }
 
 pub fn detect_wsl() -> bool {
@@ -688,6 +554,14 @@ pub fn worktrees_on_disk(store: &ProjectStore) -> Vec<PathBuf> {
         let Ok(worktrees) = crate::worktree::WorktreeManager::list(&project.repo) else {
             continue;
         };
+        // FORK: also report unregistered or empty folders left in the
+        // app-owned worktree locations (in-repo `.worktrees/` and the data dir).
+        let mut known: HashSet<PathBuf> = store
+            .projects
+            .iter()
+            .flat_map(|p| p.features.iter().map(|f| f.workdir.clone()))
+            .collect();
+        known.extend(worktrees.iter().map(|wt| wt.path.clone()));
         for worktree in worktrees {
             // The primary checkout is the repo itself, not a reclaimable
             // worktree.
@@ -695,6 +569,10 @@ pub fn worktrees_on_disk(store: &ProjectStore) -> Vec<PathBuf> {
                 found.push(worktree.path);
             }
         }
+        found.extend(crate::fork::worktree_paths::leftover_dirs(
+            &project.repo,
+            &known,
+        ));
     }
     found
 }
@@ -719,7 +597,7 @@ mod tests {
             branch: name.to_string(),
             workdir: PathBuf::from("/tmp").join(name),
             is_worktree: true,
-            tmux_session: format!("amf-{name}"),
+            tmux_session: format!("aiw-{name}"),
             sessions: Vec::new(),
             collapsed: true,
             mode: VibeMode::default(),
@@ -782,8 +660,6 @@ mod tests {
         editors: Vec<LaunchedEditor>,
         memory: Option<MemorySnapshot>,
         is_wsl: bool,
-        tailscale: TailscaleStatus,
-        paired_devices: usize,
     }
 
     impl Fixture {
@@ -792,13 +668,11 @@ mod tests {
                 config: AppConfig::default(),
                 store: store(vec![feature("alpha", ProjectStatus::Active)]),
                 live: LiveHarnesses::default(),
-                sessions: vec!["amf-alpha".to_string()],
+                sessions: vec!["aiw-alpha".to_string()],
                 worktrees: vec![PathBuf::from("/tmp/alpha")],
                 editors: Vec::new(),
                 memory: Some(snapshot(8000, 2048, 2048)),
                 is_wsl: false,
-                tailscale: TailscaleStatus::NotInstalled,
-                paired_devices: 0,
             }
         }
 
@@ -813,8 +687,6 @@ mod tests {
                 worktrees: &self.worktrees,
                 editors: &self.editors,
                 pid_alive: alive,
-                tailscale: &self.tailscale,
-                paired_devices: self.paired_devices,
             })
         }
     }
@@ -854,7 +726,7 @@ mod tests {
     }
 
     fn write_legacy_config(dir: &Path) {
-        let legacy = legacy_project_config_path(dir);
+        let [legacy, _] = legacy_project_config_paths(dir);
         std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
         std::fs::write(legacy, "{}").unwrap();
     }
@@ -870,7 +742,7 @@ mod tests {
     }
 
     #[test]
-    fn flags_a_repo_still_on_the_legacy_config_path() {
+    fn flags_a_repo_configured_only_by_amf_json() {
         let repo = tempfile::TempDir::new().unwrap();
         write_legacy_config(repo.path());
         let fixture = fixture_rooted_at(repo.path(), repo.path());
@@ -879,13 +751,19 @@ mod tests {
         let found = finding(&report, "config-path");
         assert_eq!(found.severity, Severity::Notice);
         assert_eq!(found.detail.len(), 1, "repo dir reported once, not twice");
-        assert!(found.detail[0].ends_with(".amf/config.json"));
-        // Nothing is broken yet, so the advice says so rather than alarming.
-        assert!(found.advice.as_ref().unwrap().contains("git mv"));
+        assert!(found.detail[0].ends_with("amf.json"));
+        // Nothing is broken, so the advice says so rather than alarming.
+        assert!(
+            found
+                .advice
+                .as_ref()
+                .unwrap()
+                .contains("cp amf.json aiw.json")
+        );
     }
 
     #[test]
-    fn a_legacy_file_shadowed_by_amf_json_gets_different_advice() {
+    fn an_amf_json_next_to_aiw_json_is_informational() {
         let repo = tempfile::TempDir::new().unwrap();
         write_legacy_config(repo.path());
         std::fs::write(project_config_path(repo.path()), "{}").unwrap();
@@ -893,9 +771,8 @@ mod tests {
 
         let report = fixture.run(&|_| false);
         let found = finding(&report, "config-path");
-        assert_eq!(found.severity, Severity::Notice);
-        assert!(found.detail[0].contains("no longer read"));
-        assert!(found.advice.as_ref().unwrap().contains("dead weight"));
+        assert_eq!(found.severity, Severity::Ok);
+        assert!(found.detail[0].contains("left for AMF"));
     }
 
     #[test]
@@ -932,7 +809,7 @@ mod tests {
         let mut fixture = Fixture::new();
         fixture.store.projects[0].features[0]
             .add_session_named(SessionKind::Claude, "Claude 1".into());
-        fixture.live = LiveHarnesses::from_pairs([("amf-alpha", "claude")]);
+        fixture.live = LiveHarnesses::from_pairs([("aiw-alpha", "claude")]);
         fixture.config.max_concurrent_agents = 1;
 
         let report = fixture.run(&|_| false);
@@ -982,12 +859,12 @@ mod tests {
     #[test]
     fn flags_tmux_sessions_with_no_feature() {
         let mut fixture = Fixture::new();
-        fixture.sessions.push("amf-ghost".to_string());
+        fixture.sessions.push("aiw-ghost".to_string());
 
         let report = fixture.run(&|_| false);
         let sessions = finding(&report, "tmux-sessions");
         assert_eq!(sessions.severity, Severity::Warn);
-        assert_eq!(sessions.detail, vec!["amf-ghost"]);
+        assert_eq!(sessions.detail, vec!["aiw-ghost"]);
     }
 
     #[test]
@@ -1053,125 +930,28 @@ mod tests {
         assert_eq!(finding(&report, "editors-open").severity, Severity::Ok);
     }
 
-    fn tailnet(https: bool, serve: Option<&str>, tagged: bool) -> TailscaleStatus {
-        TailscaleStatus::Running(crate::tailscale::TailnetNode {
-            dns_name: "pc.tail1.ts.net".into(),
-            https_enabled: https,
-            tagged_for_amf: tagged,
-            serve_url: serve.map(str::to_string),
-            peers: 1,
-        })
-    }
-
     #[test]
-    fn remote_access_is_quiet_when_nobody_uses_it() {
+    fn states_that_aiw_makes_no_network_connections() {
         let report = Fixture::new().run(&|_| false);
-        assert_eq!(finding(&report, "remote-access").severity, Severity::Ok);
-    }
-
-    #[test]
-    fn remote_access_names_the_next_tailscale_step() {
-        let mut fixture = Fixture::new();
-        fixture.tailscale = tailnet(false, None, false);
-        let off = finding(&fixture.run(&|_| false), "remote-access").clone();
-        assert_eq!(off.severity, Severity::Notice);
-        assert!(off.advice.unwrap().contains("HTTPS Certificates"));
-
-        fixture.tailscale = tailnet(true, None, false);
-        let unserved = finding(&fixture.run(&|_| false), "remote-access").clone();
+        let network = finding(&report, "network");
+        assert_eq!(network.severity, Severity::Ok);
+        assert!(network.summary.contains("no network connections"));
         assert!(
-            unserved
-                .advice
-                .unwrap()
-                .contains("tailscale serve --bg 47800")
-        );
-
-        fixture.tailscale = tailnet(true, Some("https://pc.tail1.ts.net"), false);
-        let served = finding(&fixture.run(&|_| false), "remote-access").clone();
-        assert_eq!(served.severity, Severity::Ok);
-        assert!(served.summary.contains("https://pc.tail1.ts.net"));
-        assert!(served.advice.unwrap().contains("tag:amf"));
-
-        fixture.tailscale = tailnet(true, Some("https://pc.tail1.ts.net"), true);
-        let locked = finding(&fixture.run(&|_| false), "remote-access").clone();
-        assert_eq!(locked.advice, None);
-    }
-
-    #[test]
-    fn remote_access_warns_when_no_device_can_reach_this_computer() {
-        let mut fixture = Fixture::new();
-        let mut isolated = tailnet(true, Some("https://pc.tail1.ts.net"), true);
-        if let TailscaleStatus::Running(node) = &mut isolated {
-            node.peers = 0;
-        }
-        fixture.tailscale = isolated;
-        let report = fixture.run(&|_| false);
-        let remote = finding(&report, "remote-access");
-        assert_eq!(remote.severity, Severity::Warn);
-        assert!(remote.summary.contains("no other device"));
-
-        fixture.config.remote_public_url = Some("https://pc.tail1.ts.net".into());
-        let report = fixture.run(&|_| false);
-        assert_eq!(
-            finding(&report, "remote-access").severity,
-            Severity::Warn,
-            "a configured URL pointing at the same tailnet address is just as unreachable"
-        );
-    }
-
-    #[test]
-    fn remote_access_flags_a_public_url_tailscale_disagrees_with() {
-        let mut fixture = Fixture::new();
-        fixture.config.remote_public_url = Some("https://old.tail1.ts.net".into());
-        fixture.tailscale = tailnet(true, Some("https://pc.tail1.ts.net"), false);
-        let report = fixture.run(&|_| false);
-        let remote = finding(&report, "remote-access");
-        assert_eq!(remote.severity, Severity::Notice);
-        assert!(remote.summary.contains("differs"));
-
-        fixture.config.remote_public_url = Some("https://pc.tail1.ts.net".into());
-        let report = fixture.run(&|_| false);
-        let agreed = finding(&report, "remote-access");
-        assert_eq!(agreed.severity, Severity::Ok);
-        assert!(
-            agreed.advice.as_deref().unwrap().contains("tag:amf"),
-            "a configured URL still gets the lock-down reminder"
-        );
-
-        fixture.config.remote_public_url = Some("http://192.168.0.2:47800".into());
-        let report = fixture.run(&|_| false);
-        assert!(
-            finding(&report, "remote-access")
-                .summary
-                .contains("isn't HTTPS")
-        );
-    }
-
-    #[test]
-    fn remote_access_speaks_up_for_a_paired_phone_with_no_address() {
-        let mut fixture = Fixture::new();
-        fixture.paired_devices = 1;
-        let report = fixture.run(&|_| false);
-        let remote = finding(&report, "remote-access");
-        assert_eq!(remote.severity, Severity::Notice);
-        assert!(
-            remote
-                .advice
-                .as_deref()
-                .unwrap()
-                .contains("tailscale.com/download")
+            report
+                .render()
+                .contains("AI Workstation (AIW) makes no network connections itself")
         );
     }
 
     #[test]
     fn renders_text_and_json() {
         let mut fixture = Fixture::new();
-        fixture.sessions.push("amf-ghost".to_string());
+        fixture.sessions.push("aiw-ghost".to_string());
         let report = fixture.run(&|_| false);
 
         let text = report.render();
-        assert!(text.contains("amf doctor"));
-        assert!(text.contains("amf-ghost"));
+        assert!(text.contains("aiw doctor"));
+        assert!(text.contains("aiw-ghost"));
         assert!(text.contains("Nothing was changed."));
 
         let json: serde_json::Value = serde_json::from_str(&report.to_json()).unwrap();
@@ -1182,6 +962,6 @@ mod tests {
             .find(|f| f["id"] == "tmux-sessions")
             .unwrap();
         assert_eq!(sessions["severity"], "warn");
-        assert_eq!(sessions["detail"][0], "amf-ghost");
+        assert_eq!(sessions["detail"][0], "aiw-ghost");
     }
 }

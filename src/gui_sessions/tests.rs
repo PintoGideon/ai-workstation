@@ -71,7 +71,7 @@ fn store(root: &Path, status: ProjectStatus) -> ProjectStore {
     store
 }
 
-const AMF_JSON: &str = r#"{
+const AIW_JSON: &str = r#"{
   "custom_sessions": [
     {
       "name": "Dev server",
@@ -93,7 +93,7 @@ const AMF_JSON: &str = r#"{
 }"#;
 
 fn handle(root: &Path, status: ProjectStatus, tmux: MockTmuxOps) -> GuiHandle {
-    std::fs::write(root.join("amf.json"), AMF_JSON).unwrap();
+    std::fs::write(root.join("aiw.json"), AIW_JSON).unwrap();
     let app = App::new_for_test(
         store(root, status),
         Box::new(tmux),
@@ -104,7 +104,7 @@ fn handle(root: &Path, status: ProjectStatus, tmux: MockTmuxOps) -> GuiHandle {
 
 fn attach_db(gui: &mut GuiHandle) -> tempfile::NamedTempFile {
     let file = tempfile::NamedTempFile::new().unwrap();
-    let db = crate::db::AmfDb::open(file.path()).unwrap();
+    let db = crate::db::AiwDb::open(file.path()).unwrap();
     let app = gui.app_for_workflow();
     db.save_store(&app.store).unwrap();
     app.db = Some(db);
@@ -271,7 +271,7 @@ fn an_unreadable_project_config_is_reported_not_silently_dropped() {
     let root = tempfile::tempdir().unwrap();
     let _seams = Seams::new(None, None);
     let mut gui = handle(root.path(), ProjectStatus::Idle, running_tmux());
-    std::fs::write(root.path().join("amf.json"), "{ not json").unwrap();
+    std::fs::write(root.path().join("aiw.json"), "{ not json").unwrap();
 
     let options = gui
         .new_session_options(&target(), vscode_cli_available())
@@ -291,7 +291,7 @@ fn a_custom_session_opens_its_window_with_the_configured_command() {
     let expected_dir = workdir.join("web");
     tmux.expect_create_window()
         .withf(move |session, window, dir| {
-            session == "amf-demo-feat" && window == "dev-server" && dir == expected_dir
+            session == "aiw-demo-feat" && window == "dev-server" && dir == expected_dir
         })
         .times(1)
         .returning(|_, _, _| Ok(()));
@@ -304,7 +304,7 @@ fn a_custom_session_opens_its_window_with_the_configured_command() {
             Ok(())
         });
     let mut gui = handle(root.path(), ProjectStatus::Idle, tmux);
-    gui.app_for_workflow().store.projects[0].features[0].tmux_session = "amf-demo-feat".to_string();
+    gui.app_for_workflow().store.projects[0].features[0].tmux_session = "aiw-demo-feat".to_string();
     let request = request(&mut gui, "Dev server");
     let gui = Mutex::new(gui);
 
@@ -334,7 +334,7 @@ fn a_custom_session_opens_its_window_with_the_configured_command() {
     let command = commands.lock().unwrap()[0].clone();
     assert!(command.contains("npm run dev"), "{command}");
     assert!(command.contains(&added.session_id), "{command}");
-    assert!(command.contains("AMF_STATUS_DIR"), "{command}");
+    assert!(command.contains("AIW_STATUS_DIR"), "{command}");
     assert!(gui.app_for_workflow().message.is_none());
 }
 
@@ -397,8 +397,8 @@ fn a_changed_or_removed_configuration_is_refused() {
     let mut gui = handle(root.path(), ProjectStatus::Idle, running_tmux());
     let request = request(&mut gui, "Dev server");
     std::fs::write(
-        root.path().join("amf.json"),
-        AMF_JSON.replace("npm run dev", "npm run start"),
+        root.path().join("aiw.json"),
+        AIW_JSON.replace("npm run dev", "npm run start"),
     )
     .unwrap();
     let gui = Mutex::new(gui);
@@ -407,7 +407,7 @@ fn a_changed_or_removed_configuration_is_refused() {
     assert_eq!(changed.kind, GuiErrorKind::Conflict);
     assert!(changed.message.contains("changed"), "{}", changed.message);
 
-    std::fs::write(root.path().join("amf.json"), r#"{"custom_sessions": []}"#).unwrap();
+    std::fs::write(root.path().join("aiw.json"), r#"{"custom_sessions": []}"#).unwrap();
     let removed = add_custom_session(&gui, request).unwrap_err();
     assert_eq!(removed.kind, GuiErrorKind::NotFound);
 }
@@ -581,7 +581,7 @@ fn unresolved_editor_rows_expire_without_hiding_live_foreign_windows() {
 }
 
 /// A live process with VS Code's shape on the worktree, which this test
-/// owns: AMF's identity check accepts it exactly as it would a real window.
+/// owns: AIW's identity check accepts it exactly as it would a real window.
 fn lookalike(dir: &Path, workdir: &Path) -> crate::resources::test_support::TestChild {
     let fake = dir.join("code");
     std::os::unix::fs::symlink("/bin/bash", &fake).unwrap();
@@ -611,7 +611,7 @@ fn closing_editors_closes_only_owned_windows_and_refuses_an_unseen_one() {
     let pid = child.id() as i64;
     std::thread::sleep(std::time::Duration::from_millis(200));
     let owned = record(&mut gui, pid, true, &workdir);
-    // A live instance AMF does not own: listed, never closed.
+    // A live instance AIW does not own: listed, never closed.
     let foreign = record(&mut gui, std::process::id() as i64, false, &workdir);
     rusqlite::Connection::open(db_file.path())
         .unwrap()

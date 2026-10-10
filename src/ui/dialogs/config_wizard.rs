@@ -92,11 +92,11 @@ fn draw_scope_picker(frame: &mut Frame, state: &ConfigWizardState, theme: &Theme
         let project_label = state
             .project_name
             .as_ref()
-            .map(|name| format!("Project ({}/.amf/config.json)", name))
+            .map(|name| format!("Project ({}/aiw.json)", name))
             .unwrap_or_else(|| "Project (select a project first)".to_string());
         let lines = vec![
             selection_line(
-                "Global (~/.config/amf/config.json)",
+                "Global (~/.config/ai_workstation/config.json)",
                 state.selected == 0,
                 theme,
             ),
@@ -211,8 +211,8 @@ fn draw_edit_item(frame: &mut Frame, state: &mut ConfigWizardState, theme: &Them
 fn draw_confirm_save(frame: &mut Frame, state: &ConfigWizardState, theme: &Theme) {
     let area = centered_rect(70, 70, frame.area());
     let scope_label = match &state.scope {
-        ConfigScope::Global => "~/.config/amf/config.json".to_string(),
-        ConfigScope::Project(repo) => format!("{}/.amf/config.json", repo.display()),
+        ConfigScope::Global => "~/.config/ai_workstation/config.json".to_string(),
+        ConfigScope::Project(repo) => format!("{}/aiw.json", repo.display()),
     };
 
     draw_modal(frame, area, " Confirm Changes ", theme, |frame, inner| {
@@ -728,7 +728,7 @@ fn custom_session_field_help(field_focus: usize) -> (&'static str, &'static str,
         _ => (
             "Custom session",
             "Configure how this extra tmux window should be created and launched.",
-            "Fields left blank fall back to AMF defaults where supported.",
+            "Fields left blank fall back to AIW defaults where supported.",
         ),
     }
 }
@@ -793,7 +793,7 @@ fn lifecycle_hook_field_help(field_focus: usize) -> (&'static str, &'static str,
         ),
         1 => (
             "Prompted",
-            "If enabled, AMF will ask the user to choose an option before running the hook.",
+            "If enabled, AIW will ask the user to choose an option before running the hook.",
             "Use Enter to toggle.",
         ),
         2 => (

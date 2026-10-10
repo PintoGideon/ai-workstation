@@ -1,6 +1,6 @@
 # AI Review picker back navigation
 
-Captured from an isolated AMF instance against open PR #483. The walkthrough
+Captured from an isolated AIW instance against open PR #483. The walkthrough
 stops before starting the paid AI Review pass, so it performs no GitHub write
 and spends no agent tokens.
 

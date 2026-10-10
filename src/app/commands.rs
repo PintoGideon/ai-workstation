@@ -53,7 +53,7 @@ impl App {
         ) {
             commands.push(CommandEntry {
                 name: "plan-interview".to_string(),
-                source: "AMF".to_string(),
+                source: "AIW".to_string(),
                 path: None,
                 action: CommandAction::Local {
                     command: LocalCommand::PlanInterview,
@@ -126,7 +126,13 @@ impl App {
         if self.ipc.is_some() {
             self.drain_ipc_messages();
         }
-        self.message = Some("Refreshed statuses".into());
+        // FORK(no-cloud): the explicit refresh is the only thing (besides
+        // opening PR Triage) that asks `gh` for PR badge state.
+        self.sync_active_prs_background();
+        // ...and retries issue comments the user asked for that never posted
+        // (AIW did this unasked at every startup).
+        self.queue_recoverable_issue_comments();
+        self.message = Some("Refreshed statuses; refreshing PR badges via gh".into());
     }
 }
 
@@ -144,7 +150,7 @@ fn local_debug_commands() -> Vec<CommandEntry> {
 fn local_debug_command(name: &str, command: LocalCommand) -> CommandEntry {
     CommandEntry {
         name: name.to_string(),
-        source: "AMF Debug".to_string(),
+        source: "AIW Debug".to_string(),
         path: None,
         action: CommandAction::Local { command },
     }
@@ -216,7 +222,7 @@ fn codex_debug_commands() -> Vec<CommandEntry> {
 fn codex_debug_command(name: &str, action: CodexDebugCommand) -> CommandEntry {
     CommandEntry {
         name: name.to_string(),
-        source: "AMF Debug".to_string(),
+        source: "AIW Debug".to_string(),
         path: None,
         action: CommandAction::CodexLiveDemo(action),
     }

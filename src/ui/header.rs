@@ -5,10 +5,12 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::Paragraph,
 };
 
 use crate::theme::Theme;
+// FORK: G11 status pills (`⚠ 2 · ● 6 · ✓ 1`) between the title and the hint.
+pub use super::fork_chrome::{HeaderPills, cwd_label, header_pills};
 
 /// The right-aligned hint painted at the end of the header row.
 const HELP_HINT: &str = "? help ";
@@ -131,7 +133,7 @@ fn badge_spans(counts: AttentionCounts, pending_count: usize, theme: &Theme) -> 
 /// separator. Only the cwd that follows is negotiable when space runs short.
 fn title_prefix_parts(version: &str) -> [String; 3] {
     [
-        " Agent Mainframe ".to_string(),
+        " AI Workstation ".to_string(), // FORK: product name
         format!("v{version} "),
         "| ".to_string(),
     ]
@@ -180,6 +182,9 @@ struct TitleLayout {
     /// Columns the badge occupies, relative to the title region's first
     /// column. `None` when there is no badge or no room left for one.
     badge: Option<Range<u16>>,
+    /// FORK: columns the status pills occupy (right-aligned in the title
+    /// region), or `None` when there are none or no room for them.
+    pills: Option<Range<u16>>,
 }
 
 /// Lay out the header title so the badge survives a narrow terminal.
@@ -196,6 +201,7 @@ fn layout_title(
     version: &str,
     attention: AttentionCounts,
     pending_count: usize,
+    pills: Option<HeaderPills>,
 ) -> TitleLayout {
     let [name, ver, sep] = title_prefix_parts(version);
     let fixed_head: u16 = [&name, &ver]
@@ -207,9 +213,23 @@ fn layout_title(
     let badge = badge_text(attention, pending_count);
     let badge_width = badge.as_ref().map_or(0, |b| b.len() as u16);
 
+    // FORK: the pills sit right-aligned in the title region, but only when
+    // the name, version and whole badge still fit beside them: the badge is
+    // the clickable route to the work, the pills only summarise it.
+    const PILLS_GAP: u16 = 2;
+    let pills_width = pills.map_or(0, |pills| pills.width());
+    let pills_cols =
+        if pills_width > 0 && title_width >= fixed + badge_width + PILLS_GAP + pills_width {
+            PILLS_GAP + pills_width
+        } else {
+            0
+        };
+    let pills = (pills_cols > 0).then(|| title_width - pills_width..title_width);
+
     let cwd_budget = title_width
         .saturating_sub(fixed)
-        .saturating_sub(badge_width);
+        .saturating_sub(badge_width)
+        .saturating_sub(pills_cols);
     let shown_cwd = shorten_cwd(cwd, cwd_budget);
     // A separator with nothing after it just spends a column on punctuation.
     let sep = if shown_cwd.is_empty() {
@@ -229,6 +249,7 @@ fn layout_title(
     TitleLayout {
         prefix: [name, ver, sep, shown_cwd],
         badge,
+        pills,
     }
 }
 
@@ -243,13 +264,15 @@ pub fn badge_hit_columns(
     version: &str,
     attention: AttentionCounts,
     pending_count: usize,
+    pills: Option<HeaderPills>, // FORK: G11 pills shift the cwd budget
 ) -> Option<Range<u16>> {
     let inner_x = area.x.saturating_add(1);
     let (title_width, _) = split_header_row(area.width.saturating_sub(2));
-    let columns = layout_title(title_width, cwd, version, attention, pending_count).badge?;
+    let columns = layout_title(title_width, cwd, version, attention, pending_count, pills).badge?;
     Some(inner_x.saturating_add(columns.start)..inner_x.saturating_add(columns.end))
 }
 
+#[allow(clippy::too_many_arguments)] // FORK: + pills
 pub fn draw(
     frame: &mut Frame,
     area: Rect,
@@ -257,17 +280,17 @@ pub fn draw(
     version: &str,
     pending_count: usize,
     attention: AttentionCounts,
+    pills: Option<HeaderPills>,
     theme: &Theme,
 ) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme.border_focus.to_color()));
+    // FORK: G11 — rounded, quiet border; name bold, version/cwd dim.
+    let block = super::fork_chrome::plain_panel(theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
     let (title_width, hint_width) = split_header_row(inner.width);
 
-    let layout = layout_title(title_width, cwd, version, attention, pending_count);
+    let layout = layout_title(title_width, cwd, version, attention, pending_count, pills);
     let [name, ver, sep, dir] = layout.prefix;
     let mut title_spans = vec![
         Span::styled(
@@ -277,8 +300,8 @@ pub fn draw(
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(ver, Style::default().fg(theme.text_muted.to_color())),
-        Span::styled(sep, Style::default().fg(theme.text_muted.to_color())),
-        Span::styled(dir, Style::default().fg(theme.text.to_color())),
+        Span::styled(sep, super::fork_chrome::guide_style(theme)), // FORK
+        Span::styled(dir, Style::default().fg(theme.text_muted.to_color())), // FORK
     ];
 
     // Only when `layout_title` found room for it, so what is drawn and what
@@ -287,10 +310,23 @@ pub fn draw(
         title_spans.extend(badge_spans(attention, pending_count, theme));
     }
 
+    // FORK: the pills, right-aligned in the columns `layout_title` gave them.
+    let mut text_width = title_width;
+    if let (Some(columns), Some(pills)) = (layout.pills.clone(), pills) {
+        text_width = columns.start;
+        let pills_area = Rect::new(
+            inner.x.saturating_add(columns.start),
+            inner.y,
+            columns.end - columns.start,
+            1,
+        );
+        frame.render_widget(Paragraph::new(Line::from(pills.spans(theme))), pills_area);
+    }
+
     if title_width > 0 {
         // Stops short of the help hint rather than being painted over by it.
         let title_area = Rect {
-            width: title_width,
+            width: text_width,
             ..inner
         };
         let title = Paragraph::new(Line::from(title_spans));
@@ -305,7 +341,7 @@ pub fn draw(
             height: 1,
         };
         let hint = Paragraph::new(Line::from(vec![
-            Span::styled("?", Style::default().fg(theme.primary.to_color())),
+            Span::styled("?", super::fork_chrome::key_style(theme)), // FORK
             Span::styled(" help ", Style::default().fg(theme.text_muted.to_color())),
         ]));
         frame.render_widget(hint, hint_area);
@@ -333,7 +369,7 @@ mod tests {
         let theme = Theme::default();
         // Long enough that the untruncated title plus badge would run past the
         // row's end and under the help hint.
-        let cwd = "/home/dev/code/agent-mainframe/.worktrees/some-long-branch";
+        let cwd = "/home/dev/code/ai-workstation/.worktrees/some-long-branch";
 
         terminal
             .draw(|frame| {
@@ -344,6 +380,7 @@ mod tests {
                     "0.37.0",
                     1,
                     (1, 0, 0),
+                    None,
                     &theme,
                 )
             })
@@ -371,7 +408,7 @@ mod tests {
     #[test]
     fn the_title_never_paints_into_the_help_hint_at_any_width() {
         let theme = Theme::default();
-        let cwd = "/home/dev/code/agent-mainframe/.worktrees/some-long-branch";
+        let cwd = "/home/dev/code/ai-workstation/.worktrees/some-long-branch";
 
         // From the narrowest row that carries a hint at all: below this
         // `split_header_row` drops it and gives the columns to the title.
@@ -387,6 +424,7 @@ mod tests {
                         "0.37.0",
                         1,
                         (1, 0, 0),
+                        None,
                         &theme,
                     )
                 })

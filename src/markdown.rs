@@ -12,7 +12,10 @@ use crate::{
     theme::Theme,
 };
 
+// FORK: `AMF_PLAN.md` is the plan file upstream AMF wrote; old worktrees
+// still have it, so it is found after AIW's own.
 const MARKDOWN_VIEW_CANDIDATES: &[&str] = &[
+    "AIW_PLAN.md",
     "AMF_PLAN.md",
     "PLAN.md",
     ".claude/plan.md",
@@ -21,7 +24,15 @@ const MARKDOWN_VIEW_CANDIDATES: &[&str] = &[
     ".claude/notes.md",
     "plan.md",
 ];
-const SIDEBAR_PLAN_CANDIDATES: &[&str] = &["AMF_PLAN.md", "PLAN.md", ".claude/plan.md", "plan.md"];
+// FORK: test-only since the dead `sidebar_plan_cache` went (DESIGN.md §12.3).
+#[cfg(test)]
+const SIDEBAR_PLAN_CANDIDATES: &[&str] = &[
+    "AIW_PLAN.md",
+    "AMF_PLAN.md",
+    "PLAN.md",
+    ".claude/plan.md",
+    "plan.md",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MarkdownViewScope {
@@ -188,6 +199,8 @@ pub fn collect_markdown_view_paths(workdir: &Path, repo_root: Option<&Path>) -> 
     paths
 }
 
+// FORK: test-only since the dead `sidebar_plan_cache` went (DESIGN.md §12.3).
+#[cfg(test)]
 pub fn preferred_plan_markdown_path(workdir: &Path, repo_root: Option<&Path>) -> Option<PathBuf> {
     for candidate in SIDEBAR_PLAN_CANDIDATES {
         let path = workdir.join(candidate);
@@ -210,12 +223,16 @@ pub fn preferred_plan_markdown_path(workdir: &Path, repo_root: Option<&Path>) ->
     None
 }
 
+// FORK: test-only since the dead `sidebar_plan_cache` went (DESIGN.md §12.3).
+#[cfg(test)]
 pub fn read_plan_preview(workdir: &Path, repo_root: Option<&Path>) -> Option<String> {
     let path = preferred_plan_markdown_path(workdir, repo_root)?;
     let content = std::fs::read_to_string(path).ok()?;
     compact_plan_preview(&content)
 }
 
+// FORK: test-only since the dead `sidebar_plan_cache` went (DESIGN.md §12.3).
+#[cfg(test)]
 fn compact_plan_preview(content: &str) -> Option<String> {
     const MAX_LINES: usize = 6;
     const MAX_CHARS: usize = 280;
@@ -1619,10 +1636,10 @@ mod tests {
         std::fs::write(claude_dir.join("context.md"), "# Context").unwrap();
         std::fs::write(claude_dir.join("plan.md"), "# Legacy plan").unwrap();
         std::fs::write(dir.path().join("PLAN.md"), "# Repository plan").unwrap();
-        std::fs::write(dir.path().join("AMF_PLAN.md"), "# Plan").unwrap();
+        std::fs::write(dir.path().join("AIW_PLAN.md"), "# Plan").unwrap();
 
         let found = collect_markdown_view_paths(dir.path(), None);
-        assert_eq!(found.first(), Some(&dir.path().join("AMF_PLAN.md")));
+        assert_eq!(found.first(), Some(&dir.path().join("AIW_PLAN.md")));
     }
 
     #[test]
@@ -1665,8 +1682,12 @@ mod tests {
     #[test]
     fn markdown_path_collection_skips_hidden_dirs_and_nested_worktrees() {
         let dir = tempfile::TempDir::new().unwrap();
-        std::fs::create_dir_all(dir.path().join(".opencode")).unwrap();
-        std::fs::write(dir.path().join(".opencode").join("hidden.md"), "# Hidden").unwrap();
+        std::fs::create_dir_all(dir.path().join(".hidden-tool")).unwrap();
+        std::fs::write(
+            dir.path().join(".hidden-tool").join("hidden.md"),
+            "# Hidden",
+        )
+        .unwrap();
         std::fs::create_dir_all(dir.path().join(".worktrees").join("other")).unwrap();
         std::fs::write(
             dir.path()
@@ -1678,7 +1699,7 @@ mod tests {
         .unwrap();
 
         let found = collect_markdown_view_paths(dir.path(), None);
-        assert!(!found.contains(&dir.path().join(".opencode").join("hidden.md")));
+        assert!(!found.contains(&dir.path().join(".hidden-tool").join("hidden.md")));
         assert!(
             !found.contains(
                 &dir.path()
@@ -1748,11 +1769,11 @@ mod tests {
     }
 
     #[test]
-    fn preferred_plan_markdown_path_prefers_amf_plan_over_legacy_candidates() {
+    fn preferred_plan_markdown_path_prefers_aiw_plan_over_legacy_candidates() {
         let worktree = tempfile::TempDir::new().unwrap();
         std::fs::create_dir_all(worktree.path().join(".claude")).unwrap();
-        let amf_plan = worktree.path().join("AMF_PLAN.md");
-        std::fs::write(&amf_plan, "# Current plan").unwrap();
+        let aiw_plan = worktree.path().join("AIW_PLAN.md");
+        std::fs::write(&aiw_plan, "# Current plan").unwrap();
         std::fs::write(worktree.path().join("PLAN.md"), "# Repository plan").unwrap();
         std::fs::write(
             worktree.path().join(".claude").join("plan.md"),
@@ -1762,7 +1783,7 @@ mod tests {
 
         assert_eq!(
             preferred_plan_markdown_path(worktree.path(), None),
-            Some(amf_plan)
+            Some(aiw_plan)
         );
     }
 
@@ -1942,7 +1963,7 @@ mod tests {
     fn render_markdown_shows_footnote_references_and_definitions() {
         let theme = Theme::default();
         let rendered = render_markdown(
-            "AMF has notes[^detail].\n\n[^detail]: Render the definition as a footnote.",
+            "AIW has notes[^detail].\n\n[^detail]: Render the definition as a footnote.",
             &theme,
             64,
             None,
@@ -2083,7 +2104,7 @@ mod tests {
     fn render_markdown_formats_tables_as_grid() {
         let theme = Theme::default();
         let rendered = render_markdown(
-            "| Name | Status |\n| --- | --- |\n| AMF | Ready |",
+            "| Name | Status |\n| --- | --- |\n| AIW | Ready |",
             &theme,
             40,
             None,
@@ -2099,7 +2120,7 @@ mod tests {
         assert!(text.contains("│ Name "), "{text}");
         assert!(text.contains("│ Status "), "{text}");
         assert!(text.contains("├"), "{text}");
-        assert!(text.contains("│ AMF "), "{text}");
+        assert!(text.contains("│ AIW "), "{text}");
         assert!(text.contains("└"), "{text}");
     }
 
@@ -2199,7 +2220,7 @@ mod tests {
     fn render_markdown_preserves_blockquote_table_prefixes() {
         let theme = Theme::default();
         let rendered = render_markdown(
-            "> | Name | Status |\n> | --- | --- |\n> | AMF | Ready |",
+            "> | Name | Status |\n> | --- | --- |\n> | AIW | Ready |",
             &theme,
             40,
             None,
@@ -2219,7 +2240,7 @@ mod tests {
             "{strings:#?}"
         );
         assert!(
-            strings.iter().any(|line| line == "│ │ AMF  │ Ready  │"),
+            strings.iter().any(|line| line == "│ │ AIW  │ Ready  │"),
             "{strings:#?}"
         );
         assert!(
@@ -2232,7 +2253,7 @@ mod tests {
     fn render_markdown_preserves_list_item_table_prefixes() {
         let theme = Theme::default();
         let rendered = render_markdown(
-            "- Table:\n  | Name | Status |\n  | --- | --- |\n  | AMF | Ready |",
+            "- Table:\n  | Name | Status |\n  | --- | --- |\n  | AIW | Ready |",
             &theme,
             40,
             None,
@@ -2252,7 +2273,7 @@ mod tests {
             "{strings:#?}"
         );
         assert!(
-            strings.iter().any(|line| line == "  │ AMF  │ Ready  │"),
+            strings.iter().any(|line| line == "  │ AIW  │ Ready  │"),
             "{strings:#?}"
         );
         assert!(
@@ -2344,7 +2365,7 @@ mod tests {
     fn render_markdown_truncates_long_styled_table_cells_without_breaking_borders() {
         let theme = Theme::default();
         let rendered = render_markdown(
-            "| Name | Notes |\n| --- | --- |\n| AMF | **supercalifragilistic** `implementation` |",
+            "| Name | Notes |\n| --- | --- |\n| AIW | **supercalifragilistic** `implementation` |",
             &theme,
             26,
             None,

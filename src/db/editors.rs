@@ -1,8 +1,8 @@
-//! SQLite persistence for editors AMF launched on a feature's behalf.
+//! SQLite persistence for editors AIW launched on a feature's behalf.
 //!
 //! A record exists so that stopping a feature can reclaim the editor window and
 //! the language servers under it — routinely the largest memory consumers on
-//! the machine, and invisible to tmux. Records outlive AMF restarts, so a
+//! the machine, and invisible to tmux. Records outlive AIW restarts, so a
 //! stored PID is never trusted on its own: `command` is kept alongside it as an
 //! identity check against PID recycling (see `MIGRATION_017`).
 //!
@@ -47,7 +47,7 @@ impl EditorKind {
     }
 }
 
-/// One editor process AMF started.
+/// One editor process AIW started.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchedEditor {
     pub id: String,
@@ -57,9 +57,9 @@ pub struct LaunchedEditor {
     pub kind: EditorKind,
     pub pid: i64,
     pub worktree_path: PathBuf,
-    /// True only when AMF opened a window it owns and may therefore kill.
+    /// True only when AIW opened a window it owns and may therefore kill.
     pub dedicated: bool,
-    /// The argv AMF spawned, used to prove a live PID is still this process.
+    /// The argv AIW spawned, used to prove a live PID is still this process.
     pub command: String,
     /// When the attributed process itself started, as `ps -o lstart=` reports
     /// it. Empty until ownership is resolved (and for rows written before
@@ -130,7 +130,7 @@ pub fn list_for_feature(conn: &Connection, feature_id: &str) -> Result<Vec<Launc
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-/// Every recorded editor, oldest launch first — the `amf doctor` view.
+/// Every recorded editor, oldest launch first — the `aiw doctor` view.
 pub fn list_all(conn: &Connection) -> Result<Vec<LaunchedEditor>> {
     let mut stmt = conn.prepare(
         "SELECT id, feature_id, session_id, kind, pid, worktree_path, dedicated, command,
@@ -203,13 +203,13 @@ fn row_to_editor(row: &rusqlite::Row<'_>) -> rusqlite::Result<LaunchedEditor> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use std::path::Path;
     use tempfile::NamedTempFile;
 
-    fn open_temp_db() -> (NamedTempFile, AmfDb) {
+    fn open_temp_db() -> (NamedTempFile, AiwDb) {
         let tmp = NamedTempFile::new().unwrap();
-        let db = AmfDb::open(tmp.path()).unwrap();
+        let db = AiwDb::open(tmp.path()).unwrap();
         (tmp, db)
     }
 
@@ -286,7 +286,7 @@ mod tests {
         let loaded = db.launched_editors_for_feature("feat-1").unwrap();
         assert!(
             !loaded[0].dedicated,
-            "reused instances are never AMF's to kill"
+            "reused instances are never AIW's to kill"
         );
         assert_eq!(loaded[0].kind, EditorKind::Other);
         assert!(loaded[0].session_id.is_none());

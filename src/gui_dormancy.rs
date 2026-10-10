@@ -34,7 +34,7 @@ pub struct DormancyView {
     pub enabled: bool,
     pub idle_minutes: u64,
     pub unattended_hours: u64,
-    /// Whether stopping also closes editors AMF opened (`kill_editor_on_stop`).
+    /// Whether stopping also closes editors AIW opened (`kill_editor_on_stop`).
     pub kill_editor_on_stop: bool,
     pub checked_at: DateTime<Utc>,
     /// Longest-idle first, as the TUI lists them.
@@ -50,7 +50,7 @@ pub struct DormantFeatureView {
     pub editor_alive: bool,
     /// Seconds since the agent last produced output.
     pub idle_secs: u64,
-    /// Seconds since the feature was last opened in AMF.
+    /// Seconds since the feature was last opened in AIW.
     pub unattended_secs: u64,
     pub observation: DormantObservation,
 }
@@ -99,7 +99,7 @@ pub enum DormancyRefusal {
     Duplicate,
     Deleted,
     AlreadyStopped,
-    /// AMF still records it as running but its tmux session no longer exists
+    /// AIW still records it as running but its tmux session no longer exists
     /// (a crash or a tmux server restart), so there is nothing left to stop.
     SessionGone,
     /// Its tmux session is not the one that was listed.
@@ -109,7 +109,7 @@ pub enum DormancyRefusal {
     SharedSession,
     /// Dormancy was switched off in config.
     DormancyOff,
-    /// Opened in AMF since the list was loaded.
+    /// Opened in AIW since the list was loaded.
     Opened,
     /// The agent produced output since the list was loaded.
     Output,
@@ -265,7 +265,7 @@ fn refused(reason: DormancyRefusal, message: impl Into<String>) -> DormancyStopO
 }
 
 fn stop_one(gui: &mut GuiHandle, observed: &DormantObservation) -> DormancyStopOutcome {
-    // Adopt anything another AMF process committed (a TUI stop, delete or
+    // Adopt anything another AIW process committed (a TUI stop, delete or
     // open) before judging, so "already stopped" means what it says.
     if let Err(error) = gui.refresh_snapshot() {
         return DormancyStopOutcome::Failed {
@@ -307,7 +307,7 @@ fn stop_one(gui: &mut GuiHandle, observed: &DormantObservation) -> DormancyStopO
     if feature.last_accessed > observed.last_accessed {
         return refused(
             DormancyRefusal::Opened,
-            "It was opened in AMF after the list was loaded",
+            "It was opened in AIW after the list was loaded",
         );
     }
     let Some(scan) = app.scan_dormant_features() else {
@@ -397,7 +397,7 @@ mod tests {
             false,
         );
         feature.id = id.to_string();
-        feature.tmux_session = format!("amf-{id}");
+        feature.tmux_session = format!("aiw-{id}");
         feature.status = ProjectStatus::Idle;
         feature.last_accessed = Utc::now() - chrono::Duration::hours(unattended_hours);
         feature
@@ -475,7 +475,7 @@ mod tests {
         /// confirm-time refreshes reload exactly this store.
         fn attach_db(&mut self) -> tempfile::NamedTempFile {
             let file = tempfile::NamedTempFile::new().unwrap();
-            let db = crate::db::AmfDb::open(file.path()).unwrap();
+            let db = crate::db::AiwDb::open(file.path()).unwrap();
             let app = self.gui().app_for_workflow();
             db.save_store(&app.store).unwrap();
             app.db = Some(db);
@@ -499,13 +499,13 @@ mod tests {
             feature("opened", 0),
         ];
         let activity: Activity = Arc::new(Mutex::new(vec![
-            idle_for("amf-quiet", 120),
-            idle_for("amf-quieter", 360),
-            idle_for("amf-busy", 0),
-            idle_for("amf-opened", 360),
+            idle_for("aiw-quiet", 120),
+            idle_for("aiw-quieter", 360),
+            idle_for("aiw-busy", 0),
+            idle_for("aiw-opened", 360),
         ]));
         let live = Arc::new(Mutex::new(
-            ["amf-quiet", "amf-quieter", "amf-busy", "amf-opened"]
+            ["aiw-quiet", "aiw-quieter", "aiw-busy", "aiw-opened"]
                 .into_iter()
                 .map(str::to_string)
                 .collect(),
@@ -565,7 +565,7 @@ mod tests {
         let quieter = &view.features[0];
         assert!(quieter.idle_secs >= 6 * 3600);
         assert!(quieter.unattended_secs >= 20 * 3600);
-        assert_eq!(quieter.observation.tmux_session, "amf-quieter");
+        assert_eq!(quieter.observation.tmux_session, "aiw-quieter");
         assert_eq!(quieter.observation.feature_name, "quieter");
         assert!(quieter.is_worktree);
         // Listing is read-only.
@@ -606,7 +606,7 @@ mod tests {
             );
             assert_eq!(f.status(id), ProjectStatus::Stopped);
         }
-        assert_eq!(f.killed(), vec!["amf-quiet", "amf-quieter"]);
+        assert_eq!(f.killed(), vec!["aiw-quiet", "aiw-quieter"]);
         // The unselected and non-dormant features are untouched.
         assert_eq!(f.status("busy"), ProjectStatus::Idle);
         assert_eq!(f.status("opened"), ProjectStatus::Idle);
@@ -630,7 +630,7 @@ mod tests {
             refusal(&again[0].outcome),
             Some(DormancyRefusal::AlreadyStopped)
         );
-        assert_eq!(f.killed(), vec!["amf-quiet"]);
+        assert_eq!(f.killed(), vec!["aiw-quiet"]);
     }
 
     #[test]
@@ -641,7 +641,7 @@ mod tests {
         let quieter = observation(&view, "quieter");
 
         // quiet's agent prints something; quieter is opened elsewhere.
-        f.activity.lock().unwrap()[0] = idle_for("amf-quiet", 0);
+        f.activity.lock().unwrap()[0] = idle_for("aiw-quiet", 0);
         {
             let app = f.gui().app_for_workflow();
             let (pi, fi) = app.store.locate_feature_by_id(None, "quieter").unwrap();
@@ -670,7 +670,7 @@ mod tests {
         let mut gone = quiet.clone();
         gone.target.feature_id = "deleted-meanwhile".to_string();
         let mut renamed = quieter.clone();
-        renamed.tmux_session = "amf-some-older-session".to_string();
+        renamed.tmux_session = "aiw-some-older-session".to_string();
 
         // Thresholds tightened after listing: quiet (idle 2h) no longer qualifies.
         f.gui().app_for_workflow().config.dormant_idle_minutes = 5 * 60;
@@ -700,7 +700,7 @@ mod tests {
             let (pi, fi) = app.store.locate_feature_by_id(None, "quiet").unwrap();
             app.store.projects[pi].features[fi].status = ProjectStatus::Stopped;
         }
-        // quieter's tmux session vanished while AMF still records it running
+        // quieter's tmux session vanished while AIW still records it running
         // (a crash or a tmux server restart).
         let (tmux, _) = tmux(f.activity.clone(), Arc::new(Mutex::new(HashSet::new())));
         f.gui().app_for_workflow().tmux = Box::new(tmux);
@@ -729,7 +729,7 @@ mod tests {
         {
             let app = f.gui().app_for_workflow();
             let (pi, fi) = app.store.locate_feature_by_id(None, "opened").unwrap();
-            app.store.projects[pi].features[fi].tmux_session = "amf-quiet".to_string();
+            app.store.projects[pi].features[fi].tmux_session = "aiw-quiet".to_string();
         }
 
         let results = stop(&f.gui, vec![quiet]).unwrap();
@@ -792,7 +792,7 @@ mod tests {
                 "code --new-window",
             )
             .unwrap();
-            // Handed to a window the user opened: never AMF's to close.
+            // Handed to a window the user opened: never AIW's to close.
             db.record_launched_editor(
                 "quieter",
                 None,
@@ -832,7 +832,7 @@ mod tests {
             panic!("{:?}", outcome(&results, "quieter"));
         };
         assert!(left.killed.is_empty());
-        assert_eq!(left.skipped[0].reason, "AMF did not open this window");
+        assert_eq!(left.skipped[0].reason, "AIW did not open this window");
         assert!(left.skipped[0].deliberate);
         assert!(crate::resources::procs::pid_alive(unowned.id() as i64));
 
@@ -884,7 +884,7 @@ mod tests {
                 .iter()
                 .all(|row| row.observation.feature_name != "quiet")
         );
-        let persisted = crate::db::AmfDb::open(db_file.path())
+        let persisted = crate::db::AiwDb::open(db_file.path())
             .unwrap()
             .load_store()
             .unwrap();

@@ -1,6 +1,6 @@
 # TODO assignment lifecycle
 
-Captured at 120×40 with AMF's isolated screenshot harness. Frames `001`–`004`
+Captured at 120×40 with AIW's isolated screenshot harness. Frames `001`–`004`
 cover the original durable lifecycle: the three states, duplicate-launch guard,
 and dashboard **Implement next** flow.
 
@@ -19,4 +19,4 @@ Frames `005`–`007` cover plan-start status tracking:
 
 The plan-start frames can be regenerated with
 `scripts/dev/screenshot/scenarios/todo-auto-in-progress.txt` and the repository's
-`scripts/dev/screenshot/amf-capture.sh` harness.
+`scripts/dev/screenshot/aiw-capture.sh` harness.

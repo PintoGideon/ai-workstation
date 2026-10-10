@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Assert native supervised-edit states through WebKit IPC and capture its X11 window.
 
-The pending edits come from AMF's real Claude diff-review hook script, fed
-offline hook input: no agent or paid harness runs. With no AMF socket in the
+The pending edits come from AIW's real Claude diff-review hook script, fed
+offline hook input: no agent or paid harness runs. With no AIW socket in the
 isolated state directory the hook takes its file fallback, which is the path
 the GUI answers. Only the window of the supplied isolated GUI PID is used.
 """
@@ -185,9 +185,9 @@ repo = pathlib.Path(sys.argv[4])
 with (repo / ".git/info/exclude").open("a") as exclusions:
     exclusions.write("\n.claude/\n")
 hook_script = workspace / "plugins/diff-review/scripts/custom-diff-review.sh"
-amf_bin = os.environ.get("AMF_BIN") or str(workspace / "target/debug/amf")
-assert os.access(amf_bin, os.X_OK), f"amf binary missing: {amf_bin}"
-dbpath = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "amf/amf.db"
+aiw_bin = os.environ.get("AIW_BIN") or str(workspace / "target/debug/aiw")
+assert os.access(aiw_bin, os.X_OK), f"aiw binary missing: {aiw_bin}"
+dbpath = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "ai_workstation/aiw.db"
 with sqlite3.connect(dbpath) as db:
     db.execute("UPDATE features SET mode='vibeless' WHERE id='shot-feature'")
     version = db.execute("SELECT value FROM store_meta WHERE key='store_version'").fetchone()
@@ -208,7 +208,7 @@ def start_hook(tool, tool_input):
     hook = subprocess.Popen(
         ["bash", str(hook_script), str(repo)],
         cwd=repo,
-        env=os.environ | {"AMF_ACTIVE": "1", "AMF_BIN": amf_bin, "AMF_SESSION": "amf-gui-shot-unused"},
+        env=os.environ | {"AIW_ACTIVE": "1", "AIW_BIN": aiw_bin, "AIW_SESSION": "aiw-gui-shot-unused"},
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -250,8 +250,8 @@ def confirm_open():
     evaluate('document.querySelector("[role=alertdialog][aria-label=\\"Confirm answer\\"]").scrollIntoView({block:"nearest"})')
 
 
-tmux = ["tmux", "-S", os.environ["AMF_TMUX_SOCKET"]]
-subprocess.run(tmux + ["new-session", "-d", "-s", "amf-gui-shot-unused", "-n", "claude", "-x", "120", "-y", "30",
+tmux = ["tmux", "-S", os.environ["AIW_TMUX_SOCKET"]]
+subprocess.run(tmux + ["new-session", "-d", "-s", "aiw-gui-shot-unused", "-n", "claude", "-x", "120", "-y", "30",
                       "printf 'Offline Claude stand-in: waiting for a supervised edit\\n'; sleep 600"], check=True)
 with sqlite3.connect(dbpath) as db:
     db.execute("UPDATE features SET status='idle' WHERE id='shot-feature'")
@@ -308,9 +308,9 @@ try:
     code, stderr = finish(approve_hook)
     assert code == 0, ("approval did not let the write proceed", code, stderr)
     wait('document.body.innerText.includes("No edits are waiting for review")')
-    capture("004-approved-agent-continues.png", "The hook read the approval and let the agent continue (exit 0); the request left the queue, the manually opened panel stays open in its empty state, and AMF did not write the source itself.", ["Approved the edit to invoice.ts", "No edits are waiting for review"], 'document.querySelectorAll(".nav-count-attention").length===0')
+    capture("004-approved-agent-continues.png", "The hook read the approval and let the agent continue (exit 0); the request left the queue, the manually opened panel stays open in its empty state, and AIW did not write the source itself.", ["Approved the edit to invoice.ts", "No edits are waiting for review"], 'document.querySelectorAll(".nav-count-attention").length===0')
     assert not approve_file.exists()
-    assert (repo / "invoice.ts").read_bytes() == original_source, "AMF wrote source while answering"
+    assert (repo / "invoice.ts").read_bytes() == original_source, "AIW wrote source while answering"
 
     feedback = "Keep credits in invoice.ts; no new module — café €"
     write_hook, write_file, _ = start_hook("Write", {

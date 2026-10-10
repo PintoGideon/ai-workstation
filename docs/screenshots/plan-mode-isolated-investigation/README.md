@@ -1,6 +1,6 @@
 # Isolated investigation at the plan review gate
 
-Captured from an isolated AMF instance against a throwaway repository using
+Captured from an isolated AIW instance against a throwaway repository using
 `scripts/dev/screenshot/scenarios/plan-interview-isolated-investigation.txt`.
 The fixture seeds a draft that already contains a synthesized plan, so reaching
 the review gate costs no agent tokens. It stops before submitting the research

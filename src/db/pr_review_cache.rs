@@ -36,7 +36,7 @@ pub fn save(conn: &Connection, review: &PrReview) -> Result<()> {
     Ok(())
 }
 
-/// Invalidate one exact cache row. Used after AMF posts an AI Review so a
+/// Invalidate one exact cache row. Used after AIW posts an AI Review so a
 /// failed background refresh cannot leave the next PR Triage entry serving
 /// the pre-post comment snapshot.
 pub fn delete(conn: &Connection, pr_number: u32, head_sha: &str) -> Result<()> {
@@ -60,7 +60,7 @@ pub fn evict_stale(conn: &Connection) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use crate::app::pr_review::{CommentKind, PrComment, PrReview, TriageState};
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use crate::github::PrRef;
     use chrono::Local;
     use tempfile::NamedTempFile;
@@ -101,9 +101,9 @@ mod tests {
         }
     }
 
-    fn open_temp_db() -> (NamedTempFile, AmfDb) {
+    fn open_temp_db() -> (NamedTempFile, AiwDb) {
         let tmp = NamedTempFile::new().unwrap();
-        let db = AmfDb::open(tmp.path()).unwrap();
+        let db = AiwDb::open(tmp.path()).unwrap();
         (tmp, db)
     }
 

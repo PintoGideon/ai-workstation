@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "${AMF_SKIP_INSTALL:-0}" != "1" ]]; then
-    /usr/local/bin/amf-install-release
+if [[ "${AIW_SKIP_INSTALL:-0}" != "1" ]]; then
+    /usr/local/bin/aiw-install-release
 fi
 
-export PATH="${AMF_INSTALL_ROOT:-/opt/amf}/bin:${PATH}"
+export PATH="${AIW_INSTALL_ROOT:-/opt/aiw}/bin:${PATH}"
 
 exec "$@"

@@ -38,7 +38,7 @@ fn drain_view_snapshots_updates_rendered_lines_when_content_is_unchanged() {
     app.mode = AppMode::Viewing(ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
-        "amf-my-feat".to_string(),
+        "aiw-my-feat".to_string(),
         "terminal".to_string(),
         "Terminal".to_string(),
         SessionKind::Terminal,
@@ -51,7 +51,7 @@ fn drain_view_snapshots_updates_rendered_lines_when_content_is_unchanged() {
     app.pane_lines = vec![ratatui::text::Line::from("ABCD")];
 
     app.view_snapshot_tx.send(ViewSnapshot {
-        session: "amf-my-feat".to_string(),
+        session: "aiw-my-feat".to_string(),
         window: "terminal".to_string(),
         pane_content: Some("same formatted content".to_string()),
         rendered_lines: Some(vec![ratatui::text::Line::from("A  D")]),
@@ -80,7 +80,7 @@ fn snapshot_mailbox_merges_cursor_only_update_with_pending_content() {
     app.mode = AppMode::Viewing(ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
-        "amf-my-feat".to_string(),
+        "aiw-my-feat".to_string(),
         "terminal".to_string(),
         "Terminal".to_string(),
         SessionKind::Terminal,
@@ -91,7 +91,7 @@ fn snapshot_mailbox_merges_cursor_only_update_with_pending_content() {
     app.pane_content_rows = 1;
 
     let base = |content: Option<&str>, cursor: Option<Option<(u16, u16)>>| ViewSnapshot {
-        session: "amf-my-feat".to_string(),
+        session: "aiw-my-feat".to_string(),
         window: "terminal".to_string(),
         pane_content: content.map(|c| c.to_string()),
         rendered_lines: content.map(|_| vec![ratatui::text::Line::from("ABCD")]),
@@ -129,7 +129,7 @@ fn frozen_display_holds_last_frame_until_freeze_lapses() {
     app.mode = AppMode::Viewing(ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
-        "amf-my-feat".to_string(),
+        "aiw-my-feat".to_string(),
         "terminal".to_string(),
         "Terminal".to_string(),
         SessionKind::Terminal,
@@ -141,7 +141,7 @@ fn frozen_display_holds_last_frame_until_freeze_lapses() {
     app.pane_lines = vec![ratatui::text::Line::from("OLD ")];
 
     app.view_snapshot_tx.send(ViewSnapshot {
-        session: "amf-my-feat".to_string(),
+        session: "aiw-my-feat".to_string(),
         window: "terminal".to_string(),
         pane_content: Some("new".to_string()),
         rendered_lines: Some(vec![ratatui::text::Line::from("NEW ")]),
@@ -176,7 +176,7 @@ fn redraw_signature_changes_when_view_selection_moves() {
     app.mode = AppMode::Viewing(ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
-        "amf-my-feat".to_string(),
+        "aiw-my-feat".to_string(),
         "claude".to_string(),
         "Claude".to_string(),
         SessionKind::Claude,
@@ -213,7 +213,7 @@ fn submit_steering_prompt_pastes_into_running_session() {
     let mut tmux = MockTmuxOps::new();
     tmux.expect_paste_text()
         .withf(|session, window, text| {
-            session == "amf-coached"
+            session == "aiw-coached"
                 && window == "claude"
                 && text == "Implement steering coach automatically."
         })
@@ -221,7 +221,7 @@ fn submit_steering_prompt_pastes_into_running_session() {
         .returning(|_, _, _| Ok(()));
     tmux.expect_send_key_name()
         .withf(|session, window, key| {
-            session == "amf-coached" && window == "claude" && key == "Enter"
+            session == "aiw-coached" && window == "claude" && key == "Enter"
         })
         .times(1)
         .returning(|_, _, _| Ok(()));
@@ -237,7 +237,7 @@ fn submit_steering_prompt_pastes_into_running_session() {
         ViewState::new(
             "my-project".to_string(),
             "coached".to_string(),
-            "amf-coached".to_string(),
+            "aiw-coached".to_string(),
             "claude".to_string(),
             "Claude 1".to_string(),
             SessionKind::Claude,
@@ -252,7 +252,7 @@ fn submit_steering_prompt_pastes_into_running_session() {
 
     match &app.mode {
         AppMode::Viewing(view) => {
-            assert_eq!(view.session, "amf-coached");
+            assert_eq!(view.session, "aiw-coached");
             assert_eq!(view.window, "claude");
         }
         _ => panic!("expected Viewing mode"),
@@ -269,7 +269,7 @@ fn compose_test_view() -> ViewState {
     ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
-        "amf-my-feat".to_string(),
+        "aiw-my-feat".to_string(),
         "claude".to_string(),
         "Claude 1".to_string(),
         SessionKind::Claude,
@@ -295,19 +295,19 @@ fn submit_compose_pastes_prose_into_session() {
     let mut tmux = MockTmuxOps::new();
     tmux.expect_paste_text()
         .withf(|session, window, text| {
-            session == "amf-my-feat" && window == "claude" && text == "Fix the flaky timer test."
+            session == "aiw-my-feat" && window == "claude" && text == "Fix the flaky timer test."
         })
         .times(1)
         .returning(|_, _, _| Ok(()));
     tmux.expect_send_key_name()
         .withf(|session, window, key| {
-            session == "amf-my-feat" && window == "claude" && key == "C-u"
+            session == "aiw-my-feat" && window == "claude" && key == "C-u"
         })
         .times(1)
         .returning(|_, _, _| Ok(()));
     tmux.expect_send_key_name()
         .withf(|session, window, key| {
-            session == "amf-my-feat" && window == "claude" && key == "Enter"
+            session == "aiw-my-feat" && window == "claude" && key == "Enter"
         })
         .times(1)
         .returning(|_, _, _| Ok(()));
@@ -328,7 +328,7 @@ fn submit_compose_pastes_prose_into_session() {
 
     app.submit_compose().unwrap();
 
-    assert!(matches!(&app.mode, AppMode::Viewing(view) if view.session == "amf-my-feat"));
+    assert!(matches!(&app.mode, AppMode::Viewing(view) if view.session == "aiw-my-feat"));
     assert_eq!(
         std::fs::read_to_string(workdir.join(".claude").join("latest-prompt.txt")).unwrap(),
         "Fix the flaky timer test."
@@ -342,7 +342,7 @@ fn submit_compose_types_slash_command_literally() {
     let mut tmux = MockTmuxOps::new();
     tmux.expect_send_literal()
         .withf(|session, window, text| {
-            session == "amf-my-feat" && window == "claude" && text == "/compact"
+            session == "aiw-my-feat" && window == "claude" && text == "/compact"
         })
         .times(1)
         .returning(|_, _, _| Ok(()));
@@ -399,6 +399,7 @@ fn submit_compose_interactive_command_enables_direct_input() {
         Box::new(tmux),
         Box::new(MockWorktreeOps::new()),
     );
+    app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
     app.store_path = tmp.path().to_path_buf();
     app.mode = AppMode::Compose(ComposeState::new(
         compose_test_view(),
@@ -410,7 +411,7 @@ fn submit_compose_interactive_command_enables_direct_input() {
     app.submit_compose().unwrap();
 
     assert!(matches!(&app.mode, AppMode::Viewing(_)));
-    assert!(app.compose_direct_targets.contains("amf-my-feat:claude"));
+    assert!(app.compose_direct_targets.contains("aiw-my-feat:claude"));
 }
 
 #[test]
@@ -455,7 +456,7 @@ fn poll_compose_submit_keeps_pasting_indicator_until_delivery_finishes() {
 
     let (tx, rx) = std::sync::mpsc::channel();
     app.compose_submit = Some(ComposeSubmit {
-        target: "amf-my-feat:claude".to_string(),
+        target: "aiw-my-feat:claude".to_string(),
         rx,
     });
 
@@ -464,7 +465,7 @@ fn poll_compose_submit_keeps_pasting_indicator_until_delivery_finishes() {
 
     tx.send(Ok(())).unwrap();
     assert!(app.poll_compose_submit());
-    assert!(matches!(&app.mode, AppMode::Viewing(view) if view.session == "amf-my-feat"));
+    assert!(matches!(&app.mode, AppMode::Viewing(view) if view.session == "aiw-my-feat"));
 }
 
 #[test]
@@ -638,7 +639,7 @@ fn inject_latest_prompt_pastes_into_running_session() {
     let mut tmux = MockTmuxOps::new();
     tmux.expect_paste_text()
         .withf(|session, window, text| {
-            session == "amf-coached"
+            session == "aiw-coached"
                 && window == "claude"
                 && text == "Resume from the latest saved prompt."
         })
@@ -646,7 +647,7 @@ fn inject_latest_prompt_pastes_into_running_session() {
         .returning(|_, _, _| Ok(()));
     tmux.expect_send_key_name()
         .withf(|session, window, key| {
-            session == "amf-coached" && window == "claude" && key == "Enter"
+            session == "aiw-coached" && window == "claude" && key == "Enter"
         })
         .times(1)
         .returning(|_, _, _| Ok(()));
@@ -660,7 +661,7 @@ fn inject_latest_prompt_pastes_into_running_session() {
         view: ViewState::new(
             "my-project".to_string(),
             "coached".to_string(),
-            "amf-coached".to_string(),
+            "aiw-coached".to_string(),
             "claude".to_string(),
             "Claude 1".to_string(),
             SessionKind::Claude,
@@ -680,7 +681,7 @@ fn inject_latest_prompt_pastes_into_running_session() {
 
     match &app.mode {
         AppMode::Viewing(view) => {
-            assert_eq!(view.session, "amf-coached");
+            assert_eq!(view.session, "aiw-coached");
             assert_eq!(view.window, "claude");
         }
         _ => panic!("expected Viewing mode"),
@@ -703,7 +704,7 @@ fn open_command_picker_prepends_codex_debug_commands() {
     match &app.mode {
         AppMode::CommandPicker(state) => {
             assert!(!state.commands.is_empty(), "expected commands");
-            assert_eq!(state.commands[0].source, "AMF Debug");
+            assert_eq!(state.commands[0].source, "AIW Debug");
             assert_eq!(state.commands[0].name, "demo-plan");
             assert_eq!(state.commands[1].name, "demo-work-change-reason");
             assert_eq!(state.commands[2].name, "demo-work-diff-review");
@@ -747,11 +748,11 @@ fn custom_diff_review_notification_opens_prompt_while_viewing() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.config.diff_review_viewer = DiffReviewViewer::Amf;
+    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
     app.mode = AppMode::Viewing(ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
-        "amf-my-feat".to_string(),
+        "aiw-my-feat".to_string(),
         "claude".to_string(),
         "Claude".to_string(),
         SessionKind::Claude,
@@ -762,7 +763,7 @@ fn custom_diff_review_notification_opens_prompt_while_viewing() {
     let notify_dir = workdir.path().join(".claude").join("notifications");
     std::fs::create_dir_all(&notify_dir).unwrap();
     let notification = serde_json::json!({
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "message": "Review: src/main.rs",
         "type": "diff-review",
@@ -799,7 +800,7 @@ fn custom_diff_review_notification_opens_prompt_while_viewing() {
 #[test]
 fn custom_diff_review_notification_marks_new_files_as_added() {
     let workdir = TempDir::new().unwrap();
-    let store = store_with_custom_session(workdir.path(), "amf-my-feat");
+    let store = store_with_custom_session(workdir.path(), "aiw-my-feat");
     let mut app = App::new_for_test(
         store,
         Box::new(MockTmuxOps::new()),
@@ -807,11 +808,11 @@ fn custom_diff_review_notification_marks_new_files_as_added() {
     );
     let tmp = NamedTempFile::new().unwrap();
     app.store_path = tmp.path().to_path_buf();
-    app.config.diff_review_viewer = DiffReviewViewer::Amf;
+    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
     app.mode = AppMode::Viewing(ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
-        "amf-my-feat".to_string(),
+        "aiw-my-feat".to_string(),
         "claude".to_string(),
         "Claude".to_string(),
         SessionKind::Claude,
@@ -829,7 +830,7 @@ fn custom_diff_review_notification_marks_new_files_as_added() {
     let notify_dir = workdir.path().join(".claude").join("notifications");
     std::fs::create_dir_all(&notify_dir).unwrap();
     let notification = serde_json::json!({
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "message": "Review: plans/new.md",
         "type": "diff-review",
@@ -867,7 +868,7 @@ fn custom_diff_review_notification_marks_new_files_as_added() {
 #[test]
 fn custom_diff_review_notification_queues_with_toast_from_normal_mode() {
     let workdir = TempDir::new().unwrap();
-    let store = store_with_custom_session(workdir.path(), "amf-my-feat");
+    let store = store_with_custom_session(workdir.path(), "aiw-my-feat");
     let mut app = App::new_for_test(
         store,
         Box::new(MockTmuxOps::new()),
@@ -875,13 +876,13 @@ fn custom_diff_review_notification_queues_with_toast_from_normal_mode() {
     );
     let tmp = NamedTempFile::new().unwrap();
     app.store_path = tmp.path().to_path_buf();
-    app.config.diff_review_viewer = DiffReviewViewer::Amf;
+    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
     app.mode = AppMode::Normal;
 
     let notify_dir = workdir.path().join(".claude").join("notifications");
     std::fs::create_dir_all(&notify_dir).unwrap();
     let notification = serde_json::json!({
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "message": "Review: src/lib.rs",
         "type": "diff-review",
@@ -923,19 +924,19 @@ fn custom_diff_review_notification_queues_with_toast_from_normal_mode() {
 #[test]
 fn check_pending_diff_review_opens_pending_review_from_normal_mode() {
     let workdir = TempDir::new().unwrap();
-    let store = store_with_custom_session(workdir.path(), "amf-my-feat");
+    let store = store_with_custom_session(workdir.path(), "aiw-my-feat");
     // The V flow enters the feature view, which checks the session.
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists().returning(|_| true);
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.config.diff_review_viewer = DiffReviewViewer::Amf;
+    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
     app.mode = AppMode::Normal;
     app.selection = Selection::Feature(0, 0);
 
     let notify_dir = workdir.path().join(".claude").join("notifications");
     std::fs::create_dir_all(&notify_dir).unwrap();
     let notification = serde_json::json!({
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "message": "Review: src/lib.rs",
         "type": "diff-review",
@@ -990,7 +991,7 @@ fn scan_notifications_pushes_input_request_toast() {
     let notify_dir = workdir.path().join(".claude").join("notifications");
     std::fs::create_dir_all(&notify_dir).unwrap();
     let notification = serde_json::json!({
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "message": "Need input before continuing.",
         "type": "input-request",
@@ -1236,7 +1237,7 @@ fn sync_session_status_none_when_file_missing() {
 fn sync_session_status_none_when_file_empty() {
     let workdir = TempDir::new().unwrap();
     let session_id = "test-sess-789";
-    let status_dir = workdir.path().join(".amf").join("session-status");
+    let status_dir = workdir.path().join(".aiw").join("session-status");
     std::fs::create_dir_all(&status_dir).unwrap();
     std::fs::write(status_dir.join(format!("{}.txt", session_id)), "").unwrap();
 
@@ -1283,7 +1284,7 @@ fn sync_session_status_skips_non_custom_sessions() {
         branch: "my-feat".to_string(),
         workdir: workdir.path().to_path_buf(),
         is_worktree: false,
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
@@ -1326,7 +1327,7 @@ fn sync_session_status_skips_non_custom_sessions() {
 
     // Even if a status file exists for this ID, it should
     // be ignored because the session is not Custom.
-    let status_dir = workdir.path().join(".amf").join("session-status");
+    let status_dir = workdir.path().join(".aiw").join("session-status");
     std::fs::create_dir_all(&status_dir).unwrap();
     std::fs::write(status_dir.join("claude-sess.txt"), "should be ignored").unwrap();
 
@@ -1391,7 +1392,7 @@ fn on_stop_none_when_not_provided() {
 fn status_file_cleanup_during_remove() {
     let workdir = TempDir::new().unwrap();
     let session_id = "cleanup-test-sess";
-    let status_dir = workdir.path().join(".amf").join("session-status");
+    let status_dir = workdir.path().join(".aiw").join("session-status");
     std::fs::create_dir_all(&status_dir).unwrap();
     let status_file = status_dir.join(format!("{}.txt", session_id));
     std::fs::write(&status_file, "running").unwrap();
@@ -1401,8 +1402,8 @@ fn status_file_cleanup_during_remove() {
     let store = store_with_custom_session(workdir.path(), session_id);
     let feature_id = store.projects[0].features[0].id.clone();
     let db_dir = TempDir::new().unwrap();
-    let db_path = db_dir.path().join("amf.db");
-    let db = crate::db::AmfDb::open(&db_path).unwrap();
+    let db_path = db_dir.path().join("aiw.db");
+    let db = crate::db::AiwDb::open(&db_path).unwrap();
     db.save_store(&store).unwrap();
     db.upsert_session_status(session_id, &feature_id, "running", None)
         .unwrap();
@@ -1414,31 +1415,9 @@ fn status_file_cleanup_during_remove() {
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
     app.db = Some(db);
     app.pending_sidebar_loads
-        .insert("amf-custom-cleanup-test-sess".to_string());
+        .insert("aiw-custom-cleanup-test-sess".to_string());
     app.latest_prompt_cache
-        .insert("amf-my-feat".to_string(), prompt_entry("cached prompt"));
-    app.opencode_sidebar_cache.insert(
-        "amf-my-feat".to_string(),
-        crate::app::opencode_storage::OpencodeSidebarData {
-            session_id: "ses-1".to_string(),
-            title: Some("cached".to_string()),
-            latest_prompt: None,
-            status: None,
-            last_tool: None,
-            todo_count: None,
-            todo_preview: Vec::new(),
-            pending_permission: None,
-            last_error: None,
-            lsp_summary: None,
-            live_summary: None,
-            model: None,
-            provider: None,
-            reasoning_tokens: None,
-            additions: None,
-            deletions: None,
-            files: None,
-        },
-    );
+        .insert("aiw-my-feat".to_string(), prompt_entry("cached prompt"));
 
     // Selecting the session and removing it should clean
     // up the status file.
@@ -1460,16 +1439,15 @@ fn status_file_cleanup_during_remove() {
             .is_none(),
         "status row should be removed on session removal"
     );
-    assert!(app.latest_prompt_for_session("amf-my-feat").is_none());
-    assert!(!app.opencode_sidebar_cache.contains_key("amf-my-feat"));
-    assert!(!app.pending_sidebar_loads.contains("amf-my-feat"));
+    assert!(app.latest_prompt_for_session("aiw-my-feat").is_none());
+    assert!(!app.pending_sidebar_loads.contains("aiw-my-feat"));
 }
 
 #[test]
 fn sync_session_status_trims_whitespace() {
     let workdir = TempDir::new().unwrap();
     let session_id = "test-sess-trim";
-    let status_dir = workdir.path().join(".amf").join("session-status");
+    let status_dir = workdir.path().join(".aiw").join("session-status");
     std::fs::create_dir_all(&status_dir).unwrap();
     std::fs::write(
         status_dir.join(format!("{}.txt", session_id)),

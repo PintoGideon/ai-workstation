@@ -19,6 +19,10 @@ pub(crate) mod editor_ops;
 pub(crate) mod feature_ops;
 pub(crate) mod feature_setup;
 pub(crate) mod fix_cost;
+mod fork_render_memo; // FORK: per-frame dialog values (DESIGN.md §12.3)
+pub(crate) mod fork_split; // FORK: split view (DESIGN.md §4.1)
+#[cfg(test)]
+mod fork_view_bench; // FORK: view refresh cost (DESIGN.md §12.3)
 pub(crate) mod github_workflow;
 mod handoff;
 mod hooks;
@@ -27,8 +31,6 @@ pub(crate) mod learning;
 pub(crate) mod model_analysis;
 mod navigation;
 mod notifications;
-mod opencode;
-pub(crate) mod opencode_storage;
 pub(crate) mod plan;
 mod plan_interview;
 mod plan_interview_attach;
@@ -37,14 +39,7 @@ pub(crate) mod precall;
 mod project_ops;
 mod prompt_library;
 pub(crate) mod prompt_overrides;
-pub(crate) mod remote_actions;
-pub(crate) mod remote_attention;
 pub mod remote_control;
-pub(crate) mod remote_push;
-pub(crate) mod remote_reach;
-pub(crate) mod remote_server;
-pub(crate) mod remote_tailscale;
-pub(crate) mod remote_todos;
 mod rename;
 pub(crate) mod resource_gate;
 pub(crate) mod review;
@@ -76,12 +71,11 @@ mod tests;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Condvar as StdCondvar, Mutex as StdMutex};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use ratatui::text::Line;
 use serde::{Deserialize, Serialize};
 use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
@@ -119,7 +113,7 @@ pub(crate) use resource_gate::{StartIntent, Started};
 pub(crate) use session_ops::session_kind_for_agent;
 pub use state::*;
 pub use steering::{PromptAnalysis, analyze_prompt};
-pub use toast::Toast;
+pub use toast::{Toast, ToastKind};
 pub(crate) use todos::ReferencedTodoDeleted;
 
 pub const VIEW_PANE_REFRESH_INTERVAL: Duration = Duration::from_millis(75);
@@ -128,10 +122,10 @@ pub const VIEW_PANE_REFRESH_INTERVAL: Duration = Duration::from_millis(75);
 /// this only exists to fix rare parser/pane drift — it must stay slow.
 pub const VIEW_DRIFT_RESEED_INTERVAL: Duration = Duration::from_secs(3);
 pub const VIEW_CURSOR_REFRESH_INTERVAL: Duration = Duration::from_millis(125);
-/// How often AMF re-anchors a live Claude pane with a SIGWINCH bounce.
+/// How often AIW re-anchors a live Claude pane with a SIGWINCH bounce.
 /// Claude Code's incremental renderer drifts its input-box anchor over
 /// time and leaves stale cells in the real tmux grid (the input box
-/// bleeds into the divider above it), which AMF can only display
+/// bleeds into the divider above it), which AIW can only display
 /// faithfully — the corruption is in the pane grid, not our render. A
 /// height bounce forces a full agent repaint. Runs on a timer regardless
 /// of activity (user-chosen mitigation); the brief flicker is the cost.
@@ -160,25 +154,15 @@ pub const VIEW_BACKGROUND_SYNC_DEFER_INTERVAL: Duration = Duration::from_millis(
 /// hammering a limit that is still empty.
 pub const GH_GRAPHQL_BACKOFF: Duration = Duration::from_secs(15 * 60);
 
-/// How often dashboard PR badges refresh.
-///
-/// This used to ride the 30-second feature-status cadence, which is wrong for
-/// this data: the sweep runs `gh pr view` once per *feature* (measured at 2
-/// GraphQL points each) plus a thread query per open PR, against a 5,000-point
-/// hourly budget. At ~34 features that is ~71 points a sweep, and at 120
-/// sweeps an hour roughly 8,500 points — the budget is gone in about 35
-/// minutes of AMF simply being open, which then takes PR Triage down with it.
-///
-/// Volume is the whole problem; no single call here is expensive. Five minutes
-/// cuts it tenfold and is still far inside a PR badge's useful freshness.
-pub const ACTIVE_PR_SYNC_INTERVAL: Duration = Duration::from_secs(5 * 60);
+// FORK(no-cloud): `ACTIVE_PR_SYNC_INTERVAL` (a 5-minute background `gh` sweep
+// for PR badges) is gone; see `App::refresh_status_and_notifications`.
 
-/// `App::save`'s message on a detected cross-process conflict (`AMF_PLAN.md`
+/// `App::save`'s message on a detected cross-process conflict (`AIW_PLAN.md`
 /// Task 5). A shared constant, not a literal repeated at each call site, so
 /// `gui_contract::GuiError`'s `From<anyhow::Error>` impl can classify this
 /// specific failure as `GuiErrorKind::Conflict` by exact match without the
 /// two texts silently drifting apart.
-pub(crate) const SAVE_CONFLICT_MESSAGE: &str = "Workspace changed elsewhere (another AMF window or process) before this save landed. Your \
+pub(crate) const SAVE_CONFLICT_MESSAGE: &str = "Workspace changed elsewhere (another AIW window or process) before this save landed. Your \
      change was not saved; the view has been refreshed with the current state -- please retry.";
 
 /// How many times `App::save_reapplying` re-applies a change after a
@@ -227,6 +211,22 @@ const VIEW_CONTROL_SNAPSHOT_MIN_INTERVAL: Duration = Duration::from_millis(150);
 /// to stay event-driven now that the composer batches input, so
 /// correctness wins over idle subprocess savings while a pane is open.
 const VIEW_CONTROL_HEAL_INTERVAL: Duration = Duration::from_millis(250);
+
+/// FORK: the heal floor backs off (250 → 500 → 1000 ms) while consecutive heals
+/// capture exactly the same screen and cursor and the control stream reports
+/// nothing; any `%output`, layout/mode change or refresh request drops it back
+/// to [`VIEW_CONTROL_HEAL_INTERVAL`]. A quiet pane open on screen then costs
+/// one tmux process a second instead of eight.
+const VIEW_CONTROL_HEAL_MAX_INTERVAL: Duration = Duration::from_millis(1000);
+
+/// FORK: fingerprint of what a heal captured, to tell "nothing changed".
+fn heal_fingerprint(snapshot: &ViewSnapshot) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    snapshot.pane_content.hash(&mut hasher);
+    snapshot.cursor.hash(&mut hasher);
+    hasher.finish()
+}
 
 const VIEW_SNAPSHOT_REFRESH_NONE: u8 = 0;
 const VIEW_SNAPSHOT_REFRESH_NORMAL: u8 = 1;
@@ -300,6 +300,15 @@ fn snapshot_from_parser(
     }
 }
 
+/// FORK: `TmuxManager::capture_pane_ansi_with_cursor` with the view workers'
+/// error handling: no content and no cursor when tmux could not be run.
+fn capture_with_cursor(session: &str, window: &str) -> (String, Option<(u16, u16)>) {
+    match TmuxManager::capture_pane_ansi_with_cursor(session, window) {
+        Ok((captured, cursor)) => (captured, Some(cursor)),
+        Err(_) => (String::new(), None),
+    }
+}
+
 fn reseed_control_view_parser(
     session: &str,
     window: &str,
@@ -309,11 +318,11 @@ fn reseed_control_view_parser(
 ) -> ViewSnapshot {
     *parser = vt100::Parser::new(rows, cols, 0);
     let capture_started_at = Instant::now();
-    let captured = TmuxManager::capture_pane_ansi(session, window).unwrap_or_default();
+    // FORK: content and cursor from one tmux process instead of two.
+    let (captured, cursor) = capture_with_cursor(session, window);
     let capture_duration = capture_started_at.elapsed();
     let normalized = crate::ui::normalize_captured_pane(&captured);
     parser.process(normalized.as_bytes());
-    let cursor = TmuxManager::cursor_position(session, window).ok();
     if let Some(cursor) = cursor {
         position_parser_cursor(parser, cursor, cols, rows);
     }
@@ -460,6 +469,12 @@ pub struct AppConfig {
     /// configs written before versioning, which deserialize it as 0.
     #[serde(default)]
     pub config_version: u32,
+    /// FORK: whether typing in an agent session opens the compose box (AIW's
+    /// behaviour) instead of going straight to the agent. Off: keystrokes
+    /// always reach the agent directly; `Ctrl+Space e` still toggles the box
+    /// for the current session.
+    #[serde(default)]
+    pub compose_box: bool,
     pub nerd_font: bool,
     pub leader_timeout_seconds: u64,
     pub input_request_wait_seconds: f64,
@@ -468,11 +483,15 @@ pub struct AppConfig {
     pub diff_viewer_layout: DiffViewerLayout,
     pub diff_review_popup_hold_secs: f64,
     pub zai: Option<ZaiPlanConfig>,
-    pub opencode_theme: Option<String>,
     pub projects: ProjectsConfig,
     pub extension: ExtensionConfig,
     pub theme: crate::theme::ThemeName,
     pub transparent_background: bool,
+    /// FORK: AIW appearance keys (`color_mode`, `theme_follow_terminal`,
+    /// `theme_dark`, `theme_light`, `nerd_font_confirmed`), stored at the top
+    /// level of config.json. See `crate::fork::appearance`.
+    #[serde(flatten)]
+    pub appearance: crate::fork::appearance::AppearanceConfig,
     #[serde(default)]
     pub token_pricing: TokenPricingConfig,
     /// Default state of the Remote Control toggle for new Claude features.
@@ -485,7 +504,7 @@ pub struct AppConfig {
     /// is opt-in unless the workaround is needed locally.
     #[serde(default)]
     pub view_auto_refresh: bool,
-    /// Maximum number of saved agent harness panes AMF auto-launches when a
+    /// Maximum number of saved agent harness panes AIW auto-launches when a
     /// stopped feature is started. Extra saved agent panes are recreated as
     /// tmux windows but left at the shell prompt to avoid process stampedes.
     /// Set to 0 to restore the previous unlimited behavior.
@@ -493,7 +512,7 @@ pub struct AppConfig {
     pub max_agent_autostart_sessions: usize,
     /// When finishing a final review, whether to auto-submit the
     /// "address the feedback" prompt to the feature's agent (paste +
-    /// Enter). When false, AMF pastes the prompt but does not send Enter,
+    /// Enter). When false, AIW pastes the prompt but does not send Enter,
     /// so the reviewer can eyeball/edit it before submitting.
     #[serde(default = "default_true")]
     pub final_review_submit_prompt: bool,
@@ -512,17 +531,17 @@ pub struct AppConfig {
     /// Path to the **cross-project** review-findings memory doc, read by the
     /// AI reviewer in addition to each repo's own doc and writable from the
     /// `M` / bootstrap flows' "global" scope. Relative values resolve against
-    /// the AMF config dir; absolute ones are used as-is. Defaults to
+    /// the AIW config dir; absolute ones are used as-is. Defaults to
     /// [`review_memory::DEFAULT_GLOBAL_REVIEW_MEMORY_FILE`] there (i.e.
-    /// `~/.config/amf/review-memory.md`) when unset. Global-only by nature —
+    /// `~/.config/ai_workstation/review-memory.md`) when unset. Global-only by nature —
     /// unlike [`Self::review_memory_path`] there is no per-project override.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub global_review_memory_path: Option<String>,
     /// Name of an existing Claude Code skill/command (without the leading `/`,
     /// e.g. `"review"`) to lead the AI PR-review prompt (`A` in the PR-review
     /// pane, Epic E of `pr-comment-review-plan.md`) with, so its review
-    /// methodology runs before AMF's own structured-findings instructions.
-    /// `None` (default) skips this — AMF ships no bundled skill for reviewing a
+    /// methodology runs before AIW's own structured-findings instructions.
+    /// `None` (default) skips this — AIW ships no bundled skill for reviewing a
     /// PR diff, so the feature must work without assuming one is installed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ai_review_skill: Option<String>,
@@ -530,7 +549,7 @@ pub struct AppConfig {
     /// for every review action listed on [`ReviewAction`], independent of
     /// whatever model the feature's own interactive session runs. Format
     /// depends on the harness running the review (a bare name/alias for
-    /// Claude/Codex/Pi, `provider/model` for Opencode). `None` (default)
+    /// Claude/Codex, `provider/model` for Pi). `None` (default)
     /// passes no explicit model, so the harness's own default model applies.
     /// Overridden
     /// per-action by `review_models`; see [`AppConfig::review_model_for`].
@@ -567,8 +586,8 @@ pub struct AppConfig {
     /// with no usable memory signal.
     #[serde(default = "default_low_memory_warn_mb")]
     pub low_memory_warn_mb: u64,
-    /// Kill the editor AMF launched for a feature (and its children, e.g.
-    /// language servers) when the feature is stopped. Editors AMF cannot
+    /// Kill the editor AIW launched for a feature (and its children, e.g.
+    /// language servers) when the feature is stopped. Editors AIW cannot
     /// prove it owns are left alone regardless of this setting.
     #[serde(default = "default_true")]
     pub kill_editor_on_stop: bool,
@@ -590,9 +609,9 @@ pub struct AppConfig {
     /// [`Self::low_memory_warn_mb`].
     #[serde(default = "default_waiting_stale_minutes")]
     pub waiting_stale_minutes: u64,
-    /// Overrides the context-window size AMF assumes when a harness's own
+    /// Overrides the context-window size AIW assumes when a harness's own
     /// telemetry doesn't report one (Claude falls back to a hardcoded
-    /// 900,000; Codex, OpenCode, and Pi otherwise have no fallback at all —
+    /// 900,000; Codex and Pi otherwise have no fallback at all —
     /// see `CLAUDE_DEFAULT_CONTEXT_LIMIT` in `context_collectors.rs`). `None`
     /// keeps each harness's existing default behavior.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -609,43 +628,24 @@ pub struct AppConfig {
     /// Global fallback for [`crate::extension::ExtensionConfig::review_prompt_budget_tokens`]:
     /// the estimated prompt-token ceiling above which `W` AI PR review and
     /// final-review co-review split an oversized diff into slices. `None` uses
-    /// the built-in per-harness default (Claude/Codex 128k, OpenCode/Pi 96k);
+    /// the built-in per-harness default (Claude/Codex 128k, Pi 96k);
     /// `0` disables pre-send splitting (adaptive halving only). A project's
-    /// `amf.json` `review_prompt_budget_tokens` overrides this.
+    /// `aiw.json` `review_prompt_budget_tokens` overrides this.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review_prompt_budget_tokens: Option<usize>,
-    /// Where the Remote Control server listens (`host:port`). Loopback by
-    /// default: reaching it from a phone goes through a tunnel the user runs
-    /// (`tailscale serve`, cloudflared, …), and a fixed port is what lets
-    /// that tunnel survive toggling the server. `0.0.0.0:<port>` exposes it
-    /// on the LAN instead (plain HTTP, so no install or push there).
-    #[serde(default = "default_remote_bind")]
-    pub remote_bind: String,
-    /// The URL a phone uses to reach the Remote Control server, e.g.
-    /// `https://my-pc.tailnet.ts.net`. The pairing QR encodes it so a scan
-    /// opens the right page; unset, the QR falls back to the bind address,
-    /// which only works on this machine or over `adb reverse`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub remote_public_url: Option<String>,
-    /// The `tailscale` CLI AMF asks for this machine's tailnet address when
-    /// `remote_public_url` is unset (`crate::tailscale`). Unset means
-    /// `tailscale` on `PATH`, then the macOS app's bundled CLI.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub remote_tailscale_cli: Option<String>,
-    /// `tailscaled`'s socket, for a daemon not at its platform default —
-    /// one the user starts themselves with its own `--socket`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub remote_tailscale_socket: Option<String>,
+    // FORK(no-cloud): the Remote Control server settings (`remote_bind`,
+    // `remote_public_url`, `remote_tailscale_cli`, `remote_tailscale_socket`)
+    // were removed with the feature; old config files still load (unknown
+    // keys are ignored).
     /// MCP servers (e.g. an issue tracker) the plan interview's Claude
     /// passes may consult, read-only. Global scope only, deliberately: an MCP
-    /// config names programs to run, so a repository's `amf.json` must not be
+    /// config names programs to run, so a repository's `aiw.json` must not be
     /// able to supply one. See [`crate::headless::HeadlessMcpConfig`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan_interview_mcp: Option<crate::headless::HeadlessMcpConfig>,
-}
-
-pub(crate) fn default_remote_bind() -> String {
-    "127.0.0.1:47800".to_string()
+    // FORK: AIW-only keys (worktree_base_dir, worktree_include) at top level.
+    #[serde(flatten)]
+    pub aiw: crate::fork::config::AiwConfig,
 }
 
 /// The distinct headless review call sites that each read `review_model`
@@ -695,7 +695,7 @@ fn default_agent_restart_limit() -> usize {
 
 // Resource-guard defaults. Grounded in measured idle RSS per harness on a
 // typical dev box (the README's Configuration section carries the numbers): a Claude
-// harness settles around 450 MiB, Codex/Opencode a little under that, and each
+// harness settles around 450 MiB, Codex a little under that, and each
 // editor-launched language server (rust-analyzer on this codebase) dwarfs them
 // at 1-2 GiB. Four concurrent harnesses is roughly 1.8 GiB of agent, which
 // leaves room for the editors and language servers they pull in on a 16 GiB
@@ -737,12 +737,19 @@ fn default_context_critical_percent() -> u8 {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum DiffReviewViewer {
-    // The native AMF diff viewer is the only supported reviewer. The legacy
+    // The native AIW diff viewer is the only supported reviewer. The legacy
     // vimdiff/neovim popup (`nvim`/`legacy`) has been retired; those values
-    // are still accepted and map to the AMF viewer so old configs keep loading.
+    // are still accepted and map to the AIW viewer so old configs keep loading.
     #[default]
-    #[serde(rename = "amf", alias = "custom", alias = "nvim", alias = "legacy")]
-    Amf,
+    // FORK: upstream AMF stored this as "amf".
+    #[serde(
+        rename = "aiw",
+        alias = "amf",
+        alias = "custom",
+        alias = "nvim",
+        alias = "legacy"
+    )]
+    Aiw,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -756,6 +763,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             config_version: APP_CONFIG_VERSION,
+            compose_box: false, // FORK: type straight into agents by default
             nerd_font: true,
             leader_timeout_seconds: 5,
             input_request_wait_seconds: 1.5,
@@ -763,17 +771,17 @@ impl Default for AppConfig {
             // (-CC PTY) clients desync Claude Code's incremental renderer and
             // cause the long-standing mangled-pane corruption on Linux/macOS.
             // Control mode stays available as an opt-in (config /
-            // AMF_TMUX_INPUT_TRANSPORT / AMF_EXPERIMENTAL_PERSISTENT_TMUX_INPUT).
+            // AIW_TMUX_INPUT_TRANSPORT / AIW_EXPERIMENTAL_PERSISTENT_TMUX_INPUT).
             tmux_control_mode: false,
             diff_review_viewer: DiffReviewViewer::default(),
             diff_viewer_layout: DiffViewerLayout::Unified,
             diff_review_popup_hold_secs: 1.5,
             zai: None,
-            opencode_theme: Some("catppuccin-frappe".to_string()),
             projects: ProjectsConfig::default(),
             extension: ExtensionConfig::default(),
-            theme: crate::theme::ThemeName::default(),
+            theme: crate::theme::ThemeName::Ember, // FORK: AIW's default theme for fresh configs
             transparent_background: false,
+            appearance: Default::default(), // FORK
             token_pricing: TokenPricingConfig::default(),
             remote_control_default: false,
             view_auto_refresh: false,
@@ -797,11 +805,8 @@ impl Default for AppConfig {
             context_warning_percent: default_context_warning_percent(),
             context_critical_percent: default_context_critical_percent(),
             review_prompt_budget_tokens: None,
-            remote_bind: default_remote_bind(),
-            remote_public_url: None,
-            remote_tailscale_cli: None,
-            remote_tailscale_socket: None,
             plan_interview_mcp: None,
+            aiw: Default::default(), // FORK: AIW-only config keys
         }
     }
 }
@@ -944,10 +949,10 @@ fn merge_snapshot_into_slot(slot: &mut Option<ViewSnapshot>, new: ViewSnapshot) 
 pub struct App {
     pub store: ProjectStore,
     pub store_path: PathBuf,
-    pub db: Option<crate::db::AmfDb>,
+    pub db: Option<crate::db::AiwDb>,
     /// The `store_meta` version `store` was loaded at, when `db` is `Some`.
     /// `save` uses this for a version-checked (cross-process-safe) write and
-    /// updates it after every save/reload — see `AMF_PLAN.md` Task 5 and
+    /// updates it after every save/reload — see `AIW_PLAN.md` Task 5 and
     /// `db::store::save_checked`. `None` when there is no DB (tests, or the
     /// JSON-file fallback), where there is nothing else to race against.
     pub(crate) store_version: Option<u64>,
@@ -988,15 +993,19 @@ pub struct App {
     /// launch carries a `todo_origin` and is not a plan run.
     pub pending_todo_spawn_prompt: Option<String>,
     /// Process-lifetime visibility for the project TODO scope. This is shared
-    /// by every TODO view but intentionally resets whenever AMF starts.
+    /// by every TODO view but intentionally resets whenever AIW starts.
     pub todo_project_visible: bool,
     /// Process-lifetime visibility for the global TODO scope. This is shared
-    /// by every TODO view but intentionally resets whenever AMF starts.
+    /// by every TODO view but intentionally resets whenever AIW starts.
     pub todo_global_visible: bool,
     pub message: Option<String>,
     pub toasts: Vec<Toast>,
     pub should_quit: bool,
     pub pane_content: String,
+    // FORK: split view state that outlives `AppMode::SplitView` (zoom stash).
+    pub fork_split: fork_split::SplitRuntime,
+    /// FORK: per-frame dialog values, see `fork_render_memo`.
+    pub(crate) fork_render_memo: fork_render_memo::RenderMemo,
     pub pane_lines: Vec<Line<'static>>,
     pub pane_content_cols: u16,
     pub pane_content_rows: u16,
@@ -1015,7 +1024,7 @@ pub struct App {
     /// Feature IDs stopped from the dashboard (`x`) during this run. Their
     /// missing tmux session is expected, so opening a saved agent pane
     /// restarts and resumes directly instead of asking (see
-    /// `open_stopped_session_dialog`). In-memory only: after an AMF restart a
+    /// `open_stopped_session_dialog`). In-memory only: after an AIW restart a
     /// missing session is indistinguishable from a crash, which is exactly the
     /// case the recovery dialog is for.
     pub user_stopped_features: std::collections::HashSet<String>,
@@ -1029,7 +1038,9 @@ pub struct App {
     next_compose_clipboard_paste_id: u64,
     pub latest_prompt_cache: HashMap<String, String>,
     pub sidebar_model_cache: HashMap<String, String>,
-    pub sidebar_plan_cache: HashMap<String, String>,
+    // FORK: `sidebar_plan_cache` removed — written (a plan-file read on the main
+    // thread every 5 s while viewing) but never read outside tests; the sidebar
+    // uses `sidebar_effective_plan_cache`, filled by the background load.
     /// The sidebar's "Current: <path>" line for each feature's effective
     /// plan (see `app::plan::resolve_effective_plan`); no entry means no
     /// plan resolved (or none has loaded yet). Populated by the
@@ -1045,7 +1056,6 @@ pub struct App {
     pub codex_sidebar_metadata_tx: std::sync::mpsc::Sender<CodexSidebarMetadataResult>,
     pub codex_sidebar_metadata_rx: std::sync::mpsc::Receiver<CodexSidebarMetadataResult>,
     pub codex_sidebar_metadata_inflight: std::collections::HashSet<String>,
-    pub opencode_sidebar_cache: HashMap<String, opencode_storage::OpencodeSidebarData>,
     /// Rendered per-session active-TODO sidebar text, rebuilt on status sync and
     /// after any local mutation that affects it (completion, deletion,
     /// spawn) rather than on every frame. Resolving it runs two SQLite
@@ -1060,9 +1070,9 @@ pub struct App {
     pending_sidebar_loads: std::collections::HashSet<String>,
     pub usage: UsageManager,
     pub token_tracker: SessionTokenTracker,
-    /// Transient context-window telemetry keyed by AMF session ID.
+    /// Transient context-window telemetry keyed by AIW session ID.
     pub context_states: HashMap<String, SessionContextState>,
-    /// Transient context-hint dismissal state keyed by AMF session ID.
+    /// Transient context-hint dismissal state keyed by AIW session ID.
     pub(crate) context_hint_states: context_hints::ContextHintStates,
     pub context_collector: SessionContextCollector,
     pub(crate) session_status_bg: Option<Receiver<sync::SessionStatusBgResult>>,
@@ -1098,7 +1108,7 @@ pub struct App {
     pub(crate) issue_work: issue_fixer::IssueWork,
     pub(crate) issue_comment_work: issue_fixer::IssueCommentWork,
     /// Receiver for the background "all prompts" scan (leader-key latest-prompt
-    /// menu). Reading and parsing every Claude/Codex/opencode transcript file
+    /// menu). Reading and parsing every Claude/Codex transcript file
     /// for a session can be slow, so it runs off the UI thread; see
     /// `app::view::open_latest_prompt_from_view`.
     pub(crate) latest_prompt_menu_bg: Option<Receiver<view::LatestPromptScanResult>>,
@@ -1199,12 +1209,9 @@ pub struct App {
     /// Why each stopped session is stopped, keyed by `feature.tmux_session`
     /// (the same granularity thinking status is tracked at). Deliberately
     /// **not** persisted: it is rebuilt from hook events and starts empty
-    /// after a restart, so no `amf.db` migration is involved. Composed with
+    /// after a restart, so no `aiw.db` migration is involved. Composed with
     /// the persisted `ProjectStatus` at render time.
     pub attention: HashMap<String, attention::AttentionRecord>,
-    /// Rate-limits the opencode `capture-pane` thinking fallback: the
-    /// 500ms thinking tick must not spawn a subprocess per feature.
-    pub(crate) opencode_thinking_pane_cache: HashMap<String, (Instant, Option<bool>)>,
     pub ipc_thinking_sessions: std::collections::HashSet<String>,
     /// Features whose dispatched review-fix prompt is being watched, keyed by
     /// `feature.tmux_session`. Populated when a finished review pastes the
@@ -1269,36 +1276,6 @@ pub struct App {
     view_display_frozen_until: Option<Instant>,
     pub(crate) harness_check_tx: Sender<HarnessCheckResult>,
     harness_check_rx: Receiver<HarnessCheckResult>,
-    /// The Remote Control companion-app server: `Some` exactly while it is
-    /// running, on a dedicated thread with its own tokio runtime. Toggled
-    /// on/off by the user only — never started automatically — per the
-    /// on-demand server-lifecycle decision in
-    /// `docs/backlog/remote-control-companion-app-plan.md`. Drained every
-    /// main-loop tick by `poll_remote_server_bg` like the other `poll_*_bg`
-    /// background jobs.
-    pub remote_server: Option<crate::remote_server::RemoteServerHandle>,
-    /// The server's actual bound address, set on `Started` and cleared on
-    /// `Stopped` (`poll_remote_server_bg`). `None` while the server is
-    /// starting up or not running — `start_pairing` needs this to build the
-    /// pairing QR when no `remote_public_url` is configured.
-    pub remote_server_addr: Option<SocketAddr>,
-    /// When `Ctrl+Space Q` was pressed while the server was off or still
-    /// starting: the pairing dialog opens once it is listening and the
-    /// dashboard or a session view is on screen (`poll_remote_server_bg`).
-    /// Forgotten if the start fails or the request outlives
-    /// `remote_server::PAIRING_REQUEST_WINDOW`.
-    pub pairing_requested: Option<std::time::Instant>,
-    /// What the local Tailscale looks like, for the pairing QR's address
-    /// and its setup steps — see `app/remote_tailscale.rs`.
-    pub remote_tailscale: remote_tailscale::RemoteTailscaleState,
-    /// The background `/health` check of the pairing address — see
-    /// `app/remote_reach.rs`.
-    pub remote_reach: remote_reach::RemoteReachState,
-    /// Web Push to paired phones — see `app/remote_push.rs`.
-    pub remote_push: remote_push::RemotePushState,
-    /// The authorized-device table the server checks bearer tokens
-    /// against — see `app/remote_server.rs`.
-    pub remote_devices: remote_server::AuthorizedDevicesCache,
 }
 
 pub(crate) struct HarnessCheckResult {
@@ -1323,7 +1300,6 @@ struct SidebarLoadResult {
     changed: bool,
     latest_prompt: Option<String>,
     model_text: Option<String>,
-    opencode_sidebar: Option<opencode_storage::OpencodeSidebarData>,
     plan_text: Option<String>,
 }
 
@@ -1857,8 +1833,15 @@ impl App {
 
                 if pane_due {
                     let started_at = Instant::now();
-                    let captured =
-                        TmuxManager::capture_pane_ansi(session, window).unwrap_or_default();
+                    // FORK: one tmux process for content + cursor when both are due.
+                    let captured = if cursor_due {
+                        let (captured, combined_cursor) = capture_with_cursor(session, window);
+                        cursor = Some(combined_cursor);
+                        next_cursor_refresh = Instant::now();
+                        captured
+                    } else {
+                        TmuxManager::capture_pane_ansi(session, window).unwrap_or_default()
+                    };
                     capture_duration = Some(started_at.elapsed());
                     let render_started_at = Instant::now();
                     rendered_lines = Some(render_ansi_lines(&captured, cols, rows));
@@ -1867,7 +1850,7 @@ impl App {
                     next_pane_refresh = Instant::now();
                 }
 
-                if cursor_due {
+                if cursor_due && cursor.is_none() {
                     let cursor_started_at = Instant::now();
                     cursor = Some(TmuxManager::cursor_position(session, window).ok());
                     cursor_duration = Some(cursor_started_at.elapsed());
@@ -1961,9 +1944,17 @@ impl App {
         let mut burst_until = Instant::now();
         let mut last_snapshot = Instant::now();
         let mut pane_dirty = false;
+        // FORK: adaptive heal floor, see VIEW_CONTROL_HEAL_MAX_INTERVAL.
+        let mut heal_interval = VIEW_CONTROL_HEAL_INTERVAL;
+        let mut last_heal: Option<u64> = None;
 
         while !stop.load(Ordering::Relaxed) {
-            match refresh.swap(VIEW_SNAPSHOT_REFRESH_NONE, Ordering::Relaxed) {
+            let refresh_kind = refresh.swap(VIEW_SNAPSHOT_REFRESH_NONE, Ordering::Relaxed);
+            if refresh_kind != VIEW_SNAPSHOT_REFRESH_NONE {
+                heal_interval = VIEW_CONTROL_HEAL_INTERVAL; // FORK
+                last_heal = None;
+            }
+            match refresh_kind {
                 VIEW_SNAPSHOT_REFRESH_NORMAL => {
                     // Periodic drift-correction reseed.
                     tx.send(reseed_control_view_parser(
@@ -2064,6 +2055,8 @@ impl App {
             }
 
             if pane_dirty {
+                heal_interval = VIEW_CONTROL_HEAL_INTERVAL; // FORK
+                last_heal = None;
                 let now = Instant::now();
                 if now < burst_until
                     || now.duration_since(last_snapshot) >= VIEW_CONTROL_SNAPSHOT_MIN_INTERVAL
@@ -2078,20 +2071,22 @@ impl App {
                     pane_dirty = false;
                     last_snapshot = Instant::now();
                 }
-            } else if auto_refresh
-                && Instant::now().duration_since(last_snapshot) >= VIEW_CONTROL_HEAL_INTERVAL
+            } else if auto_refresh && Instant::now().duration_since(last_snapshot) >= heal_interval
             {
                 // Unconditional self-heal: the change-notifier can miss a
                 // redraw, so re-capture the full pane on a steady floor to
                 // keep a stale frame from persisting until the 3s drift
                 // reseed. See VIEW_CONTROL_HEAL_INTERVAL.
-                tx.send(reseed_control_view_parser(
-                    session,
-                    window,
-                    cols,
-                    rows,
-                    &mut parser,
-                ));
+                let snapshot = reseed_control_view_parser(session, window, cols, rows, &mut parser);
+                // FORK: back off while heals keep finding the same screen.
+                let fingerprint = heal_fingerprint(&snapshot);
+                heal_interval = if last_heal == Some(fingerprint) {
+                    (heal_interval * 2).min(VIEW_CONTROL_HEAL_MAX_INTERVAL)
+                } else {
+                    VIEW_CONTROL_HEAL_INTERVAL
+                };
+                last_heal = Some(fingerprint);
+                tx.send(snapshot);
                 last_snapshot = Instant::now();
             }
         }
@@ -2117,6 +2112,10 @@ impl App {
         rows: u16,
         stop: &AtomicBool,
         refresh: &AtomicU8,
+        // FORK: an unfocused split-view tile: capture at most every
+        // `fork_split::BACKGROUND_TILE_REFRESH_INTERVAL` and skip the cursor
+        // (only the focused tile draws one) unless a refresh asks for it.
+        background: &AtomicBool,
         condvar: &(StdMutex<()>, StdCondvar),
         tx: &SnapshotSender,
     ) -> anyhow::Result<()> {
@@ -2135,7 +2134,7 @@ impl App {
                 }
             })
             .collect();
-        let fifo_dir = std::path::PathBuf::from("/tmp/amf-pipes");
+        let fifo_dir = std::path::PathBuf::from("/tmp/aiw-pipes");
         fs::create_dir_all(&fifo_dir)?;
         let fifo_path = fifo_dir.join(format!("{slug}-{window}.pipe"));
 
@@ -2229,8 +2228,11 @@ impl App {
 
             // Throttle captures: use burst interval after input,
             // normal interval otherwise.
+            let in_background = background.load(Ordering::Relaxed); // FORK
             let pane_interval = if burst_active {
                 VIEW_BURST_PANE_REFRESH_INTERVAL
+            } else if in_background {
+                fork_split::BACKGROUND_TILE_REFRESH_INTERVAL // FORK
             } else {
                 VIEW_PANE_REFRESH_INTERVAL
             };
@@ -2246,7 +2248,9 @@ impl App {
             // pane capture happens anyway — cursor and content move
             // together, and an idle pane must spawn no subprocesses.
             let cursor_due = cursor_refresh_requested
-                || (pane_due && now.duration_since(next_cursor_refresh) >= cursor_interval);
+                || (pane_due
+                    && !in_background // FORK: unfocused tiles draw no cursor
+                    && now.duration_since(next_cursor_refresh) >= cursor_interval);
 
             if pane_due || cursor_due {
                 let mut pane_content = None;
@@ -2259,8 +2263,15 @@ impl App {
                 if pane_due {
                     pane_has_new_output = false;
                     let started_at = Instant::now();
-                    let captured =
-                        TmuxManager::capture_pane_ansi(session, window).unwrap_or_default();
+                    // FORK: one tmux process for content + cursor when both are due.
+                    let captured = if cursor_due {
+                        let (captured, combined_cursor) = capture_with_cursor(session, window);
+                        cursor = Some(combined_cursor);
+                        next_cursor_refresh = Instant::now();
+                        captured
+                    } else {
+                        TmuxManager::capture_pane_ansi(session, window).unwrap_or_default()
+                    };
                     capture_duration = Some(started_at.elapsed());
                     let render_started = Instant::now();
                     rendered_lines = Some(render_ansi_lines(&captured, cols, rows));
@@ -2269,7 +2280,7 @@ impl App {
                     last_capture = Instant::now();
                 }
 
-                if cursor_due {
+                if cursor_due && cursor.is_none() {
                     let cursor_started = Instant::now();
                     cursor = Some(TmuxManager::cursor_position(session, window).ok());
                     cursor_duration = Some(cursor_started.elapsed());
@@ -2372,6 +2383,7 @@ impl App {
                 worker_rows,
                 &worker_stop,
                 &worker_refresh,
+                &AtomicBool::new(false), // FORK: the single view is always in front
                 &worker_condvar,
                 &tx,
             );
@@ -2424,12 +2436,12 @@ impl App {
             return;
         }
 
-        let launch_echo_visible = self.pane_content.contains("AMF_TMUX_BIN=")
-            || self.pane_content.contains("AMF_TMUX_SOCKET=")
-            || self.pane_content.contains("AMF_TMUX_WINDOW=")
-            || self.pane_content.contains("AMF_FEATURE_SESSION_ID=")
-            || self.pane_content.contains("AMF_SESSION_ID=")
-            || self.pane_content.contains("AMF_SESSION=");
+        let launch_echo_visible = self.pane_content.contains("AIW_TMUX_BIN=")
+            || self.pane_content.contains("AIW_TMUX_SOCKET=")
+            || self.pane_content.contains("AIW_TMUX_WINDOW=")
+            || self.pane_content.contains("AIW_FEATURE_SESSION_ID=")
+            || self.pane_content.contains("AIW_SESSION_ID=")
+            || self.pane_content.contains("AIW_SESSION=");
         if !view.startup_mask_active()
             || (!self.pane_content.trim().is_empty() && !launch_echo_visible)
         {
@@ -2508,7 +2520,7 @@ impl App {
 
     pub fn new(db_path: PathBuf) -> Result<Self> {
         setup::ensure_notify_scripts();
-        let db = crate::db::AmfDb::open_or_seed(&db_path, &crate::project::global_db_path())?;
+        let db = crate::db::AiwDb::open_or_seed(&db_path, &crate::project::global_db_path())?;
         let (store, store_version) = db.load_store_versioned()?;
         setup::repair_unquoted_claude_hooks_for_store(&store);
         let (sidebar_load_tx, sidebar_load_rx) = std::sync::mpsc::channel();
@@ -2516,7 +2528,7 @@ impl App {
         // scheduled in startup task 7 (schedule_sidebar_loads_for_all_features).
         // Building them synchronously here required reading every Claude JSONL
         // and PLAN.md file before the first frame could draw, which caused the
-        // "Loading AMF..." stall proportional to feature count.
+        // "Loading AIW..." stall proportional to feature count.
         let latest_prompt_cache = HashMap::new();
         let config = load_config();
         let zai_enabled = config.zai.is_some();
@@ -2529,7 +2541,6 @@ impl App {
             .first()
             .map(|p| merge_project_extension_config(&global_ext, &p.repo))
             .unwrap_or(global_ext);
-        let sidebar_plan_cache = HashMap::new();
         let (codex_sidebar_metadata_tx, codex_sidebar_metadata_rx) = std::sync::mpsc::channel();
         let view_snapshot_slot = Arc::new(StdMutex::new(None));
         let (wakeup_rx, wakeup_tx) = unsafe {
@@ -2572,6 +2583,8 @@ impl App {
             toasts: Vec::new(),
             should_quit: false,
             pane_content: String::new(),
+            fork_split: Default::default(),       // FORK: split view
+            fork_render_memo: Default::default(), // FORK: render memo
             pane_lines: Vec::new(),
             pane_content_cols: 0,
             pane_content_rows: 0,
@@ -2592,7 +2605,6 @@ impl App {
             next_compose_clipboard_paste_id: 1,
             latest_prompt_cache,
             sidebar_model_cache: HashMap::new(),
-            sidebar_plan_cache,
             sidebar_effective_plan_cache: HashMap::new(),
             codex_session_title_cache: HashMap::new(),
             codex_session_prompt_cache: HashMap::new(),
@@ -2601,7 +2613,6 @@ impl App {
             codex_sidebar_metadata_tx,
             codex_sidebar_metadata_rx,
             codex_sidebar_metadata_inflight: std::collections::HashSet::new(),
-            opencode_sidebar_cache: HashMap::new(),
             active_todos_sidebar_cache: HashMap::new(),
             sidebar_load_tx,
             sidebar_load_rx,
@@ -2650,7 +2661,6 @@ impl App {
             throbber_state: throbber_widgets_tui::ThrobberState::default(),
             thinking_features: std::collections::HashSet::new(),
             attention: HashMap::new(),
-            opencode_thinking_pane_cache: HashMap::new(),
             ipc_thinking_sessions: std::collections::HashSet::new(),
             awaiting_review_fixes: HashMap::new(),
             pending_editor: None,
@@ -2688,13 +2698,6 @@ impl App {
             view_display_frozen_until: None,
             harness_check_tx,
             harness_check_rx,
-            remote_server: None,
-            remote_server_addr: None,
-            pairing_requested: None,
-            remote_tailscale: Default::default(),
-            remote_reach: Default::default(),
-            remote_push: Default::default(),
-            remote_devices: Default::default(),
         };
 
         match crate::fswatch::FsWatcher::start(app.view_wakeup_tx()) {
@@ -2745,29 +2748,25 @@ impl App {
         }
 
         for message in crate::highlight::validate_startup_parsers() {
+            // FORK(no-cloud): only warnings are left (see `StartupValidationLevel`).
             match message.level {
-                crate::highlight::StartupValidationLevel::Info => {
-                    app.log_info("syntax", message.message);
-                }
                 crate::highlight::StartupValidationLevel::Warn => {
                     app.log_warn("syntax", message.message);
-                }
-                crate::highlight::StartupValidationLevel::Error => {
-                    app.log_error("syntax", message.message);
                 }
             }
         }
         crate::highlight::reload_runtime_state();
-        app.queue_recoverable_issue_comments();
+        // FORK(no-cloud): no `gh` at startup. A pending/failed issue comment
+        // is retried on the explicit refresh (`R`) instead.
 
         Ok(app)
     }
 
     pub fn log_startup(&mut self) {
-        self.log_info("amf", "AMF started".to_string());
-        self.log_debug("amf", format!("DB path: {}", self.store_path.display()));
+        self.log_info("aiw", "AIW started".to_string());
+        self.log_debug("aiw", format!("DB path: {}", self.store_path.display()));
         self.log_debug(
-            "amf",
+            "aiw",
             format!("Projects loaded: {}", self.store.projects.len()),
         );
     }
@@ -2786,14 +2785,13 @@ impl App {
         use crate::extension::ExtensionConfig;
         // `extension_for_repo` (and anything it feeds, e.g.
         // `configured_review_memory_path`) re-reads
-        // `~/.config/amf/config.json` from disk regardless of this
+        // `~/.config/ai_workstation/config.json` from disk regardless of this
         // constructor's in-memory setup, which would otherwise make tests
         // depend on whatever happens to be in that file on the machine
         // running them.
         crate::extension::set_test_global_extension_config(Some(ExtensionConfig::default()));
         let (sidebar_load_tx, sidebar_load_rx) = std::sync::mpsc::channel();
         let latest_prompt_cache = Self::build_latest_prompt_cache(&store);
-        let sidebar_plan_cache = Self::build_sidebar_plan_cache(&store);
         let (codex_sidebar_metadata_tx, codex_sidebar_metadata_rx) = std::sync::mpsc::channel();
         let view_snapshot_slot = Arc::new(StdMutex::new(None));
         let (wakeup_rx, wakeup_tx) = unsafe {
@@ -2840,6 +2838,8 @@ impl App {
             toasts: Vec::new(),
             should_quit: false,
             pane_content: String::new(),
+            fork_split: Default::default(),       // FORK: split view
+            fork_render_memo: Default::default(), // FORK: render memo
             pane_lines: Vec::new(),
             pane_content_cols: 0,
             pane_content_rows: 0,
@@ -2860,7 +2860,6 @@ impl App {
             next_compose_clipboard_paste_id: 1,
             latest_prompt_cache,
             sidebar_model_cache: HashMap::new(),
-            sidebar_plan_cache,
             sidebar_effective_plan_cache: HashMap::new(),
             codex_session_title_cache: HashMap::new(),
             codex_session_prompt_cache: HashMap::new(),
@@ -2869,7 +2868,6 @@ impl App {
             codex_sidebar_metadata_tx,
             codex_sidebar_metadata_rx,
             codex_sidebar_metadata_inflight: std::collections::HashSet::new(),
-            opencode_sidebar_cache: HashMap::new(),
             active_todos_sidebar_cache: HashMap::new(),
             sidebar_load_tx,
             sidebar_load_rx,
@@ -2918,7 +2916,6 @@ impl App {
             throbber_state: throbber_widgets_tui::ThrobberState::default(),
             thinking_features: std::collections::HashSet::new(),
             attention: HashMap::new(),
-            opencode_thinking_pane_cache: HashMap::new(),
             ipc_thinking_sessions: std::collections::HashSet::new(),
             awaiting_review_fixes: HashMap::new(),
             pending_editor: None,
@@ -2955,13 +2952,6 @@ impl App {
             view_display_frozen_until: None,
             harness_check_tx,
             harness_check_rx,
-            remote_server: None,
-            remote_server_addr: None,
-            pairing_requested: None,
-            remote_tailscale: Default::default(),
-            remote_reach: Default::default(),
-            remote_push: Default::default(),
-            remote_devices: Default::default(),
         }
     }
 
@@ -3006,7 +2996,6 @@ impl App {
         };
 
         self.refresh_latest_prompt_for_feature(pi, fi);
-        self.refresh_sidebar_plan_for_feature(pi, fi);
         self.request_codex_sidebar_metadata_for_view(
             &project_name,
             &feature_name,
@@ -3034,23 +3023,6 @@ impl App {
         cache
     }
 
-    #[allow(dead_code)] // exercised only by unit tests
-    fn build_sidebar_plan_cache(store: &ProjectStore) -> HashMap<String, String> {
-        let mut cache = HashMap::new();
-
-        for project in &store.projects {
-            for feature in &project.features {
-                if let Some(plan) =
-                    crate::markdown::read_plan_preview(&feature.workdir, Some(&project.repo))
-                {
-                    cache.insert(feature.tmux_session.clone(), plan);
-                }
-            }
-        }
-
-        cache
-    }
-
     pub(crate) fn schedule_sidebar_load_for_feature(&mut self, pi: usize, fi: usize) {
         let Some(feature) = self
             .store
@@ -3061,22 +3033,7 @@ impl App {
             return;
         };
 
-        let dedicated_opencode_session = match &self.mode {
-            AppMode::PrReview(state) if state.workdir == feature.workdir => {
-                pr_review::pr_triage_session_index_named(
-                    feature,
-                    state.fix_target,
-                    &state.dedicated_session_label,
-                )
-                .map(|si| &feature.sessions[si])
-                .filter(|session| session.kind == SessionKind::Opencode)
-            }
-            _ => None,
-        };
-        let request = dedicated_opencode_session.map_or_else(
-            || SidebarLoadRequest::from_feature(feature),
-            |session| SidebarLoadRequest::from_opencode_session(feature, session),
-        );
+        let request = SidebarLoadRequest::from_feature(feature);
         if !self
             .pending_sidebar_loads
             .insert(request.tmux_session.clone())
@@ -3158,13 +3115,6 @@ impl App {
                 self.sidebar_effective_plan_cache
                     .remove(&result.tmux_session);
             }
-
-            if let Some(data) = result.opencode_sidebar {
-                self.opencode_sidebar_cache
-                    .insert(result.tmux_session, data);
-            } else {
-                self.opencode_sidebar_cache.remove(&result.tmux_session);
-            }
         }
         changed
     }
@@ -3174,10 +3124,8 @@ impl App {
         self.sidebar_load_signatures.remove(tmux_session);
         self.latest_prompt_cache.remove(tmux_session);
         self.sidebar_model_cache.remove(tmux_session);
-        self.sidebar_plan_cache.remove(tmux_session);
         self.sidebar_effective_plan_cache.remove(tmux_session);
         self.codex_live_threads.remove(tmux_session);
-        self.opencode_sidebar_cache.remove(tmux_session);
         self.prune_codex_sidebar_caches();
     }
 
@@ -3228,35 +3176,8 @@ impl App {
         }
     }
 
-    pub(crate) fn refresh_sidebar_plan_for_feature(&mut self, pi: usize, fi: usize) {
-        let Some((project, feature)) = self
-            .store
-            .projects
-            .get(pi)
-            .and_then(|project| project.features.get(fi).map(|feature| (project, feature)))
-        else {
-            return;
-        };
-
-        if let Some(plan) =
-            crate::markdown::read_plan_preview(&feature.workdir, Some(&project.repo))
-        {
-            self.sidebar_plan_cache
-                .insert(feature.tmux_session.clone(), plan);
-        } else {
-            self.sidebar_plan_cache.remove(&feature.tmux_session);
-        }
-    }
-
     pub fn latest_prompt_for_session(&self, tmux_session: &str) -> Option<&str> {
         self.latest_prompt_cache
-            .get(tmux_session)
-            .map(String::as_str)
-    }
-
-    #[allow(dead_code)] // exercised only by unit tests
-    pub fn sidebar_plan_for_session(&self, tmux_session: &str) -> Option<&str> {
-        self.sidebar_plan_cache
             .get(tmux_session)
             .map(String::as_str)
     }
@@ -3428,7 +3349,7 @@ impl App {
                 if let Some(project) = self.store.projects.get(*pi) {
                     if project.features.get(*fi).is_some() {
                         // Extension config is project-scoped and lives under
-                        // `{repo}/.amf/config.json`, so worktree selections
+                        // `{repo}/aiw.json`, so worktree selections
                         // should still reload from the project repo.
                         merge_project_extension_config(&global_ext, &project.repo)
                     } else {
@@ -3449,8 +3370,8 @@ impl App {
     /// The effective template for a headless prompt on the feature at
     /// `repo` / `workdir`, plus where it came from. Consults, nearest-first:
     /// the feature-scope `prompt_overrides` row (keyed by `workdir`), the
-    /// repo's `amf.json` `prompt_overrides`, the global-scope row, then the
-    /// built-in default. Read fresh each call so a hand-edit to `amf.json` or
+    /// repo's `aiw.json` `prompt_overrides`, the global-scope row, then the
+    /// built-in default. Read fresh each call so a hand-edit to `aiw.json` or
     /// an override saved from the manager takes effect on the next run.
     ///
     /// Returned without interpolation so a caller that renders on a worker
@@ -3500,7 +3421,7 @@ impl App {
     }
 
     /// The batched-review size budget in estimated prompt tokens for a run of
-    /// `harness` against `repo`: the project's `amf.json`
+    /// `harness` against `repo`: the project's `aiw.json`
     /// `review_prompt_budget_tokens`, else the global
     /// `AppConfig::review_prompt_budget_tokens`, else the built-in per-harness
     /// default. A configured `0` is honored (disables pre-send splitting).
@@ -3568,12 +3489,12 @@ impl App {
     /// Resolve the configured review-memory path override for `repo`, in
     /// precedence order:
     ///
-    /// 1. `{repo}/.amf/config.json` `review_memory_path` (project scope).
+    /// 1. `{repo}/aiw.json` `review_memory_path` (project scope).
     /// 2. The `"extension"` block's `review_memory_path` in the global
-    ///    `~/.config/amf/config.json` (set via the config wizard's global
+    ///    `~/.config/ai_workstation/config.json` (set via the config wizard's global
     ///    scope).
     /// 3. The top-level `review_memory_path` key in that same global
-    ///    `~/.config/amf/config.json` — an older setting
+    ///    `~/.config/ai_workstation/config.json` — an older setting
     ///    (`AppConfig::review_memory_path`) that predates the `"extension"`
     ///    block gaining this field. It has no wizard UI of its own, and a
     ///    value set here is silently shadowed by #2 if both are present in
@@ -3667,17 +3588,11 @@ impl App {
         match kind {
             AgentKind::Claude => crate::claude::ClaudeLauncher::check_available(),
             AgentKind::Codex => crate::codex::CodexLauncher::check_available(),
-            AgentKind::Opencode => {
-                let output = std::process::Command::new("opencode")
-                    .arg("--version")
-                    .output()
-                    .context("opencode CLI not found - is Opencode installed?")?;
-                if !output.status.success() {
-                    anyhow::bail!("opencode CLI returned an error");
-                }
-                Ok(())
-            }
             AgentKind::Pi => crate::pi::PiLauncher::check_available(),
+            // FORK: Gemini/Cursor
+            AgentKind::Gemini | AgentKind::Cursor => {
+                crate::fork::extra_agents::check_available(kind)
+            }
         }
     }
 
@@ -3685,10 +3600,9 @@ impl App {
         match kind {
             AgentKind::Claude => "Install Claude Code: https://claude.ai/code",
             AgentKind::Codex => "Install Codex: npm install -g @openai/codex",
-            AgentKind::Opencode => {
-                "Install Opencode: go install github.com/opencode-ai/opencode@latest"
-            }
             AgentKind::Pi => "Install Pi: check your provider's documentation",
+            // FORK: Gemini/Cursor
+            AgentKind::Gemini | AgentKind::Cursor => crate::fork::extra_agents::install_hint(kind),
         }
     }
 
@@ -3713,7 +3627,7 @@ impl App {
     }
 
     pub(crate) fn use_custom_diff_review_viewer(&self) -> bool {
-        matches!(self.config.diff_review_viewer, DiffReviewViewer::Amf)
+        matches!(self.config.diff_review_viewer, DiffReviewViewer::Aiw)
     }
 
     pub(crate) fn ensure_agent_mode_supported(
@@ -3723,7 +3637,7 @@ impl App {
     ) -> Result<()> {
         if matches!(agent, AgentKind::Codex) && matches!(mode, VibeMode::Vibeless) {
             anyhow::bail!(
-                "Codex does not support Vibeless diff review. Use Claude/Opencode, or switch to Vibe or SuperVibe."
+                "Codex does not support Vibeless diff review. Use Claude, or switch to Vibe or SuperVibe."
             );
         }
         Ok(())
@@ -3737,8 +3651,8 @@ impl App {
     /// which wraps it to report `GuiErrorKind::Conflict` instead of a bare
     /// internal error.
     ///
-    /// Cross-process-safe when backed by a real DB (`AMF_PLAN.md` Task 5):
-    /// the save only applies if nothing else -- the GUI, another AMF
+    /// Cross-process-safe when backed by a real DB (`AIW_PLAN.md` Task 5):
+    /// the save only applies if nothing else -- the GUI, another AIW
     /// process, or a stale reload -- has saved since this `App` last loaded
     /// or saved successfully. On a detected conflict the in-memory store is
     /// refreshed from disk (see `adopt_store_from_disk`) before returning, so
@@ -3822,7 +3736,7 @@ impl App {
     }
 
     /// Adopt a newer store written by another process (the GUI, another
-    /// TUI, or `amf` automation) if one has landed since this `App` last
+    /// TUI, or `aiw` automation) if one has landed since this `App` last
     /// loaded or saved. Called from the TUI's event loop so the next save
     /// starts from current state instead of conflicting on it.
     ///
@@ -3956,6 +3870,7 @@ impl App {
 
     pub fn apply_theme(&mut self, theme_name: crate::theme::ThemeName) {
         self.config.theme = theme_name;
+        crate::fork::appearance::remember_picked_theme(&mut self.config.appearance, theme_name); // FORK
         let mut theme = crate::theme::Theme::load(&self.config.theme);
         theme.set_transparent(self.config.transparent_background);
         self.theme = theme;
@@ -4083,7 +3998,7 @@ impl App {
         if self.store_path.as_os_str().is_empty() {
             return Ok(());
         }
-        let config_path = crate::project::amf_config_dir().join("config.json");
+        let config_path = crate::project::aiw_config_dir().join("config.json");
         let dir = config_path.parent().unwrap();
         std::fs::create_dir_all(dir)?;
         let json = serde_json::to_string_pretty(&self.config)?;
@@ -4095,27 +4010,16 @@ impl App {
 fn latest_prompt_text_for_feature(feature: &Feature) -> Option<String> {
     let preferred_session_kind = match feature.agent {
         AgentKind::Claude => Some(SessionKind::Claude),
-        AgentKind::Opencode => Some(SessionKind::Opencode),
         AgentKind::Codex => Some(SessionKind::Codex),
         AgentKind::Pi => Some(SessionKind::Pi),
-    };
-
-    let preferred_opencode_session_id = if feature.agent == AgentKind::Opencode {
-        feature
-            .sessions
-            .iter()
-            .find(|session| session.kind == SessionKind::Opencode)
-            .and_then(|session| session.token_usage_source.as_ref())
-            .filter(|source| source.provider == crate::token_tracking::TokenUsageProvider::Opencode)
-            .map(|source| source.id.as_str())
-    } else {
-        None
+        AgentKind::Gemini => Some(SessionKind::Gemini), // FORK
+        AgentKind::Cursor => Some(SessionKind::Cursor), // FORK
     };
 
     crate::app::util::read_latest_prompt_for_session(
         &feature.workdir,
         preferred_session_kind.as_ref(),
-        preferred_opencode_session_id,
+        None,
     )
 }
 
@@ -4131,9 +4035,10 @@ impl SidebarLoadRequest {
     fn from_feature(feature: &Feature) -> Self {
         let preferred_session_kind = match feature.agent {
             AgentKind::Claude => Some(SessionKind::Claude),
-            AgentKind::Opencode => Some(SessionKind::Opencode),
             AgentKind::Codex => Some(SessionKind::Codex),
             AgentKind::Pi => Some(SessionKind::Pi),
+            AgentKind::Gemini => Some(SessionKind::Gemini), // FORK
+            AgentKind::Cursor => Some(SessionKind::Cursor), // FORK
         };
         let preferred_session_id = match feature.agent {
             AgentKind::Claude => feature
@@ -4141,15 +4046,6 @@ impl SidebarLoadRequest {
                 .iter()
                 .find(|session| session.kind == SessionKind::Claude)
                 .and_then(|session| session.claude_session_id.clone()),
-            AgentKind::Opencode => feature
-                .sessions
-                .iter()
-                .find(|session| session.kind == SessionKind::Opencode)
-                .and_then(|session| session.token_usage_source.as_ref())
-                .filter(|source| {
-                    source.provider == crate::token_tracking::TokenUsageProvider::Opencode
-                })
-                .map(|source| source.id.clone()),
             AgentKind::Codex => feature
                 .sessions
                 .iter()
@@ -4159,28 +4055,13 @@ impl SidebarLoadRequest {
                     source.provider == crate::token_tracking::TokenUsageProvider::Codex
                 })
                 .map(|source| source.id.clone()),
-            AgentKind::Pi => None,
+            AgentKind::Pi | AgentKind::Gemini | AgentKind::Cursor => None, // FORK
         };
 
         Self {
             tmux_session: feature.tmux_session.clone(),
             workdir: feature.workdir.clone(),
             preferred_session_kind,
-            preferred_session_id,
-            selected_plan_path: feature.selected_plan_path.clone(),
-        }
-    }
-
-    fn from_opencode_session(feature: &Feature, session: &FeatureSession) -> Self {
-        let preferred_session_id = session
-            .token_usage_source
-            .as_ref()
-            .filter(|source| source.provider == crate::token_tracking::TokenUsageProvider::Opencode)
-            .map(|source| source.id.clone());
-        Self {
-            tmux_session: feature.tmux_session.clone(),
-            workdir: feature.workdir.clone(),
-            preferred_session_kind: Some(SessionKind::Opencode),
             preferred_session_id,
             selected_plan_path: feature.selected_plan_path.clone(),
         }
@@ -4195,13 +4076,6 @@ impl SidebarLoadRequest {
         sidebar_plan_input_signature(&self.workdir, self.selected_plan_path.as_deref())
             .hash(&mut hasher);
 
-        if self.preferred_session_kind == Some(SessionKind::Opencode) {
-            opencode_storage::sidebar_input_signature(
-                &self.workdir,
-                self.preferred_session_id.as_deref(),
-            )
-            .hash(&mut hasher);
-        }
         if self.preferred_session_kind == Some(SessionKind::Claude) {
             claude_sessions::sidebar_input_signature(
                 &self.workdir,
@@ -4234,7 +4108,6 @@ impl SidebarLoadRequest {
                 changed,
                 latest_prompt: None,
                 model_text: None,
-                opencode_sidebar: None,
                 plan_text: None,
             };
         }
@@ -4244,20 +4117,12 @@ impl SidebarLoadRequest {
             self.preferred_session_kind.as_ref(),
             self.preferred_session_id.as_deref(),
         );
-        let opencode_sidebar = if self.preferred_session_kind == Some(SessionKind::Opencode) {
-            opencode_storage::read_sidebar_data(&self.workdir, self.preferred_session_id.as_deref())
-        } else {
-            None
-        };
         let model_text = match self.preferred_session_kind {
             Some(SessionKind::Claude) => self.preferred_session_id.as_deref().and_then(|id| {
                 claude_sessions::sidebar_metadata_for_session_id(&self.workdir, id)
                     .ok()
                     .flatten()
                     .and_then(|metadata| model_line(metadata.model.as_deref(), None))
-            }),
-            Some(SessionKind::Opencode) => opencode_sidebar.as_ref().and_then(|sidebar| {
-                model_line(sidebar.model.as_deref(), sidebar.provider.as_deref())
             }),
             Some(SessionKind::Codex) => {
                 let configured_model = crate::codex_config::configured_model();
@@ -4276,7 +4141,6 @@ impl SidebarLoadRequest {
             changed,
             latest_prompt,
             model_text,
-            opencode_sidebar,
             plan_text,
         }
     }
@@ -4296,7 +4160,6 @@ fn model_line(model: Option<&str>, provider: Option<&str>) -> Option<String> {
 fn session_kind_signature(session_kind: Option<&SessionKind>) -> u8 {
     match session_kind {
         Some(SessionKind::Claude) => 1,
-        Some(SessionKind::Opencode) => 2,
         Some(SessionKind::Codex) => 3,
         Some(SessionKind::Pi) => 4,
         Some(SessionKind::Terminal) => 5,
@@ -4304,6 +4167,8 @@ fn session_kind_signature(session_kind: Option<&SessionKind>) -> u8 {
         Some(SessionKind::Vscode) => 7,
         Some(SessionKind::Custom) => 8,
         Some(SessionKind::Todos) => 9,
+        Some(SessionKind::Gemini) => 10, // FORK
+        Some(SessionKind::Cursor) => 11, // FORK
         None => 0,
     }
 }

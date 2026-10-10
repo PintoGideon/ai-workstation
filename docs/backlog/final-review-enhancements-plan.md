@@ -42,7 +42,7 @@
 
 ## Why / problem
 
-The final review was rewritten to use AMF's native diff UI (press `f`
+The final review was rewritten to use AIW's native diff UI (press `f`
 in a feature view). It walks every file changed since the base ref,
 shows the developer's reasoning from `.claude/review-notes.md` beside
 each diff, lets the reviewer approve / reject (with feedback) / skip
@@ -187,7 +187,7 @@ impact. Each is independent and grounded in the plumbing it reuses.
   only flags *files* that changed (`changed_since_last`). Track
   per-comment resolved state (paired with the agent-response item) so a
   re-review can show "N unresolved threads" and filter to just those —
-  GitHub-style resolvable conversations without leaving AMF.
+  GitHub-style resolvable conversations without leaving AIW.
 - **Re-anchor comments across edits.** Store a small context snippet
   (the commented line + ~2 neighbours) alongside the `DiffLineLocation`.
   On re-review, if the exact line moved, fuzzy-match the snippet to
@@ -445,7 +445,7 @@ and outcome-driven PR review events by **Round 2 → severity tags**.
       current branch/worktree changes or one feature-branch commit)
 - [x] PR inline-comment integration — opt-in via the
       `final_review_post_to_pr` config flag. On finishing a review (with the
-      flag on), AMF resolves the branch's PR and posts a single GitHub review:
+      flag on), AIW resolves the branch's PR and posts a single GitHub review:
       line comments become inline comments (anchored `RIGHT` for a current-file
       line, `LEFT` for a deletion-only line); whole-file rejections and the
       general feedback — which have no single line to anchor to — become the
@@ -563,7 +563,7 @@ and outcome-driven PR review events by **Round 2 → severity tags**.
 - [x] Agent writes responses back into the feedback file — `REVIEW_FEEDBACK_PROMPT`
       now asks the agent, after addressing each item, to append a `**Agent:** …`
       reply on its own line under that item (what it changed / why it disagrees /
-      an answer to a `[question]`). On the next review round AMF parses the latest
+      an answer to a `[question]`). On the next review round AIW parses the latest
       round's replies from `.claude/final-review-feedback.md`
       (`parse_agent_responses` in `src/app/review.rs`, grouped by file) and, in
       `load_prior_agent_responses`, files them onto
@@ -655,7 +655,7 @@ and outcome-driven PR review events by **Round 2 → severity tags**.
       `src/ui/dialogs/diff.rs`.
 - [x] Build / test gate before approve — a per-project
       `final_review_check_command` (`ExtensionConfig` in `src/extension.rs`,
-      merged from `~/.config/amf/config.json` / `{repo}/.amf/config.json`
+      merged from `~/.config/ai_workstation/config.json` / `{repo}/.aiw/config.json`
       exactly like `lifecycle_hooks`, project overrides global) is run via
       `bash -c` in the feature's workdir when finishing a review. Unset
       (the default) skips it entirely — zero behavior change for projects
@@ -898,8 +898,8 @@ Cost:
       `blind_appended_duplicates_collapse_below_the_cap` and
       `archive_review_notes_collapses_blind_appended_duplicates_on_disk`).
       No code paths added; file spec, parser, and diff-viewer panel
-      unchanged. Options I (AMF-filtered changed-file list) and K (terser
-      section format), plus the AMF-driven mechanical writer, stay
+      unchanged. Options I (AIW-filtered changed-file list) and K (terser
+      section format), plus the AIW-driven mechanical writer, stay
       deferred to Step 2 pending dogfood results.
 - [x] Per-action model overrides — a new `review_models` map
       (`BTreeMap<String, String>` on `AppConfig`) keyed by
@@ -924,7 +924,7 @@ Cost:
       an agent-turn boundary reaches `notifications.rs`, so history never
       accumulates unbounded. The managed Review Mode instruction is
       refreshed on upgrade; it now tells the agent to blind-append and not
-      read the file at all (see the blind-append entry above). AMF's
+      read the file at all (see the blind-append entry above). AIW's
       final-review viewer and
       per-edit explanation lookup use `load_review_notes`, which merges the
       archive first and the live file second, preserving old reviewer
@@ -960,7 +960,7 @@ Cost:
       parallelize only independent batches, and cap concurrency.
 
       Do not require every fixing agent to read a potentially huge
-      `.claude/final-review-feedback.md`. AMF already parses review state, so it
+      `.claude/final-review-feedback.md`. AIW already parses review state, so it
       should be able to construct a minimal task packet containing only the
       latest unresolved comment(s), severity, file/line or range, bounded diff
       hunk and nearby context, relevant developer note/agent reply, and any
@@ -1200,7 +1200,7 @@ Viewer:
       vi family / nano / emacs / kak / micro, `--goto path:N` (plus an implied
       `--wait`, since a GUI editor that forks would return straight to a
       redrawn TUI) for VS Code and its forks, `path:N` for helix / sublime /
-      zed, and — deliberately — plain `path` for an editor AMF doesn't
+      zed, and — deliberately — plain `path` for an editor AIW doesn't
       recognise, since an unsupported flag would be read as a second filename
       and open an empty buffer called `+42`. An `$EDITOR` carrying its own
       flags (`emacsclient -nw`) is preserved.
@@ -1209,7 +1209,7 @@ Viewer:
       and the alternate screen — the app hands over a `PendingEditorOpen`
       (`src/app/state.rs`) and the loop drains it. Teardown/restore mirrors
       `main`'s setup exactly, so the editor sees the terminal it would have
-      had if AMF were never started, and the screen is always restored before
+      had if AIW were never started, and the screen is always restored before
       any error is reported. On return, the file's size/mtime is compared
       against a fingerprint taken before handing over; if the reviewer actually
       changed something, the diff is reloaded through the ordinary

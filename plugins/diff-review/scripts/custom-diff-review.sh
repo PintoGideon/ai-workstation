@@ -1,20 +1,20 @@
 #!/bin/bash
 #
-# custom-diff-review.sh — AMF custom diff review hook
+# custom-diff-review.sh — AIW custom diff review hook
 #
-# Sends a structured diff-review request to the AMF TUI and waits for
+# Sends a structured diff-review request to the AIW TUI and waits for
 # approve/reject/cancel. Falls back to file-based notification when the
 # IPC path is unavailable.
 #
 
 set -euo pipefail
 
-if [[ "${AMF_ACTIVE:-}" != "1" ]]; then
+if [[ "${AIW_ACTIVE:-}" != "1" ]]; then
     exit 0
 fi
 
 # Root-repository Claude settings are inherited by sessions launched from Git
-# worktrees. AMF passes the Git root that owns this hook as the first argument;
+# worktrees. AIW passes the Git root that owns this hook as the first argument;
 # an inherited hook must not review changes for a different feature.
 EXPECTED_WORKDIR="${1:-}"
 if [[ -n "$EXPECTED_WORKDIR" ]]; then
@@ -33,22 +33,22 @@ fi
 
 HOOK_INPUT=$(cat)
 
-# $AMF_BIN names the amf that started this session. A rebuilt or deleted
-# build leaves it pointing at nothing, so fall back to `amf` on PATH.
-[ -x "${AMF_BIN:-}" ] || AMF_BIN=amf
+# $AIW_BIN names the aiw that started this session. A rebuilt or deleted
+# build leaves it pointing at nothing, so fall back to `aiw` on PATH.
+[ -x "${AIW_BIN:-}" ] || AIW_BIN=aiw
 
-# `amf hook-field` reads the hook JSON so this script needs no JSON parser of
+# `aiw hook-field` reads the hook JSON so this script needs no JSON parser of
 # its own. It prints nothing and exits 0 for an absent field, which is the same
 # shape as the `jq -r '... // empty'` it replaces.
-AMF_CMD="$AMF_BIN"
+AIW_CMD="$AIW_BIN"
 hook_field() {
-    printf '%s' "$HOOK_INPUT" | "$AMF_CMD" hook-field "$@" 2>/dev/null || true
+    printf '%s' "$HOOK_INPUT" | "$AIW_CMD" hook-field "$@" 2>/dev/null || true
 }
 
 TOOL_NAME=$(hook_field tool_name)
 SESSION_ID=$(hook_field session_id)
 SESSION_ID="${SESSION_ID:-unknown}"
-AMF_SESSION_ID="${AMF_SESSION:-}"
+AIW_SESSION_ID="${AIW_SESSION:-}"
 
 if [[ "$TOOL_NAME" != "Edit" && "$TOOL_NAME" != "Write" ]]; then
     exit 0
@@ -86,10 +86,10 @@ log_fallback() {
     local reason="$1"
     local home_dir="${HOME:-/tmp}"
     local state_home="${XDG_STATE_HOME:-$home_dir/.local/state}"
-    local log_dir="$state_home/amf"
+    local log_dir="$state_home/aiw"
     mkdir -p "$log_dir" 2>/dev/null || true
-    printf '[WARN] [diff-review] notify-wait fallback for session=%s amf_session=%s cwd=%s file=%s: %s\n' \
-        "$SESSION_ID" "$AMF_SESSION_ID" "$CWD" "$DISPLAY_PATH" "$reason" \
+    printf '[WARN] [diff-review] notify-wait fallback for session=%s aiw_session=%s cwd=%s file=%s: %s\n' \
+        "$SESSION_ID" "$AIW_SESSION_ID" "$CWD" "$DISPLAY_PATH" "$reason" \
         >> "$log_dir/debug.log" 2>/dev/null || true
 }
 
@@ -161,14 +161,14 @@ build_payload() {
     old_snippet > "$old_file"
     new_snippet > "$new_file"
 
-    # `session_id` is deliberately the *provider's* id with the AMF session
-    # carried alongside in `amf_session`; the dashboard matches this
+    # `session_id` is deliberately the *provider's* id with the AIW session
+    # carried alongside in `aiw_session`; the dashboard matches this
     # notification on both. An explicit --field outranks the environment, so
-    # `amf hook-payload` will not substitute the tmux session here.
-    "$AMF_CMD" hook-payload \
+    # `aiw hook-payload` will not substitute the tmux session here.
+    "$AIW_CMD" hook-payload \
         --type diff-review \
         --field "session_id=$SESSION_ID" \
-        --field "amf_session=$AMF_SESSION_ID" \
+        --field "aiw_session=$AIW_SESSION_ID" \
         --field "cwd=$CWD" \
         --field "message=Review: $DISPLAY_PATH" \
         --field "file_path=$FILE_PATH" \
@@ -189,14 +189,14 @@ build_payload() {
 
 send_notification_wait() {
     local payload_file="$1"
-    if ! command -v "$AMF_CMD" >/dev/null 2>&1; then
-        log_fallback "amf command not found"
+    if ! command -v "$AIW_CMD" >/dev/null 2>&1; then
+        log_fallback "aiw command not found"
         return 1
     fi
 
     local response
     local error_file="$TEMP_DIR/notify-wait.err"
-    if ! response=$(cat "$payload_file" | "$AMF_CMD" notify-wait --timeout-ms 120000 2>"$error_file"); then
+    if ! response=$(cat "$payload_file" | "$AIW_CMD" notify-wait --timeout-ms 120000 2>"$error_file"); then
         local error
         error=$(tr '\n' ' ' < "$error_file" | sed 's/[[:space:]]\+/ /g' | cut -c1-240)
         log_fallback "${error:-notify-wait failed}"
@@ -225,14 +225,14 @@ handle_response() {
     local response="$1"
     local decision reject skip reason
 
-    # AMF replies flat — `{type, decision, reason, skip, reject}` — with
+    # AIW replies flat — `{type, decision, reason, skip, reject}` — with
     # `decision` the current field and the booleans sent alongside it. Both are
     # read because either alone is a complete answer.
-    decision=$(printf '%s' "$response" | "$AMF_CMD" hook-field decision 2>/dev/null || true)
+    decision=$(printf '%s' "$response" | "$AIW_CMD" hook-field decision 2>/dev/null || true)
 
     if [[ -z "$decision" ]]; then
-        reject=$(printf '%s' "$response" | "$AMF_CMD" hook-field reject 2>/dev/null || true)
-        skip=$(printf '%s' "$response" | "$AMF_CMD" hook-field skip 2>/dev/null || true)
+        reject=$(printf '%s' "$response" | "$AIW_CMD" hook-field reject 2>/dev/null || true)
+        skip=$(printf '%s' "$response" | "$AIW_CMD" hook-field skip 2>/dev/null || true)
         if [[ "$reject" == "true" ]]; then
             decision="reject"
         elif [[ "$skip" == "true" ]]; then
@@ -247,7 +247,7 @@ handle_response() {
             exit 0
             ;;
         reject)
-            reason=$(printf '%s' "$response" | "$AMF_CMD" hook-field reason 2>/dev/null || true)
+            reason=$(printf '%s' "$response" | "$AIW_CMD" hook-field reason 2>/dev/null || true)
             if [[ -n "$reason" ]]; then
                 echo "User rejected this change with feedback: $reason" >&2
             else

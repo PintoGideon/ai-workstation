@@ -10,25 +10,24 @@
 #
 # Self-contained: it enables the Codex harness in the isolated registry,
 # then `seed-custom-answer-fixture.sh` creates a throwaway repo whose
-# amf.json opts out of the built-in questions and adds one REQUIRED
+# aiw.json opts out of the built-in questions and adds one REQUIRED
 # select question, plus a feature to run `P` against (plan_mode false,
 # so `P` runs a fresh on-demand interview).
 #
 # Deliberately aborts before accepting: accepting runs a real headless
 # synthesis call, which costs tokens and is covered by unit tests.
 
-# Enable Codex in the isolated harness registry (rows: Claude, Opencode,
-# Codex, Pi -- so j j lands on Codex; Enter runs its availability check).
+# Enable Codex in the isolated harness registry (rows: Claude, Codex, Pi,
+# Gemini, Cursor -- so j lands on Codex; Enter runs its availability check).
 key:A
 wait:400
-key:j
 key:j
 key:Enter
 wait:1200
 key:c
 wait:500
 
-run:AMF_BIN="$AMF_BIN" "$SCRIPT_DIR/seed-custom-answer-fixture.sh" >/dev/null
+run:AIW_BIN="$AIW_BIN" "$SCRIPT_DIR/seed-custom-answer-fixture.sh" >/dev/null
 wait:1400
 note:The seeded project has one feature and no plan yet.
 shot:dashboard-seeded
@@ -37,7 +36,7 @@ shot:dashboard-seeded
 key:j
 wait:300
 
-# `P` opens the on-demand interview. It reads the project's amf.json, so
+# `P` opens the on-demand interview. It reads the project's aiw.json, so
 # the only question asked is the configured required select question.
 key:P
 wait:700

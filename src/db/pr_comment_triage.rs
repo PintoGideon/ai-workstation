@@ -331,7 +331,7 @@ pub fn load_reply_draft(
     }))
 }
 
-/// Remove a consumed reply draft after AMF successfully posts it.
+/// Remove a consumed reply draft after AIW successfully posts it.
 pub fn clear_reply_draft(conn: &Connection, pr_number: u32, comment_id: u64) -> Result<()> {
     conn.execute(
         "DELETE FROM pr_comment_reply_drafts
@@ -344,12 +344,12 @@ pub fn clear_reply_draft(conn: &Connection, pr_number: u32, comment_id: u64) -> 
 #[cfg(test)]
 mod tests {
     use crate::app::pr_review::TriageState;
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use tempfile::NamedTempFile;
 
-    fn open_temp_db() -> (NamedTempFile, AmfDb) {
+    fn open_temp_db() -> (NamedTempFile, AiwDb) {
         let tmp = NamedTempFile::new().unwrap();
-        let db = AmfDb::open(tmp.path()).unwrap();
+        let db = AiwDb::open(tmp.path()).unwrap();
         (tmp, db)
     }
 

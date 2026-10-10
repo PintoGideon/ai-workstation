@@ -1,6 +1,6 @@
 # Batched review of oversized diffs
 
-AMF's AI reviews send the whole diff to a headless agent in one prompt.
+AIW's AI reviews send the whole diff to a headless agent in one prompt.
 When that diff is larger than the review model's context window the call
 used to fail outright ("prompt is too long"), or — for the final-review
 co-reviewer — the diff was silently truncated to a fixed byte budget.
@@ -29,7 +29,7 @@ batched. The plan interview has its own, non-diff guard (see below).
    that stay under the estimated token budget. A file whose own diff
    exceeds the budget is set aside for hunk-splitting.
 3. **Review each batch.** Every batch is sent through the harness-neutral
-   runner (Claude, Codex, OpenCode, or Pi). If the harness *still*
+   runner (Claude, Codex, or Pi). If the harness *still*
    rejects a batch as too long, the batch is halved and each half
    retried, recursively, down to a single file.
 4. **Hunk-split an oversized file.** A lone file that overflows is divided
@@ -89,16 +89,15 @@ Defaults (`headless::default_prompt_budget_tokens`):
 | --- | --- |
 | Claude | 128,000 |
 | Codex | 128,000 |
-| OpenCode | 96,000 |
 | Pi | 96,000 |
 
 Override:
 
 - **Globally** — `review_prompt_budget_tokens` in
-  `~/.config/amf/config.json` (a number of tokens).
+  `~/.config/ai_workstation/config.json` (a number of tokens).
 - **Per repository** — `review_prompt_budget_tokens` in the repo's
-  `amf.json`, which overrides the global value.
-- `0` disables the pre-send split entirely. For the `W` review AMF then
+  `aiw.json`, which overrides the global value.
+- `0` disables the pre-send split entirely. For the `W` review AIW then
   only reacts to an actual "prompt too long" error, retrying that run as a
   batched review with adaptive halving. Co-review has no post-failure
   retry, so with `0` an oversized file is sent in one pass with its body
@@ -137,7 +136,7 @@ Each commit then fits in one prompt with its full context intact.
 
 The plan-interview prompts (adaptive round, synthesis, advisory review)
 are not diffs and are not batched. They have their own guard: if the
-assembled prompt is estimated to overflow, AMF drops the repository
+assembled prompt is estimated to overflow, AIW drops the repository
 `README` / `CLAUDE.md` excerpts from that one prompt and retries, noting
 the trim in the interview dialog's footer. If it still overflows, the
 prompt is sent as is with a note that it may not fit. The same

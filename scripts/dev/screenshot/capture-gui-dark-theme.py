@@ -21,7 +21,7 @@ out.mkdir(parents=True, exist_ok=True)
 base = '6183a91afc1901614ddea9dac55e70e3d320e561'
 if subprocess.run(["git", "cat-file", "-e", base + "^{commit}"], cwd=workspace, stderr=subprocess.DEVNULL).returncode:
     subprocess.run(["git", "fetch", "--no-tags", "origin", base], cwd=workspace, check=True)
-with tempfile.TemporaryDirectory(prefix="amf-theme-baseline-") as temporary:
+with tempfile.TemporaryDirectory(prefix="aiw-theme-baseline-") as temporary:
     baseline = pathlib.Path(temporary) / "gui"
     shutil.copytree(workspace / "gui", baseline, ignore=shutil.ignore_patterns("node_modules", "dist", "src-tauri"))
     (baseline / "node_modules").symlink_to(workspace / "gui/node_modules", target_is_directory=True)
@@ -32,10 +32,10 @@ with tempfile.TemporaryDirectory(prefix="amf-theme-baseline-") as temporary:
     for mode, frontend in [("before", baseline), ("after", workspace / "gui")]:
         frames = out / mode
         env = os.environ | {
-            "AMF_PROOF_MODE": mode,
-            "AMF_GUI_CAPTURE_FRONTEND": str(frontend),
-            "AMF_GUI_CAPTURE_HARNESS": str(scripts / "fixtures/gui-theme-harness.py"),
-            "AMF_GUI_CAPTURE_FRAMES": str(scripts / "capture-gui-dark-theme-frames.py"),
+            "AIW_PROOF_MODE": mode,
+            "AIW_GUI_CAPTURE_FRONTEND": str(frontend),
+            "AIW_GUI_CAPTURE_HARNESS": str(scripts / "fixtures/gui-theme-harness.py"),
+            "AIW_GUI_CAPTURE_FRAMES": str(scripts / "capture-gui-dark-theme-frames.py"),
         }
         subprocess.run(["/usr/bin/python3", str(scripts / "capture-gui-composer.py"), str(frames)], env=env, check=True)
         for line in (frames / "capture-notes.jsonl").read_text().splitlines():

@@ -2218,7 +2218,7 @@ index 1111111..2222222 100644
             ViewState::new(
                 "demo".into(),
                 "feature".into(),
-                "amf-feature".into(),
+                "aiw-feature".into(),
                 "claude".into(),
                 "Claude".into(),
                 SessionKind::Claude,
@@ -2300,7 +2300,7 @@ index 1111111..2222222 100644
             ViewState::new(
                 "demo".into(),
                 "feature".into(),
-                "amf-feature".into(),
+                "aiw-feature".into(),
                 "claude".into(),
                 "Claude".into(),
                 SessionKind::Claude,
@@ -2601,8 +2601,8 @@ index 1111111..2222222 100644
 
     fn make_git_suggestion_review(workdir: &Path) -> App {
         run_git(workdir, &["init", "-q", "--initial-branch=main"]);
-        run_git(workdir, &["config", "user.name", "AMF Test"]);
-        run_git(workdir, &["config", "user.email", "amf@example.com"]);
+        run_git(workdir, &["config", "user.name", "AIW Test"]);
+        run_git(workdir, &["config", "user.email", "aiw@example.com"]);
         std::fs::write(workdir.join("a.rs"), "ctx\n").unwrap();
         std::fs::write(workdir.join(".gitignore"), ".claude/\n").unwrap();
         run_git(workdir, &["add", "a.rs", ".gitignore"]);

@@ -3,7 +3,7 @@
 //!
 //! Precedence across the full set of layers — feature → project → global →
 //! built-in default — lives in `src/prompts/`. This module owns only the two
-//! layers that persist in `amf.db`:
+//! layers that persist in `aiw.db`:
 //!
 //! - **Feature** scope is keyed by the feature's **workdir path**, exactly
 //!   like [`crate::db::todos::TodoScope::Worktree`]: the override belongs to
@@ -11,7 +11,7 @@
 //!   follow a feature across worktree recreation.
 //! - **Global** scope has no key — one row per `(prompt_id, harness)`.
 //!
-//! **Project** scope does not live here: it is a `.amf/prompts/` file store
+//! **Project** scope does not live here: it is a `.aiw/prompts/` file store
 //! checked into the repo (see `src/prompts/`), so a project-wide override is
 //! reviewable and shared like any other repo file.
 //!
@@ -99,6 +99,12 @@ fn harness_from_token(token: Option<String>) -> Option<AgentKind> {
 
 const COLUMNS: &str = "prompt_id, scope, scope_key, harness, template, created_at, updated_at";
 
+/// FORK: rows keyed to the removed OpenCode harness are skipped on read.
+/// Read as "unknown token" they would otherwise turn into *shared* overrides
+/// and start applying to every other harness. They stay in the table,
+/// untouched, so an older build reading the same database still sees them.
+const SKIP_LEGACY_HARNESS: &str = "COALESCE(harness, '') != 'opencode'";
+
 fn row_to_override(row: &rusqlite::Row<'_>) -> rusqlite::Result<PromptOverride> {
     let scope: String = row.get(1)?;
     let scope_key: Option<String> = row.get(2)?;
@@ -116,7 +122,8 @@ fn row_to_override(row: &rusqlite::Row<'_>) -> rusqlite::Result<PromptOverride> 
 /// Every override row, feature and global, in insertion order.
 pub fn load_all(conn: &Connection) -> Result<Vec<PromptOverride>> {
     let mut stmt = conn.prepare(&format!(
-        "SELECT {COLUMNS} FROM prompt_overrides ORDER BY created_at, rowid"
+        "SELECT {COLUMNS} FROM prompt_overrides WHERE {SKIP_LEGACY_HARNESS}
+         ORDER BY created_at, rowid"
     ))?;
     let rows = stmt
         .query_map([], row_to_override)?
@@ -128,7 +135,8 @@ pub fn load_all(conn: &Connection) -> Result<Vec<PromptOverride>> {
 pub fn load_for_prompt(conn: &Connection, prompt_id: &str) -> Result<Vec<PromptOverride>> {
     let mut stmt = conn.prepare(&format!(
         "SELECT {COLUMNS} FROM prompt_overrides
-         WHERE prompt_id = ?1 ORDER BY created_at, rowid"
+         WHERE prompt_id = ?1 AND {SKIP_LEGACY_HARNESS}
+         ORDER BY created_at, rowid"
     ))?;
     let rows = stmt
         .query_map(params![prompt_id], row_to_override)?
@@ -248,10 +256,6 @@ impl PromptOverrides {
         self.rows.is_empty()
     }
 
-    pub fn all(&self) -> &[PromptOverride] {
-        &self.rows
-    }
-
     fn position(
         &self,
         prompt_id: &str,
@@ -316,27 +320,6 @@ impl PromptOverrides {
             }),
         }
         Ok(())
-    }
-
-    /// Remove an override, writing through to the database when one is
-    /// present. Returns whether anything was removed from the in-memory copy.
-    pub fn remove(
-        &mut self,
-        conn: Option<&Connection>,
-        prompt_id: &str,
-        scope: &OverrideScope,
-        harness: Option<&AgentKind>,
-    ) -> Result<bool> {
-        if let Some(conn) = conn {
-            delete(conn, prompt_id, scope, harness)?;
-        }
-        Ok(match self.position(prompt_id, scope, harness) {
-            Some(index) => {
-                self.rows.remove(index);
-                true
-            }
-            None => false,
-        })
     }
 }
 
@@ -571,14 +554,41 @@ mod tests {
 
     #[test]
     fn unknown_harness_token_degrades_to_shared() {
+        // FORK: was 'gemini', which is now a real harness.
         let conn = conn();
         conn.execute(
             "INSERT INTO prompt_overrides
                 (prompt_id, scope, scope_key, harness, template, created_at, updated_at)
-             VALUES ('x', 'global', NULL, 'gemini', 't', datetime('now'), datetime('now'))",
+             VALUES ('x', 'global', NULL, 'not-a-harness', 't', datetime('now'), datetime('now'))",
             [],
         )
         .unwrap();
         assert_eq!(load_all(&conn).unwrap()[0].harness, None);
+    }
+
+    #[test]
+    fn legacy_opencode_overrides_are_skipped_not_shared() {
+        let conn = conn();
+        for (harness, template) in [("'opencode'", "oc-only"), ("NULL", "shared")] {
+            conn.execute(
+                &format!(
+                    "INSERT INTO prompt_overrides
+                        (prompt_id, scope, scope_key, harness, template, created_at, updated_at)
+                     VALUES ('x', 'global', NULL, {harness}, '{template}', datetime('now'), datetime('now'))"
+                ),
+                [],
+            )
+            .unwrap();
+        }
+        let all = load_all(&conn).unwrap();
+        assert_eq!(all.len(), 1, "{all:?}");
+        assert_eq!(all[0].template, "shared");
+        assert_eq!(load_for_prompt(&conn, "x").unwrap().len(), 1);
+        let set = PromptOverrides::load(Some(&conn)).unwrap();
+        assert_eq!(
+            set.effective_at("x", &OverrideScope::Global, &AgentKind::Codex),
+            Some("shared"),
+            "an OpenCode row must never stand in as a shared override"
+        );
     }
 }

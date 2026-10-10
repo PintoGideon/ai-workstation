@@ -5,9 +5,9 @@
 //! the effective template, and on save routes through a scope picker
 //! (feature / project / global) and a harness picker (shared / one harness).
 //!
-//! Feature and global overrides persist in `amf.db`
+//! Feature and global overrides persist in `aiw.db`
 //! (`crate::db::prompt_overrides`); project overrides persist in the repo's
-//! `amf.json` (`ExtensionConfig::prompt_overrides`). Nothing here validates a
+//! `aiw.json` (`ExtensionConfig::prompt_overrides`). Nothing here validates a
 //! template — a dropped or unknown `{{token}}` is saved and rendered as-is.
 
 use std::path::{Path, PathBuf};
@@ -55,7 +55,7 @@ impl App {
         }
     }
 
-    /// The DB override view (feature + global rows) and the project `amf.json`
+    /// The DB override view (feature + global rows) and the project `aiw.json`
     /// override map, loaded fresh.
     fn prompt_override_sources(
         &self,

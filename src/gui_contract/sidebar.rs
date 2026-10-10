@@ -14,9 +14,9 @@
 //! | Signal | Source in the GUI |
 //! | --- | --- |
 //! | Context window, session status text, token usage | The shared session-status collector (`App::sync_session_status_background`), run by this process |
-//! | Thinking | The hooks' `/tmp/amf-thinking` marker files (Claude/Codex/Pi) and the OpenCode sidebar cache, the TUI's own non-IPC sources |
+//! | Thinking | The hooks' `/tmp/aiw-thinking` marker files (Claude/Codex/Pi), the TUI's own non-IPC sources |
 //! | Waiting for input / pending input | The hooks' notification files on disk, read without consuming them |
-//! | Open PR + unresolved threads | The shared dashboard PR sweep (`App::sync_active_prs_background`), run by this process |
+//! | Open PR + unresolved threads | The shared dashboard PR sweep (`App::sync_active_prs_background`), run by this process when PR Triage opens (FORK(no-cloud): never on a timer) |
 //! | Merged/closed PR | `pr_terminal_state` in SQLite plus this process's own sweep |
 //!
 //! Deliberately absent (TUI-process state with no shared form): the attention
@@ -90,7 +90,7 @@ pub struct SidebarFeature {
     pub waiting_for_input: bool,
     /// A waiting request other than a diff review: the TUI's `?` marker.
     pub pending_input: bool,
-    /// Editor windows AMF launched for this feature (`gui_sessions`).
+    /// Editor windows AIW launched for this feature (`gui_sessions`).
     pub editors: Vec<crate::gui_sessions::FeatureEditor>,
 }
 
@@ -163,7 +163,6 @@ pub struct CollapseTarget {
 #[derive(Debug, Default)]
 pub struct SidebarClock {
     last_session_status: Option<Instant>,
-    last_pr_sweep: Option<Instant>,
 }
 
 /// Build the sidebar projection for `projects` (the snapshot's own,
@@ -319,7 +318,7 @@ pub(crate) fn project_sidebar(app: &App, projects: &[Project]) -> SidebarSnapsho
 struct NotificationHeader {
     #[serde(alias = "type")]
     notification_type: Option<String>,
-    amf_session: Option<String>,
+    aiw_session: Option<String>,
     cwd: Option<String>,
     message: Option<String>,
     #[serde(skip)]
@@ -346,7 +345,7 @@ impl From<NotificationHeader> for WaitingRequest {
 
 /// Requests waiting on disk, per feature id, oldest first. Reads the same
 /// two places the TUI's file scan does (each feature's
-/// `.claude/notifications/`, then the global directory matched by AMF
+/// `.claude/notifications/`, then the global directory matched by AIW
 /// session, then cwd) and never removes, answers or collapses anything.
 pub(crate) fn waiting_requests(projects: &[Project]) -> HashMap<String, Vec<WaitingRequest>> {
     let mut waiting: HashMap<String, Vec<WaitingRequest>> = HashMap::new();
@@ -359,10 +358,10 @@ pub(crate) fn waiting_requests(projects: &[Project]) -> HashMap<String, Vec<Wait
                 .push(header.into());
         }
     }
-    let global = crate::project::amf_config_dir().join("notifications");
+    let global = crate::project::aiw_config_dir().join("notifications");
     for header in read_headers(&global, now) {
         let cwd = PathBuf::from(header.cwd.as_deref().unwrap_or_default());
-        if let Some(feature_id) = owning_feature(projects, header.amf_session.as_deref(), &cwd) {
+        if let Some(feature_id) = owning_feature(projects, header.aiw_session.as_deref(), &cwd) {
             waiting.entry(feature_id).or_default().push(header.into());
         }
     }
@@ -397,11 +396,11 @@ fn read_headers(dir: &Path, now: SystemTime) -> Vec<NotificationHeader> {
 }
 
 /// `App::project_feature_for_message`'s rule: the feature whose tmux session
-/// is the hook's `AMF_SESSION`, else the one whose workdir best contains (or
+/// is the hook's `AIW_SESSION`, else the one whose workdir best contains (or
 /// is contained by) the hook's cwd.
-fn owning_feature(projects: &[Project], amf_session: Option<&str>, cwd: &Path) -> Option<String> {
+fn owning_feature(projects: &[Project], aiw_session: Option<&str>, cwd: &Path) -> Option<String> {
     let features = || projects.iter().flat_map(|project| &project.features);
-    if let Some(session) = amf_session.filter(|session| !session.is_empty())
+    if let Some(session) = aiw_session.filter(|session| !session.is_empty())
         && let Some(feature) = features().find(|feature| feature.tmux_session == session)
     {
         return Some(feature.id.clone());
@@ -462,16 +461,16 @@ impl GuiHandle {
             app.sync_session_status_background();
             clock.last_session_status = Some(Instant::now());
         }
-        if app.active_pr_bg.is_none()
-            && due(clock.last_pr_sweep, crate::app::ACTIVE_PR_SYNC_INTERVAL)
-        {
-            app.sync_active_prs_background();
-            // A workspace with no Git features yet starts no sweep; ask again
-            // on the next poll rather than five minutes after the first one.
-            if app.active_pr_bg.is_some() {
-                clock.last_pr_sweep = Some(Instant::now());
-            }
-        }
+        // FORK(no-cloud): no timed `gh` sweep for PR badges; the GUI refreshes
+        // them when PR Triage opens (`gui_pr_triage`), and otherwise shows the
+        // last-known state.
+    }
+
+    /// FORK(no-cloud): start the PR badge sweep (`gh`) on an explicit user
+    /// action — the desktop shell calls this when PR Triage opens. There is no
+    /// timed sweep.
+    pub fn refresh_pr_badges(&mut self) {
+        self.app.sync_active_prs_background();
     }
 
     /// Persist a project or feature row's collapse state in the shared store,
@@ -573,7 +572,7 @@ mod tests {
             false,
         );
         feature.id = id.to_string();
-        feature.tmux_session = format!("amf-sidebar-test-{}-{id}", std::process::id());
+        feature.tmux_session = format!("aiw-sidebar-test-{}-{id}", std::process::id());
         feature.status = ProjectStatus::Idle;
         feature.sessions = sessions;
         feature
@@ -781,7 +780,7 @@ mod tests {
     fn an_open_pr_outranks_a_terminal_one_and_terminal_state_is_read_from_the_db() {
         let dir = tempfile::tempdir().unwrap();
         let tmp_db = tempfile::NamedTempFile::new().unwrap();
-        let db = crate::db::AmfDb::open(tmp_db.path()).unwrap();
+        let db = crate::db::AiwDb::open(tmp_db.path()).unwrap();
         let repo = dir.path().to_string_lossy().to_string();
         db.save_pr_terminal_state(
             &repo,
@@ -881,7 +880,7 @@ mod tests {
     }
 
     #[test]
-    fn global_notifications_resolve_by_amf_session_then_deepest_workdir() {
+    fn global_notifications_resolve_by_aiw_session_then_deepest_workdir() {
         let dir = tempfile::tempdir().unwrap();
         let outer = feature("outer", dir.path(), vec![]);
         let inner = feature("inner", &dir.path().join("nested"), vec![]);
@@ -910,15 +909,15 @@ mod tests {
         let mut stopped = feature("stopped", dir.path(), vec![]);
         stopped.status = ProjectStatus::Stopped;
         let markers = [running.tmux_session.clone(), stopped.tmux_session.clone()];
-        std::fs::create_dir_all("/tmp/amf-thinking").unwrap();
+        std::fs::create_dir_all("/tmp/aiw-thinking").unwrap();
         for marker in &markers {
-            std::fs::write(Path::new("/tmp/amf-thinking").join(marker), "").unwrap();
+            std::fs::write(Path::new("/tmp/aiw-thinking").join(marker), "").unwrap();
         }
         let app = app_for(store_with(vec![running, stopped], dir.path()));
 
         let sidebar = project_sidebar(&app, &app.store.projects);
         for marker in &markers {
-            let _ = std::fs::remove_file(Path::new("/tmp/amf-thinking").join(marker));
+            let _ = std::fs::remove_file(Path::new("/tmp/aiw-thinking").join(marker));
         }
 
         assert!(sidebar.features["running"].thinking);
@@ -929,7 +928,7 @@ mod tests {
     fn custom_sessions_carry_their_configured_icons() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(
-            dir.path().join("amf.json"),
+            dir.path().join("aiw.json"),
             r#"{"custom_sessions":[{"name":"Dev server","icon":"S","icon_nerd":"nf-md-server"}]}"#,
         )
         .unwrap();
@@ -964,7 +963,7 @@ mod tests {
             dir.path(),
         );
         let tmp_db = tempfile::NamedTempFile::new().unwrap();
-        let db = crate::db::AmfDb::open(tmp_db.path()).unwrap();
+        let db = crate::db::AiwDb::open(tmp_db.path()).unwrap();
         db.save_store(&store).unwrap();
         let mut tmux = MockTmuxOps::new();
         // Mutations broadcast a live snapshot; nothing is running here.
@@ -991,7 +990,7 @@ mod tests {
         gui.set_collapsed(feature, false).unwrap();
 
         // What a TUI process opening the same database loads.
-        let tui = crate::db::AmfDb::open(tmp_db.path())
+        let tui = crate::db::AiwDb::open(tmp_db.path())
             .unwrap()
             .load_store()
             .unwrap();
@@ -1002,7 +1001,7 @@ mod tests {
         let mut changed = tui.clone();
         changed.projects[0].collapsed = false;
         changed.projects[0].features[0].collapsed = true;
-        crate::db::AmfDb::open(tmp_db.path())
+        crate::db::AiwDb::open(tmp_db.path())
             .unwrap()
             .save_store(&changed)
             .unwrap();

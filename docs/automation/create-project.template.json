@@ -1,6 +1,6 @@
 {
   "path": "/absolute/path/to/repo/or/directory",
-  "project_name": "name-for-the-amf-project",
+  "project_name": "name-for-the-aiw-project",
   "preferred_agent": null,
   "dry_run": false
 }

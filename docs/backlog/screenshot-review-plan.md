@@ -4,7 +4,7 @@
 - **Owner:** unassigned
 - **Relates to:** ANSI pane capture (`src/tmux.rs:1704`
   `capture_pane_ansi`); XDG config/state resolution
-  (`src/project.rs:1217` `amf_config_dir`, `src/ipc.rs:13`
+  (`src/project.rs:1217` `aiw_config_dir`, `src/ipc.rs:13`
   `socket_path`, `src/debug.rs:47`); automation IPC
   (`src/automation.rs`, `docs/automation/README.md`); skills
   (`.claude/skills/`, `skills/`); no-tmux Docker harness
@@ -12,23 +12,23 @@
 
 ## Why / problem
 
-AMF is a ratatui TUI, so a change can't be "seen" the way a web page can.
-Today, verifying an AMF UI change means the human launches `amf` and
+AIW is a ratatui TUI, so a change can't be "seen" the way a web page can.
+Today, verifying an AIW UI change means the human launches `aiw` and
 looks. We want to ask an agent (Claude, Codex, …) to build something and
-then — **only when explicitly asked** — have the agent run AMF itself and
+then — **only when explicitly asked** — have the agent run AIW itself and
 return **screenshots** (later GIF/video) proving the feature works, with
 zero risk to the human's real projects or running dashboard.
 
 The hard pieces already exist in-repo: `tmux capture-pane -e -p` yields
 ANSI-colored pane text, and config/socket/log paths all resolve through
 the `dirs` crate, which honors `XDG_CONFIG_HOME` / `XDG_STATE_HOME`. That
-means an **isolated scratch AMF instance needs no Rust changes** — env
+means an **isolated scratch AIW instance needs no Rust changes** — env
 vars alone give it a private DB, IPC socket, and logs. The only genuinely
 new code is a renderer that turns captured ANSI frames into PNGs.
 
 ## Scope decisions (settled)
 
-- **Instance target:** a fresh, throwaway AMF instance (own scratch
+- **Instance target:** a fresh, throwaway AIW instance (own scratch
   `XDG_CONFIG_HOME` + `XDG_STATE_HOME` + tmux session), never the human's
   real running session.
 - **Rendering fidelity:** ship the **lightweight Python + Pillow** renderer
@@ -44,17 +44,17 @@ New, self-contained tooling under `scripts/dev/screenshot/`, driven by a
 new skill. No changes to existing Rust for the lightweight path.
 
 1. **Isolation via env.** Scratch root
-   `${AMF_SHOT_DIR:-/tmp/amf-shots}/<ts>/` with `config/`, `state/`, and an
+   `${AIW_SHOT_DIR:-/tmp/aiw-shots}/<ts>/` with `config/`, `state/`, and an
    optional throwaway git repo. Export `XDG_CONFIG_HOME` / `XDG_STATE_HOME`
    at it; **keep the real `HOME`** so `claude` auth + git identity work.
-   Distinct tmux session name (`amf-shot-<ts>`) + distinct XDG dirs ⇒ the
-   real `~/.config/amf/amf.db`, IPC socket, and any live `amf` are
+   Distinct tmux session name (`aiw-shot-<ts>`) + distinct XDG dirs ⇒ the
+   real `~/.config/ai_workstation/aiw.db`, IPC socket, and any live `aiw` are
    untouched.
-2. **Harness.** `tmux new-session -d -s amf-shot-<ts> -x 120 -y 40` (fixed
-   geometry ⇒ reproducible images), send the isolated `amf` invocation,
+2. **Harness.** `tmux new-session -d -s aiw-shot-<ts> -x 120 -y 40` (fixed
+   geometry ⇒ reproducible images), send the isolated `aiw` invocation,
    poll `capture-pane -p` until a known dashboard string appears
    (wait-for-ready, not a blind sleep).
-3. **Seeding (optional).** `amf automation create-project|create-feature`
+3. **Seeding (optional).** `aiw automation create-project|create-feature`
    against the scratch socket to populate demo state before capture.
 4. **Scenario → shots.** A newline-delimited scenario of `send-keys` steps;
    after each labeled step, `capture-pane -e -p` → `render_ansi.py` →
@@ -84,9 +84,9 @@ Epics with no unmet needs can run **in parallel**.
 | G. Docs + high-fidelity `vhs` path | P2 | B | after B lands |
 
 **Parallel track 1:** Epic A (renderer) — pure Python, testable against a
-captured sample dump with no AMF involvement.
+captured sample dump with no AIW involvement.
 **Parallel track 2:** Epic B (harness/driver) — shell + tmux, testable by
-launching isolated AMF and dumping raw captures, no renderer needed.
+launching isolated AIW and dumping raw captures, no renderer needed.
 A and B are the two independent P0 tracks; everything else layers on top.
 
 ## Progress
@@ -103,15 +103,15 @@ A and B are the two independent P0 tracks; everything else layers on top.
 - [x] Verify against a hand-captured sample: colors + layout faithful.
 
 ### Epic B — isolated harness + driver (P0, independent)
-- [x] `scripts/dev/screenshot/amf-capture.sh`: create scratch root, export
+- [x] `scripts/dev/screenshot/aiw-capture.sh`: create scratch root, export
       `XDG_CONFIG_HOME`/`XDG_STATE_HOME`, keep real `HOME`.
-- [x] Launch AMF in `tmux new-session ... -x 120 -y 40`; wait-for-ready by
+- [x] Launch AIW in `tmux new-session ... -x 120 -y 40`; wait-for-ready by
       polling `capture-pane -p` for a known string (bounded timeout).
 - [x] Per-step `capture-pane -e -p` → numbered `.ansi` dump (PNG rendering
       wired up once Epic C's driver integration lands; renderer itself is
       done per Epic A).
 - [x] Teardown: kill scratch tmux session; `--keep` to preserve scratch
-      root; confirm real AMF/tmux untouched.
+      root; confirm real AIW/tmux untouched.
 - [x] Flags: `--scenario` (minimal `key:`/`wait:`/`shot:` grammar),
       `--out-dir`, `--geometry WxH`, `--keep`.
 
@@ -122,7 +122,7 @@ A and B are the two independent P0 tracks; everything else layers on top.
 - [x] Ship `scenarios/dashboard-tour.txt` (+1 more) as copyable templates.
 
 ### Epic D — seeding via automation IPC (P1; needs B)
-- [x] Driver `--seed <automation-json>` runs `amf automation
+- [x] Driver `--seed <automation-json>` runs `aiw automation
       create-project|create-feature` against the scratch socket.
 - [x] Example seed payloads under `scenarios/` reusing
       `docs/automation/*.template.json` shape.
@@ -132,7 +132,7 @@ A and B are the two independent P0 tracks; everything else layers on top.
       alone has nothing in it for most scenarios to show. Added a second
       `--seed-feature <file>`, always applied as `create-feature` right
       after `--seed`, so a project and its first feature can be seeded
-      together in one scratch run. → `scripts/dev/screenshot/amf-capture.sh`,
+      together in one scratch run. → `scripts/dev/screenshot/aiw-capture.sh`,
       `scripts/dev/screenshot/README.md`.
 
 ### Epic E — GIF assembly (P2; needs A, B)
@@ -141,15 +141,15 @@ A and B are the two independent P0 tracks; everything else layers on top.
 - [x] Off by default; verify a multi-step scenario yields a valid GIF.
 
 ### Epic F — screenshot skill (P1; needs B, C)
-- [x] This repository's `.claude/skills/amf-screenshot/SKILL.md`: invoke only
+- [x] This repository's `.claude/skills/aiw-screenshot/SKILL.md`: invoke only
       when the user asks for proof a feature works; author a scenario for the
       just-built feature; run the driver; return PNG paths to the user; build a
       GIF only on request.
-- [x] This repository's native `.agents/skills/amf-screenshot/SKILL.md` uses
+- [x] This repository's native `.agents/skills/aiw-screenshot/SKILL.md` uses
       the same isolated capture, scenario, rendering, and verification
       workflow, then returns direct image previews and local file links in
-      place of Claude's Artifact tool. AMF does not inject this
-      AMF-development-only workflow into managed projects.
+      place of Claude's Artifact tool. AIW does not inject this
+      AIW-development-only workflow into managed projects.
 - [x] Document isolation guarantees + fixed geometry in the skill.
 - [x] **Follow-up, from real use.** Returning raw PNG/GIF paths wasn't a
       usable deliverable — many terminal environments don't render images
@@ -159,7 +159,7 @@ A and B are the two independent P0 tracks; everything else layers on top.
       chrome, images inlined as base64 so nothing external loads) via the
       `Artifact` tool, loading `artifact-design` first, and returns the
       published URL as the primary deliverable instead of file paths. →
-      `.claude/skills/amf-screenshot/SKILL.md`.
+      `.claude/skills/aiw-screenshot/SKILL.md`.
 
 - [x] **Follow-up, from real use.** The two-job CI workflow (unprivileged
       capture + a `screenshot-pages` environment holding the Cloudflare token)
@@ -173,11 +173,11 @@ A and B are the two independent P0 tracks; everything else layers on top.
       run, `gh run download`s it, builds the CSP-locked gallery with the new
       `build_static_gallery.py`, and runs `wrangler pages deploy` locally with
       a `CLOUDFLARE_API_TOKEN` in the environment (kept in
-      `~/.secrets/cf-amf-pages.env`, sourced by the `amf-publish-screenshots`
+      `~/.secrets/cf-aiw-pages.env`, sourced by the `aiw-publish-screenshots`
       shell wrapper; `wrangler login` also works but is unreliable) and
       `CLOUDFLARE_ACCOUNT_ID` set. No GitHub environment, no per-run approval,
       and no Cloudflare credential ever enters CI. →
-      `.github/workflows/amf-screenshot-artifact.yml`,
+      `.github/workflows/aiw-screenshot-artifact.yml`,
       `scripts/dev/screenshot/publish-pages.sh`,
       `scripts/dev/screenshot/build_static_gallery.py`.
 
@@ -190,9 +190,9 @@ A and B are the two independent P0 tracks; everything else layers on top.
 ## Verification
 
 1. Run `render_ansi.py` on a captured sample dump → inspect PNG fidelity.
-2. `amf-capture.sh --scenario scenarios/dashboard-tour.txt --out-dir
-   /tmp/amf-shots/test` → numbered PNGs produced; confirm real
-   `~/.config/amf/amf.db` and any live `amf` session untouched.
+2. `aiw-capture.sh --scenario scenarios/dashboard-tour.txt --out-dir
+   /tmp/aiw-shots/test` → numbered PNGs produced; confirm real
+   `~/.config/ai_workstation/aiw.db` and any live `aiw` session untouched.
 3. Re-run with `--gif` → animated GIF produced without ffmpeg.
 4. Skill dry-run from both Claude and Codex sessions: ask the agent to "prove
    the dashboard loads"; confirm it invokes the skill, runs the driver, and
@@ -204,16 +204,16 @@ A and B are the two independent P0 tracks; everything else layers on top.
   ad-hoc per request by the agent? (Plan ships a couple of versioned
   examples; agent can author throwaway ones.)
 - Do we ever need shots of **real agent output** (a live `claude` run), or
-  only AMF's own UI surfaces? (Plan assumes UI surfaces; real-agent shots
+  only AIW's own UI surfaces? (Plan assumes UI surfaces; real-agent shots
   would need real `HOME`/auth and are slower/nondeterministic.)
-- Future: a first-class `amf screenshot` subcommand that captures AMF's
+- Future: a first-class `aiw screenshot` subcommand that captures AIW's
   *own* embedded panes internally — worth it, or is the external driver
   enough? (Deferred; external driver ships value first.)
 
 ## Reasoning / when to build
 
 Build when we want reviewable proof-of-work from agents without the human
-launching AMF. The two P0 epics (A renderer, B harness) are independent
+launching AIW. The two P0 epics (A renderer, B harness) are independent
 and small — a single afternoon each — and together deliver the core
 "screenshot on demand" capability. C/D/F make it agent-usable unattended;
 E/G are polish. The env-isolation insight (no Rust changes needed) is what

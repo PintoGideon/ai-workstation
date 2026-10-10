@@ -111,7 +111,7 @@ fn pr_review_toggle_to_session_jumps_and_stashes_state() {
 
     match &app.mode {
         AppMode::Viewing(view) => {
-            assert_eq!(view.session, "amf-my-feat");
+            assert_eq!(view.session, "aiw-my-feat");
             assert_eq!(view.session_label, "PR Triage");
         }
         other => panic!("expected Viewing, got {:?}", std::mem::discriminant(other)),
@@ -120,7 +120,7 @@ fn pr_review_toggle_to_session_jumps_and_stashes_state() {
         .pr_review_return
         .as_ref()
         .expect("pane state should be stashed");
-    assert_eq!(stash.session, "amf-my-feat");
+    assert_eq!(stash.session, "aiw-my-feat");
     assert_eq!(stash.state.selected, 1);
     assert_eq!(stash.state.detail_scroll, 3);
 }
@@ -194,14 +194,14 @@ fn pr_review_return_to_pane_ignores_mismatched_session() {
 
     // Simulate having navigated away to an unrelated session's view.
     if let AppMode::Viewing(view) = &mut app.mode {
-        view.session = "amf-other-feat".to_string();
+        view.session = "aiw-other-feat".to_string();
         view.window = "claude".to_string();
     }
 
     app.pr_review_return_to_pane();
 
     assert!(
-        matches!(&app.mode, AppMode::Viewing(view) if view.session == "amf-other-feat"),
+        matches!(&app.mode, AppMode::Viewing(view) if view.session == "aiw-other-feat"),
         "should not have jumped into the stashed pane from an unrelated session"
     );
     assert!(
@@ -238,9 +238,9 @@ fn pr_review_load_investigations_reconciles_a_stuck_running_row() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
 
-    // A run that never finished (the process died / AMF restarted) plus a
+    // A run that never finished (the process died / AIW restarted) plus a
     // completed one, both for PR 42 on this project.
     let stuck = PrInvestigation::new_running(
         "proj-1",
@@ -307,7 +307,7 @@ fn pr_investigation_run_never_enters_the_writable_fix_path() {
 
     let db_dir = TempDir::new().unwrap();
     let mut app = App::new_for_test(store, Box::new(MockTmuxOps::new()), Box::new(worktree));
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     enter_pr_review_for_feature(&mut app, 2);
     assert!(
         !matches!(app.selection, Selection::Session(..)),
@@ -365,7 +365,7 @@ fn pr_investigation_dismiss_action_flips_status_in_memory_and_on_disk() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     enter_pr_review_for_feature(&mut app, 3);
 
     let mut inv = PrInvestigation::new_running(
@@ -567,7 +567,8 @@ fn pr_review_inject_fix_also_stashes_return_state() {
 
     let db_dir = TempDir::new().unwrap();
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     enter_pr_review_for_feature(&mut app, 2);
     if let AppMode::PrReview(state) = &mut app.mode {
         state.selected = 1;
@@ -766,7 +767,8 @@ fn pr_review_inject_fix_targets_dialogs_original_comment_after_selection_moves()
     tmux.expect_session_exists().returning(|_| true);
     let db_dir = TempDir::new().unwrap();
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     enter_pr_review_for_feature(&mut app, 2);
     if let AppMode::PrReview(state) = &mut app.mode {
         state.selected = 1; // comment id 2
@@ -827,7 +829,8 @@ fn single_comment_fix_keeps_a_batched_comments_in_memory_batch_id() {
     tmux.expect_session_exists().returning(|_| true);
     let db_dir = TempDir::new().unwrap();
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     enter_pr_review_for_feature(&mut app, 2);
 
     // Comment id 1 was resolved as part of an earlier batch; comment id 2 is
@@ -915,7 +918,7 @@ fn sample_ai_review_finding(body: &str) -> crate::app::ai_review::AiReviewFindin
 fn ai_review_finding_fix_costs_correlate_to_resolved_batched_comments() {
     let db_file = tempfile::NamedTempFile::new().unwrap();
     let mut app = pr_review_test_app();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
 
     // A cached review with two code comments (ids 1 and 2, on src/file1.rs:1
     // and src/file2.rs:2) to correlate findings against.
@@ -1094,7 +1097,7 @@ fn ai_review_model_picker_backs_through_custom_editor_and_rebuilds_for_new_harne
 
     match &app.mode {
         AppMode::AiReview(state) => {
-            assert_eq!(state.harness, Some(AgentKind::Opencode));
+            assert_eq!(state.harness, Some(AgentKind::Codex));
             assert!(state.harness_pick.is_none());
             assert!(state.model.is_none());
             assert!(!state.model_picked);
@@ -1116,7 +1119,7 @@ fn ai_review_model_picker_backs_through_custom_editor_and_rebuilds_for_new_harne
 /// `harness_changed` used to compare only against the immediately preceding
 /// screen, so this second confirm looked unchanged and fell through to
 /// `start_ai_pr_review`'s `AppConfig::review_model` fallback — reseeding the
-/// Claude-only "sonnet" preset as a custom Opencode model, exactly what the
+/// Claude-only "sonnet" preset as a custom Codex model, exactly what the
 /// first switch had correctly cleared.
 #[test]
 fn ai_review_harness_pick_reconfirm_after_backing_out_does_not_reseed_stale_model() {
@@ -1146,14 +1149,14 @@ fn ai_review_harness_pick_reconfirm_after_backing_out_does_not_reseed_stale_mode
     }
 
     // Back out of the model picker (Claude -> harness picker) and switch to
-    // Opencode: this is the already-covered case, so the model resets to
+    // Codex: this is the already-covered case, so the model resets to
     // fresh defaults instead of "sonnet".
     crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Esc)).unwrap();
     crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Down)).unwrap();
     app.accept_selected_ai_review_harness_for_test();
     match &app.mode {
         AppMode::AiReview(state) => {
-            assert_eq!(state.harness, Some(AgentKind::Opencode));
+            assert_eq!(state.harness, Some(AgentKind::Codex));
             let pick = state.model_pick.as_ref().expect("rebuilt model picker");
             assert!(pick.custom_input.is_empty());
         }
@@ -1161,7 +1164,7 @@ fn ai_review_harness_pick_reconfirm_after_backing_out_does_not_reseed_stale_mode
     }
 
     // Back out a second time without picking a model, and reconfirm the same
-    // (already-switched-to) Opencode harness.
+    // (already-switched-to) Codex harness.
     crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Esc)).unwrap();
     match &app.mode {
         AppMode::AiReview(state) => {
@@ -1169,7 +1172,7 @@ fn ai_review_harness_pick_reconfirm_after_backing_out_does_not_reseed_stale_mode
                 .harness_pick
                 .as_ref()
                 .expect("should return to harness picker");
-            assert_eq!(pick.agents[pick.selected], AgentKind::Opencode);
+            assert_eq!(pick.agents[pick.selected], AgentKind::Codex);
         }
         _ => panic!("expected AI Review pane"),
     }
@@ -1177,7 +1180,7 @@ fn ai_review_harness_pick_reconfirm_after_backing_out_does_not_reseed_stale_mode
 
     match &app.mode {
         AppMode::AiReview(state) => {
-            assert_eq!(state.harness, Some(AgentKind::Opencode));
+            assert_eq!(state.harness, Some(AgentKind::Codex));
             let pick = state
                 .model_pick
                 .as_ref()
@@ -1186,7 +1189,7 @@ fn ai_review_harness_pick_reconfirm_after_backing_out_does_not_reseed_stale_mode
             assert_eq!(pick.selected, 0);
             assert!(
                 pick.custom_input.is_empty(),
-                "must not reseed the Claude-only \"sonnet\" default as an Opencode custom model"
+                "must not reseed the Claude-only \"sonnet\" default as an Codex custom model"
             );
         }
         _ => panic!("expected AI Review pane"),
@@ -1195,7 +1198,7 @@ fn ai_review_harness_pick_reconfirm_after_backing_out_does_not_reseed_stale_mode
 
 /// Broader regression covering the reviewer's general "repeated navigation"
 /// concern rather than just a single back-and-forth: hops through three
-/// harnesses (Claude -> Opencode -> Codex -> Opencode -> Claude), backing out
+/// harnesses (Claude -> Codex -> Pi -> Codex -> Claude), backing out
 /// to the harness picker between every hop. Every switch away from the
 /// original Claude harness must land on fresh `Default`/empty model defaults
 /// (never a stale non-Claude value), and switching *back* to the original
@@ -1229,25 +1232,25 @@ fn ai_review_harness_pick_survives_multi_hop_navigation() {
         });
     }
 
-    // Claude -> Opencode: first switch away from the original harness.
-    crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Esc)).unwrap();
-    crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Down)).unwrap();
-    app.accept_selected_ai_review_harness_for_test();
-    match &app.mode {
-        AppMode::AiReview(state) => {
-            assert_eq!(state.harness, Some(AgentKind::Opencode));
-            assert!(state.model_pick.as_ref().unwrap().custom_input.is_empty());
-        }
-        _ => panic!("expected AI Review pane"),
-    }
-
-    // Opencode -> Codex: still away from the original, still fresh defaults.
+    // Claude -> Codex: first switch away from the original harness.
     crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Esc)).unwrap();
     crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Down)).unwrap();
     app.accept_selected_ai_review_harness_for_test();
     match &app.mode {
         AppMode::AiReview(state) => {
             assert_eq!(state.harness, Some(AgentKind::Codex));
+            assert!(state.model_pick.as_ref().unwrap().custom_input.is_empty());
+        }
+        _ => panic!("expected AI Review pane"),
+    }
+
+    // Codex -> Pi: still away from the original, still fresh defaults.
+    crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Esc)).unwrap();
+    crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Down)).unwrap();
+    app.accept_selected_ai_review_harness_for_test();
+    match &app.mode {
+        AppMode::AiReview(state) => {
+            assert_eq!(state.harness, Some(AgentKind::Pi));
             let pick = state.model_pick.as_ref().expect("rebuilt model picker");
             assert_eq!(pick.rows, vec![ModelPickRow::Default, ModelPickRow::Custom]);
             assert!(pick.custom_input.is_empty());
@@ -1255,20 +1258,20 @@ fn ai_review_harness_pick_survives_multi_hop_navigation() {
         _ => panic!("expected AI Review pane"),
     }
 
-    // Codex -> Opencode: back to a previously-visited harness, still not the
+    // Pi -> Codex: back to a previously-visited harness, still not the
     // original — must not resurrect anything stale.
     crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Esc)).unwrap();
     crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Up)).unwrap();
     app.accept_selected_ai_review_harness_for_test();
     match &app.mode {
         AppMode::AiReview(state) => {
-            assert_eq!(state.harness, Some(AgentKind::Opencode));
+            assert_eq!(state.harness, Some(AgentKind::Codex));
             assert!(state.model_pick.as_ref().unwrap().custom_input.is_empty());
         }
         _ => panic!("expected AI Review pane"),
     }
 
-    // Opencode -> Claude: switching back to the *original* harness should
+    // Codex -> Claude: switching back to the *original* harness should
     // restore the configured "sonnet" default, not force an empty Custom.
     crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Esc)).unwrap();
     crate::handlers::handle_ai_review_key(&mut app, ke(KeyCode::Up)).unwrap();
@@ -1540,9 +1543,9 @@ fn cancel_review_memory_bootstrap_returns_to_picker_without_dropping_the_bg_resu
 fn open_review_memory_compact_confirm_reads_doc_and_opens() {
     let tmp = TempDir::new().unwrap();
     let repo = tmp.path().to_path_buf();
-    std::fs::create_dir_all(repo.join(".amf")).unwrap();
+    std::fs::create_dir_all(repo.join(".aiw")).unwrap();
     std::fs::write(
-        repo.join(".amf").join("review-memory.md"),
+        repo.join(".aiw").join("review-memory.md"),
         "# Review memory\n\n## Tests\n- One\n- Two\n",
     )
     .unwrap();
@@ -1592,9 +1595,9 @@ fn open_review_memory_compact_confirm_reads_doc_and_opens() {
 fn open_review_memory_compact_confirm_reachable_from_pr_triage() {
     let tmp = TempDir::new().unwrap();
     let repo = tmp.path().to_path_buf();
-    std::fs::create_dir_all(repo.join(".amf")).unwrap();
+    std::fs::create_dir_all(repo.join(".aiw")).unwrap();
     std::fs::write(
-        repo.join(".amf").join("review-memory.md"),
+        repo.join(".aiw").join("review-memory.md"),
         "# Review memory\n\n## Tests\n- One\n",
     )
     .unwrap();
@@ -1637,9 +1640,9 @@ fn open_review_memory_compact_confirm_reachable_from_pr_triage() {
 fn open_review_memory_compact_confirm_reachable_from_the_dashboard() {
     let tmp = TempDir::new().unwrap();
     let repo = tmp.path().to_path_buf();
-    std::fs::create_dir_all(repo.join(".amf")).unwrap();
+    std::fs::create_dir_all(repo.join(".aiw")).unwrap();
     std::fs::write(
-        repo.join(".amf").join("review-memory.md"),
+        repo.join(".aiw").join("review-memory.md"),
         "# Review memory\n\n## Tests\n- One\n- Two\n",
     )
     .unwrap();
@@ -1730,9 +1733,9 @@ fn review_memory_compact_toggle_scope_rereads_the_selected_doc() {
     let tmp = TempDir::new().unwrap();
     let repo = tmp.path().join("repo");
     let global_doc = tmp.path().join("global-review-memory.md");
-    std::fs::create_dir_all(repo.join(".amf")).unwrap();
+    std::fs::create_dir_all(repo.join(".aiw")).unwrap();
     std::fs::write(
-        repo.join(".amf").join("review-memory.md"),
+        repo.join(".aiw").join("review-memory.md"),
         "# Review memory\n\n## Tests\n- Project one\n- Project two\n",
     )
     .unwrap();
@@ -1936,7 +1939,7 @@ fn poll_review_memory_compact_bg_success_opens_review_dialog() {
     app.review_memory_compact_bg = Some(rx);
     app.review_memory_compact_pending = Some(crate::app::CompactRunState {
         origin,
-        path: std::path::PathBuf::from("/tmp/test-workdir/.amf/review-memory.md"),
+        path: std::path::PathBuf::from("/tmp/test-workdir/.aiw/review-memory.md"),
         scope: crate::app::review_memory::MemoryScope::Global,
     });
     app.mode = AppMode::ReviewMemoryCompactRunning(crate::app::CompactRunView {
@@ -2001,7 +2004,7 @@ fn poll_review_memory_compact_bg_nothing_to_compact_returns_to_picker_with_messa
     app.review_memory_compact_bg = Some(rx);
     app.review_memory_compact_pending = Some(crate::app::CompactRunState {
         origin,
-        path: std::path::PathBuf::from("/tmp/test-workdir/.amf/review-memory.md"),
+        path: std::path::PathBuf::from("/tmp/test-workdir/.aiw/review-memory.md"),
         scope: crate::app::review_memory::MemoryScope::Project,
     });
     app.mode = AppMode::ReviewMemoryCompactRunning(crate::app::CompactRunView {
@@ -2031,7 +2034,7 @@ fn poll_review_memory_compact_bg_error_still_returns_to_picker() {
     app.review_memory_compact_bg = Some(rx);
     app.review_memory_compact_pending = Some(crate::app::CompactRunState {
         origin,
-        path: std::path::PathBuf::from("/tmp/test-workdir/.amf/review-memory.md"),
+        path: std::path::PathBuf::from("/tmp/test-workdir/.aiw/review-memory.md"),
         scope: crate::app::review_memory::MemoryScope::Project,
     });
     app.mode = AppMode::ReviewMemoryCompactRunning(crate::app::CompactRunView {
@@ -2077,7 +2080,7 @@ fn cancel_review_memory_compact_does_not_reopen_review_dialog_over_the_user() {
     app.review_memory_compact_bg = Some(rx);
     app.review_memory_compact_pending = Some(crate::app::CompactRunState {
         origin,
-        path: std::path::PathBuf::from("/tmp/test-workdir/.amf/review-memory.md"),
+        path: std::path::PathBuf::from("/tmp/test-workdir/.aiw/review-memory.md"),
         scope: crate::app::review_memory::MemoryScope::Project,
     });
     app.mode = AppMode::ReviewMemoryCompactRunning(crate::app::CompactRunView {
@@ -2177,7 +2180,7 @@ fn pr_review_compact_write_overwrites_file_and_returns_to_picker() {
 #[test]
 fn pr_review_compact_write_keeps_findings_appended_while_the_dialog_was_open() {
     // The compact proposal rewrites a snapshot taken before the agent pass. Any
-    // AMF session can append to the same doc in that window (every session on
+    // AIW session can append to the same doc in that window (every session on
     // the machine shares the global one), so those findings have to survive the
     // rewrite instead of being clobbered by a stale snapshot.
     let tmp = TempDir::new().unwrap();
@@ -2373,7 +2376,7 @@ fn pr_review_dedicated_session_status_is_scoped_to_its_session() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "thinking-start",
         "session_id": tmux_session,
-        "amf_feature_session_id": other_session_id,
+        "aiw_feature_session_id": other_session_id,
     }));
     assert_eq!(
         app.pr_review_dedicated_session_working(),
@@ -2384,7 +2387,7 @@ fn pr_review_dedicated_session_status_is_scoped_to_its_session() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "thinking-start",
         "session_id": tmux_session,
-        "amf_feature_session_id": dedicated_session_id,
+        "aiw_feature_session_id": dedicated_session_id,
     }));
     assert_eq!(app.pr_review_dedicated_session_working(), Some(true));
 
@@ -2392,91 +2395,21 @@ fn pr_review_dedicated_session_status_is_scoped_to_its_session() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "tool-start",
         "session_id": tmux_session,
-        "amf_feature_session_id": dedicated_session_id,
+        "aiw_feature_session_id": dedicated_session_id,
     }));
     app.handle_ipc_message_value(serde_json::json!({
         "type": "thinking-stop",
         "session_id": tmux_session,
-        "amf_feature_session_id": dedicated_session_id,
+        "aiw_feature_session_id": dedicated_session_id,
     }));
     assert_eq!(app.pr_review_dedicated_session_working(), Some(true));
 
     app.handle_ipc_message_value(serde_json::json!({
         "type": "tool-stop",
         "session_id": tmux_session,
-        "amf_feature_session_id": dedicated_session_id,
+        "aiw_feature_session_id": dedicated_session_id,
     }));
     assert_eq!(app.pr_review_dedicated_session_working(), Some(false));
-}
-
-#[test]
-fn pr_review_dedicated_opencode_session_uses_sidebar_activity() {
-    let mut store = store_with_feature(ProjectStatus::Active);
-    let session = store.projects[0].features[0].add_session_named(
-        SessionKind::Opencode,
-        crate::app::pr_review::TRIAGE_SESSION_LABEL.to_string(),
-    );
-    session.set_token_usage_source_exact(TokenUsageSource {
-        provider: TokenUsageProvider::Opencode,
-        id: "opencode-triage".to_string(),
-    });
-    let tmux_session = store.projects[0].features[0].tmux_session.clone();
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.opencode_sidebar_cache.insert(
-        tmux_session,
-        crate::app::opencode_storage::OpencodeSidebarData {
-            session_id: "opencode-triage".to_string(),
-            status: Some("busy".to_string()),
-            ..Default::default()
-        },
-    );
-    enter_pr_review_for_feature(&mut app, 2);
-
-    assert_eq!(app.pr_review_dedicated_session_working(), Some(true));
-}
-
-#[test]
-fn pr_review_schedules_sidebar_load_for_dedicated_opencode_session() {
-    let mut store = store_with_feature(ProjectStatus::Active);
-    let session = store.projects[0].features[0].add_session_named(
-        SessionKind::Opencode,
-        crate::app::pr_review::TRIAGE_SESSION_LABEL.to_string(),
-    );
-    session.set_token_usage_source_exact(TokenUsageSource {
-        provider: TokenUsageProvider::Opencode,
-        id: "opencode-triage".to_string(),
-    });
-    let si = store.projects[0].features[0].sessions.len() - 1;
-    let expected_signature = SidebarLoadRequest::from_opencode_session(
-        &store.projects[0].features[0],
-        &store.projects[0].features[0].sessions[si],
-    )
-    .signature();
-    let tmux_session = store.projects[0].features[0].tmux_session.clone();
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    enter_pr_review_for_feature(&mut app, 2);
-
-    app.schedule_sidebar_load_for_feature(0, 0);
-    for _ in 0..20 {
-        app.poll_sidebar_load_results();
-        if !app.pending_sidebar_loads.contains(&tmux_session) {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(5));
-    }
-
-    assert_eq!(
-        app.sidebar_load_signatures.get(&tmux_session),
-        Some(&expected_signature)
-    );
 }
 
 #[test]
@@ -2486,9 +2419,9 @@ fn pr_review_dedicated_pi_session_uses_thinking_marker() {
         SessionKind::Pi,
         crate::app::pr_review::TRIAGE_SESSION_LABEL.to_string(),
     );
-    let tmux_session = format!("amf-pi-triage-test-{}", uuid::Uuid::new_v4());
+    let tmux_session = format!("aiw-pi-triage-test-{}", uuid::Uuid::new_v4());
     store.projects[0].features[0].tmux_session = tmux_session.clone();
-    let marker = PathBuf::from("/tmp/amf-thinking").join(&tmux_session);
+    let marker = PathBuf::from("/tmp/aiw-thinking").join(&tmux_session);
     std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
     std::fs::write(&marker, "").unwrap();
     let mut app = App::new_for_test(
@@ -2536,7 +2469,7 @@ fn pr_review_dedicated_session_status_is_absent_for_existing_live_target() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "thinking-start",
         "session_id": tmux_session,
-        "amf_feature_session_id": session_id,
+        "aiw_feature_session_id": session_id,
     }));
 
     assert_eq!(
@@ -2624,7 +2557,7 @@ fn pr_review_agent_draft_captures_harness_model_usage_and_cost() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     enter_pr_review_for_feature(&mut app, 1);
     let tmux_session = app.store.projects[0].features[0].tmux_session.clone();
     app.sidebar_model_cache
@@ -2715,7 +2648,7 @@ fn pr_review_agent_draft_metadata_ignores_a_changed_fix_target() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     enter_pr_review_for_feature(&mut app, 1);
     persist_draft_with_provenance(
         &app,
@@ -2749,7 +2682,7 @@ fn pr_review_agent_draft_metadata_ignores_a_changed_fix_target() {
     assert_eq!(metadata.estimated_cost, None);
 }
 
-/// A draft persisted before AMF recorded provenance still discloses that it was
+/// A draft persisted before AIW recorded provenance still discloses that it was
 /// AI-generated; the details it cannot vouch for read as unreported.
 #[test]
 fn pr_review_agent_draft_without_provenance_discloses_unknown_details() {
@@ -2765,7 +2698,7 @@ fn pr_review_agent_draft_without_provenance_discloses_unknown_details() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     enter_pr_review_for_feature(&mut app, 1);
     persist_draft_with_provenance(&app, None);
 
@@ -3484,9 +3417,9 @@ fn pr_review_ids_in_visible_order(app: &App) -> Vec<u64> {
     }
 }
 
-fn install_amf_outbound_comment_mix(app: &mut App) {
+fn install_aiw_outbound_comment_mix(app: &mut App) {
     use crate::app::pr_review::{
-        AI_REVIEW_ATTRIBUTION_FOOTER, AMF_ATTRIBUTION_FOOTER, CommentKind,
+        AI_REVIEW_ATTRIBUTION_FOOTER, AIW_ATTRIBUTION_FOOTER, CommentKind,
     };
 
     enter_pr_review_with_conversation(app, &[], &[]);
@@ -3494,10 +3427,10 @@ fn install_amf_outbound_comment_mix(app: &mut App) {
         let mut root = pr_comment_of_kind(1, CommentKind::Inline);
         root.author = "reviewer".into();
 
-        let mut amf_reply = pr_comment_of_kind(2, CommentKind::Inline);
-        amf_reply.author = "author".into();
-        amf_reply.in_reply_to = Some(1);
-        amf_reply.body = format!("Done in `abc123`.\n\n{AMF_ATTRIBUTION_FOOTER}");
+        let mut aiw_reply = pr_comment_of_kind(2, CommentKind::Inline);
+        aiw_reply.author = "author".into();
+        aiw_reply.in_reply_to = Some(1);
+        aiw_reply.body = format!("Done in `abc123`.\n\n{AIW_ATTRIBUTION_FOOTER}");
 
         let mut ai_finding = pr_comment_of_kind(3, CommentKind::Inline);
         ai_finding.author = "author".into();
@@ -3508,19 +3441,19 @@ fn install_amf_outbound_comment_mix(app: &mut App) {
         human_reply.in_reply_to = Some(1);
         human_reply.body = "This still needs a regression test.".into();
 
-        let mut orphaned_amf_reply = pr_comment_of_kind(5, CommentKind::Inline);
-        orphaned_amf_reply.author = "author".into();
-        orphaned_amf_reply.in_reply_to = Some(999);
-        orphaned_amf_reply.body = format!("Done elsewhere.\n\n{AMF_ATTRIBUTION_FOOTER}");
+        let mut orphaned_aiw_reply = pr_comment_of_kind(5, CommentKind::Inline);
+        orphaned_aiw_reply.author = "author".into();
+        orphaned_aiw_reply.in_reply_to = Some(999);
+        orphaned_aiw_reply.body = format!("Done elsewhere.\n\n{AIW_ATTRIBUTION_FOOTER}");
 
-        state.review.comments = vec![root, amf_reply, ai_finding, human_reply, orphaned_amf_reply];
+        state.review.comments = vec![root, aiw_reply, ai_finding, human_reply, orphaned_aiw_reply];
     }
 }
 
 #[test]
-fn pr_review_collates_amf_followup_but_keeps_standalone_findings_actionable() {
+fn pr_review_collates_aiw_followup_but_keeps_standalone_findings_actionable() {
     let mut app = pr_review_test_app();
-    install_amf_outbound_comment_mix(&mut app);
+    install_aiw_outbound_comment_mix(&mut app);
 
     // The attributed inline reply is represented under comment 1's Replies
     // section, not as a duplicate row. A top-level AI finding stays fully
@@ -3537,9 +3470,9 @@ fn pr_review_collates_amf_followup_but_keeps_standalone_findings_actionable() {
 }
 
 #[test]
-fn pr_review_fixes_standalone_amf_findings_but_not_followup_replies() {
+fn pr_review_fixes_standalone_aiw_findings_but_not_followup_replies() {
     let mut app = pr_review_test_app();
-    install_amf_outbound_comment_mix(&mut app);
+    install_aiw_outbound_comment_mix(&mut app);
 
     if let AppMode::PrReview(state) = &mut app.mode {
         state.selected = 2; // top-level AI Review finding
@@ -3557,7 +3490,7 @@ fn pr_review_fixes_standalone_amf_findings_but_not_followup_replies() {
     }
 
     // Even a stale mark set assembled before refresh filters the orphaned
-    // AMF follow-up out of the combined prompt, but retains the finding.
+    // AIW follow-up out of the combined prompt, but retains the finding.
     if let AppMode::PrReview(state) = &mut app.mode {
         state.fix_confirm = None;
         state.marked.extend([3, 4, 5]);
@@ -3904,7 +3837,7 @@ fn dedicated_review_session_working_for_workdir_reads_outside_pr_review_mode() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "thinking-start",
         "session_id": tmux_session,
-        "amf_feature_session_id": dedicated_session_id,
+        "aiw_feature_session_id": dedicated_session_id,
     }));
     assert_eq!(
         app.dedicated_review_session_working_for_workdir(&workdir),
@@ -4134,7 +4067,7 @@ fn pr_review_open_fix_confirm_seeds_editor_from_selection() {
         confirm
             .editor
             .text()
-            .contains("amf reply-draft --pr-number 7 --comment-id 1 --request-id")
+            .contains("aiw reply-draft --pr-number 7 --comment-id 1 --request-id")
     );
     assert_eq!(confirm.reply_draft_requests.len(), 1);
     assert_eq!(confirm.reply_draft_requests[0].comment_id, 1);
@@ -4366,7 +4299,7 @@ fn pr_review_open_reply_done_seeds_template_in_confirm_view() {
 fn pr_review_reply_done_prefers_the_agent_draft() {
     let db_dir = TempDir::new().unwrap();
     let mut app = pr_review_test_app();
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     enter_pr_review(&mut app, 1);
 
     app.db
@@ -4399,7 +4332,7 @@ fn pr_review_reply_not_needed_ignores_a_captured_fix_draft() {
     // the not-needed explanation.
     let db_dir = TempDir::new().unwrap();
     let mut app = pr_review_test_app();
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     enter_pr_review(&mut app, 1);
 
     app.db
@@ -4429,7 +4362,7 @@ fn pr_review_reply_not_needed_ignores_a_captured_fix_draft() {
 fn reply_draft_toast_context_uses_the_cached_comments_path_and_snippet() {
     let db_dir = TempDir::new().unwrap();
     let mut app = pr_review_test_app();
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
 
     let review = pr_review_with_comments(1);
     app.db
@@ -4461,7 +4394,7 @@ fn reply_draft_toast_context_uses_the_cached_comments_path_and_snippet() {
 fn reply_draft_toast_context_none_without_a_cached_review() {
     let db_dir = TempDir::new().unwrap();
     let mut app = pr_review_test_app();
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     app.db
         .as_ref()
         .unwrap()
@@ -4485,7 +4418,7 @@ fn reply_draft_toast_context_none_without_a_cached_review() {
 fn pr_review_reply_draft_ipc_ignores_an_expired_request() {
     let db_dir = TempDir::new().unwrap();
     let mut app = pr_review_test_app();
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     app.db
         .as_ref()
         .unwrap()
@@ -4678,7 +4611,7 @@ fn pr_review_agent_draft_includes_the_post_injection_commit_that_touched_the_fil
 
     let db_dir = TempDir::new().unwrap();
     let mut app = pr_review_test_app();
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     enter_pr_review(&mut app, 1);
     if let AppMode::PrReview(state) = &mut app.mode {
         state.workdir = repo.path().to_path_buf();
@@ -4771,7 +4704,7 @@ fn pr_review_editing_a_captured_draft_drops_ai_attribution() {
 
     let db_dir = TempDir::new().unwrap();
     let mut app = pr_review_test_app();
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     enter_pr_review(&mut app, 1);
 
     app.db
@@ -4797,7 +4730,7 @@ fn pr_review_editing_a_captured_draft_drops_ai_attribution() {
 
     // `agent_drafted` stays true — it's a historical fact about how the reply
     // was seeded — but the *effective* attribution (what actually gets
-    // posted) drops to AMF's channel-only footer now that the user has
+    // posted) drops to AIW's channel-only footer now that the user has
     // changed the agent's words.
     assert!(reply_is_agent_drafted(&app));
     assert!(!reply_effective_agent_drafted(&app));
@@ -4943,7 +4876,7 @@ fn pr_review_append_memory_writes_and_dedups() {
         "dialog closes once appended"
     );
 
-    let doc_path = repo.join(".amf").join("review-memory.md");
+    let doc_path = repo.join(".aiw").join("review-memory.md");
     let contents = std::fs::read_to_string(&doc_path).unwrap();
     assert!(contents.contains("## General"));
     assert!(contents.contains("- comment 1 (src/file1.rs:1)"));
@@ -4964,12 +4897,11 @@ fn pr_review_append_memory_honors_project_review_memory_path_override() {
     let tmp = TempDir::new().unwrap();
     let repo = tmp.path().to_path_buf();
 
-    // A project-level override in `{repo}/.amf/config.json` should redirect
-    // the append away from the default `.amf/review-memory.md`.
-    std::fs::create_dir_all(repo.join(".amf")).unwrap();
+    // A project-level override in `{repo}/aiw.json` should redirect
+    // the append away from the default `.aiw/review-memory.md`.
     std::fs::write(
-        repo.join(".amf").join("config.json"),
-        r#"{"review_memory_path": ".amf/team-review-memory.md"}"#,
+        repo.join("aiw.json"),
+        r#"{"review_memory_path": ".aiw/team-review-memory.md"}"#,
     )
     .unwrap();
 
@@ -4997,12 +4929,12 @@ fn pr_review_append_memory_honors_project_review_memory_path_override() {
     app.pr_review_open_memory_add();
     app.pr_review_append_memory().unwrap();
 
-    let default_path = repo.join(".amf").join("review-memory.md");
+    let default_path = repo.join(".aiw").join("review-memory.md");
     assert!(
         !default_path.exists(),
         "the default path should be untouched when a project override is set"
     );
-    let overridden_path = repo.join(".amf").join("team-review-memory.md");
+    let overridden_path = repo.join(".aiw").join("team-review-memory.md");
     let contents = std::fs::read_to_string(&overridden_path).unwrap();
     assert!(contents.contains("- comment 1 (src/file1.rs:1)"));
 }
@@ -5379,7 +5311,7 @@ fn pr_review_append_memory_after_ai_summary_persists_the_generated_text_not_the_
 
     app.pr_review_append_memory().unwrap();
 
-    let contents = std::fs::read_to_string(repo.join(".amf").join("review-memory.md")).unwrap();
+    let contents = std::fs::read_to_string(repo.join(".aiw").join("review-memory.md")).unwrap();
     assert!(contents.contains("- Never mutate shared state without the lock (src/file1.rs:1)."));
     assert!(
         !contents.contains(&raw),
@@ -5414,7 +5346,7 @@ fn pr_review_append_memory_global_scope_writes_the_cross_project_doc() {
         Box::new(worktree),
     );
     // An absolute override keeps the test off the developer's real
-    // `~/.config/amf/review-memory.md`.
+    // `~/.config/ai_workstation/review-memory.md`.
     app.config.global_review_memory_path = Some(global_doc.display().to_string());
     enter_pr_review(&mut app, 1);
 
@@ -5430,7 +5362,7 @@ fn pr_review_append_memory_global_scope_writes_the_cross_project_doc() {
     );
     assert!(contents.contains("- comment 1 (src/file1.rs:1)"));
     assert!(
-        !repo.join(".amf").join("review-memory.md").exists(),
+        !repo.join(".aiw").join("review-memory.md").exists(),
         "the project doc should be untouched when the global scope is picked"
     );
 }
@@ -5439,10 +5371,10 @@ fn pr_review_append_memory_global_scope_writes_the_cross_project_doc() {
 fn review_memory_paths_resolves_project_override_and_global_together() {
     let tmp = TempDir::new().unwrap();
     let repo = tmp.path().join("repo");
-    std::fs::create_dir_all(repo.join(".amf")).unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
     std::fs::write(
-        repo.join(".amf").join("config.json"),
-        r#"{"review_memory_path": ".amf/team-review-memory.md"}"#,
+        repo.join("amf.json"),
+        r#"{"review_memory_path": ".aiw/team-review-memory.md"}"#,
     )
     .unwrap();
     let global_doc = tmp.path().join("global-lessons.md");
@@ -5464,7 +5396,7 @@ fn review_memory_paths_resolves_project_override_and_global_together() {
     let paths = app.review_memory_paths(&repo);
     assert_eq!(
         paths.project,
-        repo.join(".amf").join("team-review-memory.md")
+        repo.join(".aiw").join("team-review-memory.md")
     );
     assert_eq!(paths.global, global_doc);
 }
@@ -5613,7 +5545,7 @@ fn completed_ai_review_carries_run_attribution_into_the_pane_and_cache() {
         Box::new(MockWorktreeOps::new()),
     );
     let db_file = tempfile::NamedTempFile::new().unwrap();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     enter_pr_review_for_feature(&mut app, 1);
     app.open_ai_review_from_triage();
     let origin = match &app.mode {
@@ -5755,7 +5687,7 @@ fn disconnected_ai_review_worker_persists_error_and_updates_triage() {
         Box::new(MockWorktreeOps::new()),
     );
     let db_file = tempfile::NamedTempFile::new().unwrap();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     enter_pr_review_for_feature(&mut app, 1);
     let (workdir, pr) = match &app.mode {
         AppMode::PrReview(state) => (state.workdir.clone(), state.review.pr.clone()),
@@ -6000,7 +5932,7 @@ fn open_ai_review_for_pr_reopens_cached_findings_and_summary() {
         Box::new(MockWorktreeOps::new()),
     );
     let db_file = tempfile::NamedTempFile::new().unwrap();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     let pr = pr_review_with_comments(1).pr;
     app.db
         .as_ref()
@@ -6042,7 +5974,7 @@ fn seed_ai_review_fixture_persists_and_opens_without_running_an_agent() {
     );
     let db_file = tempfile::NamedTempFile::new().unwrap();
     let workdir = tempfile::tempdir().unwrap();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
 
     let response = app
         .seed_ai_review_from_request(&SeedAiReviewRequest {
@@ -6080,7 +6012,7 @@ fn seed_ai_review_fixture_persists_and_opens_without_running_an_agent() {
 #[test]
 fn pr_triage_zero_result_survives_reopen_and_restart_but_not_new_head() {
     let db_dir = TempDir::new().unwrap();
-    let db_path = db_dir.path().join("amf.db");
+    let db_path = db_dir.path().join("aiw.db");
     let review = pr_review_with_comments(1);
     let zero_run = crate::app::ai_review::AiReviewRun {
         ran_at: chrono::Local::now(),
@@ -6093,7 +6025,7 @@ fn pr_triage_zero_result_survives_reopen_and_restart_but_not_new_head() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.db = Some(crate::db::AmfDb::open(&db_path).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_path).unwrap());
     app.db
         .as_ref()
         .unwrap()
@@ -6135,7 +6067,7 @@ fn pr_triage_zero_result_survives_reopen_and_restart_but_not_new_head() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    restarted.db = Some(crate::db::AmfDb::open(&db_path).unwrap());
+    restarted.db = Some(crate::db::AiwDb::open(&db_path).unwrap());
     restarted.enter_pr_review(PathBuf::from("/tmp/test-workdir"), review.pr.clone());
     assert!(matches!(
         &restarted.mode,
@@ -6170,7 +6102,7 @@ fn refreshed_pr_head_clears_stale_ai_review_completion() {
         Box::new(MockWorktreeOps::new()),
     );
     let db_file = tempfile::NamedTempFile::new().unwrap();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     enter_pr_review_for_feature(&mut app, 1);
     if let AppMode::PrReview(state) = &mut app.mode {
         state.ai_review_last_run = Some(crate::app::ai_review::AiReviewRun {
@@ -6229,7 +6161,7 @@ fn ai_review_post_dialog_is_seeded_with_generated_summary_and_attribution() {
             let body = state.post_confirm.as_ref().unwrap().editor.text();
             assert!(body.starts_with("The patch has one correctness risk."));
             assert!(body.contains("A general finding"));
-            assert!(body.ends_with("— AI review via AMF"));
+            assert!(body.ends_with("— AI review via AIW"));
         }
         _ => panic!("expected AI Review pane"),
     }
@@ -6280,7 +6212,7 @@ fn ai_review_post_dialog_seeds_usage_summary_only_on_the_overall_review() {
             );
             assert!(body.contains("Input tokens: 12.3k"));
             assert!(body.contains("Estimated cost: $0.10"));
-            assert!(body.ends_with("— AI review via AMF"));
+            assert!(body.ends_with("— AI review via AIW"));
             assert!(
                 !post.inline[0].body.contains("AI review usage"),
                 "inline comment must not carry the usage section: {}",
@@ -6327,7 +6259,7 @@ fn ai_review_post_dialog_drops_generated_summary_when_a_finding_is_skipped() {
                 !body.contains("sensitive issue"),
                 "the model summary describing the skipped finding must not be posted: {body}"
             );
-            assert!(body.starts_with("AI review, via AMF."));
+            assert!(body.starts_with("AI review, via AIW."));
             assert!(body.contains("A kept finding"));
         }
         _ => panic!("expected AI Review pane"),
@@ -6479,10 +6411,10 @@ fn post_success_refresh_snaps_selection_off_a_newly_resolved_comment() {
 }
 
 #[test]
-fn post_success_refresh_snaps_selection_off_a_newly_collated_amf_reply() {
-    use crate::app::pr_review::AMF_ATTRIBUTION_FOOTER;
+fn post_success_refresh_snaps_selection_off_a_newly_collated_aiw_reply() {
+    use crate::app::pr_review::AIW_ATTRIBUTION_FOOTER;
 
-    // Regression: `selected` can itself be an orphaned AMF follow-up reply
+    // Regression: `selected` can itself be an orphaned AIW follow-up reply
     // (its root wasn't fetched, so it stood as its own row). If a refresh
     // fetches the root, the reply becomes collated under it and vanishes
     // from `visible_indices()`. `all_sorted_indices()` used to also drop
@@ -6528,7 +6460,7 @@ fn post_success_refresh_snaps_selection_off_a_newly_collated_amf_reply() {
         pull_request_review_id: None,
     };
 
-    // Initial fetch: the AMF reply came back but its root did not, so it's
+    // Initial fetch: the AIW reply came back but its root did not, so it's
     // orphaned and shown as its own row. It's selected.
     let orphan_reply = crate::github::ReviewComment {
         id: 2,
@@ -6538,7 +6470,7 @@ fn post_success_refresh_snaps_selection_off_a_newly_collated_amf_reply() {
         side: Some("RIGHT".into()),
         diff_hunk: Some("@@".into()),
         subject_type: None,
-        body: format!("Done in `abc123`.\n\n{AMF_ATTRIBUTION_FOOTER}"),
+        body: format!("Done in `abc123`.\n\n{AIW_ATTRIBUTION_FOOTER}"),
         user: user("author"),
         in_reply_to_id: Some(1),
         pull_request_review_id: Some(91),
@@ -6600,7 +6532,7 @@ fn post_success_refresh_snaps_selection_off_a_newly_collated_amf_reply() {
             assert_ne!(
                 state.selected_comment().map(|comment| comment.id),
                 Some(2),
-                "selection must not stay on the now-collated AMF reply"
+                "selection must not stay on the now-collated AIW reply"
             );
             assert_eq!(
                 state.selected_comment().map(|comment| comment.id),
@@ -6625,7 +6557,7 @@ fn post_success_refresh_caches_fresh_triage_when_ai_review_has_no_return_pane() 
         Box::new(MockWorktreeOps::new()),
     );
     let db_file = tempfile::NamedTempFile::new().unwrap();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     let stale = pr_review_with_comments(1);
     app.db
         .as_ref()
@@ -7511,7 +7443,7 @@ fn ai_review_fix_hands_the_finding_to_triage_without_posting() {
     assert!(confirm.batch.is_none());
     assert!(confirm.editor.text().contains("finding 1"));
     // Nothing to reply to on GitHub, so no reply-draft handoff.
-    assert!(!confirm.editor.text().contains("amf reply-draft"));
+    assert!(!confirm.editor.text().contains("aiw reply-draft"));
     assert_eq!(confirm.reply_draft_requests[0].comment_id, comment.id);
     // The stashed pane was restored, not replaced by a fresh one.
     assert!(app.ai_review_return_to.is_none());
@@ -7540,7 +7472,7 @@ fn ai_review_batch_fix_combines_marked_findings() {
     assert!(confirm.editor.text().contains("finding 0"));
     assert!(confirm.editor.text().contains("finding 2"));
     assert!(!confirm.editor.text().contains("finding 1"));
-    assert!(!confirm.editor.text().contains("amf reply-draft"));
+    assert!(!confirm.editor.text().contains("aiw reply-draft"));
 }
 
 #[test]
@@ -7809,8 +7741,8 @@ fn repo_with_teammate_pr() -> TempDir {
     let repo = TempDir::new().unwrap();
     let dir = repo.path();
     git_out(dir, &["init", "--quiet", "--initial-branch=main"]);
-    git_out(dir, &["config", "user.name", "AMF Test"]);
-    git_out(dir, &["config", "user.email", "amf@example.com"]);
+    git_out(dir, &["config", "user.name", "AIW Test"]);
+    git_out(dir, &["config", "user.email", "aiw@example.com"]);
     std::fs::write(dir.join("shared.rs"), "fn shared() {}\n").unwrap();
     git_out(dir, &["add", "shared.rs"]);
     git_out(dir, &["commit", "--quiet", "-m", "initial"]);
@@ -7834,7 +7766,7 @@ fn open_teammate_pr(
     let head = git_out(workdir, &["rev-parse", "teammate-pr"]);
     let base = git_out(workdir, &["rev-parse", "main"]);
     let merge_base = git_out(workdir, &["merge-base", &base, &head]);
-    git_out(workdir, &["update-ref", "refs/amf/review/9/head", &head]);
+    git_out(workdir, &["update-ref", "refs/aiw/review/9/head", &head]);
     let mut pinned = pr.clone();
     pinned.head_oid = head;
     pinned.base_oid = base;
@@ -7944,7 +7876,7 @@ fn enter_opens_the_pr_in_the_review_viewer_and_esc_returns_to_the_same_row() {
 
     // Leaving drops the private review refs (off the UI thread).
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while !git_out(dir, &["for-each-ref", "refs/amf/review/"]).is_empty() {
+    while !git_out(dir, &["for-each-ref", "refs/aiw/review/"]).is_empty() {
         assert!(
             std::time::Instant::now() < deadline,
             "review refs never removed"
@@ -8050,7 +7982,7 @@ fn a_pr_that_fails_to_open_stays_on_the_tab_with_the_reason() {
 /// `review_tab_on`, with a real database attached and the test opener.
 fn review_tab_with_db(repo: &std::path::Path, db_file: &NamedTempFile) -> App {
     let mut app = review_tab_on(repo);
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     app.pr_review_work
         .set_review_opener_for_test(open_teammate_pr);
     // Reload so the badges read the database that is now attached.
@@ -8291,7 +8223,7 @@ fn leaving_a_pr_review_says_so_when_the_draft_could_not_be_saved() {
     let db_file = NamedTempFile::new().unwrap();
     let mut app = review_tab_with_db(repo.path(), &db_file);
     open_selected_pr(&mut app);
-    // Break the table out from under AMF with a second connection.
+    // Break the table out from under AIW with a second connection.
     rusqlite::Connection::open(db_file.path())
         .unwrap()
         .execute_batch("DROP TABLE pr_review_drafts;")
@@ -8314,8 +8246,8 @@ fn repo_with_two_file_pr() -> TempDir {
     let repo = TempDir::new().unwrap();
     let dir = repo.path();
     git_out(dir, &["init", "--quiet", "--initial-branch=main"]);
-    git_out(dir, &["config", "user.name", "AMF Test"]);
-    git_out(dir, &["config", "user.email", "amf@example.com"]);
+    git_out(dir, &["config", "user.name", "AIW Test"]);
+    git_out(dir, &["config", "user.email", "aiw@example.com"]);
     std::fs::write(dir.join("edit.rs"), "fn edit() {}\n").unwrap();
     std::fs::write(dir.join("keep.rs"), "fn keep() {}\n").unwrap();
     git_out(dir, &["add", "."]);
@@ -9033,8 +8965,8 @@ fn settle_slowly(app: &mut App, pending: fn(&App) -> bool, poll: fn(&mut App) ->
 
 /// Dirt of every kind in `dir`: staged, unstaged, untracked, and a stash.
 fn make_dirty(dir: &std::path::Path) {
-    git_out(dir, &["config", "user.name", "AMF Acceptance"]);
-    git_out(dir, &["config", "user.email", "amf@example.com"]);
+    git_out(dir, &["config", "user.name", "AIW Acceptance"]);
+    git_out(dir, &["config", "user.email", "aiw@example.com"]);
     let readme = dir.join("README.md");
     let original = std::fs::read_to_string(&readme).unwrap();
     std::fs::write(&readme, format!("{original}\nstashed\n")).unwrap();
@@ -9052,20 +8984,20 @@ fn make_dirty(dir: &std::path::Path) {
 /// branch and posts a Comment review — so it runs only when asked:
 ///
 /// ```text
-/// AMF_PR_REVIEW_ACCEPTANCE_PR=654 cargo test -j 2 --lib -- --ignored acceptance_
+/// AIW_PR_REVIEW_ACCEPTANCE_PR=654 cargo test -j 2 --lib -- --ignored acceptance_
 /// ```
 ///
 /// Needs `gh` signed in with push access to the PR's branch.
 #[test]
-#[ignore = "talks to GitHub; set AMF_PR_REVIEW_ACCEPTANCE_PR and run with --ignored"]
+#[ignore = "talks to GitHub; set AIW_PR_REVIEW_ACCEPTANCE_PR and run with --ignored"]
 fn acceptance_review_a_real_pr_while_a_local_feature_is_dirty() {
-    let Ok(number) = std::env::var("AMF_PR_REVIEW_ACCEPTANCE_PR") else {
-        eprintln!("AMF_PR_REVIEW_ACCEPTANCE_PR not set; skipping");
+    let Ok(number) = std::env::var("AIW_PR_REVIEW_ACCEPTANCE_PR") else {
+        eprintln!("AIW_PR_REVIEW_ACCEPTANCE_PR not set; skipping");
         return;
     };
     let number: u32 = number.parse().expect("a PR number");
-    let repo_url = std::env::var("AMF_PR_REVIEW_ACCEPTANCE_REPO")
-        .unwrap_or_else(|_| "https://github.com/eldridgerdev/agent-mainframe".to_string());
+    let repo_url = std::env::var("AIW_PR_REVIEW_ACCEPTANCE_REPO")
+        .unwrap_or_else(|_| "https://github.com/example-org/ai-workstation".to_string());
     let repo_slug = repo_url
         .trim_start_matches("https://github.com/")
         .to_string();
@@ -9115,7 +9047,7 @@ fn acceptance_review_a_real_pr_while_a_local_feature_is_dirty() {
         Box::new(MockTmuxOps::new()), // any tmux call fails the test
         Box::new(MockWorktreeOps::new()),
     );
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     app.selection = Selection::Project(0);
     let features_before = app.store.projects[0].features.len();
     app.open_pr_review();
@@ -9200,7 +9132,7 @@ fn acceptance_review_a_real_pr_while_a_local_feature_is_dirty() {
         })
         .expect("a file with an added line");
     select_file(&mut app, &commented);
-    comment_on_line_containing(&mut app, &comment_line, "AMF acceptance: inline note");
+    comment_on_line_containing(&mut app, &comment_line, "AIW acceptance: inline note");
     for path in pr_files.iter() {
         select_file(&mut app, path);
         press(&mut app, KeyCode::Char('a'));
@@ -9214,7 +9146,7 @@ fn acceptance_review_a_real_pr_while_a_local_feature_is_dirty() {
             .is_some_and(|m| m.contains("draft saved"))
     );
     open(&mut app);
-    assert_eq!(line_comment_texts(&app), ["AMF acceptance: inline note"]);
+    assert_eq!(line_comment_texts(&app), ["AIW acceptance: inline note"]);
     assert_eq!(viewer(&app).decisions.len(), pr_files.len());
     assert_eq!(viewer(&app).selected_file, position, "position restored");
 
@@ -9239,8 +9171,8 @@ fn acceptance_review_a_real_pr_while_a_local_feature_is_dirty() {
         .clone();
     let pusher = root.path().join("pusher");
     git_out(root.path(), &["clone", "--quiet", &repo_url, "pusher"]);
-    git_out(&pusher, &["config", "user.name", "AMF Acceptance"]);
-    git_out(&pusher, &["config", "user.email", "amf@example.com"]);
+    git_out(&pusher, &["config", "user.name", "AIW Acceptance"]);
+    git_out(&pusher, &["config", "user.email", "aiw@example.com"]);
     let branch = pr["headRefName"].as_str().unwrap();
     git_out(&pusher, &["checkout", "--quiet", branch]);
     let touched_path = pusher.join(&touched);
@@ -9248,14 +9180,14 @@ fn acceptance_review_a_real_pr_while_a_local_feature_is_dirty() {
     std::fs::write(
         &touched_path,
         format!(
-            "{before}\nAMF acceptance push {}\n",
+            "{before}\nAIW acceptance push {}\n",
             chrono::Utc::now().to_rfc3339()
         ),
     )
     .unwrap();
     git_out(
         &pusher,
-        &["commit", "--quiet", "-am", "test: AMF acceptance push"],
+        &["commit", "--quiet", "-am", "test: AIW acceptance push"],
     );
     git_out(&pusher, &["push", "--quiet", "origin", branch]);
     let new_head = git_out(&pusher, &["rev-parse", "HEAD"]);
@@ -9286,11 +9218,11 @@ fn acceptance_review_a_real_pr_while_a_local_feature_is_dirty() {
         pr_files.len() - 1,
         "the rest keep theirs"
     );
-    assert_eq!(line_comment_texts(&app), ["AMF acceptance: inline note"]);
+    assert_eq!(line_comment_texts(&app), ["AIW acceptance: inline note"]);
 
     // ── Posting a Comment pins the inline comment to the reviewed head. ──
     press(&mut app, KeyCode::Char('q'));
-    let marker = format!("[AMF acceptance test {}]", chrono::Utc::now().to_rfc3339());
+    let marker = format!("[AIW acceptance test {}]", chrono::Utc::now().to_rfc3339());
     write_summary(&mut app, &marker);
     press(&mut app, KeyCode::Enter);
     settle_slowly(
@@ -9327,12 +9259,12 @@ fn acceptance_review_a_real_pr_while_a_local_feature_is_dirty() {
         inline[0]["body"]
             .as_str()
             .unwrap()
-            .contains("AMF acceptance: inline note")
+            .contains("AIW acceptance: inline note")
     );
 
     // ── The review's refs are gone; the checkouts are still untouched. ──
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while !git_out(&clone, &["for-each-ref", "refs/amf/review/"]).is_empty() {
+    while !git_out(&clone, &["for-each-ref", "refs/aiw/review/"]).is_empty() {
         assert!(
             std::time::Instant::now() < deadline,
             "review refs left behind"
@@ -9381,7 +9313,7 @@ fn tui_reply_and_resolve_write_through_the_shared_github_boundary() {
     app.pr_review_post_reply().unwrap();
     assert_eq!(
         fake.state().writes,
-        ["reply 1: Already handled upstream.\n\n— posted via AMF"]
+        ["reply 1: Already handled upstream.\n\n— posted via AIW"]
     );
     app.pr_review_select_next();
     app.pr_review_toggle_resolve();

@@ -195,7 +195,7 @@ impl App {
         }
     }
 
-    /// Whether a TODO scope is actionable in the current AMF process.
+    /// Whether a TODO scope is actionable in the current AIW process.
     /// Worktree TODOs are always visible; the two broader scopes share their
     /// visibility across every overlay opened during this run.
     pub(crate) fn todo_scope_visible(&self, scope: &TodoScope) -> bool {
@@ -1894,7 +1894,7 @@ impl App {
     /// editor, so a wrong guess here costs the user an edit, not an answer.
     ///
     /// Provenance is deliberately a statement *that* work happened, not a
-    /// transcript of it. AMF keeps no per-TODO history: transcripts are scoped
+    /// transcript of it. AIW keeps no per-TODO history: transcripts are scoped
     /// to a workdir (and in practice to one harness), and a tmux capture holds
     /// only whatever is still on screen. Either would put text in the brief
     /// that does not reliably describe this TODO, which is worse than a line
@@ -1937,7 +1937,7 @@ impl App {
         brief
     }
 
-    /// Provenance lines for `todo`: what AMF has already started for it.
+    /// Provenance lines for `todo`: what AIW has already started for it.
     ///
     /// Each link is reported only when its target still exists, and says so
     /// when it does not, because a brief that names a session the user cannot

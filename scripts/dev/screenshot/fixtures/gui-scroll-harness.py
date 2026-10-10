@@ -4,7 +4,7 @@
 `transcript` behaves like Claude/Codex/Pi: it writes a long transcript on the
 normal screen (so tmux keeps it as history), then prints a further burst
 whenever the capture script creates `<workdir>/transcript-more`, without
-anything being typed into it. `fullscreen` behaves like OpenCode/Neovim: it
+anything being typed into it. `fullscreen` behaves like Neovim: it
 draws a scrollable list on the alternate screen, asks for SGR mouse
 reporting, and scrolls when wheel reports arrive.
 
@@ -52,7 +52,7 @@ STEPS = [
 
 
 def transcript():
-    out(f"{BOLD}AMF capture fixture · long-running agent transcript{RESET}\r\n")
+    out(f"{BOLD}AIW capture fixture · long-running agent transcript{RESET}\r\n")
     out(f"{DIM}Offline stand-in: no model is called.{RESET}\r\n\r\n")
     for step in range(1, 121):
         detail = STEPS[step % len(STEPS)]
@@ -86,7 +86,7 @@ def fullscreen():
         if offset is None:
             offset = len(items) - visible
         offset = max(0, min(offset, len(items) - visible))
-        frame = [f"\x1b[H\x1b[2J{BOLD}AMF capture fixture · full-screen program (alternate screen, mouse reporting on){RESET}"]
+        frame = [f"\x1b[H\x1b[2J{BOLD}AIW capture fixture · full-screen program (alternate screen, mouse reporting on){RESET}"]
         frame += [items[i][:cols] for i in range(offset, offset + visible)]
         frame.append(f"{DIM}showing {offset + 1}-{offset + visible} of {len(items)} · wheel reports received: {reports}{RESET}")
         out("\r\n".join(frame))

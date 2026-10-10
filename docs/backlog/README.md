@@ -15,7 +15,7 @@ the code if you prefer, and trim the backlog entry to a pointer.
 
 - One feature per file, named in kebab-case and **ending in `-plan`**
   (e.g. `remote-control-server-mode-plan.md`). The `plan` in the name
-  matters: AMF's in-app Markdown viewer filters to files whose path
+  matters: AIW's in-app Markdown viewer filters to files whose path
   contains "plan", so this is what makes a backlog doc show up there.
 - Keep each doc **self-contained**: a reader should understand the
   proposal without opening other files, though linking to related plans
@@ -65,10 +65,10 @@ doc always says exactly what remains.
 
 - [Docs site feature coverage](docs-site-coverage-plan.md) — _All 7 epics
   shipped._ Audit of `site/content/docs/` against `src/` and `CLAUDE.md`
-  turned up shipped features with no site coverage: two (`amf doctor`, the
+  turned up shipped features with no site coverage: two (`aiw doctor`, the
   automation CLI) already documented in README and just missing a site
   page, plus context-window/usage tracking, a multi-harness capability
-  matrix, the `amf.json` project-config schema, session bookmarks/saved-
+  matrix, the `aiw.json` project-config schema, session bookmarks/saved-
   transcript resume/Fresh Context handoff, Remote Control, task-prompt
   coaching, plan-interview reference-doc attachment, and combined-batch
   fix-cost disclosure. Landed as three new pages —
@@ -80,7 +80,7 @@ doc always says exactly what remains.
   and `keybindings.md`, all cross-linked. Verifying Epic 1 turned up and
   fixed a separate, pre-existing bug that had the whole site failing to
   build (see [bug backlog](bug-backlog-plan.md)). One follow-up open
-  question: nothing was checked against a live `amf` session across all
+  question: nothing was checked against a live `aiw` session across all
   four harnesses, only against source.
 - [Crate package size](crate-package-size-plan.md) — _Shipped._ The
   published crate was 20MB/703 files (11.1MiB compressed) — over
@@ -90,7 +90,7 @@ doc always says exactly what remains.
   files `src/` actually pulls in via `include_str!`, down to 8.2MiB/1.7MiB
   compressed.
 - [Premium-model efficiency options](premium-model-efficiency-options-plan.md) —
-  _Backlog._ Planning reference for eight ways AMF could make Astra/Fable more
+  _Backlog._ Planning reference for eight ways AIW could make Astra/Fable more
   affordable, with worked savings calculations, implementation boundaries,
   evaluation criteria, and dependencies for later feature plans. OPT-07 records
   the implemented Claude Code/Codex advice for new, on-demand and TODO Plan
@@ -101,9 +101,9 @@ doc always says exactly what remains.
 
 - [Project config location](project-config-location-plan.md) — _Shipped._
   Moved hand-authored project config out of the generated
-  `.amf/` directory to `amf.json` at the repo root, so `.amf/` is purely
+  `.aiw/` directory to `aiw.json` at the repo root, so `.aiw/` is purely
   generated and gitignorable with no force-tracked exception. Legacy
-  `.amf/config.json` is still read and migrates on first write; the
+  `.aiw/config.json` is still read and migrates on first write; the
   directory gains an injected README explaining what it is.
 
 - [Plan Mode: guided feature discovery](plan-mode-interview-plan.md) —
@@ -174,7 +174,7 @@ doc always says exactly what remains.
   save & inject, a multi-source picker (`User` / `Project` / `Global` /
   `Worktree` with badges), export to `config.json`, fill-in
   `{{placeholders}}`, and select-menu slots authored inline as
-  `{{name|a|b|c}}`. Tags/grouping, an `amf-add-prompt` skill, export/display
+  `{{name|a|b|c}}`. Tags/grouping, an `aiw-add-prompt` skill, export/display
   location unification, and showing the on-disk destination path remain.
 - [Startup performance](startup-performance-plan.md) — _In progress._
   Parser repair and sidebar concurrency fixes shipped in PR #308;
@@ -189,7 +189,7 @@ doc always says exactly what remains.
   remains. Pi remains unsupported until it exposes usable per-session
   usage metadata.
 - [Token-efficient agent sessions](token-efficiency-plan.md) — _Partial._
-  Move AMF from cumulative usage accounting to active usage management:
+  Move AIW from cumulative usage accounting to active usage management:
   provider/model-aware costs, Economy/Balanced/Deep session profiles,
   context-pressure warnings and soft budgets, deliberate
   resume/compact/fresh rotation, bounded cross-provider handoffs,
@@ -205,11 +205,11 @@ doc always says exactly what remains.
 - [Remote Control — companion app](remote-control-companion-app-plan.md) —
   _In progress._ Epic 1 (on-demand tokio/axum server skeleton, toggled
   from the dashboard leader menu) has shipped. Monitor and, eventually,
-  fully control AMF agent sessions
+  fully control AIW agent sessions
   (any harness, any feature) from a phone: read-only status/notifications
   first, then answering blocked-agent prompts, then full terminal
   control — over LAN and/or an existing tunnel tool. Client is a Flutter
-  native app (iOS + Android) rather than a PWA, paired to AMF via a
+  native app (iOS + Android) rather than a PWA, paired to AIW via a
   QR-code exchange for a per-device token. A new remote-control
   server (tokio/axum) runs on-demand on its own thread, marshalling all
   App-state access through the existing main-loop channel pattern. Ten
@@ -219,7 +219,7 @@ doc always says exactly what remains.
   which mirrors to claude.ai/mobile via Anthropic's own infrastructure.
 - [Remote Control — server mode](remote-control-server-mode-plan.md) —
   _Backlog._ Spawn new Claude sessions on demand from web/mobile, each
-  in its own worktree. Deferred; AMF's role would shift from
+  in its own worktree. Deferred; AIW's role would shift from
   drive-the-agent to provision-and-review.
 - [Remote Control — QR code overlay](remote-control-qr-overlay-plan.md) —
   _Backlog._ Render the Remote Control session URL as a scannable QR in
@@ -245,7 +245,7 @@ doc always says exactly what remains.
   co-review and workflow enhancements stay in backlog.
 - [PR Triage](pr-comment-review-plan.md) — _Shipped._ Triage a
   GitHub PR's comments (inline, review summaries, conversation, bots)
-  inside AMF and, per comment, inject a token-minimal fix into the live
+  inside AIW and, per comment, inject a token-minimal fix into the live
   agent session, post an AI-drafted reply, or skip. Token efficiency is
   the core constraint: the TUI fetches/triages with zero agent tokens,
   fix prompts carry only comment + diff hunk + `file:line`, threads are
@@ -258,7 +258,7 @@ doc always says exactly what remains.
   worktree-backed feature, with its harness and vibe mode chosen
   independently of the source feature, an explicit `I` step to land
   those commits on the PR, and a cross-project review-memory layer
-  (`~/.config/amf/review-memory.md`) that AI review merges on top of each
+  (`~/.config/ai_workstation/review-memory.md`) that AI review merges on top of each
   repo's own doc, with `g` picking which doc `M` and the bootstrap write to.
   One small backlog item remains: teaching the compact pass (`c`) to prune
   the global doc as well as the project one. A later addition — investigating
@@ -276,7 +276,7 @@ doc always says exactly what remains.
   when a run finishes; mouse-wheel / `j`-`k` scrolling for the right-side box;
   and a follow-up-thread count on the section header.
 - [Screenshot & video review harness](screenshot-review-plan.md) —
-  _All epics shipped._ Lets an agent run AMF in an isolated scratch
+  _All epics shipped._ Lets an agent run AIW in an isolated scratch
   instance (private `XDG_CONFIG_HOME`/`XDG_STATE_HOME` + tmux session, no
   Rust changes) and, only when asked, return screenshots proving a
   feature works. A Python + Pillow ANSI→PNG renderer, a tmux driver

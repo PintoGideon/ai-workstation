@@ -32,7 +32,7 @@ const key = (observation: { target: FeatureTarget }) =>
 /** What stopping does to editors, stated before the user confirms. */
 function editorPolicy(view: DormancyView): string {
   return view.kill_editor_on_stop
-    ? "Editor windows AMF opened for these features are closed too. A window AMF did not open, one whose process now belongs to something else, or one sharing its VS Code instance with other windows is left running and reported."
+    ? "Editor windows AIW opened for these features are closed too. A window AIW did not open, one whose process now belongs to something else, or one sharing its VS Code instance with other windows is left running and reported."
     : "Editor cleanup is off (kill_editor_on_stop), so no editor window is examined or closed.";
 }
 
@@ -43,7 +43,7 @@ export function EditorReport({ editors }: { editors: EditorCleanup | null }) {
     ...editors.skipped.map((editor) => editor.deliberate
       ? `Left ${editor.name} running: ${editor.reason}`
       : `${editor.name} had already closed`),
-    ...editors.pending.map((name) => `${name} is still opening; AMF closes it once it can identify the window`),
+    ...editors.pending.map((name) => `${name} is still opening; AIW closes it once it can identify the window`),
   ];
   if (lines.length === 0) return <p className="muted">No tracked editor.</p>;
   return <ul className="dormancy-editors" aria-label="Editor cleanup">
@@ -182,7 +182,7 @@ export default function DormancyPanel({ onClose, onOpenFeature }: {
     </div>}
 
     {results ? <section aria-label="Stop results" className="dormancy-results">
-      <p>Each feature was checked again just before stopping. Only AMF's own tmux session and editor windows were touched.</p>
+      <p>Each feature was checked again just before stopping. Only AIW's own tmux session and editor windows were touched.</p>
       <ul>
         {results.map((result) => <li key={key(result)} className={`dormancy-result dormancy-result-${result.outcome}`}>
           <Icon name={result.outcome === "stopped" ? "check" : "alert"} />
@@ -202,7 +202,7 @@ export default function DormancyPanel({ onClose, onOpenFeature }: {
       <p className="muted">Each one is checked again first. A feature that was opened, produced output, was stopped or deleted, lost its tmux session, or otherwise stopped being dormant since this list loaded is skipped and reported.</p>
     </section> : view && (!view.enabled
       ? <EmptyState icon="alert" title="Dormancy detection is off">
-          Set dormant_idle_minutes and dormant_last_accessed_hours above 0 in AMF's config to list idle, unattended features.
+          Set dormant_idle_minutes and dormant_last_accessed_hours above 0 in AIW's config to list idle, unattended features.
         </EmptyState>
       : view.features.length === 0
         ? <EmptyState icon="check" title="Nothing is dormant right now">

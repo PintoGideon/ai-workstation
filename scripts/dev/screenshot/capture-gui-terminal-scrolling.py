@@ -21,7 +21,7 @@ import urllib.request
 out = pathlib.Path(sys.argv[1]).resolve()
 out.mkdir(parents=True, exist_ok=True)
 workspace = pathlib.Path(__file__).resolve().parents[3]
-with tempfile.TemporaryDirectory(prefix="amf-gui-scroll-") as temporary:
+with tempfile.TemporaryDirectory(prefix="aiw-gui-scroll-") as temporary:
     scratch = pathlib.Path(temporary)
     with socket.socket() as inspector_socket:
         inspector_socket.bind(("127.0.0.1", 0))
@@ -29,8 +29,8 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-scroll-") as temporary:
     config = scratch / "config"
     state = scratch / "state"
     repo = scratch / "demo-api"
-    (config / "amf").mkdir(parents=True)
-    (state / "amf").mkdir(parents=True)
+    (config / "ai_workstation").mkdir(parents=True)
+    (state / "ai_workstation").mkdir(parents=True)
     repo.mkdir()
     env = os.environ.copy()
     env.update(
@@ -38,14 +38,14 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-scroll-") as temporary:
         XDG_STATE_HOME=str(state),
         GDK_BACKEND="x11",
         WEBKIT_INSPECTOR_HTTP_SERVER=inspector_address,
-        AMF_TMUX_SOCKET=str(scratch / "scroll-tmux.sock"),
+        AIW_TMUX_SOCKET=str(scratch / "scroll-tmux.sock"),
     )
     git_env = env | {
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "AMF demo",
+        "GIT_AUTHOR_NAME": "AIW demo",
         "GIT_AUTHOR_EMAIL": "demo@example.com",
-        "GIT_COMMITTER_NAME": "AMF demo",
+        "GIT_COMMITTER_NAME": "AIW demo",
         "GIT_COMMITTER_EMAIL": "demo@example.com",
     }
 
@@ -62,8 +62,8 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-scroll-") as temporary:
     git("add", ".")
     git("commit", "-m", "Initial invoice API")
     git("checkout", "-b", "round-invoice-totals")
-    tmux_name = "amf-gui-scroll-proof"
-    tmux = ["tmux", "-S", env["AMF_TMUX_SOCKET"]]
+    tmux_name = "aiw-gui-scroll-proof"
+    tmux = ["tmux", "-S", env["AIW_TMUX_SOCKET"]]
     harness = str(workspace / "scripts/dev/screenshot/fixtures/gui-scroll-harness.py")
     import shlex
     def command(mode):
@@ -90,7 +90,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-scroll-") as temporary:
     gui = None
     try:
         subprocess.run(tmux + ["new-session", "-d", "-s", tmux_name, "-n", "claude", "-x", "120", "-y", "30", command("transcript")], check=True)
-        subprocess.run(tmux + ["new-window", "-d", "-t", tmux_name, "-n", "opencode", command("fullscreen")], check=True)
+        subprocess.run(tmux + ["new-window", "-d", "-t", tmux_name, "-n", "nvim", command("fullscreen")], check=True)
         for _ in range(100):
             if vite.poll() is not None:
                 raise RuntimeError(
@@ -104,14 +104,14 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-scroll-") as temporary:
         else:
             raise RuntimeError("The isolated frontend did not become ready")
         gui = subprocess.Popen(
-            [str(workspace / "target/debug/amf-gui")],
+            [str(workspace / "target/debug/aiw-gui")],
             cwd=scratch,
             env=env,
             stdout=gui_log,
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
-        dbpath = config / "amf/amf.db"
+        dbpath = config / "ai_workstation/aiw.db"
         for _ in range(60):
             if gui.poll() is not None:
                 raise RuntimeError(
@@ -150,7 +150,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-scroll-") as temporary:
                     stamp,
                 ),
             )
-            for index, (kind, label) in enumerate([("claude", "Claude"), ("opencode", "OpenCode")]):
+            for index, (kind, label) in enumerate([("claude", "Claude"), ("nvim", "Neovim")]):
                 db.execute("INSERT INTO feature_sessions(id,feature_id,kind,label,tmux_window,created_at,sort_order) VALUES(?,?,?,?,?,?,?)",
                     ("shot-" + kind, "shot-feature", kind, label, kind, stamp, index))
             version = db.execute(
@@ -163,7 +163,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-scroll-") as temporary:
         subprocess.run(
             [
                 "/usr/bin/python3",
-                os.environ.get("AMF_GUI_CAPTURE_FRAMES", str(workspace / "scripts/dev/screenshot/capture-gui-terminal-scrolling-frames.py")),
+                os.environ.get("AIW_GUI_CAPTURE_FRAMES", str(workspace / "scripts/dev/screenshot/capture-gui-terminal-scrolling-frames.py")),
                 str(out),
                 str(gui.pid),
                 inspector_address,

@@ -1,6 +1,6 @@
 # Global review-memory compaction
 
-Captured from an isolated AMF v0.33.0 instance with a two-finding project
+Captured from an isolated AIW v0.33.0 instance with a two-finding project
 memory doc and a four-finding cross-project memory doc. The capture stopped
 before confirming the compact pass, so no agent tokens were spent and neither
 document was written.

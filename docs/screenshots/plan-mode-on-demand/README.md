@@ -1,12 +1,12 @@
 # On-demand plan interviews
 
-Captured with the `/amf-screenshot` workflow from an isolated AMF instance
+Captured with the `/aiw-screenshot` workflow from an isolated AIW instance
 against a throwaway repository, using
 `scripts/dev/screenshot/scenarios/plan-interview-on-demand.txt`. The scenario
 seeds a project and one feature with **plan mode off**, then runs the
 interview against that existing feature — so it exercises the real
 no-pending-launch path without reading or modifying user projects, the normal
-AMF database, or any agent session.
+AIW database, or any agent session.
 
 Every pass aborts before accepting. Accepting runs a real headless synthesis
 call against the feature's harness, which costs tokens and would make the
@@ -55,8 +55,8 @@ nothing is written, and the feature is untouched.
 
 ## 6. The second trigger
 
-`Ctrl+Space` then `a` opens the command picker focused on AMF's own local
-commands, where `plan-interview` is listed under the **AMF** source. It is
+`Ctrl+Space` then `a` opens the command picker focused on AIW's own local
+commands, where `plan-interview` is listed under the **AIW** source. It is
 offered only when a feature or session is selected.
 
 ![Command picker showing the plan-interview entry](06-command-picker-entry.png)

@@ -30,7 +30,7 @@ pub struct EvidenceOwner {
 impl EvidenceOwner {
     pub fn directory(&self) -> PathBuf {
         self.workdir
-            .join(".amf/screenshots")
+            .join(".aiw/screenshots")
             .join(&self.feature_id)
             .join(&self.session_id)
             .join(&self.scope_id)
@@ -275,7 +275,7 @@ pub(crate) fn ensure_directory(owner: &EvidenceOwner) -> Result<()> {
     let directory = open_directory(&dir, true)?;
     // Registering a destination must not dirty the repository before capture.
     // Keep an existing project's rules; never overwrite a shared ignore file.
-    let namespace = owner.workdir.join(".amf/screenshots");
+    let namespace = owner.workdir.join(".aiw/screenshots");
     let ignore = namespace.join(".gitignore");
     safe_path(&ignore)?;
     let namespace = open_directory(&namespace, false)?;
@@ -690,7 +690,7 @@ fn remove_directory_contents(
 
 pub(crate) fn guidance(owner: &EvidenceOwner) -> String {
     format!(
-        "AMF screenshot evidence: Capture only when the user explicitly requests visual validation. This guidance does not authorize capture. Your producing AMF session is {} (feature {}). Use only {}. Do not modify owner.json or recreate this directory after cleanup. Write a completed PNG/JPEG/WebP/GIF as <image-id>.<extension>, then atomically publish <image-id>.json LAST with version:1, scope_id:{}, image_id, file, sha256 (lowercase SHA-256 of final image), caption and captured_at (RFC3339). IDs use ASCII letters/digits/hyphens/underscores. Close/rename the image before writing metadata. For replacement keep image_id and publish the new hash. Maximum image 20 MiB, 16384 pixels per axis and 40 million pixels. Check original owner.json still exists before publishing. Do not write another session's destination.",
+        "AIW screenshot evidence: Capture only when the user explicitly requests visual validation. This guidance does not authorize capture. Your producing AIW session is {} (feature {}). Use only {}. Do not modify owner.json or recreate this directory after cleanup. Write a completed PNG/JPEG/WebP/GIF as <image-id>.<extension>, then atomically publish <image-id>.json LAST with version:1, scope_id:{}, image_id, file, sha256 (lowercase SHA-256 of final image), caption and captured_at (RFC3339). IDs use ASCII letters/digits/hyphens/underscores. Close/rename the image before writing metadata. For replacement keep image_id and publish the new hash. Maximum image 20 MiB, 16384 pixels per axis and 40 million pixels. Check original owner.json still exists before publishing. Do not write another session's destination.",
         owner.session_id,
         owner.feature_id,
         owner.directory().display(),
@@ -844,7 +844,7 @@ mod tests {
                 "--porcelain",
                 "--untracked-files=all",
                 "--",
-                ".amf/screenshots",
+                ".aiw/screenshots",
             ])
             .output()
             .unwrap();
@@ -854,7 +854,7 @@ mod tests {
             "Evidence dirtied the repo: {:?}",
             status.stdout
         );
-        let ignore = dir.path().join(".amf/screenshots/.gitignore");
+        let ignore = dir.path().join(".aiw/screenshots/.gitignore");
         std::fs::write(&ignore, "# Existing project choices\n*\n").unwrap();
         ensure_directory(&owner).unwrap();
         assert_eq!(

@@ -629,7 +629,7 @@ pub struct DiffViewerState {
     pub apply_suggestions_on_finish: bool,
     /// Human-readable anchors of suggestions successfully applied during this
     /// review (either individually or by the finish-time batch). Carried until
-    /// finish so the summary can say exactly what AMF changed locally.
+    /// finish so the summary can say exactly what AIW changed locally.
     pub applied_suggestions: Vec<String>,
     /// Finish-time application failures. The affected suggestions remain open
     /// and are sent to the fixing agent normally. Read through
@@ -1067,7 +1067,7 @@ impl DiffViewerState {
     /// After a reload, drop approvals and undo entries for every file whose
     /// patch (or status) differs from `previous`, the files it replaced. An
     /// approval describes the patch it was given on; a file that changed —
-    /// whether AMF wrote it or something outside AMF did — needs a new look.
+    /// whether AIW wrote it or something outside AIW did — needs a new look.
     pub fn forget_verdicts_for_changed_patches(&mut self, previous: &[crate::diff::DiffFile]) {
         let files = &self.files;
         let unchanged = |path: &str| {

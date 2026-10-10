@@ -13,7 +13,7 @@ const view: DebugLogView = {
   limit: 1000, shared_history: true,
   entries: [
     { timestamp: "2026-10-09T10:00:00Z", level: "DEBUG", context: "tmux", message: "Pane attached" },
-    { timestamp: "2026-10-09T10:01:00Z", level: "INFO", context: "amf", message: "Ready" },
+    { timestamp: "2026-10-09T10:01:00Z", level: "INFO", context: "aiw", message: "Ready" },
     { timestamp: "2026-10-09T10:02:00Z", level: "WARN", context: "sync", message: "café\n<script>alert(1)</script>" },
     { timestamp: "2026-10-09T10:03:00Z", level: "ERROR", context: "worktree", message: "Could not create checkout" },
   ],

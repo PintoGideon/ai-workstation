@@ -3,27 +3,27 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-IMAGE_NAME="${AMF_NO_TMUX_IMAGE:-amf-no-tmux}"
-CONTAINER_NAME="${AMF_NO_TMUX_CONTAINER:-amf-no-tmux}"
+IMAGE_NAME="${AIW_NO_TMUX_IMAGE:-aiw-no-tmux}"
+CONTAINER_NAME="${AIW_NO_TMUX_CONTAINER:-aiw-no-tmux}"
 
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [docker run args...]
 
-Builds the no-tmux AMF image, then runs it interactively.
+Builds the no-tmux AIW image, then runs it interactively.
 
 Pass Docker run flags before \`--\` and the container command after it.
 
 Environment variables:
-  AMF_NO_TMUX_IMAGE      Docker image name to build/run (default: $IMAGE_NAME)
-  AMF_NO_TMUX_CONTAINER  Docker container name to use (default: $CONTAINER_NAME)
-  AMF_RELEASE_ARCHIVE    Optional local release tarball path for the container
-  AMF_RELEASE_BASE       Optional release download base URL
+  AIW_NO_TMUX_IMAGE      Docker image name to build/run (default: $IMAGE_NAME)
+  AIW_NO_TMUX_CONTAINER  Docker container name to use (default: $CONTAINER_NAME)
+  AIW_RELEASE_ARCHIVE    Optional local release tarball path for the container
+  AIW_RELEASE_BASE       Optional release download base URL
 
 Examples:
   $0
   $0 --rm -it -- bash
-  AMF_RELEASE_ARCHIVE=$PWD/amf.tar.gz $0
+  AIW_RELEASE_ARCHIVE=$PWD/aiw.tar.gz $0
 EOF
 }
 
@@ -51,14 +51,14 @@ for arg in "$@"; do
     fi
 done
 
-for var in AMF_RELEASE_ARCHIVE AMF_RELEASE_BASE AMF_INSTALL_ROOT AMF_SKIP_INSTALL; do
+for var in AIW_RELEASE_ARCHIVE AIW_RELEASE_BASE AIW_INSTALL_ROOT AIW_SKIP_INSTALL; do
     if [[ -n "${!var:-}" ]]; then
         docker_env_args+=("-e" "$var=${!var}")
     fi
 done
 
-if [[ -n "${AMF_RELEASE_ARCHIVE:-}" && -f "${AMF_RELEASE_ARCHIVE:-}" ]]; then
-    docker_run_args+=("-v" "${AMF_RELEASE_ARCHIVE}:${AMF_RELEASE_ARCHIVE}:ro")
+if [[ -n "${AIW_RELEASE_ARCHIVE:-}" && -f "${AIW_RELEASE_ARCHIVE:-}" ]]; then
+    docker_run_args+=("-v" "${AIW_RELEASE_ARCHIVE}:${AIW_RELEASE_ARCHIVE}:ro")
 fi
 
 if [[ -t 0 && -t 1 ]]; then

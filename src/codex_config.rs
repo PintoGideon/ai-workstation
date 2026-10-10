@@ -3,19 +3,8 @@ use std::process::Command;
 
 use crate::project::VibeMode;
 
-pub fn ensure_user_config_notify_hook(hook_path: &Path) {
-    if cfg!(test) {
-        return;
-    }
-    let Some(config_path) = dirs::home_dir().map(|home| home.join(".codex").join("config.toml"))
-    else {
-        return;
-    };
-    let _ = ensure_user_config_notify_hook_for(&config_path, hook_path);
-}
-
 pub fn launch_override_args(workdir: &Path, mode: &VibeMode) -> Vec<String> {
-    let hook_path = workdir.join(".codex").join("amf-codex-notify.sh");
+    let hook_path = workdir.join(".codex").join("aiw-codex-notify.sh");
     let user_config_path = dirs::home_dir()
         .map(|home| home.join(".codex").join("config.toml"))
         .unwrap_or_default();
@@ -46,8 +35,8 @@ fn configured_model_for(config_path: &Path) -> Option<String> {
 /// TUI's event-loop thread. Callers that want the CLI-sourced catalog spawn
 /// [`spawn_cli_catalog_probe`] on a background thread instead.
 ///
-/// No-ops under `cfg!(test)`, like [`ensure_user_config_notify_hook`], so
-/// unit tests never depend on the machine's real `~/.codex/config.toml`.
+/// No-ops under `cfg!(test)`, so unit tests never depend on the machine's
+/// real `~/.codex/config.toml`.
 pub fn known_models() -> Vec<String> {
     if cfg!(test) {
         return Vec::new();
@@ -77,7 +66,7 @@ pub fn spawn_cli_catalog_probe() -> std::sync::mpsc::Receiver<Option<Vec<String>
 /// Read the catalog used by Codex's own model picker. The NUX table in
 /// config.toml only records models that have already been surfaced to a user;
 /// the cache contains the complete visible catalog and is therefore the
-/// correct source for an AMF picker.
+/// correct source for an AIW picker.
 fn known_models_from_cache(cache_path: &Path) -> Option<Vec<String>> {
     let value: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(cache_path).ok()?).ok()?;
@@ -86,7 +75,7 @@ fn known_models_from_cache(cache_path: &Path) -> Option<Vec<String>> {
 
 /// Ask the installed Codex CLI for its catalog when its cache has not been
 /// written yet. This is the same catalog rendered by Codex's model picker and
-/// keeps a fresh AMF install from falling back to `Custom…` only.
+/// keeps a fresh AIW install from falling back to `Custom…` only.
 fn known_models_from_cli() -> Option<Vec<String>> {
     let output = Command::new("codex")
         .args(["debug", "models"])
@@ -177,14 +166,45 @@ fn build_launch_config(
     launch_config
 }
 
+// FORK: Codex's `notify` is one argv (program + args; Codex appends the JSON
+// payload), not a list of commands. AIW never writes `~/.codex/config.toml`;
+// each launch passes `notify = [<worktree hook>, <user's own notify argv>...]`
+// with `-c`, and the hook replays the user's command (see
+// scripts/codex-notify.sh). Entries AIW itself once wrote into the global
+// file are dropped so they don't run twice.
 fn build_notify_override(notify: Option<&toml::Value>, hook_path: &Path) -> toml::Value {
     let hook_cmd = hook_path.to_string_lossy().into_owned();
-    let mut entries = parse_notify_entries(notify).unwrap_or_default();
-    if !entries.iter().any(|entry| entry == &hook_cmd) {
-        entries.push(hook_cmd);
-    }
+    let user_argv: Vec<String> = parse_notify_entries(notify)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|entry| !is_aiw_notify_hook(entry))
+        .collect();
+    let mut argv = vec![hook_cmd];
+    argv.extend(user_argv);
+    toml::Value::Array(argv.into_iter().map(toml::Value::String).collect())
+}
 
-    toml::Value::Array(entries.into_iter().map(toml::Value::String).collect())
+/// AIW's own notify hooks: the per-worktree `.codex/aiw-codex-notify.sh` and
+/// `<config dir>/codex-notify.sh`. FORK: upstream AMF's equivalents
+/// (`.codex/amf-codex-notify.sh`, `<config root>/amf/codex-notify.sh`, which
+/// older AMF versions added to `~/.codex/config.toml`) count too.
+fn is_aiw_notify_hook(entry: &str) -> bool {
+    let path = Path::new(entry);
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+    let parent = path
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+    matches!(name, "aiw-codex-notify.sh" | "amf-codex-notify.sh")
+        || (name == "codex-notify.sh"
+            && matches!(
+                parent,
+                crate::project::AIW_DIR_NAME | crate::project::LEGACY_AMF_DIR_NAME
+            ))
 }
 
 fn parse_notify_entries(value: Option<&toml::Value>) -> Option<Vec<String>> {
@@ -210,36 +230,6 @@ fn launch_config_to_args(config: toml::map::Map<String, toml::Value>) -> Vec<Str
         args.push(format!("{key}={value}"));
     }
     args
-}
-
-fn ensure_user_config_notify_hook_for(config_path: &Path, hook_path: &Path) -> Option<()> {
-    let mut config = if config_path.exists() {
-        std::fs::read_to_string(config_path)
-            .ok()
-            .and_then(|s| toml::from_str::<toml::Value>(&s).ok())
-            .filter(|value| value.is_table())?
-    } else {
-        toml::Value::Table(toml::map::Map::new())
-    };
-
-    let table = config.as_table_mut()?;
-    let hook_cmd = hook_path.to_string_lossy().into_owned();
-    let mut entries = parse_notify_entries(table.get("notify")).unwrap_or_default();
-    if !entries.iter().any(|entry| entry == &hook_cmd) {
-        entries.push(hook_cmd);
-    }
-
-    table.insert(
-        "notify".to_string(),
-        toml::Value::Array(entries.into_iter().map(toml::Value::String).collect()),
-    );
-
-    if let Some(parent) = config_path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let rendered = toml::to_string_pretty(&config).ok()?;
-    let _ = std::fs::write(config_path, rendered + "\n");
-    Some(())
 }
 
 /// Append launch-specific evidence guidance without writing shared configuration.
@@ -351,7 +341,7 @@ mod tests {
     fn launch_override_args_merges_existing_user_entries() {
         let dir = TempDir::new().unwrap();
         let config_path = dir.path().join("config.toml");
-        let hook_path = dir.path().join("amf-codex-notify.sh");
+        let hook_path = dir.path().join("aiw-codex-notify.sh");
 
         fs::write(&config_path, "notify = [\"/tmp/existing-hook.sh\"]\n").unwrap();
         let args = launch_override_args_for(&config_path, &hook_path, dir.path(), &VibeMode::Vibe);
@@ -367,16 +357,109 @@ mod tests {
             "existing user notify entry should be preserved"
         );
         assert!(
-            args[5].contains("amf-codex-notify.sh"),
-            "AMF hook should be injected into the transient override"
+            args[5].contains("aiw-codex-notify.sh"),
+            "AIW hook should be injected into the transient override"
+        );
+    }
+
+    // FORK: the notify hook is passed per launch and the user's config is
+    // only read, never written.
+    #[test]
+    fn notify_override_puts_hook_first_and_chains_user_argv() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let hook_path = dir.path().join(".codex").join("aiw-codex-notify.sh");
+        let original = "model = \"gpt-5\"\nnotify = [\"notify-send\", \"Codex done\", \"/home/u/.config/ai_workstation/codex-notify.sh\"]\n";
+        fs::write(&config_path, original).unwrap();
+
+        let args = launch_override_args_for(&config_path, &hook_path, dir.path(), &VibeMode::Vibe);
+        let notify = args.last().unwrap();
+        let value: toml::Value = toml::from_str(notify).unwrap();
+        let argv: Vec<&str> = value["notify"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(
+            argv,
+            vec![
+                hook_path.to_string_lossy().as_ref(),
+                "notify-send",
+                "Codex done"
+            ]
+        );
+        assert_eq!(fs::read_to_string(&config_path).unwrap(), original);
+    }
+
+    #[test]
+    fn notify_override_drops_stale_aiw_entries() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let hook_path = dir
+            .path()
+            .join("wt")
+            .join(".codex")
+            .join("aiw-codex-notify.sh");
+        fs::write(
+            &config_path,
+            // FORK: upstream AMF's global and per-worktree hooks are dropped too.
+            "notify = [\"/home/u/.config/ai_workstation/codex-notify.sh\", \"/old/wt/.codex/aiw-codex-notify.sh\", \"/home/u/.config/amf/codex-notify.sh\", \"/old/wt/.codex/amf-codex-notify.sh\"]\n",
+        )
+        .unwrap();
+        let args = launch_override_args_for(&config_path, &hook_path, dir.path(), &VibeMode::Vibe);
+        let value: toml::Value = toml::from_str(args.last().unwrap()).unwrap();
+        assert_eq!(
+            value["notify"].as_array().unwrap().len(),
+            1,
+            "only this launch's hook should remain: {value:?}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn notify_hook_replays_the_users_notify_command_with_the_payload() {
+        let dir = TempDir::new().unwrap();
+        let hook = dir.path().join("aiw-codex-notify.sh");
+        fs::write(&hook, include_str!("../scripts/codex-notify.sh")).unwrap();
+        let out = dir.path().join("out.txt");
+        let user = dir.path().join("user.sh");
+        fs::write(
+            &user,
+            format!(
+                "#!/bin/sh\nprintf '%s|%s' \"$1\" \"$2\" > '{}'\n",
+                out.display()
+            ),
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&user, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let status = std::process::Command::new("bash")
+            .arg(&hook)
+            .arg(&user)
+            .arg("tag")
+            .arg("{\"type\":\"agent-turn-complete\"}")
+            .env_remove("AIW_ACTIVE")
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !out.exists() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert_eq!(
+            fs::read_to_string(&out).unwrap(),
+            "tag|{\"type\":\"agent-turn-complete\"}"
         );
     }
 
     #[test]
-    fn launch_override_args_falls_back_to_amf_hook_only() {
+    fn launch_override_args_falls_back_to_aiw_hook_only() {
         let dir = TempDir::new().unwrap();
         let config_path = dir.path().join("missing.toml");
-        let hook_path = dir.path().join("amf-codex-notify.sh");
+        let hook_path = dir.path().join("aiw-codex-notify.sh");
 
         let args = launch_override_args_for(&config_path, &hook_path, dir.path(), &VibeMode::Vibe);
 
@@ -386,7 +469,7 @@ mod tests {
         assert_eq!(args[2], "--add-dir");
         assert_eq!(args[3], dir.path().to_string_lossy());
         assert_eq!(args[4], "-c");
-        assert!(args[5].contains("amf-codex-notify.sh"));
+        assert!(args[5].contains("aiw-codex-notify.sh"));
     }
 
     #[test]
@@ -454,7 +537,7 @@ mod tests {
     fn launch_override_args_supervibe_uses_full_access_without_approvals() {
         let dir = TempDir::new().unwrap();
         let config_path = dir.path().join("missing.toml");
-        let hook_path = dir.path().join("amf-codex-notify.sh");
+        let hook_path = dir.path().join("aiw-codex-notify.sh");
 
         let args =
             launch_override_args_for(&config_path, &hook_path, dir.path(), &VibeMode::SuperVibe);

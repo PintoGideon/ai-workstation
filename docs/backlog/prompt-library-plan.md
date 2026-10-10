@@ -2,7 +2,7 @@
 
 - **Status:** All phases complete _(phases 1–3 shipped in v0.26.0:
   multi-source picker, fill-in flow, and inline select-menus landed; tags + tag
-  filtering, the config-merge test, and the amf-add-prompt skill — phase 3
+  filtering, the config-merge test, and the aiw-add-prompt skill — phase 3
   complete. Phase 4 done: export/display resolver unified + destination paths
   surfaced in the picker, export confirm, and editor. Phase 5 done: VIM support
   in the editor/fill surfaces (Ctrl+T toggle + mode indicator) and agent-skill
@@ -51,8 +51,8 @@ them before the prompt reaches the session.
   persisted in the SQLite store (`ProjectStore`, `db/store.rs`, a
   migration, load/save).
 - `FeaturePreset` / `CustomSessionConfig` show the config-file
-  pattern (`~/.config/amf/config.json` global +
-  `{repo}/.amf/config.json` project merge) for declarative,
+  pattern (`~/.config/ai_workstation/config.json` global +
+  `{repo}/.aiw/config.json` project merge) for declarative,
   version-controllable entries.
 - `TextEditor` (with vim support) is already used by `ComposeState`
   and `SteeringPromptState` and is reusable for the editor dialog.
@@ -283,14 +283,14 @@ New `src/ui/dialogs/prompt_library.rs` (model on
 
 ### Phase 3 — Declarative templates & select menus
 
-- [x] `ExtensionConfig.prompt_templates` + project `.amf/config.json`
+- [x] `ExtensionConfig.prompt_templates` + project `.aiw/config.json`
   with global + project merge (by name, project wins)
 - [x] Export a user template to global/project `config.json` from the
   picker (`x` → `g`/`p`); same-name entries are replaced in place
 - [x] Load `Global` / `Project` templates into the picker. The picker now
   merges three sources: editable `User` (SQLite) first, then read-only
-  `Project` (`{repo}/.amf/config.json`), then `Global`
-  (`~/.config/amf/config.json`). A `Global` entry whose name collides
+  `Project` (`{repo}/.aiw/config.json`), then `Global`
+  (`~/.config/ai_workstation/config.json`). A `Global` entry whose name collides
   with a `Project` one is dropped (project wins). `User` entries are
   intentionally *not* deduped against config, so an exported template
   shows as both an editable copy and a read-only declarative one.
@@ -307,9 +307,9 @@ New `src/ui/dialogs/prompt_library.rs` (model on
   `PromptTemplate.tags`; the picker fuzzy-matches tags alongside name/body, a
   `#tag` query filters by tag only, and a bare `#` surfaces every tagged
   template (light grouping). Tags render as `#chips` in the preview pane.
-- [x] Optional `amf-add-prompt` skill (parallel to `amf-add-preset`).
-  `.claude/skills/amf-add-prompt/SKILL.md` adds/updates a `prompt_templates`
-  entry in `.amf/config.json` (project) or `~/.config/amf/config.json`'s
+- [x] Optional `aiw-add-prompt` skill (parallel to `aiw-add-preset`).
+  `.claude/skills/aiw-add-prompt/SKILL.md` adds/updates a `prompt_templates`
+  entry in `.aiw/config.json` (project) or `~/.config/ai_workstation/config.json`'s
   `extension` block (global), documenting the `PromptTemplate` schema, inline
   `{{slot}}` / `{{name|opt1|opt2}}` syntax, and the explicit `placeholders`
   array (text / multi_line / select).
@@ -327,11 +327,11 @@ New `src/ui/dialogs/prompt_library.rs` (model on
      project's **main** repo root, shared across all its worktrees.
    - `resolve_export_repo` (export `x` → `p`) uses the same
      project-repo path *when opened from a session*, but otherwise falls
-     back to `detect_repo_path()` — the git toplevel of AMF's current
-     working directory, which is the **worktree** root when AMF runs
+     back to `detect_repo_path()` — the git toplevel of AIW's current
+     working directory, which is the **worktree** root when AIW runs
      inside one.
   Result: exporting from the dashboard (no view) can write to a
-  worktree's `.amf/config.json` instead of the main repo's, so the
+  worktree's `.aiw/config.json` instead of the main repo's, so the
   picker (which reads the main repo) won't show what was just exported.
   Fix: point `resolve_export_repo`'s fallback at the same selection-based
   `resolve_library_repo` logic so display and export always agree, and
@@ -346,12 +346,12 @@ New `src/ui/dialogs/prompt_library.rs` (model on
   always matches where a write lands:
    - Picker: the preview pane reserves a muted footer line showing the
      selected entry's resolved source file — the SQLite store for `User`,
-     the relevant `.amf/config.json` for `Project` / `Worktree` /
+     the relevant `.aiw/config.json` for `Project` / `Worktree` /
      `Global`. Precomputed into `PromptLibraryEntry.source_path` at build
      time so the UI stays a pure renderer.
    - Export confirm: the `x` → `g`/`p`/`w` prompt now names each target's
      exact path *before* writing (`build_export_menu_message`), e.g.
-     `(g) ~/.config/amf/config.json   (p) <repo>/.amf/config.json`, with
+     `(g) ~/.config/ai_workstation/config.json   (p) <repo>/.aiw/config.json`, with
      `(unavailable)` for scopes lacking context.
    - Editor: a destination hint (reusing the spacer line) — `User`
      templates note they save to the local store (not version-controlled);
@@ -409,7 +409,7 @@ New `src/ui/dialogs/prompt_library.rs` (model on
 2. **Save scope (MVP):** save the current (compose) prompt only.
    Saving previous prompts — including a "save to library" action
    in the existing `LatestPrompt` menu — is a phase 2 follow-up.
-3. **Project-scoped templates** (`.amf/config.json`) wait until
+3. **Project-scoped templates** (`.aiw/config.json`) wait until
    phase 3 with the rest of the declarative config path; phase 1 is
    SQLite-only.
 

@@ -56,6 +56,13 @@ impl App {
         self.toasts.push(Toast::new(msg, kind));
     }
 
+    /// A toast that stays up for `duration` instead of its kind's default.
+    pub fn push_toast_for(&mut self, msg: impl Into<String>, kind: ToastKind, duration: Duration) {
+        let mut toast = Toast::new(msg, kind);
+        toast.duration = duration;
+        self.toasts.push(toast);
+    }
+
     pub fn push_toast_success(&mut self, msg: impl Into<String>) {
         self.push_toast(msg, ToastKind::Success);
     }
@@ -75,7 +82,7 @@ impl App {
     /// Move the shared status message into an expiring toast.
     ///
     /// Most modes render `message` in their own status or validation area,
-    /// but pane view has no persistent AMF status line. Consuming it here
+    /// but pane view has no persistent AIW status line. Consuming it here
     /// keeps pane feedback visible without leaving text over the harness.
     pub fn promote_message_to_toast(&mut self) {
         let Some(message) = self.message.take() else {

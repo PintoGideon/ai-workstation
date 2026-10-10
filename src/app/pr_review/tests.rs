@@ -1,6 +1,6 @@
 use super::domain::{
     COMMENT_HUNK_CONTEXT_LINES, LEGACY_REVIEW_SESSION_LABEL, WHOLE_FILE_HUNK_LINES,
-    append_amf_attribution, reply_posted_via_amf,
+    append_aiw_attribution, reply_posted_via_aiw,
 };
 use super::fetch::{make_snippet, normalize, truncate_chars};
 use super::investigation::{
@@ -582,7 +582,7 @@ fn single_and_combined_fix_prompts_omit_posted_review_usage() {
         - Total tokens: 20.0k\n\
         - Estimated cost: $0.10";
     let feedback = "Guard this behind the lock.\n\nKeep the early return.";
-    // AMF posts through the user's GitHub account, so usage removal must be
+    // AIW posts through the user's GitHub account, so usage removal must be
     // independent of GitHub's bot flag and the comment's kind.
     for usage in [attribution.usage_summary(), legacy_usage.to_string()] {
         let body = format!("{feedback}\n\n{usage}\n\n{AI_REVIEW_ATTRIBUTION_FOOTER}");
@@ -1034,22 +1034,39 @@ fn replies_in_finds_only_comments_targeting_this_ones_id() {
 }
 
 #[test]
-fn reply_posted_via_amf_detects_the_channel_disclosure_footer() {
-    let mut reply = sample_comment(2, "amf-user", false);
-    reply.body = format!("Done in `abc123`.\n\n{}", AMF_ATTRIBUTION_FOOTER);
-    assert!(reply_posted_via_amf(&reply));
+fn reply_posted_via_aiw_detects_the_channel_disclosure_footer() {
+    let mut reply = sample_comment(2, "aiw-user", false);
+    reply.body = format!("Done in `abc123`.\n\n{}", AIW_ATTRIBUTION_FOOTER);
+    assert!(reply_posted_via_aiw(&reply));
 
     reply.body = format!("Fixed the guard.\n\n{}", AI_ATTRIBUTION_FOOTER);
-    assert!(reply_posted_via_amf(&reply));
+    assert!(reply_posted_via_aiw(&reply));
 
     // A reply posted through some other channel (a headless agent using
     // `gh` directly, a human on GitHub) has no such footer.
     reply.body = "Done in `abc123`.".to_string();
-    assert!(!reply_posted_via_amf(&reply));
+    assert!(!reply_posted_via_aiw(&reply));
+}
+
+/// FORK: replies and findings posted before the rename carry the old
+/// footers; they are still recognised as AIW's own.
+#[test]
+fn legacy_footers_from_before_the_rename_are_still_recognised() {
+    use super::domain::{LEGACY_AI_DRAFTED_FOOTER, LEGACY_AI_REVIEW_FOOTER, LEGACY_POSTED_FOOTER};
+    let mut reply = sample_comment(2, "aiw-user", false);
+    for footer in [LEGACY_POSTED_FOOTER, LEGACY_AI_DRAFTED_FOOTER] {
+        reply.body = format!("Done.\n\n{footer}");
+        assert!(reply_posted_via_aiw(&reply), "{footer}");
+        assert!(reply.is_aiw_authored(), "{footer}");
+    }
+    reply.body = format!("Finding.\n\n{LEGACY_AI_REVIEW_FOOTER}");
+    assert!(reply.is_aiw_authored());
+    // A finding stays review work, not a follow-up reply.
+    assert!(!reply_posted_via_aiw(&reply));
 }
 
 #[test]
-fn normalize_classifies_exact_amf_footers_without_hiding_human_feedback() {
+fn normalize_classifies_exact_aiw_footers_without_hiding_human_feedback() {
     let comments = vec![
         ReviewComment {
             id: 1,
@@ -1072,7 +1089,7 @@ fn normalize_classifies_exact_amf_footers_without_hiding_human_feedback() {
             side: Some("RIGHT".into()),
             diff_hunk: Some("@@".into()),
             subject_type: None,
-            body: format!("Done in `abc123`.\n\n{AMF_ATTRIBUTION_FOOTER}"),
+            body: format!("Done in `abc123`.\n\n{AIW_ATTRIBUTION_FOOTER}"),
             user: user("author", "User"),
             in_reply_to_id: Some(1),
             pull_request_review_id: Some(91),
@@ -1085,7 +1102,7 @@ fn normalize_classifies_exact_amf_footers_without_hiding_human_feedback() {
             side: Some("RIGHT".into()),
             diff_hunk: Some("@@".into()),
             subject_type: None,
-            body: "I saw the posted via AMF note; this still needs a test.".into(),
+            body: "I saw the posted via AIW note; this still needs a test.".into(),
             user: user("reviewer", "User"),
             in_reply_to_id: Some(1),
             pull_request_review_id: Some(90),
@@ -1108,21 +1125,21 @@ fn normalize_classifies_exact_amf_footers_without_hiding_human_feedback() {
     // This is the same normalize pass a manual refresh runs after an `R`
     // reply has appeared on GitHub.
     let review = normalize(pr(), comments, vec![], vec![], vec![]);
-    assert!(review.comments[1].is_amf_authored());
-    assert!(review.is_collated_amf_reply(&review.comments[1]));
-    assert!(review.comments[3].is_amf_authored());
-    assert!(!review.is_collated_amf_reply(&review.comments[3]));
+    assert!(review.comments[1].is_aiw_authored());
+    assert!(review.is_collated_aiw_reply(&review.comments[1]));
+    assert!(review.comments[3].is_aiw_authored());
+    assert!(!review.is_collated_aiw_reply(&review.comments[3]));
     assert!(review.comments[3].is_actionable());
 
-    // Merely mentioning AMF is not an attribution marker, so the unrelated
+    // Merely mentioning AIW is not an attribution marker, so the unrelated
     // human reply remains incoming, actionable work.
-    assert!(!review.comments[2].is_amf_authored());
+    assert!(!review.comments[2].is_aiw_authored());
     assert!(review.comments[2].is_actionable());
     assert_eq!(review.open_count(), 3);
 }
 
 #[test]
-fn orphaned_amf_reply_is_not_collated_away() {
+fn orphaned_aiw_reply_is_not_collated_away() {
     let mut orphan = sample_comment(2, "author", false);
     orphan.in_reply_to = Some(999);
     orphan.body = format!("Done.\n\n{AI_ATTRIBUTION_FOOTER}");
@@ -1132,9 +1149,9 @@ fn orphaned_amf_reply_is_not_collated_away() {
         fetched_at: Local::now(),
     };
 
-    assert!(orphan.is_amf_authored());
+    assert!(orphan.is_aiw_authored());
     assert!(!orphan.is_actionable());
-    assert!(!review.is_collated_amf_reply(&orphan));
+    assert!(!review.is_collated_aiw_reply(&orphan));
     assert_eq!(review.open_count(), 0);
 }
 
@@ -1641,14 +1658,14 @@ fn bootstrap_prompt_lists_every_pr_and_instructs_category_format() {
 }
 
 #[test]
-fn append_amf_attribution_uses_a_distinct_channel_disclosure() {
+fn append_aiw_attribution_uses_a_distinct_channel_disclosure() {
     assert_eq!(
-        append_amf_attribution("Done in `abc123`."),
-        "Done in `abc123`.\n\n— posted via AMF"
+        append_aiw_attribution("Done in `abc123`."),
+        "Done in `abc123`.\n\n— posted via AIW"
     );
     assert_eq!(
-        append_amf_attribution("Trailing newline.\n\n"),
-        "Trailing newline.\n\n— posted via AMF"
+        append_aiw_attribution("Trailing newline.\n\n"),
+        "Trailing newline.\n\n— posted via AIW"
     );
 }
 
@@ -1663,11 +1680,11 @@ fn agent_drafted_replies_use_ai_attribution() {
     };
     assert_eq!(
         append_reply_attribution("Fixed the guard.", true, Some(&metadata)),
-        "Fixed the guard.\n\n_AI generation: harness Codex · model gpt-5.5 · estimated tokens ~1.5k · Fix cost (est.): $0.04_\n\n— drafted by AI via AMF"
+        "Fixed the guard.\n\n_AI generation: harness Codex · model gpt-5.5 · estimated tokens ~1.5k · Fix cost (est.): $0.04_\n\n— drafted by AI via AIW"
     );
     assert_eq!(
         append_reply_attribution("Done in `abc123`.", false, Some(&metadata)),
-        "Done in `abc123`.\n\n— posted via AMF"
+        "Done in `abc123`.\n\n— posted via AIW"
     );
 }
 
@@ -1682,7 +1699,7 @@ fn agent_drafted_reply_in_a_combined_batch_marks_the_shared_cost() {
     };
     assert_eq!(
         append_reply_attribution("Fixed the guard.", true, Some(&metadata)),
-        "Fixed the guard.\n\n_AI generation: harness Codex · model gpt-5.5 · estimated tokens ~1.5k · Fix cost (est.): $0.04 · combined (3)_\n_Fixed as one of 3 comments handled in a single combined agent run; the fix cost above is that run's total, shared across them._\n\n— drafted by AI via AMF"
+        "Fixed the guard.\n\n_AI generation: harness Codex · model gpt-5.5 · estimated tokens ~1.5k · Fix cost (est.): $0.04 · combined (3)_\n_Fixed as one of 3 comments handled in a single combined agent run; the fix cost above is that run's total, shared across them._\n\n— drafted by AI via AIW"
     );
 }
 

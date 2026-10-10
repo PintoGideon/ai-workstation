@@ -3,13 +3,13 @@
 # before and after completion. All setup runs inside the capture harness's
 # private XDG state.
 
-run:$AMF_BIN automation create-project --file scripts/dev/screenshot/scenarios/sidebar-todo-proof-project.json
-run:if ! tmux has-session -t amf-sidebar-todo-proof-sidebar-todo-proof 2>/dev/null; then tmux new-session -d -s amf-sidebar-todo-proof-sidebar-todo-proof -n codex -c "$PWD"; fi
-run:python3 scripts/dev/screenshot/seed-sidebar-todo.py "$XDG_CONFIG_HOME/amf/amf.db"
+run:$AIW_BIN automation create-project --file scripts/dev/screenshot/scenarios/sidebar-todo-proof-project.json
+run:if ! tmux has-session -t aiw-sidebar-todo-proof-sidebar-todo-proof 2>/dev/null; then tmux new-session -d -s aiw-sidebar-todo-proof-sidebar-todo-proof -n codex -c "$PWD"; fi
+run:python3 scripts/dev/screenshot/seed-sidebar-todo.py "$XDG_CONFIG_HOME/ai_workstation/aiw.db"
 
 # Automation runs after the TUI has loaded, so restart it against the seeded
 # scratch database before navigating the newly created feature.
-run:tmux respawn-pane -k -t "$SESSION" "$AMF_BIN"
+run:tmux respawn-pane -k -t "$SESSION" "$AIW_BIN"
 # Do not send navigation keys until the respawned TUI has reloaded the seeded
 # project. A fixed delay races on busy runners and makes the keys land on the
 # empty dashboard instead.

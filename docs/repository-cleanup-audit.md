@@ -48,7 +48,7 @@ Inventory captured from `git ls-files` at commit `14a3938` (2026-06-23): 229 tra
 | Examples | `examples/` | 1 |
 | Docker assets | `docker/` | 3 |
 | Bundled runtime content | `plugins/`, `skills/`, `themes/` | 13 |
-| Tool-specific configuration | `.amf/`, `.claude/`, `.opencode/`, `.gitignore` | 24 |
+| Tool-specific configuration | `.aiw/`, `.claude/`, `.opencode/`, `.gitignore` | 24 |
 
 The inventory deliberately counts files by primary purpose. For example, skill Markdown is classified as bundled runtime content, GitHub workflows as automation, and syntax fixtures under `docs/` as documentation even when they also exercise runtime behavior.
 
@@ -66,11 +66,11 @@ Validation baseline captured on 2026-08-10 with `rustc 1.96.1` and `cargo 1.96.1
 
 ## Declaration and consumer trace
 
-- `Cargo.toml` declares one binary (`amf`), one auto-discovered example (`vtcheck`), no Cargo features, and no build script. `cargo check --all-targets` resolves both targets.
+- `Cargo.toml` declares one binary (`aiw`), one auto-discovered example (`vtcheck`), no Cargo features, and no build script. `cargo check --all-targets` resolves both targets.
 - Every tracked file under `src/` is connected through the module declarations rooted at `src/main.rs`; nested module roots in `src/app/mod.rs`, `src/handlers/mod.rs`, `src/ui/mod.rs`, `src/db/mod.rs`, and `src/highlight/mod.rs` account for the directory modules and test-only modules.
 - All 25 normal dependencies have direct source references. `mockall` is used by test configurations; `pretty_assertions` has no source or example reference and is an apparent unused development dependency pending history review.
 - Runtime-injected scripts, OpenCode plugins, skills, and themes are connected through `include_str!` declarations in `src/app/setup.rs` and `src/theme.rs`. The syntax fixtures used at compile time are connected through `include_str!` in syntax/highlight tests.
-- Release, Docker, automation, and PR helper scripts have workflow or documentation consumers. Three scripts have no tracked caller: `scripts/generate-amf-themes.sh`, `scripts/generate-amf-themes.js`, and `scripts/test-thinking.sh`. Their comments and behavior identify them as standalone maintenance/development utilities, so absence of a static caller is not by itself removal evidence.
+- Release, Docker, automation, and PR helper scripts have workflow or documentation consumers. Three scripts have no tracked caller: `scripts/generate-aiw-themes.sh`, `scripts/generate-aiw-themes.js`, and `scripts/test-thinking.sh`. Their comments and behavior identify them as standalone maintenance/development utilities, so absence of a static caller is not by itself removal evidence.
 
 ## Documentation review notes
 
@@ -85,7 +85,7 @@ Validation baseline captured on 2026-08-10 with `rustc 1.96.1` and `cargo 1.96.1
 
 ## `AGENTS.md` / `CLAUDE.md` synchronization review
 
-The tracked `HEAD` versions have the same section order and nearly all of the same content. The feature-local Plan Mode block currently visible in `AGENTS.md` is an AMF-generated working-tree addition paired with ignored `.claude/plan.md`; it is not part of the tracked baseline and should not be copied into `CLAUDE.md` as permanent repository guidance.
+The tracked `HEAD` versions have the same section order and nearly all of the same content. The feature-local Plan Mode block currently visible in `AGENTS.md` is an AIW-generated working-tree addition paired with ignored `.claude/plan.md`; it is not part of the tracked baseline and should not be copied into `CLAUDE.md` as permanent repository guidance.
 
 | Section | Divergence | Recommended alignment |
 |---|---|---|
@@ -107,30 +107,30 @@ Synchronization should compare normalized shared sections in CI or generate both
 
 ## Project and tool configuration review
 
-- `.amf/config.json` is active project configuration: the release custom session calls `scripts/release.sh`, and the prompt template is loaded by the extension/config merge path. Its `Status Ticker` custom session calls `.amf/test-ticker.sh`, a path that does not exist in the working tree or any reachable git history; this session is therefore a confirmed broken configuration entry.
+- `.aiw/config.json` is active project configuration: the release custom session calls `scripts/release.sh`, and the prompt template is loaded by the extension/config merge path. Its `Status Ticker` custom session calls `.aiw/test-ticker.sh`, a path that does not exist in the working tree or any reachable git history; this session is therefore a confirmed broken configuration entry.
 - `.opencode/commands` is a working symlink to `../.claude/commands`, deliberately sharing the tracked command library between agents. In contrast, `.opencode/settings.json` is a broken symlink to the intentionally untracked/missing `.claude/settings.json`. Current project configuration is `.opencode/opencode.json`; no tracked consumer names the broken compatibility symlink.
 - `.claude/session-status-db-migration.md` describes Migration 004 with an entirely unchecked test plan, but the table, CLI command, DB accessors, fallback migration, cleanup paths, and tests are present in `src/` and `scripts/set-session-status.sh`. It is completed implementation planning material stored among active tool configuration and is a consolidation candidate (move to historical documentation or remove after maintainer confirmation).
 - `.claude/notes.md` is intentionally minimal but active: the README maps `m` to the memo session and `src/markdown.rs` includes the path in Markdown discovery. Retain it as a scaffold unless the memo feature itself changes.
-- The tracked Claude commands are exposed to OpenCode through `.opencode/commands`; the PR commands call their matching `scripts/amf/` helpers. `ai-review.md` depends on `.amf/change-history.json`, which is produced for Vibeless OpenCode sessions by the bundled change tracker. These are runtime consumers, not dead documentation.
+- The tracked Claude commands are exposed to OpenCode through `.opencode/commands`; the PR commands call their matching `scripts/aiw/` helpers. `ai-review.md` depends on `.aiw/change-history.json`, which is produced for Vibeless OpenCode sessions by the bundled change tracker. These are runtime consumers, not dead documentation.
 - `.github/workflows/release.yml` consumes the release packaging script and release-note sections. `.github/workflows/main.yml` has a confusing test pipeline: `rustc --version && cargo --version |` continues into `cargo test`, piping version output to the test process instead of printing both versions as its comment says. The tests still run, but the step should use three independent commands.
-- The reviewed project settings are local (`.amf/`, `.claude/`, `.opencode/`). They do not inject persistent global Claude/OpenCode settings. Source cleanup code still removes historical AMF entries from global Claude settings, consistent with the local-only policy.
+- The reviewed project settings are local (`.aiw/`, `.claude/`, `.opencode/`). They do not inject persistent global Claude/OpenCode settings. Source cleanup code still removes historical AIW entries from global Claude settings, consistent with the local-only policy.
 
 ## Bundled and operational artifact review
 
 | Artifact group | Consumption evidence | Audit disposition |
 |---|---|---|
-| `skills/amf-*` | All six skills are embedded in `AMF_SKILLS` and injected into `.claude/skills`, `.opencode/skills`, or `.agents/skills` according to the selected agent; cleanup uses the same list. | Retain. Direct runtime consumers and symmetric cleanup are present. |
+| `skills/aiw-*` | All six skills are embedded in `AIW_SKILLS` and injected into `.claude/skills`, `.opencode/skills`, or `.agents/skills` according to the selected agent; cleanup uses the same list. | Retain. Direct runtime consumers and symmetric cleanup are present. |
 | `.opencode/plugins/*.js` | All three plugins are embedded by `src/app/setup.rs`; input-request and sidebar-state are installed for OpenCode, while change-tracker is installed for Vibeless mode. Tests assert install/refresh behavior. | Retain. Direct runtime consumers are present. |
-| `plugins/diff-review/scripts/custom-diff-review.sh` | Embedded into the global AMF helper directory and resolved into Claude Vibeless local hook settings; it is the current structured in-app review hook, despite the directory name overlapping the retired legacy viewer wording in the changelog. | Retain; clarify the changelog/current documentation distinction. |
+| `plugins/diff-review/scripts/custom-diff-review.sh` | Embedded into the global AIW helper directory and resolved into Claude Vibeless local hook settings; it is the current structured in-app review hook, despite the directory name overlapping the retired legacy viewer wording in the changelog. | Retain; clarify the changelog/current documentation distinction. |
 | `scripts/codex-diff-review.sh` and notification/status scripts | Embedded and staged by `ensure_notify_scripts`; Codex/Claude launch and hook paths consume them. | Retain. Direct runtime consumers are present. |
 | `themes/opencode/*.json` | Four canonical themes are embedded by `src/theme.rs` and injected into feature worktrees. | Retain. Direct compile-time and runtime consumers are present. |
-| `.opencode/themes/*` | Three JSON files are byte-for-byte duplicates of canonical embedded themes. `.opencode/opencode.json` selects `amf-catppuccin`, providing project-local OpenCode use, but Gruvbox is absent and the duplicate README is stale. | Consolidation opportunity, not a removal recommendation: decide whether direct repo OpenCode use must work before AMF starts, then generate/synchronize this directory from the canonical source or document why both copies are maintained. |
+| `.opencode/themes/*` | Three JSON files are byte-for-byte duplicates of canonical embedded themes. `.opencode/opencode.json` selects `aiw-catppuccin`, providing project-local OpenCode use, but Gruvbox is absent and the duplicate README is stale. | Consolidation opportunity, not a removal recommendation: decide whether direct repo OpenCode use must work before AIW starts, then generate/synchronize this directory from the canonical source or document why both copies are maintained. |
 | Theme generator scripts | Both standalone scripts generate ten transparent wrapper themes under `.opencode/themes`; their output set and design conflict with the four current full, non-transparent canonical themes. Nothing tracked calls or documents the generators. | Suspected obsolete; require maintainer confirmation and history evidence before removal. |
 | `examples/vtcheck.rs` | Auto-discovered Cargo example that reproduces the pane parsing pipeline against a live tmux target. It has no tracked documentation/caller and defaults to a bug-specific session name. | Diagnostic artifact needing confirmation; retain unless the pane-corruption investigation is confirmed closed and the watchdog has no ongoing manual use. |
 | Docker no-tmux assets | The guide calls the local bundle/runner scripts; the Dockerfile copies both helper scripts. These validate published release bundles on systems without tmux. | Retain. The workflow is documented and internally complete. |
 | Release bundle script | Called by every release build matrix entry and packages the adjacent tmux runtime. | Retain. It is release-critical. |
 
-One cleanup asymmetry is confirmed in code: `ThemeManager::inject_opencode_themes` writes four themes, but `cleanup_opencode_plugins` removes only three and omits `amf-gruvbox.json`. A future fix should derive injection and cleanup from one shared manifest (and extend the test to cover Gruvbox), preventing new managed themes from becoming orphaned.
+One cleanup asymmetry is confirmed in code: `ThemeManager::inject_opencode_themes` writes four themes, but `cleanup_opencode_plugins` removes only three and omits `aiw-gruvbox.json`. A future fix should derive injection and cleanup from one shared manifest (and extend the test to cover Gruvbox), preventing new managed themes from becoming orphaned.
 
 ## Git-history evidence
 
@@ -142,7 +142,7 @@ For this audit, “recent” means changes since `v0.24.0` (2026-06-16) through 
 | Theme generator scripts | Added with the first OpenCode themes in `4b75f03` and last changed in `4574100`, both on 2026-03-01. The canonical theme system was overhauled in `21e15fa` (2026-03-06), and Gruvbox was added in `a190b2e` (2026-03-16), without updating either generator. No recent or release workflow use was found. This supports “obsolete” but does not prove absence of manual downstream use, so confidence remains medium. |
 | `scripts/test-thinking.sh` | Added in `2d2beec` (2026-03-06) alongside Codex notification/thinking work and never changed. Its only tracked reference is its own usage comment. It may remain a manual diagnostic, so removal confidence is low. |
 | Broken `.opencode/settings.json` | The symlink was added in `b7b3d1c` (2026-02-15). Its target `.claude/settings.json` was deliberately untracked by `d241b9c` (2026-03-12); the symlink was not repaired or removed afterward. This gives high confidence that the tracked link is obsolete/broken. |
-| Missing Status Ticker command | The `.amf/config.json` entry was added in `bca4321` (2026-06-01) and its metadata was normalized in `2486d5f` (2026-06-21), but `.amf/test-ticker.sh` has never existed in any reachable history. Recent edits show intent to retain the session, so the preferred follow-up is restore the script or remove the entry deliberately, not assume which outcome is wanted. The breakage itself is high confidence. |
+| Missing Status Ticker command | The `.aiw/config.json` entry was added in `bca4321` (2026-06-01) and its metadata was normalized in `2486d5f` (2026-06-21), but `.aiw/test-ticker.sh` has never existed in any reachable history. Recent edits show intent to retain the session, so the preferred follow-up is restore the script or remove the entry deliberately, not assume which outcome is wanted. The breakage itself is high confidence. |
 | Session-status migration plan | Initially authored as `.claude/plan.md` in `102d094` (2026-04-22), carried through the feature merges culminating in PR merge `4049311` (2026-05-07), and not updated after implementation or the later session-status refinement `bca4321`. This gives high confidence that it is completed historical planning material, while its final archival location remains a maintainer choice. |
 | `examples/vtcheck.rs` | Added once in pane-corruption fix `8e40e89` (2026-06-12), with no later changes. Because this is close to the audited release window and the event-loop/pane code continued changing, history argues for retention until maintainers confirm the investigation is closed. |
 | Duplicate project/canonical themes | Both copies and their READMEs were introduced together in `4b75f03`; the three common project-local copies were last synchronized during 2026-03-01/06 theme fixes. Gruvbox was added only to the canonical embedded set in `a190b2e`, and only `themes/opencode/README.md` was updated for the later theme design. Neither redundant README has a compile-time/runtime consumer. History confirms deliberate initial duplication followed by drift: remove `themes/README.md` and `.opencode/themes/README.md`, while treating removal of the project-local JSON copies as a separate decision. |
@@ -156,13 +156,13 @@ For this audit, “recent” means changes since `v0.24.0` (2026-06-16) through 
 
 ## End-to-end workflow cross-check
 
-- **Installation and upgrade:** The release workflow produces the asset names consumed by the upgrader and no-tmux installer. The bundle contains `amf` plus a neighboring tmux wrapper/runtime; scripts, plugins, skills, and canonical themes needed after install are `include_str!` data in the binary rather than omitted filesystem dependencies. Upgrade unit tests cover bundle preference, legacy fallback, symlink handling, and large payloads.
+- **Installation and upgrade:** The release workflow produces the asset names consumed by the upgrader and no-tmux installer. The bundle contains `aiw` plus a neighboring tmux wrapper/runtime; scripts, plugins, skills, and canonical themes needed after install are `include_str!` data in the binary rather than omitted filesystem dependencies. Upgrade unit tests cover bundle preference, legacy fallback, symlink handling, and large payloads.
 - **Release:** `.github/workflows/release.yml` runs tests, builds four targets, and calls `scripts/package-release-bundle.sh` for each. `CHANGELOG.md` release headings feed the release-note step. The release/Docker assets are active and should not be cleanup targets merely because they are outside `src/`.
 - **Automation:** All six JSON examples/templates parse as JSON. CLI declarations and `src/automation.rs` correspond to the documented create-project, create-feature, and batch-feature flows; passing tests cover dry-run validation, hook prompts, creation, and failure cases.
 - **Themes:** Compile-time embedding, worktree injection, project-local OpenCode selection, and injection tests confirm runtime use. The missing Gruvbox cleanup/test coverage and duplicated/stale project-local documentation remain the only confirmed cleanup gaps in this flow.
 - **Syntax parsers:** The README’s on-demand install model matches `src/highlight/`; parser installation/highlighting/startup-validation tests pass. Two fixture files are compile-time inputs, while the broader `docs/syntax-tests` set supports manual diff validation. The cleanup need is documentation/classification, not fixture deletion.
 - **Worktrees and local configuration:** Feature startup calls local notification/plugin/skill injection for both the main repo and worktrees. Cleanup is agent-specific, and tests cover local Claude settings, OpenCode plugin refresh/cleanup, Codex hooks, status migration, and worktree lifecycle. No finding recommends removing these runtime assets.
-- **Agent sessions:** Claude, Codex, and OpenCode each have explicit launch, transcript/sidebar, notification, and cleanup consumers; Pi intentionally receives no injected AMF skills in the current match. The custom diff-review hook is exercised by current tests and must be retained.
+- **Agent sessions:** Claude, Codex, and OpenCode each have explicit launch, transcript/sidebar, notification, and cleanup consumers; Pi intentionally receives no injected AIW skills in the current match. The custom diff-review hook is exercised by current tests and must be retained.
 - **Test/documentation consistency:** The passing 615-test suite makes the shared “no tests yet” guidance a high-priority documentation correction. The README’s contributing command (`cargo test`) is the accurate workflow.
 
 ## Prioritized findings
@@ -233,7 +233,7 @@ Risk describes the impact of acting on a wrong recommendation; confidence descri
 - **Location / scope:** `src/theme.rs`, `src/app/setup.rs`, theme tests.
 - **Category:** Consolidation.
 - **Evidence:** Injection writes four managed themes; cleanup removes a hardcoded three-theme list created before Gruvbox was added. Existing injection tests do not assert Gruvbox.
-- **Recommendation:** Define one managed-theme manifest consumed by injection, cleanup, and tests; include `amf-gruvbox.json` in cleanup behavior.
+- **Recommendation:** Define one managed-theme manifest consumed by injection, cleanup, and tests; include `aiw-gruvbox.json` in cleanup behavior.
 - **Risk:** Low.
 - **Confidence:** High.
 - **Verification status:** Confirmed by source comparison and blame sequencing.
@@ -274,9 +274,9 @@ Risk describes the impact of acting on a wrong recommendation; confidence descri
 
 ### NC-1 — Status Ticker configuration points to a nonexistent script
 
-- **Location / scope:** `.amf/config.json`, expected `.amf/test-ticker.sh`; custom-session picker/runtime.
+- **Location / scope:** `.aiw/config.json`, expected `.aiw/test-ticker.sh`; custom-session picker/runtime.
 - **Category:** Needs confirmation.
-- **Evidence:** The entry calls `bash .amf/test-ticker.sh`; that path is absent from the checkout and all reachable history. The entry itself was edited as recently as 2026-06-21.
+- **Evidence:** The entry calls `bash .aiw/test-ticker.sh`; that path is absent from the checkout and all reachable history. The entry itself was edited as recently as 2026-06-21.
 - **Recommendation:** Decide intent: restore and track a working ticker script if this remains a repository diagnostic, or remove the broken custom-session entry. Do not silently choose between those outcomes in a cleanup patch.
 - **Risk:** Medium because removal could discard an intended developer workflow.
 - **Confidence:** High that current configuration is broken.
@@ -289,14 +289,14 @@ Risk describes the impact of acting on a wrong recommendation; confidence descri
 - **Category:** Consolidation.
 - **Evidence:** Three JSON files are exact duplicates across directories, Gruvbox exists only in the canonical embedded directory, and three README surfaces disagree. `themes/README.md` adds only a directory overview; `.opencode/themes/README.md` describes the obsolete transparent copies; `themes/opencode/README.md` contains the useful build/update instructions. The project config selects a project-local theme, so direct OpenCode use remains a plausible consumer of the JSON files—not of the redundant READMEs.
 - **Recommendation:** Keep and correct `themes/opencode/README.md`; remove `themes/README.md` and `.opencode/themes/README.md`. Declare `themes/opencode/` canonical and generate/synchronize `.opencode/themes/` if pre-injection direct use is required; otherwise confirm that use is unsupported before proposing removal of the duplicate JSON files.
-- **Risk:** Medium because removing project-local copies could break direct OpenCode startup before AMF injects assets.
+- **Risk:** Medium because removing project-local copies could break direct OpenCode startup before AIW injects assets.
 - **Confidence:** High that duplication/drift exists; medium on the correct consolidation mechanism.
 - **Verification status:** README removal/consolidation is confirmed; JSON asset consolidation remains partially verified pending direct-OpenCode support expectations.
 - **Expected impact:** Eliminates manual duplication and contradictory theme guidance.
 
 ### NC-2 — Theme generators describe an older system
 
-- **Location / scope:** `scripts/generate-amf-themes.sh`, `scripts/generate-amf-themes.js`.
+- **Location / scope:** `scripts/generate-aiw-themes.sh`, `scripts/generate-aiw-themes.js`.
 - **Category:** Needs confirmation.
 - **Evidence:** Both produce ten transparent wrapper themes, conflict with the four current full/non-transparent themes, have no tracked caller/documentation, and were not updated through the theme overhaul or Gruvbox addition.
 - **Recommendation:** Ask maintainers whether either is used manually/downstream. If not, remove both; if generation is desired, replace them with one deterministic generator for the canonical theme set and test its output.
@@ -327,7 +327,7 @@ Risk describes the impact of acting on a wrong recommendation; confidence descri
 ## Retained uncertainties
 
 - No downstream repository or local manual invocation can be proven absent from this checkout; this particularly affects standalone generators and diagnostics.
-- Direct OpenCode startup in the repository may depend on `.opencode/themes` before AMF injection. Current config supports that inference, but no explicit support contract was found.
+- Direct OpenCode startup in the repository may depend on `.opencode/themes` before AIW injection. Current config supports that inference, but no explicit support contract was found.
 - The intended Status Ticker workflow is unclear: recent config maintenance supports retention, while the script has never been tracked.
 - There is no established policy for completed feature plans—retain in place, move to `docs/`, or rely on git history.
 - Interactive tmux/agent behavior, Docker image execution, and multi-platform release packaging were not executed locally; static paths and relevant unit tests passed.

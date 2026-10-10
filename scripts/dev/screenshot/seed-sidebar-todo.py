@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed one session-local TODO in a throwaway AMF screenshot database."""
+"""Seed one session-local TODO in a throwaway AIW screenshot database."""
 
 import sqlite3
 import sys
@@ -15,7 +15,7 @@ def main(database: str) -> None:
         "INSERT INTO features "
         "(id, project_id, name, branch, workdir, is_worktree, tmux_session, mode, agent, status, collapsed, created_at, last_accessed) "
         "VALUES (?, ?, 'sidebar-todo-proof', 'sidebar-todo-proof', ?, 1, "
-        "'amf-sidebar-todo-proof-sidebar-todo-proof', 'vibe', 'codex', 'active', 0, datetime('now'), datetime('now'))",
+        "'aiw-sidebar-todo-proof-sidebar-todo-proof', 'vibe', 'codex', 'active', 0, datetime('now'), datetime('now'))",
         (feature_id, project_id, workdir),
     )
     conn.execute(

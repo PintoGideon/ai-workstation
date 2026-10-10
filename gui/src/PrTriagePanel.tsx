@@ -343,7 +343,7 @@ export default function PrTriagePanel({ target, onClose, onHandoff }: { target: 
               {selected.can_resolve && <button className="btn btn-secondary btn-sm" disabled={locked}
                 onClick={() => void act({ kind: "request_resolve", comment_id: selected.id })}>{selected.resolved ? "Reopen thread…" : "Resolve thread…"}</button>}
             </div>}
-            {!selected.actionable && <p className="small muted">AMF follow-up replies are shown for context only.</p>}
+            {!selected.actionable && <p className="small muted">AIW follow-up replies are shown for context only.</p>}
             {investigate && investigate.commentId !== selected.id && <p className="small muted">
               An investigation request for another comment is open.{" "}
               {comments.some((c) => c.id === investigate.commentId) &&
@@ -381,7 +381,7 @@ export default function PrTriagePanel({ target, onClose, onHandoff }: { target: 
             {selected.local_note && <p className="small muted">Local note: {selected.local_note}</p>}
             {selected.replies.length > 0 && <section aria-label="Thread replies" className="pr-replies">
               {selected.replies.map((r) => <div key={r.id} className="pr-reply">
-                <strong className="small">{r.author}</strong>{r.via_amf && <span className="tag">via AMF</span>}
+                <strong className="small">{r.author}</strong>{r.via_aiw && <span className="tag">via AIW</span>}
                 <PrMarkdown source={r.body} workflowId={view!.workflow_id} identity={imageIdentity} onOpenImage={showImage} />
               </div>)}
             </section>}

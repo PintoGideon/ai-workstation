@@ -1,6 +1,6 @@
 # Development checks
 
-Use current stable Rust with rustfmt and Clippy. AMF uses edition 2024 and builds
+Use current stable Rust with rustfmt and Clippy. AIW uses edition 2024 and builds
 bundled SQLite/tree-sitter C code, so a C compiler/linker is required. The minimum
 compiler version is not separately tested; CI uses stable.
 
@@ -11,8 +11,8 @@ fixtures, Unix sockets and FIFOs. Install `git`, `tmux`, `sh`, `bash`, `ps`, `sl
 `mkfifo` and a C toolchain. On Ubuntu, CI installs `build-essential pkg-config git
 tmux bash coreutils procps`; on macOS it uses the runner's Xcode/Unix tools and
 installs tmux with Homebrew. No authenticated GitHub account or paid agent harness
-is required for tests. Running AMF itself requires whichever of Claude Code,
-Codex, OpenCode and Pi you select.
+is required for tests. Running AIW itself requires whichever of Claude Code,
+Codex, Pi, Gemini CLI and Cursor agent you select.
 
 ```sh
 cargo build --locked
@@ -36,7 +36,7 @@ setup cannot race the server's last-session exit. Only server startup is retried
 transport assertions run once. The parent enforces a 90-second timeout and kills
 the child's private server and removes its socket directory on success, failure
 or timeout. Child stdin is closed, exercising desktop-style terminal attachment
-without changing the test runner's stdin. No test uses the user's AMF tmux server.
+without changing the test runner's stdin. No test uses the user's AIW tmux server.
 
 The WSL-only clipboard integration test accesses the real Windows clipboard.
 Run with functioning WSL interop. A restricted sandbox can prevent Unix socket
@@ -69,7 +69,7 @@ All 2,511 originals remain accounted for (2,512 total).
 
 Never use `println!`/`eprintln!` in TUI code. Use App's `log_debug`, `log_info`,
 `log_warn`, or `log_error` with a short context such as `sync` or `worktree`.
-Dashboard `D` opens the log; the file is `~/.local/state/amf/debug.log`.
+Dashboard `D` opens the log; the file is `~/.local/state/ai_workstation/debug.log`.
 
 ## CI jobs
 
@@ -121,4 +121,4 @@ Local Linux/WSL baseline and inventory evidence are in
 [baseline/README.md](baseline/README.md). Hosted Linux/macOS/audit runs must be
 inspected for the published commit before CI is called green. Workflow linting
 and a local audit do not establish macOS execution or hosted success. Publishing
-this work remains a separate authorized step under `AMF_PLAN.md`.
+this work remains a separate authorized step under `AIW_PLAN.md`.

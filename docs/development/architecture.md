@@ -1,6 +1,6 @@
 # Architecture
 
-AMF is a single Rust executable. It retains the existing event loop and persistence
+AIW is a single Rust executable. It retains the existing event loop and persistence
 formats; feature extraction does not introduce a new framework or library.
 See [checks.md](checks.md) for setup, focused suites, CI and contribution guidance.
 The [baseline inventory](baseline/README.md) records the pre-refactor ownership map
@@ -13,12 +13,12 @@ main (startup, events, deadlines, worker polling)
   -> handlers (key/mouse dispatch) -> App feature methods
   -> ui (dashboard, pane, pickers, dialogs) -> display state/helpers
 App feature methods -> project/domain data + feature state
-                    -> db::AmfDb + feature persistence modules
+                    -> db::AiwDb + feature persistence modules
                     -> external managers / TmuxOps / WorktreeOps
 workers -> channels/mailbox -> feature poll/apply methods -> AppMode/display state
 ```
 
-`src/main.rs` is a thin binary that calls `agent_mainframe::cli::run`;
+`src/main.rs` is a thin binary that calls `ai_workstation::cli::run`;
 `src/cli.rs` owns CLI dispatch, terminal setup/teardown and `run_loop`. The loop
 reads terminal/IPC events, polls workers, reconciles session state, schedules
 pane refreshes and redraws. It uses deadlines and mode-dependent work; Viewing
@@ -59,7 +59,7 @@ frontend's `SyntaxCode.tsx` renders spans as `syn-*` classes coloured by the
 `src/gui_prompt_overrides.rs` adapts the headless-prompt override manager
 without touching `App::mode`, so it can sit above an open interview or review
 and its pre-call notice. Rows come from the shared registry and
-`resolve_template_layered` over the same DB and `amf.json` layers the call sites
+`resolve_template_layered` over the same DB and `aiw.json` layers the call sites
 read. Each row carries a revision fingerprint of that prompt's stored overrides
 and context paths; saves and clears re-resolve the stable context and refuse a
 mismatch. Project writes go through `prompts::project::update_in_repo`, which
@@ -92,7 +92,7 @@ provenance, with an exact-prompt confirmation and fresh PR/session checks.
 `TmuxOps` delivers a bracketed paste only to an existing running window; sending
 never creates an agent. Successful Enter marks Fixing through the shared
 persistence path. A failed Enter retires the confirmation while keeping the fix
-editor because terminal delivery can be ambiguous. `amf reply-draft` first sends
+editor because terminal delivery can be ambiguous. `aiw reply-draft` first sends
 to the TUI socket, then falls back to the same SQLite request-id capture guard
 when that socket is unavailable. The GUI's existing Done-reply engine reads the
 returned draft and its fixing-session attribution; no GUI IPC socket or schema
@@ -136,16 +136,15 @@ recreates a departed hook's files.
 Responders hold a shared file lock through validation and delivery and publish
 responses without overwriting an existing decision. A failed signal can retry
 only that original decision; TUI delivery failures keep the review and feedback
-open. OpenCode uses reply paths unique to each change and a waiting lease with
-process, session and change ownership, refreshed while its hook polls. The GUI
-requires a live owner and a fresh lease before answering OpenCode requests.
+open. The GUI leaves `change-reason` requests (Codex's watcher) to the TUI,
+because no hook proves a live owner for them.
 
 `gui_sessions.rs` gives the GUI the rest of the TUI's session picker. VS Code
 goes through `App::launch_vscode_window`, the picker's tracked launch (the
 `code` CLI is a test seam, `session_ops::vscode_cli`). The feature's
 `launched_editors` rows are projected into the sidebar snapshot, and closing
 them calls `App::kill_tracked_editors` after checking the rows the user
-confirmed. Custom sessions are re-read from the effective `amf.json` and
+confirmed. Custom sessions are re-read from the effective `aiw.json` and
 matched by a config revision. Their `pre_check` runs between two holds of the
 GUI lock, and they are created by `App::add_custom_session_identified`, which
 shares its window launch with the TUI's add. `with_feature_started_for_add`
@@ -171,7 +170,7 @@ rules; the module signals no process itself. Terminal attachment records
 | | `pr_review/integration.rs` | Fix target/harness selection, injection and linked session navigation |
 | | `pr_review/memory.rs` | Review-memory bootstrap, compact and append workflows |
 | | `pr_review/review_tab.rs` | "Review a PR" tab: open-PR list, tab switching, opening a PR into the viewer and leaving it |
-| | `pr_review/revisions.rs` | Object-only PR fetch into `refs/amf/review/N/*`, head check, merge-base, ref cleanup |
+| | `pr_review/revisions.rs` | Object-only PR fetch into `refs/aiw/review/N/*`, head check, merge-base, ref cleanup |
 | | `pr_review/github_access.rs` | `TriageGithub` read/write boundary (`gh` in production, fixtures in tests) and the investigation runner seam |
 | | `pr_review/state.rs`, `runtime.rs` | Dialog types and background work ownership |
 | Final Review | `review/preparation.rs` | Diff snapshots, persisted progression/history and review notes |
@@ -246,7 +245,7 @@ behavior while issue workflows can reuse authentication, repository-context,
 and list transport. Compact companion-feature setup state and row rendering
 live in `app/feature_setup.rs` and `ui/dialogs/feature_setup.rs`, shared by PR
 Triage and Final Review. Headless execution is in `headless.rs`; harness
-integration supports Claude Code, Codex, OpenCode and Pi. IPC, filesystem
+integration supports Claude Code, Codex, Pi, Gemini CLI and Cursor agent. IPC, filesystem
 watching, tmux observation, editors and resource inspection have dedicated
 modules. Injection is partial: App workflows still call concrete managers and
 filesystem APIs. Preserve those boundaries and process lifetimes; introduce an

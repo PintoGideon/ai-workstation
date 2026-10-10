@@ -15,17 +15,19 @@ use crate::token_tracking::TokenUsageSource;
 pub(super) fn agent_to_str(a: &AgentKind) -> &'static str {
     match a {
         AgentKind::Claude => "claude",
-        AgentKind::Opencode => "opencode",
         AgentKind::Codex => "codex",
         AgentKind::Pi => "pi",
+        AgentKind::Gemini => "gemini", // FORK
+        AgentKind::Cursor => "cursor", // FORK
     }
 }
 
 pub(super) fn agent_from_str(s: &str) -> AgentKind {
     match s {
-        "opencode" => AgentKind::Opencode,
         "codex" => AgentKind::Codex,
         "pi" => AgentKind::Pi,
+        "gemini" => AgentKind::Gemini, // FORK
+        "cursor" => AgentKind::Cursor, // FORK
         _ => AgentKind::Claude,
     }
 }
@@ -65,9 +67,10 @@ fn status_from_str(s: &str) -> ProjectStatus {
 fn kind_to_str(k: &SessionKind) -> &'static str {
     match k {
         SessionKind::Claude => "claude",
-        SessionKind::Opencode => "opencode",
         SessionKind::Codex => "codex",
         SessionKind::Pi => "pi",
+        SessionKind::Gemini => "gemini", // FORK
+        SessionKind::Cursor => "cursor", // FORK
         SessionKind::Terminal => "terminal",
         SessionKind::Nvim => "nvim",
         SessionKind::Vscode => "vscode",
@@ -76,11 +79,17 @@ fn kind_to_str(k: &SessionKind) -> &'static str {
     }
 }
 
+/// FORK: rows that still name the removed OpenCode harness are legacy data:
+/// an OpenCode session is dropped on load (see [`load_sessions`]), and an
+/// OpenCode feature/project agent falls back to the default agent.
+use crate::project::LEGACY_OPENCODE_AGENT as LEGACY_OPENCODE;
+
 fn kind_from_str(s: &str) -> SessionKind {
     match s {
-        "opencode" => SessionKind::Opencode,
         "codex" => SessionKind::Codex,
         "pi" => SessionKind::Pi,
+        "gemini" => SessionKind::Gemini, // FORK
+        "cursor" => SessionKind::Cursor, // FORK
         "terminal" => SessionKind::Terminal,
         "nvim" => SessionKind::Nvim,
         "vscode" => SessionKind::Vscode,
@@ -131,7 +140,13 @@ pub fn load(conn: &Connection) -> Result<ProjectStore> {
         )
         .optional()?
         .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
-        .map(|v| v.iter().map(|s| agent_from_str(s)).collect())
+        // FORK: a legacy "opencode" entry is dropped, not mapped to Claude.
+        .map(|v| {
+            v.iter()
+                .filter(|s| s.as_str() != LEGACY_OPENCODE)
+                .map(|s| agent_from_str(s))
+                .collect()
+        })
         .unwrap_or_default();
 
     let extra: std::collections::HashMap<String, serde_json::Value> = conn
@@ -157,7 +172,7 @@ pub fn load(conn: &Connection) -> Result<ProjectStore> {
         .collect::<Result<Vec<_>, _>>()?;
 
     // Templates are global, frequently mutated, and shared across every
-    // concurrently running AMF process, so they're read/written through
+    // concurrently running AIW process, so they're read/written through
     // `db::prompt_templates` directly rather than as part of this
     // full-replace store — see that module's doc comment.
     let prompt_templates = super::prompt_templates::load(conn)?;
@@ -182,7 +197,8 @@ pub fn load(conn: &Connection) -> Result<ProjectStore> {
 
     let mut projects = Vec::new();
     for (id, name, repo, collapsed, preferred_agent, is_git, created_at) in project_ids {
-        let features = load_features(conn, &id)?;
+        let preferred_agent = agent_from_str(&preferred_agent);
+        let features = load_features(conn, &id, &preferred_agent)?;
         projects.push(Project {
             id,
             name,
@@ -190,7 +206,7 @@ pub fn load(conn: &Connection) -> Result<ProjectStore> {
             collapsed,
             features,
             created_at: dt_from_str(&created_at),
-            preferred_agent: agent_from_str(&preferred_agent),
+            preferred_agent,
             is_git,
         });
     }
@@ -257,7 +273,11 @@ type FeatureRow = (
     Option<String>,
 );
 
-fn load_features(conn: &Connection, project_id: &str) -> Result<Vec<Feature>> {
+fn load_features(
+    conn: &Connection,
+    project_id: &str,
+    project_agent: &AgentKind,
+) -> Result<Vec<Feature>> {
     let mut stmt = conn.prepare(
         "SELECT id, name, branch, workdir, is_worktree, tmux_session,
                 mode, review, plan_mode, agent, enable_chrome, status,
@@ -338,7 +358,14 @@ fn load_features(conn: &Connection, project_id: &str) -> Result<Vec<Feature>> {
             mode: mode_from_str(&mode_str),
             review,
             plan_mode,
-            agent: agent_from_str(&agent_str),
+            // FORK: a feature whose agent was the removed OpenCode harness
+            // falls back to its project's preferred agent (itself already
+            // mapped off OpenCode by `agent_from_str`).
+            agent: if agent_str == LEGACY_OPENCODE {
+                project_agent.clone()
+            } else {
+                agent_from_str(&agent_str)
+            },
             enable_chrome,
             remote_control: false, // not yet in DB schema; default false
             pending_worktree_script: false,
@@ -370,17 +397,21 @@ fn load_features(conn: &Connection, project_id: &str) -> Result<Vec<Feature>> {
 }
 
 fn load_sessions(conn: &Connection, feature_id: &str) -> Result<Vec<FeatureSession>> {
+    // FORK: sessions of the removed OpenCode harness are dropped on load.
+    // There is no way left to launch or resume them, and keeping a
+    // placeholder kind around would mean a dead branch in every session
+    // match. The full-replace `save` then removes their rows for good.
     let mut stmt = conn.prepare(
         "SELECT id, kind, label, tmux_window, claude_session_id,
                 token_usage_source, token_usage_source_match,
                 created_at, command, on_stop, pre_check,
                 todo_id, todo_launched_from_menu, stopped
-         FROM feature_sessions WHERE feature_id = ?1
+         FROM feature_sessions WHERE feature_id = ?1 AND kind != ?2
          ORDER BY sort_order ASC, rowid ASC",
     )?;
 
     let sessions = stmt
-        .query_map(params![feature_id], |row| {
+        .query_map(params![feature_id, LEGACY_OPENCODE], |row| {
             Ok(FeatureSession {
                 id: row.get(0)?,
                 kind: kind_from_str(&row.get::<_, String>(1)?),
@@ -417,10 +448,10 @@ fn load_sessions(conn: &Connection, feature_id: &str) -> Result<Vec<FeatureSessi
 
 // ── save ─────────────────────────────────────────────────────
 
-/// The full-replace save's cross-process safety net (`AMF_PLAN.md` Task 5,
+/// The full-replace save's cross-process safety net (`AIW_PLAN.md` Task 5,
 /// "Establish cross-process coordination"). `save` below deletes and
 /// reinserts every row on every call: two processes (the TUI and the GUI,
-/// or two AMF instances) each holding their own in-memory `ProjectStore`
+/// or two AIW instances) each holding their own in-memory `ProjectStore`
 /// would otherwise silently clobber each other's concurrent writes — the
 /// second save wins in full, discarding whatever the first one added, with
 /// no error and no trace. `store_meta`'s `store_version` key turns that into
@@ -451,7 +482,7 @@ pub enum SaveOutcome {
 
 /// Save without a version check: only for call sites with no concurrent
 /// writer to race against by construction (seeding/merging a legacy store at
-/// `AmfDb::open_or_seed` time, before anything holds a loaded version to
+/// `AiwDb::open_or_seed` time, before anything holds a loaded version to
 /// check against). Ordinary application saves must go through
 /// [`save_checked`] instead — see its doc comment.
 pub fn save(conn: &Connection, store: &ProjectStore) -> Result<u64> {
@@ -673,7 +704,7 @@ fn do_save(conn: &Connection, store: &ProjectStore) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use crate::project::{Feature, FeatureSession, Project, ProjectStore, SessionKind, VibeMode};
     use std::collections::HashMap;
     use tempfile::NamedTempFile;
@@ -689,9 +720,9 @@ mod tests {
         }
     }
 
-    fn open_temp_db() -> (NamedTempFile, AmfDb) {
+    fn open_temp_db() -> (NamedTempFile, AiwDb) {
         let tmp = NamedTempFile::new().unwrap();
-        let db = AmfDb::open(tmp.path()).unwrap();
+        let db = AiwDb::open(tmp.path()).unwrap();
         (tmp, db)
     }
 
@@ -761,7 +792,7 @@ mod tests {
             branch: "feature/my-feature".to_string(),
             workdir: PathBuf::from("/tmp/repo/.worktrees/my-feature"),
             is_worktree: true,
-            tmux_session: "amf-my-feature".to_string(),
+            tmux_session: "aiw-my-feature".to_string(),
             sessions: vec![session],
             collapsed: false,
             mode: VibeMode::Vibe,
@@ -970,7 +1001,7 @@ mod tests {
                     branch: "keep".to_string(),
                     workdir: PathBuf::from("/tmp/repo"),
                     is_worktree: false,
-                    tmux_session: "amf-keep".to_string(),
+                    tmux_session: "aiw-keep".to_string(),
                     sessions: Vec::new(),
                     collapsed: true,
                     mode: VibeMode::default(),
@@ -998,7 +1029,7 @@ mod tests {
                     branch: "skip".to_string(),
                     workdir: PathBuf::from("/tmp/repo/.worktrees/skip"),
                     is_worktree: true,
-                    tmux_session: "amf-skip".to_string(),
+                    tmux_session: "aiw-skip".to_string(),
                     sessions: Vec::new(),
                     collapsed: true,
                     mode: VibeMode::default(),
@@ -1033,7 +1064,7 @@ mod tests {
         assert_eq!(loaded.projects[0].features[0].name, "keep");
     }
 
-    // ── cross-process coordination (AMF_PLAN.md Task 5) ─────────────
+    // ── cross-process coordination (AIW_PLAN.md Task 5) ─────────────
 
     #[test]
     fn fresh_database_has_version_zero() {
@@ -1110,7 +1141,7 @@ mod tests {
     #[test]
     fn unconditional_save_also_advances_the_version() {
         // `save` (no expected-version check) is still the seed/merge path's
-        // save at `AmfDb::open_or_seed` time; it must keep incrementing the
+        // save at `AiwDb::open_or_seed` time; it must keep incrementing the
         // same counter `save_checked` reads; otherwise the very first
         // application-level save after a fresh seed would see a version
         // that does not match what is actually on disk.
@@ -1147,5 +1178,111 @@ mod tests {
             save_checked(&db.conn, &store, 0).unwrap(),
             SaveOutcome::Saved { new_version: 1 }
         );
+    }
+
+    /// FORK: a database written while OpenCode was supported must still load.
+    /// OpenCode sessions are dropped, a feature whose agent was OpenCode takes
+    /// its project's preferred agent, a project that preferred OpenCode falls
+    /// back to the default agent, and OpenCode leaves the harness list.
+    #[test]
+    fn legacy_opencode_rows_load_without_opencode() {
+        let (_tmp, db) = open_temp_db();
+        let mut store = empty_store();
+        let mut codex_project = Project::new(
+            "codex-project".into(),
+            "/tmp/legacy-repo".into(),
+            true,
+            AgentKind::Codex,
+        );
+        let mut feature = Feature::new(
+            "legacy".into(),
+            "legacy".into(),
+            "/tmp/legacy-repo".into(),
+            false,
+            VibeMode::Vibe,
+            false,
+            false,
+            AgentKind::Claude,
+            false,
+            false,
+        );
+        let keep = feature.add_session(SessionKind::Claude).id.clone();
+        let gone = feature.add_session(SessionKind::Codex).id.clone();
+        codex_project.features.push(feature);
+        store.projects.push(codex_project);
+        store.projects.push(Project::new(
+            "oc-project".into(),
+            "/tmp/oc-repo".into(),
+            true,
+            AgentKind::Claude,
+        ));
+        store.available_harnesses = vec![AgentKind::Claude, AgentKind::Codex];
+        save(&db.conn, &store).unwrap();
+
+        // Rewrite the rows the way an OpenCode-era build stored them.
+        db.conn
+            .execute_batch(&format!(
+                "UPDATE features SET agent = 'opencode';
+                 UPDATE feature_sessions SET kind = 'opencode' WHERE id = '{gone}';
+                 UPDATE projects SET preferred_agent = 'opencode' WHERE name = 'oc-project';
+                 UPDATE store_meta SET value = '[\"opencode\",\"codex\"]'
+                     WHERE key = 'available_harnesses';"
+            ))
+            .unwrap();
+
+        let loaded = load(&db.conn).expect("a legacy OpenCode store must load");
+        let feature = &loaded.projects[0].features[0];
+        assert_eq!(
+            feature.agent,
+            AgentKind::Codex,
+            "falls back to the project's agent"
+        );
+        let ids: Vec<&str> = feature.sessions.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, vec![keep.as_str()], "the OpenCode session is dropped");
+        assert_eq!(loaded.projects[1].preferred_agent, AgentKind::default());
+        assert_eq!(loaded.available_harnesses, vec![AgentKind::Codex]);
+
+        // Saving the loaded store removes the OpenCode rows for good.
+        save(&db.conn, &loaded).unwrap();
+        let opencode_rows: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM feature_sessions WHERE kind = 'opencode'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(opencode_rows, 0);
+    }
+
+    /// FORK: cached token usage for OpenCode sessions is ignored, not read
+    /// back as Claude usage.
+    #[test]
+    fn legacy_opencode_token_cache_rows_are_ignored() {
+        let (_tmp, db) = open_temp_db();
+        let entry = |id: &str| crate::token_tracking::DbTokenCacheEntry {
+            source: crate::token_tracking::TokenUsageSource {
+                provider: crate::token_tracking::TokenUsageProvider::Claude,
+                id: id.to_string(),
+            },
+            signature: Some(1),
+            usage: None,
+            parse_state: None,
+        };
+        db.save_token_cache(&[entry("claude-1"), entry("oc-1")])
+            .unwrap();
+        db.conn
+            .execute(
+                "UPDATE token_usage_cache SET source_provider = 'opencode' WHERE source_id = 'oc-1'",
+                [],
+            )
+            .unwrap();
+        let ids: Vec<String> = db
+            .load_token_cache()
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.source.id)
+            .collect();
+        assert_eq!(ids, vec!["claude-1".to_string()]);
     }
 }

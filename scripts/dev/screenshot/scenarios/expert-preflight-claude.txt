@@ -1,5 +1,5 @@
 # Claude-specific proof of the Expert model selector and pre-call gate.
-run:python3 "$SCRIPT_DIR/seed_plan_draft.py" "$XDG_CONFIG_HOME/amf/amf.db"
+run:python3 "$SCRIPT_DIR/seed_plan_draft.py" "$XDG_CONFIG_HOME/ai_workstation/aiw.db"
 wait:700
 key:j
 wait:300

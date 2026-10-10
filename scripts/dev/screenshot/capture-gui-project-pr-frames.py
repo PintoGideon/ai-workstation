@@ -132,11 +132,11 @@ def capture(name, note, expects, expression=None, allow_alert=False):
             str(window.id),
             str(g.width),
             str(g.height),
-            str(pathlib.Path(os.environ.get("AMF_PROJECT_PR_PROOF_SCOPE", str(out))) / name),
+            str(pathlib.Path(os.environ.get("AIW_PROJECT_PR_PROOF_SCOPE", str(out))) / name),
         ],
         check=True,
     )
-    digest = hashlib.sha256((pathlib.Path(os.environ.get("AMF_PROJECT_PR_PROOF_SCOPE", str(out))) / name).read_bytes()).digest()
+    digest = hashlib.sha256((pathlib.Path(os.environ.get("AIW_PROJECT_PR_PROOF_SCOPE", str(out))) / name).read_bytes()).digest()
     assert digest not in captured_frames, "The native window saved a stale frame"
     captured_frames.add(digest)
     (out / name.replace(".png", ".txt")).write_text(body)
@@ -149,8 +149,8 @@ def has_button(text):
     return f'Array.from(document.querySelectorAll("button")).some(b=>b.textContent.trim()==={json.dumps(text)})'
 
 
-state = pathlib.Path(os.environ["AMF_GUI_GH_STATE"])
-calls_path = pathlib.Path(os.environ["AMF_GUI_AI_CALLS"])
+state = pathlib.Path(os.environ["AIW_GUI_GH_STATE"])
+calls_path = pathlib.Path(os.environ["AIW_GUI_AI_CALLS"])
 
 
 def ai_calls():

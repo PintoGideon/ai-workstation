@@ -1,29 +1,29 @@
 #!/bin/bash
-# Write a custom session status into the AMF database.
+# Write a custom session status into the AIW database.
 #
-# AMF sets AMF_SESSION_ID and AMF_STATUS_DIR when launching custom sessions.
+# AIW sets AIW_SESSION_ID and AIW_STATUS_DIR when launching custom sessions.
 # Call this script from your session's hook to report a one-line status shown
-# in the AMF dashboard.
+# in the AIW dashboard.
 #
 # Usage: set-session-status.sh "status text"
 
-if [ "${AMF_ACTIVE:-}" != "1" ]; then
+if [ "${AIW_ACTIVE:-}" != "1" ]; then
     exit 0
 fi
 
 STATUS_TEXT="${1:-}"
-SESSION_ID="${AMF_SESSION_ID:-}"
+SESSION_ID="${AIW_SESSION_ID:-}"
 
 if [ -z "$SESSION_ID" ] || [ -z "$STATUS_TEXT" ]; then
     exit 0
 fi
 
-if command -v amf >/dev/null 2>&1; then
-    amf set-status "$SESSION_ID" "$STATUS_TEXT" 2>/dev/null && exit 0
+if command -v aiw >/dev/null 2>&1; then
+    aiw set-status "$SESSION_ID" "$STATUS_TEXT" 2>/dev/null && exit 0
 fi
 
-# Fallback: write to the legacy file path when amf is not in PATH.
-if [ -n "$AMF_STATUS_DIR" ]; then
-    mkdir -p "$AMF_STATUS_DIR"
-    printf '%s\n' "$STATUS_TEXT" > "$AMF_STATUS_DIR/${SESSION_ID}.txt"
+# Fallback: write to the legacy file path when aiw is not in PATH.
+if [ -n "$AIW_STATUS_DIR" ]; then
+    mkdir -p "$AIW_STATUS_DIR"
+    printf '%s\n' "$STATUS_TEXT" > "$AIW_STATUS_DIR/${SESSION_ID}.txt"
 fi

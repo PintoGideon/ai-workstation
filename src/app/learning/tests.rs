@@ -38,7 +38,7 @@ fn store_at(workdir: &Path, is_git: bool) -> ProjectStore {
         branch: "my-feat".to_string(),
         workdir: workdir.to_path_buf(),
         is_worktree: false,
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         sessions: vec![],
         collapsed: false,
         mode: VibeMode::default(),
@@ -106,8 +106,8 @@ fn git(repo: &Path, args: &[&str]) {
 fn repo_with_branch_change() -> TempDir {
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "--initial-branch=main"]);
-    git(repo.path(), &["config", "user.name", "AMF Test"]);
-    git(repo.path(), &["config", "user.email", "amf@example.com"]);
+    git(repo.path(), &["config", "user.name", "AIW Test"]);
+    git(repo.path(), &["config", "user.email", "aiw@example.com"]);
     std::fs::write(repo.path().join("README.md"), "# my-project\n").unwrap();
     std::fs::create_dir_all(repo.path().join("src")).unwrap();
     std::fs::write(repo.path().join("src/main.rs"), "fn main() {}\n").unwrap();
@@ -136,7 +136,7 @@ fn state_with_content(lines: &[&str]) -> LearningViewState {
         "proj-1".to_string(),
         0,
         0,
-        "amf".to_string(),
+        "aiw".to_string(),
         "learning-mode".to_string(),
         PathBuf::from("/tmp/does-not-matter"),
         true,
@@ -1801,7 +1801,7 @@ fn fallback_walk_skips_noise_and_respects_caps() {
 }
 
 /// A folder the walk can't open leaves no gap in the list, so the walk has
-/// to report it — otherwise "no such directory" and "AMF couldn't read it"
+/// to report it — otherwise "no such directory" and "AIW couldn't read it"
 /// are indistinguishable to someone who doesn't know the project.
 #[test]
 #[cfg(unix)]
@@ -2530,7 +2530,7 @@ fn a_re_file_that_cannot_be_saved_is_undone_and_says_so() {
         .clone();
     // The same database, reopened read-only: the session and the row are
     // all still there, and only the write fails.
-    app.db = Some(crate::db::AmfDb::open_read_only(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open_read_only(&db_dir.path().join("aiw.db")).unwrap());
 
     assert_eq!(
         app.learning_relabel_intent(),
@@ -2732,7 +2732,7 @@ fn a_codex_question_is_recorded_as_the_deep_dive_it_will_actually_be() {
         LearningRunMode::DeepDive.effective_for(&AgentKind::Codex),
         LearningRunMode::DeepDive
     );
-    for harness in [AgentKind::Claude, AgentKind::Opencode, AgentKind::Pi] {
+    for harness in [AgentKind::Claude, AgentKind::Pi] {
         assert_eq!(
             LearningRunMode::NoTools.effective_for(&harness),
             LearningRunMode::NoTools,
@@ -2774,7 +2774,7 @@ fn opened_app_with_db() -> (TempDir, TempDir, App) {
     let repo = repo_with_branch_change();
     let db_dir = TempDir::new().unwrap();
     let mut app = app_at(repo.path(), true);
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     app.open_learning_mode(0, 0).unwrap();
     while learning(&app).content_path.as_deref() != Some("src/main.rs") {
         app.learning_select_next_entry();
@@ -2835,7 +2835,7 @@ fn a_failure_arriving_after_the_overlay_closed_is_still_saved() {
     let reason = row.error.as_deref().unwrap_or_default();
     assert!(reason.contains("couldn't answer"), "{reason}");
     assert!(
-        !reason.contains("AMF stopped"),
+        !reason.contains("AIW stopped"),
         "a real failure keeps its own reason rather than being reconciled: {reason}"
     );
 }
@@ -3061,7 +3061,7 @@ fn app_on_util(contents: &str) -> (TempDir, TempDir, App) {
     std::fs::write(repo.path().join("src/util.rs"), contents).unwrap();
     let db_dir = TempDir::new().unwrap();
     let mut app = app_at(repo.path(), true);
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     app.open_learning_mode(0, 0).unwrap();
     for _ in 0..learning(&app).entries.len() {
         if learning(&app).content_path.as_deref() == Some("src/util.rs") {
@@ -3386,7 +3386,7 @@ fn the_intro_opens_on_the_first_visit_only() {
     let repo = repo_with_branch_change();
     let db_dir = TempDir::new().unwrap();
     let mut app = app_at(repo.path(), true);
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
 
     app.open_learning_mode(0, 0).unwrap();
     assert!(
@@ -3864,8 +3864,8 @@ fn a_long_answer_is_excerpted_into_the_note() {
 fn repo_with_a_small_change_in_a_big_file() -> TempDir {
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "--initial-branch=main"]);
-    git(repo.path(), &["config", "user.name", "AMF Test"]);
-    git(repo.path(), &["config", "user.email", "amf@example.com"]);
+    git(repo.path(), &["config", "user.name", "AIW Test"]);
+    git(repo.path(), &["config", "user.email", "aiw@example.com"]);
     std::fs::create_dir_all(repo.path().join("src")).unwrap();
     let base: String = (0..BIG_FILE_LINES)
         .map(|i| format!("fn line_{i}() {{}}\n"))
@@ -4194,7 +4194,7 @@ fn opened_app_that_can_launch() -> (TempDir, TempDir, App) {
     // resource warning it would otherwise raise on a loaded machine.
     app.config.max_concurrent_agents = 0;
     app.config.low_memory_warn_mb = 0;
-    app.db = Some(crate::db::AmfDb::open(&db_dir.path().join("amf.db")).unwrap());
+    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
     app.open_learning_mode(0, 0).unwrap();
     while learning(&app).content_path.as_deref() != Some("src/main.rs") {
         app.learning_select_next_entry();

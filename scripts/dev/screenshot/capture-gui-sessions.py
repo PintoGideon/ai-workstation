@@ -2,7 +2,7 @@
 """Run native GUI proof for VS Code and configured custom sessions.
 
 The database, config, Git repository/worktree and tmux server (its own socket)
-are private to this run. The project's committed `amf.json` defines two custom
+are private to this run. The project's committed `aiw.json` defines two custom
 sessions: "Dev server" (Nerd Font icon, working_dir, pre_check, on_stop,
 autolaunch) and "Database", whose pre_check runs `docker info`. Both `code` and
 `docker` resolve to stand-ins in a private bin directory placed first on PATH:
@@ -11,7 +11,7 @@ stand-in prints a dev-server banner for the custom session, and the `code`
 stand-in starts a stand-in "window" process with VS Code's argv shape, which
 this script owns. The user's real VS Code, Docker and editor windows are never
 run, recorded, signalled or killed. A second runner-owned process is recorded
-as a window AMF did not open, and must survive. No agent is launched: the
+as a window AIW did not open, and must survive. No agent is launched: the
 feature runs a plain shell. Only owned GUI/Vite process groups, the stand-ins
 and the private tmux server are stopped on exit.
 """
@@ -39,7 +39,7 @@ def iso(delta):
     return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-AMF_JSON = {
+AIW_JSON = {
     "custom_sessions": [
         {
             "name": "Dev server",
@@ -63,7 +63,7 @@ AMF_JSON = {
     ]
 }
 
-with tempfile.TemporaryDirectory(prefix="amf-gui-sessions-") as temporary:
+with tempfile.TemporaryDirectory(prefix="aiw-gui-sessions-") as temporary:
     scratch = pathlib.Path(temporary)
     with socket.socket() as inspector_socket:
         inspector_socket.bind(("127.0.0.1", 0))
@@ -74,19 +74,19 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sessions-") as temporary:
     worktree = scratch / "worktrees" / "checkout-redesign"
     bin_dir = scratch / "bin"
     standin_dir = scratch / "standin"
-    for directory in [config / "amf", state / "amf", repo, bin_dir, standin_dir]:
+    for directory in [config / "ai_workstation", state / "ai_workstation", repo, bin_dir, standin_dir]:
         directory.mkdir(parents=True)
     code_log = scratch / "code-calls.log"
     code_log.write_text("")
 
     # The stand-in window: VS Code's argv shape (a `code` binary, then
     # `--new-window <worktree>`), with a child standing in for the extension
-    # host. AMF attributes it exactly as it would a real window.
+    # host. AIW attributes it exactly as it would a real window.
     window_binary = standin_dir / "code"
     os.symlink("/bin/bash", window_binary)
     (bin_dir / "code").write_text(f"""#!/bin/bash
 # Stand-in VS Code CLI for the screenshot capture. Never a real editor.
-if [ "$1" = "--version" ]; then echo "1.99.0 (AMF capture stand-in)"; exit 0; fi
+if [ "$1" = "--version" ]; then echo "1.99.0 (AIW capture stand-in)"; exit 0; fi
 printf '%s\\n' "$*" >> {json.dumps(str(code_log))}
 setsid {json.dumps(str(window_binary))} -c 'sleep 600 & wait' "$@" >/dev/null 2>&1 </dev/null &
 exit 0
@@ -110,7 +110,7 @@ exec sleep 3600
         XDG_STATE_HOME=str(state),
         GDK_BACKEND="x11",
         WEBKIT_INSPECTOR_HTTP_SERVER=inspector_address,
-        AMF_TMUX_SOCKET=str(scratch / "sessions-tmux.sock"),
+        AIW_TMUX_SOCKET=str(scratch / "sessions-tmux.sock"),
         PATH=f"{bin_dir}:{os.environ.get('PATH', '')}",
         SHELL="/bin/bash",
         PS1="$ ",
@@ -122,23 +122,23 @@ exec sleep 3600
     git_env = env | {
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "AMF demo",
+        "GIT_AUTHOR_NAME": "AIW demo",
         "GIT_AUTHOR_EMAIL": "demo@example.com",
-        "GIT_COMMITTER_NAME": "AMF demo",
+        "GIT_COMMITTER_NAME": "AIW demo",
         "GIT_COMMITTER_EMAIL": "demo@example.com",
     }
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, env=git_env, check=True)
     (repo / "README.md").write_text("# Storefront\n")
     (repo / "web").mkdir()
     (repo / "web/package.json").write_text('{ "name": "storefront-web", "scripts": { "dev": "vite" } }\n')
-    (repo / "amf.json").write_text(json.dumps(AMF_JSON, indent=2) + "\n")
+    (repo / "aiw.json").write_text(json.dumps(AIW_JSON, indent=2) + "\n")
     subprocess.run(["git", "add", "."], cwd=repo, env=git_env, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "Initial"], cwd=repo, env=git_env, check=True)
     worktree.parent.mkdir()
     subprocess.run(["git", "worktree", "add", "-q", "-b", "checkout-redesign", str(worktree)],
                    cwd=repo, env=git_env, check=True)
 
-    tmux = ["tmux", "-S", env["AMF_TMUX_SOCKET"]]
+    tmux = ["tmux", "-S", env["AIW_TMUX_SOCKET"]]
     foreign_editor = None
     vite = gui = None
     vite_log = (out / "vite.log").open("w")
@@ -149,12 +149,12 @@ exec sleep 3600
         # Plain, rc-free shells: the user's own shell startup files never run.
         shell = "bash --noprofile --norc"
         subprocess.run(
-            tmux + ["new-session", "-d", "-s", "amf-checkout-redesign", "-n", "shell", "-x", "120", "-y", "30",
+            tmux + ["new-session", "-d", "-s", "aiw-checkout-redesign", "-n", "shell", "-x", "120", "-y", "30",
                     "-c", str(worktree), shell],
             env=env, check=True,
         )
         subprocess.run(tmux + ["set-option", "-g", "default-command", shell], env=env, check=True)
-        # A VS Code window the user opened themselves, which AMF only knows
+        # A VS Code window the user opened themselves, which AIW only knows
         # of as "not ours": it must still be running at the end.
         foreign_editor = subprocess.Popen(
             ["sleep", "600"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
@@ -180,10 +180,10 @@ exec sleep 3600
         else:
             raise RuntimeError("The isolated frontend did not become ready")
         gui = subprocess.Popen(
-            [str(workspace / "target/debug/amf-gui")], cwd=scratch, env=env,
+            [str(workspace / "target/debug/aiw-gui")], cwd=scratch, env=env,
             stdout=gui_log, stderr=subprocess.STDOUT, start_new_session=True,
         )
-        dbpath = config / "amf/amf.db"
+        dbpath = config / "ai_workstation/aiw.db"
         for _ in range(60):
             if gui.poll() is not None:
                 raise RuntimeError(f"The isolated GUI exited ({gui.returncode}):\n" + (out / "gui.log").read_text())
@@ -207,7 +207,7 @@ exec sleep 3600
             db.execute(
                 "INSERT INTO features(id,project_id,name,branch,workdir,is_worktree,tmux_session,status,collapsed,created_at,last_accessed,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 ("checkout", "shot-project", "checkout-redesign", "checkout-redesign", str(worktree), 1,
-                 "amf-checkout-redesign", "idle", 0, created, created, 0),
+                 "aiw-checkout-redesign", "idle", 0, created, created, 0),
             )
             db.execute(
                 "INSERT INTO feature_sessions(id,feature_id,kind,label,tmux_window,created_at,sort_order) VALUES(?,?,?,?,?,?,?)",
@@ -225,16 +225,16 @@ exec sleep 3600
             )
 
         subprocess.run(
-            ["/usr/bin/python3", os.environ.get("AMF_GUI_CAPTURE_FRAMES", str(workspace / "scripts/dev/screenshot/capture-gui-sessions-frames.py")),
-             str(out), str(gui.pid), inspector_address, str(dbpath), env["AMF_TMUX_SOCKET"],
+            ["/usr/bin/python3", os.environ.get("AIW_GUI_CAPTURE_FRAMES", str(workspace / "scripts/dev/screenshot/capture-gui-sessions-frames.py")),
+             str(out), str(gui.pid), inspector_address, str(dbpath), env["AIW_TMUX_SOCKET"],
              str(worktree), str(code_log), str(window_binary), str(foreign_editor.pid)],
             env=env, check=True,
         )
-        assert foreign_editor.poll() is None, "AMF must never close a window it did not open"
+        assert foreign_editor.poll() is None, "AIW must never close a window it did not open"
         print("PASS: Custom sessions and VS Code verified with stand-ins; the foreign window was left running", flush=True)
     finally:
         subprocess.run(tmux + ["kill-server"], check=False, stderr=subprocess.DEVNULL)
-        # Any stand-in window AMF did not close: identified by our own
+        # Any stand-in window AIW did not close: identified by our own
         # binary path, so nothing else can match.
         for proc in pathlib.Path("/proc").iterdir():
             if not proc.name.isdigit():

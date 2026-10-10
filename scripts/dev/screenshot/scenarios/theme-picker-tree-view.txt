@@ -5,7 +5,7 @@
 # members, Esc backs out without closing the picker.
 #
 # Run with:
-#   ./amf-capture.sh --scenario scenarios/theme-picker-tree-view.txt --keep
+#   ./aiw-capture.sh --scenario scenarios/theme-picker-tree-view.txt --keep
 
 shot:dashboard
 

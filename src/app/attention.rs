@@ -7,7 +7,7 @@
 //!
 //! Design constraints (see `PLAN.md`):
 //! - Nothing here is persisted. The map lives on `App`, is rebuilt from hook
-//!   events, and is empty after a restart. No `amf.db` migration.
+//!   events, and is empty after a restart. No `aiw.db` migration.
 //! - `ProjectStatus` is untouched; the dashboard composes the persisted status
 //!   with this in-memory layer at render time.
 //! - A harness that cannot distinguish question-from-done degrades to
@@ -126,7 +126,7 @@ pub fn classify_notification(
         .then_some(AttentionState::Question)
 }
 
-/// What a harness is able to tell AMF about a stopped session.
+/// What a harness is able to tell AIW about a stopped session.
 ///
 /// This is the containment mechanism for the fact that hook fidelity differs
 /// per harness: rather than sprinkling `match agent` across the ingestion and
@@ -152,15 +152,13 @@ impl HarnessCapabilities {
 
     /// Capabilities for `agent`, as wired by `app/setup.rs`.
     ///
-    /// - **Claude** runs AMF's full hook set: `Notification` marks a question,
+    /// - **Claude** runs AIW's full hook set: `Notification` marks a question,
     ///   `Stop` marks a completion, and `UserPromptSubmit`/`PreToolUse` mark
     ///   new output.
     /// - **Codex** runs `codex-notify.sh`, which fires once when the turn ends
     ///   and cannot separate a question from a completion — so it can claim
     ///   neither, and everything it reports narrows to `Waiting`. Its
     ///   `thinking-stop` event does give reliable new-output tracking.
-    /// - **Opencode** runs the AMF plugins, which raise an explicit
-    ///   `input-request`, plus sidebar/pane thinking detection for new output.
     /// - **Pi** has no hook mechanism at all (`src/pi.rs` is a version probe),
     ///   so it reports nothing and clears on open.
     pub fn for_agent(agent: &AgentKind) -> Self {
@@ -175,12 +173,21 @@ impl HarnessCapabilities {
                 reports_completed: false,
                 reports_new_output: true,
             },
-            AgentKind::Opencode => Self {
+            AgentKind::Pi => Self::NONE,
+            // FORK: Gemini's Notification(ToolPermission) is a question,
+            // AfterAgent a completion, BeforeAgent/BeforeTool new output.
+            AgentKind::Gemini => Self {
                 reports_question: true,
                 reports_completed: true,
                 reports_new_output: true,
             },
-            AgentKind::Pi => Self::NONE,
+            // FORK: Cursor has `stop` and `beforeSubmitPrompt` but no
+            // permission/question hook, so a question degrades to Waiting.
+            AgentKind::Cursor => Self {
+                reports_question: false,
+                reports_completed: true,
+                reports_new_output: true,
+            },
         }
     }
 
@@ -208,7 +215,7 @@ impl HarnessCapabilities {
 /// Where an attention state came from, which decides whether it may replace a
 /// standing `Question`.
 ///
-/// The distinction matters because AMF has two signals of very different
+/// The distinction matters because AIW has two signals of very different
 /// quality. A harness hook is the agent itself saying what happened, so a
 /// `Stop` really does end the turn that a permission prompt interrupted.
 /// `sync.rs`'s thinking-transition fallback only observes that a session went
@@ -559,7 +566,7 @@ mod tests {
 
     #[test]
     fn full_fidelity_harnesses_keep_their_state() {
-        for agent in [AgentKind::Claude, AgentKind::Opencode] {
+        for agent in [AgentKind::Claude, AgentKind::Gemini] {
             assert_eq!(
                 record(agent.clone(), AttentionState::Question).state,
                 AttentionState::Question
@@ -574,7 +581,7 @@ mod tests {
     #[test]
     fn only_hookless_harnesses_clear_on_open() {
         assert!(HarnessCapabilities::for_agent(&AgentKind::Pi).clears_on_open());
-        for agent in [AgentKind::Claude, AgentKind::Codex, AgentKind::Opencode] {
+        for agent in [AgentKind::Claude, AgentKind::Codex] {
             assert!(!HarnessCapabilities::for_agent(&agent).clears_on_open());
         }
     }

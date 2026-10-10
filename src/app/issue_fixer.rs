@@ -386,12 +386,12 @@ impl IssueCommentWork {
 }
 
 fn issue_comment_marker(feature_id: &str) -> String {
-    format!("<!-- amf-issue-feature:{feature_id} -->")
+    format!("<!-- aiw-issue-feature:{feature_id} -->")
 }
 
 fn issue_feature_comment(feature_id: &str, feature_name: &str, branch: &str) -> String {
     format!(
-        "AMF created feature `{feature_name}` on branch `{branch}` to work on this issue.\n\n{}",
+        "AIW created feature `{feature_name}` on branch `{branch}` to work on this issue.\n\n{}",
         issue_comment_marker(feature_id)
     )
 }
@@ -1082,18 +1082,6 @@ mod tests {
             _include_closed: bool,
         ) -> Result<Vec<crate::github::PrListEntry>> {
             Ok(Vec::new())
-        }
-
-        fn resolve_pr(&self, _workdir: &std::path::Path) -> Result<crate::github::PrResolution> {
-            anyhow::bail!("unused in issue test")
-        }
-
-        fn fetch_pr_by_number(
-            &self,
-            _workdir: &std::path::Path,
-            _number: u32,
-        ) -> Result<crate::github::PrRef> {
-            anyhow::bail!("unused in issue test")
         }
 
         fn list_issues(

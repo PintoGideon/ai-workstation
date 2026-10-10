@@ -16,7 +16,7 @@ use std::path::Path;
 
 const KIB_PER_MIB: u64 = 1024;
 
-/// Where a snapshot's numbers came from. Kept on the snapshot so `amf doctor`
+/// Where a snapshot's numbers came from. Kept on the snapshot so `aiw doctor`
 /// can say what it measured instead of printing bare numbers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemorySource {

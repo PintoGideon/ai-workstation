@@ -19,13 +19,13 @@ use crate::headless::HeadlessRunner;
 use crate::plan_interview::{self, PlanQuestion};
 use crate::project::AgentKind;
 
-const PLAN_FILE_NAME: &str = "AMF_PLAN.md";
+const PLAN_FILE_NAME: &str = "AIW_PLAN.md";
 
 /// Composer seed offered after an accepted interview. Deliberately short and
 /// editable: the plan itself carries the detail, and the instruction block
 /// already told the agent to treat its decisions as settled.
 pub(super) const PLAN_KICKOFF_PROMPT: &str = "\
-Read `AMF_PLAN.md`. It is the plan I approved for this feature — its \
+Read `AIW_PLAN.md`. It is the plan I approved for this feature — its \
 decisions are settled unless I say otherwise.
 
 Start with the first unchecked task, and keep the task checkboxes current as \
@@ -830,7 +830,7 @@ impl App {
 
     /// Remove any staged reference-document copies for the interview currently
     /// on screen. Safe to call whenever the interview is ending or being parked
-    /// with no pass in flight: the directory is generated `.amf/` scratch and
+    /// with no pass in flight: the directory is generated `.aiw/` scratch and
     /// `prepare_attached_docs` re-creates it from scratch on the next pass
     /// anyway.
     fn clear_plan_interview_doc_staging(&self) {
@@ -2547,7 +2547,7 @@ impl App {
     /// full Plan-mode round/synthesis flow in place. Nothing about the
     /// interview is reset — the brief and any answers already given carry
     /// forward into the full round, per the resolved escalation decision in
-    /// `AMF_PLAN.md`. Errors from the continued round/synthesis dispatch are
+    /// `AIW_PLAN.md`. Errors from the continued round/synthesis dispatch are
     /// reported rather than propagated, matching every other `Done`-phase
     /// continuation in this module (see `poll_plan_interview_ai_bg`).
     fn escalate_quick_plan_to_full(&mut self, reason: String) {
@@ -2631,7 +2631,7 @@ impl App {
         };
 
         // A TODO planned into an existing feature writes beside that feature's
-        // own plan rather than over it: `AMF_PLAN.md` belongs to the feature,
+        // own plan rather than over it: `AIW_PLAN.md` belongs to the feature,
         // and a `P` run's accepted plan must survive a TODO being planned in
         // the same checkout. A new feature has no such neighbour, so it keeps
         // the ordinary name the harness instruction block already points at.
@@ -2862,7 +2862,7 @@ impl App {
     /// A new session rather than the running one: the TODO asked for its own
     /// worker, and the feature's existing agent may be mid-task on something
     /// else. The seed names the plan file explicitly, because the harness's
-    /// injected instruction block points at `AMF_PLAN.md` and this plan is
+    /// injected instruction block points at `AIW_PLAN.md` and this plan is
     /// deliberately not that file.
     pub(crate) fn start_todo_plan_session(
         &mut self,
@@ -2966,7 +2966,7 @@ impl App {
     ///
     /// "Live" means all three: the feature is not stopped, tmux still has the
     /// session, *and* tmux still has the harness's own window. Any of them alone
-    /// is stale — AMF's status is only reconciled every few seconds, and a
+    /// is stale — AIW's status is only reconciled every few seconds, and a
     /// harness that exited leaves its feature's tmux session up for as long as
     /// the terminal window (or a dev server, or a second harness) outlives it.
     ///
@@ -3140,7 +3140,7 @@ impl App {
 
     /// Make an on-demand plan effective for the feature it was written for.
     ///
-    /// Writing `AMF_PLAN.md` is not enough on its own: unless the harness's
+    /// Writing `AIW_PLAN.md` is not enough on its own: unless the harness's
     /// instruction file points at it, the agent is never told the plan exists.
     /// Running the interview is also taken as turning plan mode on, so a later
     /// restart keeps injecting the block instead of silently dropping it.
@@ -3427,31 +3427,31 @@ fn todo_branch_name(todo_title: &str) -> String {
 }
 
 /// The file a TODO's plan is written to when it lands in a feature that already
-/// exists: `AMF_PLAN.todo-<slug>.md`.
+/// exists: `AIW_PLAN.todo-<slug>.md`.
 ///
 /// Named after the TODO rather than its uuid so the file is readable in a
-/// directory listing, and prefixed `AMF_PLAN.` so it sorts beside the feature's
+/// directory listing, and prefixed `AIW_PLAN.` so it sorts beside the feature's
 /// own plan instead of scattering. A title that slugifies to nothing (emoji,
-/// punctuation) falls back to a fixed name rather than producing `AMF_PLAN..md`.
+/// punctuation) falls back to a fixed name rather than producing `AIW_PLAN..md`.
 fn todo_plan_file_name(todo_title: &str) -> String {
     const MAX_SLUG: usize = 40;
     let slug = crate::app::util::slugify_shortened(todo_title, MAX_SLUG);
     if slug.is_empty() {
-        "AMF_PLAN.todo.md".to_string()
+        "AIW_PLAN.todo.md".to_string()
     } else {
-        format!("AMF_PLAN.todo-{slug}.md")
+        format!("AIW_PLAN.todo-{slug}.md")
     }
 }
 
-/// The kickoff seed for a plan that is *not* in `AMF_PLAN.md`.
+/// The kickoff seed for a plan that is *not* in `AIW_PLAN.md`.
 ///
-/// The harness's injected instruction block names `AMF_PLAN.md`, so a seed that
+/// The harness's injected instruction block names `AIW_PLAN.md`, so a seed that
 /// said only "read the plan" would send the agent to the wrong file — or to the
 /// feature's own plan, which is someone else's work.
 fn todo_plan_kickoff_prompt(plan_file: &str) -> String {
     format!(
         "Read `{plan_file}`. It is the plan I approved for this TODO \u{2014} its decisions are \
-settled unless I say otherwise. Read that file, not `AMF_PLAN.md`: `AMF_PLAN.md` is this \
+settled unless I say otherwise. Read that file, not `AIW_PLAN.md`: `AIW_PLAN.md` is this \
 feature's own plan and is not what I am asking you to work on.\n\nStart with the first \
 unchecked task, and keep the task checkboxes current as you go."
     )
@@ -3556,7 +3556,7 @@ mod tests {
     }
 
     /// A TODO planned into a feature that already exists writes beside that
-    /// feature's plan, never over it: `AMF_PLAN.md` is the feature's, and a `P`
+    /// feature's plan, never over it: `AIW_PLAN.md` is the feature's, and a `P`
     /// run's accepted plan has to survive a TODO being planned in the same
     /// checkout.
     #[test]
@@ -3567,7 +3567,7 @@ mod tests {
         let todo_file = todo_plan_file_name("Wire up the chooser");
         write_plan_file_named(workdir.path(), &todo_file, "# The TODO's plan\n").unwrap();
 
-        assert_eq!(todo_file, "AMF_PLAN.todo-wire-up-the-chooser.md");
+        assert_eq!(todo_file, "AIW_PLAN.todo-wire-up-the-chooser.md");
         assert_eq!(
             fs::read_to_string(workdir.path().join(PLAN_FILE_NAME)).unwrap(),
             "# The feature's plan\n",
@@ -3595,11 +3595,11 @@ mod tests {
     }
 
     /// A title that slugifies to nothing still has to produce a usable
-    /// filename, not `AMF_PLAN.todo-.md`.
+    /// filename, not `AIW_PLAN.todo-.md`.
     #[test]
     fn a_title_with_no_sluggable_characters_falls_back_to_a_fixed_name() {
-        assert_eq!(todo_plan_file_name("🎉 !!! ???"), "AMF_PLAN.todo.md");
-        assert_eq!(todo_plan_file_name(""), "AMF_PLAN.todo.md");
+        assert_eq!(todo_plan_file_name("🎉 !!! ???"), "AIW_PLAN.todo.md");
+        assert_eq!(todo_plan_file_name(""), "AIW_PLAN.todo.md");
     }
 
     /// A very long title is bounded, and never leaves a trailing dash from the
@@ -3608,7 +3608,7 @@ mod tests {
     fn a_long_title_is_truncated_without_a_dangling_separator() {
         let name = todo_plan_file_name(&"alpha beta ".repeat(20));
         assert!(name.len() < 70, "got {name}");
-        assert!(name.starts_with("AMF_PLAN.todo-"));
+        assert!(name.starts_with("AIW_PLAN.todo-"));
         assert!(name.ends_with(".md"));
         assert!(!name.contains("-.md"), "no dangling separator: {name}");
     }
@@ -3642,19 +3642,19 @@ mod tests {
     }
 
     /// The kickoff seed for a TODO plan must name the file it actually wrote.
-    /// The harness's injected instruction block points at `AMF_PLAN.md`, so a
+    /// The harness's injected instruction block points at `AIW_PLAN.md`, so a
     /// seed that only said "read the plan" would send the agent to the
     /// feature's plan instead of this one.
     #[test]
     fn the_todo_kickoff_prompt_names_the_file_it_wrote() {
-        let prompt = todo_plan_kickoff_prompt("AMF_PLAN.todo-chooser.md");
-        assert!(prompt.contains("AMF_PLAN.todo-chooser.md"));
+        let prompt = todo_plan_kickoff_prompt("AIW_PLAN.todo-chooser.md");
+        assert!(prompt.contains("AIW_PLAN.todo-chooser.md"));
         assert!(
-            prompt.contains("Read that file, not `AMF_PLAN.md`"),
+            prompt.contains("Read that file, not `AIW_PLAN.md`"),
             "it must send the agent to its own plan, not the feature's: {prompt}"
         );
         assert!(
-            prompt.contains("`AMF_PLAN.md` is this feature's own plan"),
+            prompt.contains("`AIW_PLAN.md` is this feature's own plan"),
             "and say what the other file is, so it is not read by mistake: {prompt}"
         );
     }
@@ -3669,7 +3669,7 @@ mod tests {
         write_plan_file_named(workdir.path(), PLAN_FILE_NAME, "# Updated plan\n").unwrap();
 
         assert_eq!(
-            fs::read_to_string(workdir.path().join("AMF_PLAN.md")).unwrap(),
+            fs::read_to_string(workdir.path().join("AIW_PLAN.md")).unwrap(),
             "# Updated plan\n"
         );
         assert_eq!(
@@ -3678,14 +3678,14 @@ mod tests {
         );
         assert_eq!(
             fs::read_to_string(workdir.path().join(".gitignore")).unwrap(),
-            "target/\nAMF_PLAN.md\n"
+            "target/\nAIW_PLAN.md\n"
         );
     }
 
     #[test]
     fn non_worktree_plan_write_is_the_plan_sidebar_reads() {
         let repo = TempDir::new().unwrap();
-        let expected_plan = repo.path().join("AMF_PLAN.md");
+        let expected_plan = repo.path().join("AIW_PLAN.md");
 
         write_plan_file_named(
             repo.path(),

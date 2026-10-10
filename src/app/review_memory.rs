@@ -8,28 +8,28 @@
 //!
 //! There are **two** such docs, distinguished by [`MemoryScope`]: each repo's
 //! own committed doc (the default target for every write) and one
-//! cross-project doc in the AMF config dir for habits that outlive a single
+//! cross-project doc in the AIW config dir for habits that outlive a single
 //! repo. The AI reviewer reads both, merged by [`merge_memory_context`]; every
 //! other flow writes to exactly one, chosen by the user.
 //!
-//! AMF only ever *appends* here (dedup-aware, grouped by category) — it never
+//! AIW only ever *appends* here (dedup-aware, grouped by category) — it never
 //! rewrites existing prose, so hand-edits are safe across runs. The one
 //! exception is the explicit, user-triggered "compact" pass ([`compact_prompt`]),
 //! which proposes a wholesale rewrite (merging near-duplicates, pruning stale
 //! rules) but never writes it without the user reviewing and confirming the
 //! result first — see `App::pr_review_compact_write`. Because that rewrite is
 //! built from a snapshot read before the agent pass, and because any number of
-//! AMF sessions can append to the same doc meanwhile (all of them share the
+//! AIW sessions can append to the same doc meanwhile (all of them share the
 //! cross-project one), the write re-reads the file and reconciles against that
 //! snapshot via [`doc_drift`] rather than trusting it.
 
 use std::path::{Path, PathBuf};
 
 /// Default location of the review-memory doc, relative to the repo root.
-pub const DEFAULT_REVIEW_MEMORY_PATH: &str = ".amf/review-memory.md";
+pub const DEFAULT_REVIEW_MEMORY_PATH: &str = ".aiw/review-memory.md";
 
 /// Default filename of the cross-project review-memory doc, relative to the
-/// AMF config dir — i.e. `~/.config/amf/review-memory.md`.
+/// AIW config dir — i.e. `~/.config/ai_workstation/review-memory.md`.
 pub const DEFAULT_GLOBAL_REVIEW_MEMORY_FILE: &str = "review-memory.md";
 
 /// Which of the two review-memory docs a flow reads or writes: the repo's own
@@ -37,10 +37,10 @@ pub const DEFAULT_GLOBAL_REVIEW_MEMORY_FILE: &str = "review-memory.md";
 /// exactly one (the user picks); only the AI reviewer's context reads both.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MemoryScope {
-    /// `{repo}/.amf/review-memory.md` — committed, shared with the team.
+    /// `{repo}/.aiw/review-memory.md` — committed, shared with the team.
     #[default]
     Project,
-    /// `~/.config/amf/review-memory.md` — this user's, across every repo.
+    /// `~/.config/ai_workstation/review-memory.md` — this user's, across every repo.
     Global,
 }
 
@@ -83,10 +83,10 @@ impl ReviewMemoryPaths {
 const HEADER_TEMPLATE: &str = "\
 # Review memory
 
-Recurring findings from code review, grouped by category. AMF appends new
+Recurring findings from code review, grouped by category. AIW appends new
 findings here (from PR triage and AI review) and reads this file as context
 before each AI review, so the same issue doesn't need rediscovering every
-time. Edit freely — AMF only ever appends, it never rewrites what's already
+time. Edit freely — AIW only ever appends, it never rewrites what's already
 here.
 ";
 
@@ -94,9 +94,9 @@ const GLOBAL_HEADER_TEMPLATE: &str = "\
 # Review memory (cross-project)
 
 Recurring code-review findings that apply across every repo you work in, not
-just one. AMF reads this file *in addition to* each repo's own
-`.amf/review-memory.md` before an AI review, so put durable personal habits
-here and repo-specific rules there. Edit freely — AMF only ever appends, it
+just one. AIW reads this file *in addition to* each repo's own
+`.aiw/review-memory.md` before an AI review, so put durable personal habits
+here and repo-specific rules there. Edit freely — AIW only ever appends, it
 never rewrites what's already here.
 ";
 
@@ -116,14 +116,14 @@ pub fn review_memory_path(repo: &Path, configured: Option<&str>) -> PathBuf {
 
 /// Resolve the cross-project review-memory doc path, honoring a configured
 /// override. Mirrors [`review_memory_path`] but anchors relative paths to the
-/// AMF config dir (`~/.config/amf`) rather than a repo, since this doc belongs
+/// AIW config dir (`~/.config/ai_workstation`) rather than a repo, since this doc belongs
 /// to no single repo.
 pub fn global_review_memory_path(configured: Option<&str>) -> PathBuf {
-    global_review_memory_path_in(&crate::project::amf_config_dir(), configured)
+    global_review_memory_path_in(&crate::project::aiw_config_dir(), configured)
 }
 
 /// [`global_review_memory_path`] with the config dir injected, so tests can
-/// resolve against a temp dir instead of the developer's real `~/.config/amf`.
+/// resolve against a temp dir instead of the developer's real `~/.config/ai_workstation`.
 pub fn global_review_memory_path_in(config_dir: &Path, configured: Option<&str>) -> PathBuf {
     let configured = configured.map(str::trim).filter(|s| !s.is_empty());
     let rel = Path::new(configured.unwrap_or(DEFAULT_GLOBAL_REVIEW_MEMORY_FILE));
@@ -279,7 +279,7 @@ pub fn append_findings_to_doc(doc: &str, findings: &[(String, String)]) -> (Stri
 ///
 /// The compact pass rewrites a doc wholesale from a snapshot read minutes
 /// earlier (one agent pass, then however long the user spends reviewing the
-/// proposal). Other AMF sessions — including ones in other repos, for the
+/// proposal). Other AIW sessions — including ones in other repos, for the
 /// cross-project doc — append to the same file in that window, so the write
 /// has to know whether it is about to clobber findings it never saw.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -483,7 +483,7 @@ mod tests {
         let repo = Path::new("/repo");
         assert_eq!(
             review_memory_path(repo, None),
-            PathBuf::from("/repo/.amf/review-memory.md")
+            PathBuf::from("/repo/.aiw/review-memory.md")
         );
     }
 
@@ -510,14 +510,14 @@ mod tests {
         let repo = Path::new("/repo");
         assert_eq!(
             review_memory_path(repo, Some("   ")),
-            PathBuf::from("/repo/.amf/review-memory.md")
+            PathBuf::from("/repo/.aiw/review-memory.md")
         );
     }
 
     #[test]
     fn ensure_review_memory_doc_creates_with_header() {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join(".amf").join("review-memory.md");
+        let path = dir.path().join(".aiw").join("review-memory.md");
         assert!(!path.exists());
 
         ensure_review_memory_doc(&path, MemoryScope::Project).unwrap();
@@ -793,23 +793,23 @@ mod tests {
 
     #[test]
     fn global_review_memory_path_defaults_into_the_config_dir() {
-        let config_dir = Path::new("/home/u/.config/amf");
+        let config_dir = Path::new("/home/u/.config/ai_workstation");
         assert_eq!(
             global_review_memory_path_in(config_dir, None),
-            PathBuf::from("/home/u/.config/amf/review-memory.md")
+            PathBuf::from("/home/u/.config/ai_workstation/review-memory.md")
         );
         assert_eq!(
             global_review_memory_path_in(config_dir, Some("   ")),
-            PathBuf::from("/home/u/.config/amf/review-memory.md")
+            PathBuf::from("/home/u/.config/ai_workstation/review-memory.md")
         );
     }
 
     #[test]
     fn global_review_memory_path_honors_relative_and_absolute_overrides() {
-        let config_dir = Path::new("/home/u/.config/amf");
+        let config_dir = Path::new("/home/u/.config/ai_workstation");
         assert_eq!(
             global_review_memory_path_in(config_dir, Some("notes/lessons.md")),
-            PathBuf::from("/home/u/.config/amf/notes/lessons.md")
+            PathBuf::from("/home/u/.config/ai_workstation/notes/lessons.md")
         );
         assert_eq!(
             global_review_memory_path_in(config_dir, Some("/srv/shared/lessons.md")),
@@ -855,16 +855,16 @@ mod tests {
     #[test]
     fn review_memory_paths_selects_by_scope() {
         let paths = ReviewMemoryPaths {
-            project: PathBuf::from("/repo/.amf/review-memory.md"),
-            global: PathBuf::from("/home/u/.config/amf/review-memory.md"),
+            project: PathBuf::from("/repo/.aiw/review-memory.md"),
+            global: PathBuf::from("/home/u/.config/ai_workstation/review-memory.md"),
         };
         assert_eq!(
             paths.for_scope(MemoryScope::Project),
-            Path::new("/repo/.amf/review-memory.md")
+            Path::new("/repo/.aiw/review-memory.md")
         );
         assert_eq!(
             paths.for_scope(MemoryScope::Global),
-            Path::new("/home/u/.config/amf/review-memory.md")
+            Path::new("/home/u/.config/ai_workstation/review-memory.md")
         );
     }
 

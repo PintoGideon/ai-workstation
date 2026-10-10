@@ -1,7 +1,7 @@
 # Cross-file comment navigation (`{` / `}`) and undo verdict (`U`)
 
-Captured from an isolated, throwaway AMF instance
-(`scripts/dev/screenshot/amf-capture.sh`, 160x44) against a scratch demo repo
+Captured from an isolated, throwaway AIW instance
+(`scripts/dev/screenshot/aiw-capture.sh`, 160x44) against a scratch demo repo
 whose `review-demo` branch changes two files — `src/auth.rs` and
 `src/cache.rs` — with four line comments seeded into
 `.claude/final-review-progress.json` (a blocker and a suggestion on each file)

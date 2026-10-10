@@ -40,9 +40,9 @@ pub(super) fn window_github_hunk(
     context: usize,
 ) -> Option<String> {
     let synthetic = format!(
-        "diff --git a/__amf_comment__ b/__amf_comment__\n\
-         --- a/__amf_comment__\n\
-         +++ b/__amf_comment__\n{text}\n"
+        "diff --git a/__aiw_comment__ b/__aiw_comment__\n\
+         --- a/__aiw_comment__\n\
+         +++ b/__aiw_comment__\n{text}\n"
     );
     let files = crate::diff::parse_unified_diff(&synthetic).ok()?;
     let hunk = files.first()?.hunks.first()?;
@@ -132,22 +132,32 @@ pub(crate) fn window_parsed_hunk(
 /// post time (not part of the editable seed) so composing a "not needed"
 /// reason — which starts from an empty buffer — isn't complicated by a
 /// footer already sitting in the editor.
-pub(crate) const AMF_ATTRIBUTION_FOOTER: &str = "— posted via AMF";
+pub(crate) const AIW_ATTRIBUTION_FOOTER: &str = "— posted via AIW";
 
-pub(crate) const AI_ATTRIBUTION_FOOTER: &str = "— drafted by AI via AMF";
+pub(crate) const AI_ATTRIBUTION_FOOTER: &str = "— drafted by AI via AIW";
 
 /// Attribution on findings and summaries posted by the separate AI Review
 /// workflow. These are still actionable review findings after refresh; the
 /// footer identifies their origin without turning them into follow-up replies.
-pub(crate) const AI_REVIEW_ATTRIBUTION_FOOTER: &str = "— AI review via AMF";
+pub(crate) const AI_REVIEW_ATTRIBUTION_FOOTER: &str = "— AI review via AIW";
 
-/// Leave AMF's posted usage summary out of fix prompts, even when the review
+/// FORK: the same three footers as posted before the rename. Comments already
+/// on GitHub keep them, so they are still recognised as AIW's own (read only;
+/// new posts always use the AIW footers above).
+pub(crate) const LEGACY_POSTED_FOOTER: &str = "— posted via AMF";
+pub(crate) const LEGACY_AI_DRAFTED_FOOTER: &str = "— drafted by AI via AMF";
+pub(crate) const LEGACY_AI_REVIEW_FOOTER: &str = "— AI review via AMF";
+
+/// Leave AIW's posted usage summary out of fix prompts, even when the review
 /// was posted under a human GitHub account. Match the generated paragraph so
 /// feedback that merely discusses usage or quotes its heading stays intact.
 fn strip_review_usage(body: &str) -> Cow<'_, str> {
     let trimmed = body.trim_end();
-    let (core, footer) = match trimmed.strip_suffix(AI_REVIEW_ATTRIBUTION_FOOTER) {
-        Some(core) => (core.trim_end(), Some(AI_REVIEW_ATTRIBUTION_FOOTER)),
+    let (core, footer) = match [AI_REVIEW_ATTRIBUTION_FOOTER, LEGACY_AI_REVIEW_FOOTER]
+        .into_iter()
+        .find_map(|footer| Some((trimmed.strip_suffix(footer)?.trim_end(), footer)))
+    {
+        Some((core, footer)) => (core, Some(footer)),
         None => (trimmed, None),
     };
     // Current reviews use a collapsed details block; older ones used a
@@ -200,7 +210,7 @@ fn strip_review_usage(body: &str) -> Cow<'_, str> {
     }
 }
 
-/// Which agent session AMF asked for a reply draft, captured at fix injection
+/// Which agent session AIW asked for a reply draft, captured at fix injection
 /// and persisted with the draft (`db::pr_comment_triage::begin_reply_draft`).
 ///
 /// The disclosure has to describe the session that actually wrote the draft.
@@ -213,7 +223,7 @@ fn strip_review_usage(body: &str) -> Cow<'_, str> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReplyDraftProvenance {
     pub harness: String,
-    /// AMF feature-session id of the session the fix was injected into.
+    /// AIW feature-session id of the session the fix was injected into.
     pub session_id: String,
     /// Model as known at injection time — usually `None`, since a session
     /// created by this very fix has no transcript yet. Kept as the fallback for
@@ -245,7 +255,7 @@ pub struct ReplyGenerationMetadata {
 }
 
 impl ReplyGenerationMetadata {
-    /// An agent draft whose provenance was never recorded (written before AMF
+    /// An agent draft whose provenance was never recorded (written before AIW
     /// persisted it) or no longer decodes. The reply still discloses that it
     /// was AI-generated and says every detail is unknown — the one thing it
     /// must not do is fill the gap from an unrelated session.
@@ -287,7 +297,7 @@ impl ReplyGenerationMetadata {
     /// than silently dropping one of the promised provenance fields.
     ///
     /// A batched fix adds a second italic line spelling out — for a PR reader
-    /// who isn't an AMF user — that this comment was one of several fixed in a
+    /// who isn't an AIW user — that this comment was one of several fixed in a
     /// single agent run and that the cost above is the whole run's, shared.
     pub fn disclosure(&self) -> String {
         let mut out = format!(
@@ -306,18 +316,18 @@ impl ReplyGenerationMetadata {
     }
 }
 
-pub(super) fn append_amf_attribution(body: &str) -> String {
-    format!("{}\n\n{}", body.trim_end(), AMF_ATTRIBUTION_FOOTER)
+pub(super) fn append_aiw_attribution(body: &str) -> String {
+    format!("{}\n\n{}", body.trim_end(), AIW_ATTRIBUTION_FOOTER)
 }
 
 /// Attribution for reply text drafted by an agent harness. Provider-neutral
-/// wording stays accurate for Claude, Codex, OpenCode, and Pi.
+/// wording stays accurate for Claude, Codex, Pi, Gemini and Cursor.
 ///
-/// Reply-flow only — [`reply_posted_via_amf`] treats this footer as proof a
-/// reply went through AMF's `R`/`n` dialog, so anything else that wants
+/// Reply-flow only — [`reply_posted_via_aiw`] treats this footer as proof a
+/// reply went through AIW's `R`/`n` dialog, so anything else that wants
 /// AI-authorship attribution (e.g. `ai_review`'s posted findings) needs its
 /// own distinct footer rather than reusing this one, or it would falsely
-/// register as an AMF-posted reply.
+/// register as an AIW-posted reply.
 pub(crate) fn append_ai_attribution(
     body: &str,
     metadata: Option<&ReplyGenerationMetadata>,
@@ -341,7 +351,7 @@ pub(super) fn append_reply_attribution(
     if agent_drafted {
         append_ai_attribution(body, metadata)
     } else {
-        append_amf_attribution(body)
+        append_aiw_attribution(body)
     }
 }
 
@@ -349,7 +359,7 @@ pub(super) fn append_reply_attribution(
 /// captured agent draft only earns AI-authorship attribution while it stays
 /// unedited; once the user changes it — even down to entirely their own
 /// words — the posted text is no longer purely the agent's own, so it falls
-/// back to channel-only AMF attribution.
+/// back to channel-only AIW attribution.
 pub fn reply_effective_agent_drafted(reply: &ReplyState) -> bool {
     reply.agent_drafted && reply.editor.text().trim() == reply.original_seed.trim()
 }
@@ -564,9 +574,10 @@ pub(super) fn pr_triage_session_index_named_for_harness(
     if session.kind != session_kind_for_agent(harness) {
         let existing_harness = match session.kind {
             SessionKind::Claude => "Claude",
-            SessionKind::Opencode => "Opencode",
             SessionKind::Codex => "Codex",
             SessionKind::Pi => "Pi",
+            SessionKind::Gemini => "Gemini", // FORK
+            SessionKind::Cursor => "Cursor", // FORK
             _ => "another harness",
         };
         anyhow::bail!(
@@ -1028,50 +1039,64 @@ impl PrComment {
     /// replies always target the thread's root comment directly (see
     /// [`PrComment::reply_target`]), so there's no multi-level chain to walk —
     /// filtering `in_reply_to == Some(self.id)` finds every reply in the
-    /// thread, however it was posted (AMF's own `R`/`n` flow, or some other
+    /// thread, however it was posted (AIW's own `R`/`n` flow, or some other
     /// actor — e.g. an agent using `gh` directly — that never went through
-    /// AMF's reply dialog and so left no local triage record).
+    /// AIW's reply dialog and so left no local triage record).
     pub fn replies_in<'a>(&self, all: &'a [PrComment]) -> Vec<&'a PrComment> {
         all.iter()
             .filter(|c| c.in_reply_to == Some(self.id))
             .collect()
     }
 
-    /// Whether this comment was posted by an AMF-owned workflow.
+    /// Whether this comment was posted by an AIW-owned workflow.
     ///
     /// Exact attribution footers are the durable signal: author login is not
-    /// sufficient because AMF posts as the user's own GitHub account, and a
+    /// sufficient because AIW posts as the user's own GitHub account, and a
     /// loose text search would misclassify ordinary comments that merely
-    /// mention AMF.
-    pub fn is_amf_authored(&self) -> bool {
+    /// mention AIW.
+    pub fn is_aiw_authored(&self) -> bool {
         let body = self.body.trim_end();
-        body.ends_with(AMF_ATTRIBUTION_FOOTER)
-            || body.ends_with(AI_ATTRIBUTION_FOOTER)
-            || body.ends_with(AI_REVIEW_ATTRIBUTION_FOOTER)
+        [
+            AIW_ATTRIBUTION_FOOTER,
+            AI_ATTRIBUTION_FOOTER,
+            AI_REVIEW_ATTRIBUTION_FOOTER,
+            LEGACY_POSTED_FOOTER,
+            LEGACY_AI_DRAFTED_FOOTER,
+            LEGACY_AI_REVIEW_FOOTER,
+        ]
+        .iter()
+        .any(|footer| body.ends_with(footer))
     }
 
     /// Whether this is a follow-up reply posted through PR Triage's reply flow.
     ///
-    /// The parent relationship is essential: a standalone AMF-authored finding
+    /// The parent relationship is essential: a standalone AIW-authored finding
     /// is still review work even when it carries an attribution footer.
-    pub fn is_amf_followup_reply(&self) -> bool {
-        self.in_reply_to.is_some() && reply_posted_via_amf(self)
+    pub fn is_aiw_followup_reply(&self) -> bool {
+        self.in_reply_to.is_some() && reply_posted_via_aiw(self)
     }
 
     /// Incoming feedback and standalone findings can be fixed, batched,
-    /// replied to, and counted as open work. AMF's own follow-up replies stay
+    /// replied to, and counted as open work. AIW's own follow-up replies stay
     /// inspectable as thread history but must not become a fresh task.
     pub fn is_actionable(&self) -> bool {
-        !self.is_amf_followup_reply()
+        !self.is_aiw_followup_reply()
     }
 }
 
-/// Whether `reply` carries either exact AMF attribution footer — the local
-/// signal distinguishing a reply AMF posted itself from one some other actor
+/// Whether `reply` carries either exact AIW attribution footer — the local
+/// signal distinguishing a reply AIW posted itself from one some other actor
 /// posted directly.
-pub fn reply_posted_via_amf(reply: &PrComment) -> bool {
+pub fn reply_posted_via_aiw(reply: &PrComment) -> bool {
     let body = reply.body.trim_end();
-    body.ends_with(AMF_ATTRIBUTION_FOOTER) || body.ends_with(AI_ATTRIBUTION_FOOTER)
+    [
+        AIW_ATTRIBUTION_FOOTER,
+        AI_ATTRIBUTION_FOOTER,
+        LEGACY_POSTED_FOOTER,
+        LEGACY_AI_DRAFTED_FOOTER,
+    ]
+    .iter()
+    .any(|footer| body.ends_with(footer))
 }
 
 /// Appended to a fix prompt when another comment on the same file was already
@@ -1277,14 +1302,14 @@ pub struct PrReview {
 }
 
 impl PrReview {
-    /// Whether an AMF follow-up reply is already represented beneath its
+    /// Whether an AIW follow-up reply is already represented beneath its
     /// fetched root comment's detail view. Such replies stay in the normalized
     /// model/cache, but do not need a duplicate row in the actionable list.
     ///
     /// An orphaned reply whose root was not fetched remains a list row so it is
     /// still accessible rather than silently disappearing.
-    pub fn is_collated_amf_reply(&self, comment: &PrComment) -> bool {
-        comment.is_amf_followup_reply()
+    pub fn is_collated_aiw_reply(&self, comment: &PrComment) -> bool {
+        comment.is_aiw_followup_reply()
             && comment.in_reply_to.is_some_and(|root_id| {
                 self.comments
                     .iter()
@@ -1292,7 +1317,7 @@ impl PrReview {
             })
     }
 
-    /// Number of unresolved incoming comments and standalone findings. AMF
+    /// Number of unresolved incoming comments and standalone findings. AIW
     /// follow-up replies are thread history, so they never inflate this count.
     pub fn open_count(&self) -> usize {
         self.comments

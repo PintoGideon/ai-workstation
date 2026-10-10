@@ -20,12 +20,12 @@
 ## Why / problem
 
 When you stop work on a feature for the day, the context of "what's
-left and where I left off" lives only in your head. AMF should let you
+left and where I left off" lives only in your head. AIW should let you
 jot down TODOs against the work you're doing, see them next to the rest
 of the feature tree, and pick a TODO back up tomorrow by launching an
 agent that already knows what to do.
 
-The list doubles as a launcher: highlight a TODO, press a key, and AMF
+The list doubles as a launcher: highlight a TODO, press a key, and AIW
 spins up a fresh agent-harness session in the right worktree with a
 composer prompt pre-filled to address that item — editable before it's
 sent.
@@ -45,10 +45,10 @@ sent.
   work belonging to one checkout in the same list as work belonging to
   every other.
 - **Native UI, not tmux-backed.** Opening the TODOS session enters a
-  native AMF overlay/mode rather than attaching to a tmux pane.
+  native AIW overlay/mode rather than attaching to a tmux pane.
   `SessionKind::Todos.is_agent_harness()` is `false` and no tmux window
   is created for it.
-- **SQLite persistence.** Stored in the existing `amf.db` via a new
+- **SQLite persistence.** Stored in the existing `aiw.db` via a new
   migration and access module — not in the `ProjectStore` JSON blob.
 - **Spawn into the host feature.** Launching an agent for a TODO
   creates the new session inside the feature the TODO belongs to (same
@@ -74,7 +74,7 @@ sent.
 ### Data model
 
 New SQLite tables (migration `MIGRATION_010`), accessed via a new
-`src/db/todos.rs` module exposing methods on `AmfDb`. Kept out of the
+`src/db/todos.rs` module exposing methods on `AiwDb`. Kept out of the
 `ProjectStore` JSON so the list isn't rewritten on every store save.
 
 ```text
@@ -99,7 +99,7 @@ todos
   updated_at          TEXT NOT NULL
 ```
 
-`AmfDb` gains: `load_todo_list(project_id)`,
+`AiwDb` gains: `load_todo_list(project_id)`,
 `upsert_todo_list(...)`, `list_todos(list_id)`, `upsert_todo(...)`,
 `delete_todo(id)`, `reorder_todos(...)`, and cascade cleanup when a
 project/feature is deleted (extend the existing delete paths).
@@ -171,7 +171,7 @@ project/feature is deleted (extend the existing delete paths).
 
 - [x] Add `MIGRATION_010` creating `todo_lists` + `todos` tables.
 - [x] Add `src/db/todos.rs` with row structs and CRUD/query fns.
-- [x] Expose `AmfDb` methods (load/upsert list, list/upsert/delete/
+- [x] Expose `AiwDb` methods (load/upsert list, list/upsert/delete/
       reorder todos).
 - [x] Cascade-delete todos & list when a project is deleted
       (explicit cleanup in `app/project_ops.rs::delete_project`, since
@@ -308,7 +308,7 @@ project/feature is deleted (extend the existing delete paths).
 Shipped. `g`/`Enter` no longer spawns straight away: it resolves what the
 key should mean, then offers the choice it cannot resolve. The decisions
 below come from a feature-discovery interview; the working plan it produced
-lived in the branch's (gitignored) `AMF_PLAN.md`, so its conclusions are
+lived in the branch's (gitignored) `AIW_PLAN.md`, so its conclusions are
 recorded here rather than linked.
 
 - [x] `g`/`Enter` resolves before it asks: a linked feature wins, then a
@@ -324,7 +324,7 @@ recorded here rather than linked.
 - [x] Brief composed from every field the row carries — title, notes,
       list scratchpad, plus a bounded **provenance** paragraph
       (`compose_plan_brief` + `todo_provenance`). Provenance states *that*
-      work was started, not a transcript of it: AMF keeps no per-TODO
+      work was started, not a transcript of it: AIW keeps no per-TODO
       history (transcripts are workdir-scoped and effectively Claude-only,
       a tmux capture holds only what is still on screen), so quoting
       either would put text in the brief that does not describe this TODO.
@@ -335,18 +335,18 @@ recorded here rather than linked.
       accepted transcript live and would otherwise be overwritten and
       pre-filled from. Draft/resume comes free from `plan_interviews`
       (`MIGRATION_016`), so no new draft storage was needed.
-- [x] Host-feature accept writes `AMF_PLAN.todo-<slug>.md` **beside** the
-      feature's own `AMF_PLAN.md` rather than over it, spawns a session in
+- [x] Host-feature accept writes `AIW_PLAN.todo-<slug>.md` **beside** the
+      feature's own `AIW_PLAN.md` rather than over it, spawns a session in
       the host feature, records `spawned_session_id`, and seeds the
       composer with a kickoff prompt that names the file explicitly — the
-      harness's injected instruction block still points at `AMF_PLAN.md`,
+      harness's injected instruction block still points at `AIW_PLAN.md`,
       so an unqualified "read the plan" would send the agent to the
       feature's plan instead of this one.
 - [x] New-feature destination reuses the `n` create-feature wizard
       pre-seeded (branch = slugified title, agent/mode from the host
       feature, plan mode forced on). No new creation path: the wizard
       already checks out the worktree *before* the interview when plan
-      mode is on, so "created up front" needed no new code. The AMF
+      mode is on, so "created up front" needed no new code. The AIW
       `Feature` row is still deferred to accept, which is the first moment
       `linked_feature_id` can be written.
 - [x] `TodoPlanOrigin` threaded through `PreparedFeatureLaunch`,
@@ -363,7 +363,7 @@ recorded here rather than linked.
       `CHANGELOG.md` updates, and unit coverage for the resolver, the step
       machine, brief composition, plan-file naming, and link clearing.
 
-**Verified by running the app** (`scripts/dev/screenshot/amf-capture.sh`,
+**Verified by running the app** (`scripts/dev/screenshot/aiw-capture.sh`,
 throwaway repo + scratch instance): both destinations reach the interview
 with the brief pre-filled; the new-feature path checks out a real worktree
 before the interview opens; and an accept into a host feature that already
@@ -380,7 +380,7 @@ list. Work belonging to one checkout no longer sits in the same list as
 work belonging to every other, and the first feature to add a TODOs
 session no longer claims it for the whole repo. The decisions below come
 from a feature-discovery interview; the working plan lived in the
-branch's (gitignored) `AMF_PLAN.md`, so its conclusions are recorded
+branch's (gitignored) `AIW_PLAN.md`, so its conclusions are recorded
 here rather than linked.
 
 - [x] `TodoScope::{Worktree, Project, Global}` (`src/db/todos.rs`) is
@@ -473,11 +473,11 @@ here rather than linked.
       outcome.
 
 **Verified against a real database:** `MIGRATION_025` was run over a copy
-of a live `~/.config/amf/amf.db` — same list id, same host feature, all 23
+of a live `~/.config/ai_workstation/aiw.db` — same list id, same host feature, all 23
 items intact, `carry_over` preserved, and `PRAGMA foreign_key_check`
 clean afterwards, with `todos` still referencing the rebuilt table.
 
-**Verified by running the app** (`scripts/dev/screenshot/amf-capture.sh`,
+**Verified by running the app** (`scripts/dev/screenshot/aiw-capture.sh`,
 throwaway repo + scratch instance): `p` and `g` independently hide their
 scopes, each hidden pane becomes a labeled placeholder without exposing its
 TODO contents, hiding the focused pane advances focus, and restoring a pane
@@ -490,7 +490,7 @@ and the 200 / 100 / 60-column fallbacks.
 
 Shipped. Replaces the independent `done` / `in_progress` flags and loosely
 related spawned-session link with one explicit lifecycle plus an optional
-agent association. An item is reserved before AMF launches its agent, so the
+agent association. An item is reserved before AIW launches its agent, so the
 same TODO cannot accidentally be assigned twice and `I` has one authoritative
 definition of eligible work.
 
@@ -520,7 +520,7 @@ definition of eligible work.
 - [x] Database, app-state, launch-flow, selection, reconciliation, rendering,
       and migration tests cover the lifecycle and its failure paths.
 
-**Verified by running the app** in a throwaway AMF instance at 120×40: all
+**Verified by running the app** in a throwaway AIW instance at 120×40: all
 three markers and counts rendered together, the launch chooser identified an
 in-progress item, a duplicate launch was blocked with an explanatory message,
 and dashboard `I` opened the TODO-specific composer with the item prompt seeded
@@ -607,7 +607,7 @@ could target only an existing feature (Epic 8's `TodoSpawnTarget` picker).
       off). Adjusted `scenarios/todo-auto-in-progress.txt`, whose chooser
       navigation assumed "Plan this TODO first" was the second option.
 
-**Verified by running the app** (`scripts/dev/screenshot/amf-capture.sh`,
+**Verified by running the app** (`scripts/dev/screenshot/aiw-capture.sh`,
 throwaway git repo + scratch instance, `scenarios/todo-spawn-new-feature.txt`):
 `Enter` on an unlinked TODO shows the three-option chooser with the new
 middle option and its detail line; selecting it opens the ordinary
@@ -648,7 +648,7 @@ TODOs, since any future launch-and-seed flow can hit the same failure shape.
       confirming a stashed prompt leads `leader l`'s list and clears on
       injection.
 
-**Verified by running the app** (`scripts/dev/screenshot/amf-capture.sh`,
+**Verified by running the app** (`scripts/dev/screenshot/aiw-capture.sh`,
 scratch instance, `scenarios/unsent-prompt-recovery.txt`, DB-seeded so it
 needs no real harness or a real launch failure to demonstrate): `leader l`
 on a session view leads with `[unsent · TODO: Fix the login bug]` and the
@@ -673,7 +673,7 @@ saved as `Unsent: TODO: Fix the login bug [User]`, tagged `#unsent`.
   spawning an agent (`g`/`Enter`/`I`), not to the plan interview.
 - **Worktree keys are only separator-normalised** (`todo_workdir_key`).
   Symlinks and case are not, so one checkout reachable by two different
-  real paths would get two lists. Left as-is because AMF stores the
+  real paths would get two lists. Left as-is because AIW stores the
   workdir it created, so the paths it compares come from one source.
 - **The feature picker does not remember a target per TODO.** The cursor
   defaults to the feature the editor was opened under, which was one
@@ -696,7 +696,7 @@ saved as `Unsent: TODO: Fix the login bug [User]`, tagged `#unsent`.
   belongs to a checkout rather than to a host feature, and it is settled
   by the disposition prompt before the deletion runs.) "Re-home"
   means: the list itself is project-scoped, so rather than deleting all
-  the TODOs along with the feature that happened to host them, AMF
+  the TODOs along with the feature that happened to host them, AIW
   reassigns the list's `feature_id` to a different surviving feature of
   the project (so the TODOs live on). When the host feature is deleted
   but the project remains, show a small prompt: **Re-home** (pick which
@@ -722,6 +722,6 @@ saved as `Unsent: TODO: Fix the login bug [User]`, tagged `#unsent`.
 This is a self-contained vertical slice — new tables, one session kind,
 one native view — that reuses the existing session-spawn and
 composer-seed machinery rather than inventing new agent plumbing. Build
-it when there's appetite for a planning/triage surface inside AMF; the
+it when there's appetite for a planning/triage surface inside AIW; the
 spawn-from-TODO launcher is the differentiator over keeping a plain
 markdown to-do file, and it leans entirely on paths that already exist.

@@ -8,7 +8,7 @@ part stops happening. Implementation is deferred to a separate follow-up
 feature; this doc ends with a go/no-go recommendation. (The recommendation, §7,
 lands on the second approach — a one-line instruction change — not a subagent.)
 
-The approved plan for this investigation is `AMF_PLAN.md` in this worktree.
+The approved plan for this investigation is `AIW_PLAN.md` in this worktree.
 
 **Review status:** draft complete, awaiting maintainer sign-off. Every code
 reference below was cross-checked against the tree at branch
@@ -21,7 +21,7 @@ feature is opened.
 (`src/app/setup.rs`), with P0 covered by
 `blind_appended_duplicates_collapse_below_the_cap` /
 `archive_review_notes_collapses_blind_appended_duplicates_on_disk`
-(`src/app/review.rs`). Options I and K, and Step 2 (the AMF-driven mechanical
+(`src/app/review.rs`). Options I and K, and Step 2 (the AIW-driven mechanical
 writer + opt-in headless enrichment), remain deferred pending dogfood results.
 
 ## Contents
@@ -41,15 +41,15 @@ writer + opt-in headless enrichment), remain deferred pending dogfood results.
 
 ### 1.1 Two different files, routinely conflated
 
-AMF's Final Review touches two independent Markdown files under the feature
+AIW's Final Review touches two independent Markdown files under the feature
 worktree's `.claude/` directory. They are easy to mix up because both live in
 `.claude/`, both are gitignored, and both have an `-archive.md` sibling. Only
 the **first** is what the plan's cost premise is about.
 
 | File | Author | Reader | Purpose |
 | --- | --- | --- | --- |
-| `.claude/review-notes.md` (+ `review-notes-archive.md`) | the **feature agent** (while Review Mode is on) | AMF (shows it beside the diff); the agent re-reads it each batch to avoid duplicate sections | Per-changed-file "what changed and why" developer notes, captured *as the work happens* |
-| `.claude/final-review-feedback.md` (+ `final-review-feedback-archive.md`) | **AMF itself** (`complete_final_review`), never an agent | the feature agent, once per round, via `REVIEW_FEEDBACK_PROMPT` | The human reviewer's verdicts / line comments / suggestions for a finished review round |
+| `.claude/review-notes.md` (+ `review-notes-archive.md`) | the **feature agent** (while Review Mode is on) | AIW (shows it beside the diff); the agent re-reads it each batch to avoid duplicate sections | Per-changed-file "what changed and why" developer notes, captured *as the work happens* |
+| `.claude/final-review-feedback.md` (+ `final-review-feedback-archive.md`) | **AIW itself** (`complete_final_review`), never an agent | the feature agent, once per round, via `REVIEW_FEEDBACK_PROMPT` | The human reviewer's verdicts / line comments / suggestions for a finished review round |
 
 Two more `.claude/` files support an in-flight review but carry no agent cost:
 
@@ -76,9 +76,9 @@ All five paths are added to `.claude/.gitignore` by `ensure_notification_hooks`
 `claude_session_picker.rs:242`, `codex_session_picker.rs:244`,
 `opencode.rs:249`.
 
-**What it writes.** `ensure_review_claude_md` injects an AMF-managed block into
+**What it writes.** `ensure_review_claude_md` injects an AIW-managed block into
 the worktree's `CLAUDE.local.md` (Claude Code's gitignored, auto-read variant of
-`CLAUDE.md`), delimited by `<!-- AMF:review-instructions:begin -->` /
+`CLAUDE.md`), delimited by `<!-- AIW:review-instructions:begin -->` /
 `<!-- ...:end -->`. The block (`src/app/setup.rs:1355-1378`) instructs the
 agent, verbatim in intent:
 
@@ -121,7 +121,7 @@ sentence body then a `---` rule.
    when refining an existing file's note.
 
 The live file is bounded to the **50** most-recently-documented files
-(`MAX_LIVE_REVIEW_NOTE_FILES`, `src/app/review.rs:69`). AMF keeps it bounded
+(`MAX_LIVE_REVIEW_NOTE_FILES`, `src/app/review.rs:69`). AIW keeps it bounded
 *without the agent's help*: `archive_review_notes_after_agent_turn`
 (`src/app/notifications.rs:367`) fires on every `thinking-stop` / `stop` /
 `input-request` IPC notification for a `feature.review` feature and calls
@@ -137,7 +137,7 @@ The live file is bounded to the **50** most-recently-documented files
 `archive_review_notes` is also run once at setup time
 (`ensure_review_claude_md` → `src/app/setup.rs:1396`).
 
-**How AMF reads it back.** `load_review_notes(workdir)`
+**How AIW reads it back.** `load_review_notes(workdir)`
 (`src/app/review.rs:5196`) parses the archive then the live file (live wins on
 key collision) into a `path -> note` map via `parse_review_notes`
 (`src/app/review.rs:5213`). During a review this populates
@@ -157,7 +157,7 @@ in `DiffViewerState::generated_notes` (`src/app/state.rs:961`; generator around
   `state.review = true` and `state.layout = preferred_diff_viewer_layout()`, and
   enters `AppMode::DiffViewerLoading(state)`.
 - **No agent, no tmux session, no headless call** is part of launching the
-  review. Final Review is AMF's native TUI diff viewer walking every file
+  review. Final Review is AIW's native TUI diff viewer walking every file
   changed against the base ref, with the reviewer approving / rejecting /
   commenting per file. Saved `final-review-progress.json` is reloaded on open
   (the restoration choke point is documented at `src/app/review.rs:456`).
@@ -237,7 +237,7 @@ changes.
 
 The expensive, repeated read/rewrite loop the plan targets is **§1.2** — the
 feature agent maintaining `.claude/review-notes.md` batch by batch during
-Review Mode. It is *not* `final-review-feedback.md` (AMF writes that; the agent
+Review Mode. It is *not* `final-review-feedback.md` (AIW writes that; the agent
 reads it once per round) and *not* the diff-viewer walk (no agent at all).
 
 So the concrete optimisation question has two halves:
@@ -249,7 +249,7 @@ So the concrete optimisation question has two halves:
 2. **Or can the primary agent keep authoring the notes, but stop paying the
    part that actually costs** — the per-batch *read* of the growing file and its
    context carry (§2)? (Family 3, §3.6 — and per §3.6 that read is redundant
-   with dedup AMF already runs every turn.)
+   with dedup AIW already runs every turn.)
 
 The remaining sections evaluate both; the recommendation (§7) lands on the
 second.
@@ -277,7 +277,7 @@ trusting what it already saw.
 
 ### 2.2 Assumptions (no live measurement was taken)
 
-No running AMF instance with a billable session was available for this
+No running AIW instance with a billable session was available for this
 investigation, so the numbers below are **analytical estimates**, not
 measurements. They model a **Claude Code** session, since Review Mode's
 instruction only reaches Claude today (§1.2). Parameters:
@@ -291,7 +291,7 @@ instruction only reaches Claude today (§1.2). Parameters:
 | cap | `MAX_LIVE_REVIEW_NOTE_FILES` live-file ceiling | 50 (never hit) | 50 (hit ~batch 15) |
 | — | compaction events | 0 | 1 (mid-session) |
 
-Pricing = AMF's default table (`TokenPricingConfig::default`,
+Pricing = AIW's default table (`TokenPricingConfig::default`,
 `src/token_tracking.rs:858`), i.e. Claude Sonnet-class: input **$3.00**/Mtok,
 output **$15.00**/Mtok, cache-read **$0.30**/Mtok, cache-write **$3.75**/Mtok.
 The `CLAUDE.local.md` Review-Mode instruction block is ~240 tokens.
@@ -331,7 +331,7 @@ $0.10–$0.30).
   batches), read count and context-carry both rise roughly linearly. A
   pathological "note after every file" agent (ignoring the "batch it"
   instruction) pushes the large-diff figure toward $1.5–$2.
-- Recommended update to `AMF_PLAN.md` risk list: mark "the premise that the
+- Recommended update to `AIW_PLAN.md` risk list: mark "the premise that the
   read/rewrite loop dominates cost is an assumption" as **qualified — material
   only on large branches; negligible on small ones.**
 
@@ -341,22 +341,22 @@ These figures are the baseline the options in §7 are compared against.
 
 ### 3.0 Framing: three families
 
-AMF today does **not** orchestrate any harness's native subagents. The only
+AIW today does **not** orchestrate any harness's native subagents. The only
 place subagents appear in the code is *accounting*: `src/token_tracking.rs:346`
 and `:458` sum `~/.claude/projects/<session>/subagents/*.jsonl` into a session's
-usage. Every out-of-band model call AMF makes goes through `HeadlessRunner`
+usage. Every out-of-band model call AIW makes goes through `HeadlessRunner`
 (`src/headless.rs:201`), which spawns a one-shot CLI process, feeds the prompt
 on stdin, and holds a `HeadlessLease` (`src/headless.rs:524`) for the
 concurrency gate.
 
 The options split into three families:
 
-- **Agent-driven delegation** — AMF changes only the *instructions* it injects
+- **Agent-driven delegation** — AIW changes only the *instructions* it injects
   (the `CLAUDE.local.md` Review-Mode block, §1.2), telling the **primary agent**
-  to hand notes writing to its own native subagent. AMF spawns nothing; it
+  to hand notes writing to its own native subagent. AIW spawns nothing; it
   relies on the harness having a subagent primitive (Claude Code's Task tool;
   OpenCode subagents). — Option A.
-- **AMF-driven offload** — AMF runs the notes writer itself, out of the primary
+- **AIW-driven offload** — AIW runs the notes writer itself, out of the primary
   agent's process: a `HeadlessRunner` one-shot, a dedicated long-lived session,
   or a hook script. Harness-neutral in principle, but each mechanism has a
   different reach across the four harnesses (§5). — Options B, C, D.
@@ -365,7 +365,7 @@ The options split into three families:
   (the read of the growing file; that file then riding along in context) stop
   happening, while the agent keeps authoring the notes. — §3.6, Options F–K.
   This family exists because §2 found the **read**, not the write, is the
-  dominant cost, and the read turns out to be **redundant** with machinery AMF
+  dominant cost, and the read turns out to be **redundant** with machinery AIW
   already runs (§3.6).
 
 ### 3.1 Option A — Claude Code native subagent (Task tool), agent-driven
@@ -384,7 +384,7 @@ and Pi have no subagent primitive (§5).
 **Context isolation.** Strong. The subagent's read of `review-notes.md` and its
 prose generation happen in a separate transcript; only a ~1-line result returns
 to the primary context. The `review-notes.md` content never enters the primary
-window. Subagent usage is still billed and still visible to AMF via the
+window. Subagent usage is still billed and still visible to AIW via the
 `subagents/*.jsonl` accounting path.
 
 **Failure modes.**
@@ -399,20 +399,20 @@ window. Subagent usage is still billed and still visible to AMF via the
 - Subagents cost a fresh system prompt + tool preamble per spawn (~1–3 k tokens
   of cache-write each); at 18 batches that overhead can rival the baseline it
   removes.
-- No AMF hook fires on Task-tool completion for *this* purpose;
-  `SubagentStop` exists but AMF does not wire it, and it carries no structured
+- No AIW hook fires on Task-tool completion for *this* purpose;
+  `SubagentStop` exists but AIW does not wire it, and it carries no structured
   "did the notes get written" signal.
 
-### 3.2 Option B — AMF-driven `HeadlessRunner` one-shot per batch/finding
+### 3.2 Option B — AIW-driven `HeadlessRunner` one-shot per batch/finding
 
 **Invocation.** A new gated call site (like the `review.walkthrough` generator
 at `src/app/review.rs:1595`): on an end-of-turn IPC notification for a
 `feature.review` feature (the same hook point as
-`archive_review_notes_after_agent_turn`, `src/app/notifications.rs:367`), AMF
+`archive_review_notes_after_agent_turn`, `src/app/notifications.rs:367`), AIW
 diffs the worktree, finds files changed since the last notes pass, and runs
 `HeadlessRunner::run(harness, workdir, prompt, restricted=false)` — or
 `run_read_only` — with a "write review notes for these files" prompt. The
-one-shot reads the diff (and `review-notes.md`) and emits the sections; AMF
+one-shot reads the diff (and `review-notes.md`) and emits the sections; AIW
 writes them to the file. The primary agent is never asked to touch
 `review-notes.md` at all — its Review-Mode block is removed.
 
@@ -448,10 +448,10 @@ window. This is the cleanest isolation of the four.
 
 ### 3.3 Option C — dedicated long-lived notes-writer session
 
-**Invocation.** AMF creates a second tmux-backed agent session on the feature
+**Invocation.** AIW creates a second tmux-backed agent session on the feature
 (the way `create_dedicated_review_session` / `FINAL_REVIEW_SESSION_LABEL`
 already makes a "Final Review" session, `src/app/review.rs:16`, `:3674`),
-labelled e.g. "Review Notes". After each primary-agent turn AMF pastes a short
+labelled e.g. "Review Notes". After each primary-agent turn AIW pastes a short
 "document the files changed since your last note" prompt into that session's
 window. The session keeps its own context across the whole implementation, so it
 accumulates understanding of the change.
@@ -475,7 +475,7 @@ the *primary* session's context pressure (fewer compactions, longer useful life)
 - Prompt-delivery fragility: pasting into a tmux window depends on the session
   being alive and at a prompt; `paste_review_prompt` already has to handle "no
   window" fallbacks (`src/app/review.rs:3661`).
-- Idle-detection coupling: AMF would need a new "notes writer finished" signal
+- Idle-detection coupling: AIW would need a new "notes writer finished" signal
   to avoid stacking prompts, similar to `AwaitingReviewFix`
   (`src/app/review.rs:3744`).
 - Cost: a long-lived session is the *most* expensive of the four to run; it only
@@ -483,7 +483,7 @@ the *primary* session's context pressure (fewer compactions, longer useful life)
 
 ### 3.4 Option D — hook-based append (no model, or minimal model)
 
-**Invocation.** AMF already installs `Stop` / `PostToolUse` hooks into
+**Invocation.** AIW already installs `Stop` / `PostToolUse` hooks into
 `.claude/settings.local.json` (`src/app/setup.rs:1146`, `:1206`). Add a
 `PostToolUse` hook matched to `Edit|Write` (or a `Stop` hook) that runs a script
 which: reads the tool payload / the git diff, and appends a **mechanical**
@@ -494,8 +494,8 @@ the script makes its own tiny `HeadlessRunner`-style call for a one-sentence
 
 **Supported harnesses.** Claude Code has the richest hook surface. OpenCode has
 `.opencode/` hooks. Codex and Pi hook support is limited/absent — for those,
-the same script can be run by AMF on the end-of-turn IPC notification instead
-(so this degrades to "AMF-driven, model-free" rather than being unsupported).
+the same script can be run by AIW on the end-of-turn IPC notification instead
+(so this degrades to "AIW-driven, model-free" rather than being unsupported).
 
 **Context isolation.** Perfect — the primary agent is never involved and never
 told to write notes. Zero primary-context cost. Zero model cost in the
@@ -515,7 +515,7 @@ model-free variant.
 - Per-`Edit` firing is noisy; needs debouncing to per-turn (a `Stop` hook is
   naturally per-turn; `PostToolUse` needs a guard).
 - Harness inconsistency: the hook payload shape and available events differ per
-  harness, so the "hook" path is really "Claude/OpenCode hook, AMF-side script
+  harness, so the "hook" path is really "Claude/OpenCode hook, AIW-side script
   elsewhere".
 
 ### 3.5 Summary table (families 1–2)
@@ -523,9 +523,9 @@ model-free variant.
 | | Who spawns | Harnesses | Primary-context cost | Model cost | "Why" quality | Main risk |
 | --- | --- | --- | --- | --- | --- | --- |
 | A — native subagent | primary agent | Claude (OpenCode partial) | low (batch description only) | subagent spawn overhead ×B | good | non-determinism; spawn overhead |
-| B — headless one-shot | AMF | all 4 | ~zero | cold start ×B (or ×1 if batched) | medium (good if fed transcript) | output trusted un-reviewed; concurrency gate |
-| C — dedicated session | AMF | all 4 (tmux) | ~zero for primary | highest (second full context) | best | doubles agent count; two agents/worktree |
-| D — hook append | AMF (hook/script) | Claude/OpenCode hook; AMF-side elsewhere | zero | zero (model-free) or tiny | low ("what", not "why") | quality floor; hook reliability |
+| B — headless one-shot | AIW | all 4 | ~zero | cold start ×B (or ×1 if batched) | medium (good if fed transcript) | output trusted un-reviewed; concurrency gate |
+| C — dedicated session | AIW | all 4 (tmux) | ~zero for primary | highest (second full context) | best | doubles agent count; two agents/worktree |
+| D — hook append | AIW (hook/script) | Claude/OpenCode hook; AIW-side elsewhere | zero | zero (model-free) or tiny | low ("what", not "why") | quality floor; hook reliability |
 
 ### 3.6 Family 3 — reduce the loop in place (no subagent, no offload)
 
@@ -546,19 +546,19 @@ session — not the writing. And that read is **already redundant**:
 - `load_review_notes` (`src/app/review.rs:5196`) merges archive then live, live
   winning, so the diff viewer always shows the newest note per file.
 
-In other words: AMF already de-duplicates and supersedes notes by path on every
+In other words: AIW already de-duplicates and supersedes notes by path on every
 turn. The instruction telling the agent to read the file first *"to skip a file
-that already has a note"* is asking it to pay for a dedup AMF then redoes anyway.
+that already has a note"* is asking it to pay for a dedup AIW then redoes anyway.
 
 The in-place options:
 
 | # | Change | Cost removed | Keeps agent "why"? | Effort | Notes |
 | --- | --- | --- | --- | --- | --- |
-| **F — blind append** | Instruction becomes: *"append a section per file you touched this batch; **do not read `review-notes.md`** — AMF keeps only your latest note per file. Use your own memory of this session to skip a file you've already covered."* | the per-batch **read** and its **context carry** — i.e. both dominant terms of §2 | **yes** | ~1-line instruction change to `ensure_review_claude_md`; **no new code** | machinery already supports it (above). Within one turn the live file can briefly hold duplicates; the post-turn archive pass collapses them. Agent can't *refine* a prior note, only append a fuller replacement — newest wins, which is usually more accurate anyway |
-| **G — end-of-turn harvest** | Ask the agent to end each turn with terse `NOTE: <path> — <why>` lines; the existing `Stop` hook scrapes them into the file | the read **and** most of the write (the lines are ~free — the agent already narrates this) | yes | small `Stop` hook script (Claude/OpenCode); AMF-side scrape of the transcript for Codex/Pi | overlaps Option D but agent-authored; no separate "notes prose" pass |
+| **F — blind append** | Instruction becomes: *"append a section per file you touched this batch; **do not read `review-notes.md`** — AIW keeps only your latest note per file. Use your own memory of this session to skip a file you've already covered."* | the per-batch **read** and its **context carry** — i.e. both dominant terms of §2 | **yes** | ~1-line instruction change to `ensure_review_claude_md`; **no new code** | machinery already supports it (above). Within one turn the live file can briefly hold duplicates; the post-turn archive pass collapses them. Agent can't *refine* a prior note, only append a fuller replacement — newest wins, which is usually more accurate anyway |
+| **G — end-of-turn harvest** | Ask the agent to end each turn with terse `NOTE: <path> — <why>` lines; the existing `Stop` hook scrapes them into the file | the read **and** most of the write (the lines are ~free — the agent already narrates this) | yes | small `Stop` hook script (Claude/OpenCode); AIW-side scrape of the transcript for Codex/Pi | overlaps Option D but agent-authored; no separate "notes prose" pass |
 | **H — note once, at stop / before review** | Move the trigger from per-logical-batch to a single pass at feature stop or when `f` opens the review | turns B reads+writes into 1 | yes | instruction + a single prompt/paste at the trigger point | already floated in `token-efficiency-plan.md` §7 ("request it once before review or feature stop"); loses per-batch "why" granularity |
-| **I — AMF says which files need a note** | AMF (which has the diff) tells the agent the changed-file list and filters out renames / pure formatting / trivial one-liners; agent notes only the rest | fewer sections → less output and a smaller file (smaller reads if any remain) | yes | AMF-side diff classification + inject the list | composes with F/H |
-| **J — AMF writes "what", agent adds "why"** | AMF appends the mechanical skeleton (file + hunk headers) after each turn; the agent appends only a `why:` line where something is non-obvious | the agent's cost of deciding + phrasing "what changed" | yes, where it matters | AMF-side mechanical writer (same as Option D's core) + a shorter instruction | Option D's Layer-1 writer plus a cheap agent-driven "why", with no headless call |
+| **I — AIW says which files need a note** | AIW (which has the diff) tells the agent the changed-file list and filters out renames / pure formatting / trivial one-liners; agent notes only the rest | fewer sections → less output and a smaller file (smaller reads if any remain) | yes | AIW-side diff classification + inject the list | composes with F/H |
+| **J — AIW writes "what", agent adds "why"** | AIW appends the mechanical skeleton (file + hunk headers) after each turn; the agent appends only a `why:` line where something is non-obvious | the agent's cost of deciding + phrasing "what changed" | yes, where it matters | AIW-side mechanical writer (same as Option D's core) + a shorter instruction | Option D's Layer-1 writer plus a cheap agent-driven "why", with no headless call |
 | **K — terser format** | `- <path>: <why>` instead of `## <path> — <title>` + 1–2 sentences + `---` | ~half the write cost; less parse ambiguity | yes | instruction + a `parse_review_notes` heading variant | small standalone win; composes with everything |
 
 **Failure modes for family 3 as a whole.**
@@ -580,8 +580,8 @@ The in-place options:
 | F — blind append | ~zero (no read, no carry) | write-only (small) | agent-authored | trivial (instruction) | all 4 |
 | G — end-of-turn harvest | ~zero | ~zero marginal | agent-authored, terse | small (hook/scrape) | all 4 |
 | H — once at stop/review | one read+write total | one write pass | agent-authored, coarser | small | all 4 |
-| I — AMF picks files | lower (smaller file) | less output | agent-authored | small (AMF-side) | all 4 |
-| J — AMF "what" + agent "why" | ~zero | tiny (agent `why:` only) | agent where it matters | medium (AMF writer) | all 4 |
+| I — AIW picks files | lower (smaller file) | less output | agent-authored | small (AIW-side) | all 4 |
+| J — AIW "what" + agent "why" | ~zero | tiny (agent `why:` only) | agent where it matters | medium (AIW writer) | all 4 |
 | K — terser format | lower | ~half write | agent-authored | trivial | all 4 |
 
 ## 4. Review-files spec options
@@ -596,10 +596,10 @@ recommended default:
 | Option | For | Against |
 | --- | --- | --- |
 | **Markdown, `## <path> — <title>` sections (current)** | already parsed by `parse_review_notes` (`src/app/review.rs:5213`) and `review_note_sections` (`:5060`); listed as a viewable doc in `src/markdown.rs:20`; human opens it directly; a one-shot / subagent emits it with no schema | loose parsing; a malformed heading silently drops a section |
-| JSON (`[{path, title, why, ...}]`) | machine-robust; easy for AMF to validate a subagent's output before writing | new parser + new writer; loses the "just open the file" property and the markdown-viewer integration; not reviewer-readable raw |
+| JSON (`[{path, title, why, ...}]`) | machine-robust; easy for AIW to validate a subagent's output before writing | new parser + new writer; loses the "just open the file" property and the markdown-viewer integration; not reviewer-readable raw |
 
 **Recommendation:** keep Markdown as the on-disk surface. If a subagent's output
-needs validating, have it emit Markdown and let AMF normalise on write — it
+needs validating, have it emit Markdown and let AIW normalise on write — it
 already round-trips sections through `review_note_sections` /
 `write_review_notes_atomic`.
 
@@ -616,7 +616,7 @@ already round-trips sections through `review_note_sections` /
 | Option | Verdict |
 | --- | --- |
 | **`<workdir>/.claude/review-notes.md` (current)** | same dir as every other review sidecar (`final-review-progress.json`, `final-review-snapshot.json`, `final-review-feedback.md`); already resolved by `load_review_notes(workdir)`; already gitignored via `.claude/.gitignore` — **keep** |
-| Temp dir | loses worktree association, does not survive an AMF restart; nothing else in the review flow lives outside `.claude/` — reject |
+| Temp dir | loses worktree association, does not survive an AIW restart; nothing else in the review flow lives outside `.claude/` — reject |
 | `.worktrees/` | wrong scope — that is the *container* of sibling worktrees, not a per-feature location — reject |
 
 ### 4.4 Committed vs gitignored — **gitignored (keep), with a caveat to resolve**
@@ -682,8 +682,8 @@ them delivers.
 
 | Harness | Native subagent primitive | `HeadlessRunner` one-shot | Restricted / read-only one-shot | Notes |
 | --- | --- | --- | --- | --- |
-| **Claude Code** | **Yes** — Task tool + `.claude/agents/*.md` | Yes (`command_for` → `claude -p`, `src/headless.rs:1062`) | Yes — `--safe-mode --tools ""` (restricted) / `--tools Read,Glob,Grep` (read-only), `src/headless.rs:1070`, `:1189` | Full hook surface (`Stop`, `PostToolUse`, `SubagentStop`, …) already managed by AMF (`src/app/setup.rs:1146`+) |
-| **OpenCode** | **Partial** — subagents via `opencode.json` / `.opencode/agent/*.md`, `task` tool / `@mention` | Yes (`opencode run`, `src/headless.rs:1095`) | Yes — `--pure` + `OPENCODE_PERMISSION` deny-all, `src/headless.rs:1098`, `:1208` | Has an `.opencode/` hook equivalent; AMF must not touch global `~/.config/opencode/` (CLAUDE.md rule) |
+| **Claude Code** | **Yes** — Task tool + `.claude/agents/*.md` | Yes (`command_for` → `claude -p`, `src/headless.rs:1062`) | Yes — `--safe-mode --tools ""` (restricted) / `--tools Read,Glob,Grep` (read-only), `src/headless.rs:1070`, `:1189` | Full hook surface (`Stop`, `PostToolUse`, `SubagentStop`, …) already managed by AIW (`src/app/setup.rs:1146`+) |
+| **OpenCode** | **Partial** — subagents via `opencode.json` / `.opencode/agent/*.md`, `task` tool / `@mention` | Yes (`opencode run`, `src/headless.rs:1095`) | Yes — `--pure` + `OPENCODE_PERMISSION` deny-all, `src/headless.rs:1098`, `:1208` | Has an `.opencode/` hook equivalent; AIW must not touch global `~/.config/opencode/` (CLAUDE.md rule) |
 | **Codex** (`codex exec`) | **No** — single agent, no delegation primitive | Yes (`codex exec --sandbox read-only --ephemeral`, `src/headless.rs:1079`) | Yes, but **only** the ephemeral read-only sandbox — there is no separate no-tools mode (`run_read_only` returns the ordinary command for Codex, `src/headless.rs:1207`) | Limited hook support |
 | **Pi** | **No documented primitive** — treat as none until verified | Yes (`pi -p --no-session`, `src/headless.rs:1112`) | Yes — `--no-tools --no-extensions --no-skills --no-prompt-templates --no-context-files --no-approve`, `src/headless.rs:1119`, `:1214` | `--no-tools` covers built-in + extension + custom tools on current releases |
 
@@ -694,14 +694,14 @@ them delivers.
   (`HeadlessRunner`, `create_dedicated_review_session`, managed hooks).
 - **OpenCode** — Options B/C/D fully; Option A possible but needs an
   OpenCode-specific delegation prompt and an `opencode.json` subagent
-  definition AMF would have to write into `.opencode/` (worktree-local, never
+  definition AIW would have to write into `.opencode/` (worktree-local, never
   global).
-- **Codex** — Options B (headless one-shot) and D-as-AMF-side-script only.
+- **Codex** — Options B (headless one-shot) and D-as-AIW-side-script only.
   No native subagent; hook support too thin to rely on. Option C (dedicated
   tmux session) technically works but Codex has no read-only *interactive*
   mode, so a second Codex session in the worktree could edit code — it would
   have to be trusted or fenced by prompt alone.
-- **Pi** — same as Codex: Options B and D-as-AMF-side-script. `--no-tools`
+- **Pi** — same as Codex: Options B and D-as-AIW-side-script. `--no-tools`
   headless is clean, so a Pi one-shot notes writer that receives everything in
   its prompt is well-supported; anything needing repo tools is `run_read_only`
   with Pi's read-only tool set.
@@ -716,21 +716,21 @@ them delivers.
 - **If review notes are extended to all four harnesses** (by making
   `ensure_review_claude_md` harness-aware), Family 3 (Option F etc.) extends with
   it — every supported harness reads *some* local-instruction file. The
-  AMF-driven offload (Options B / D / J) also covers all four and is the only
+  AIW-driven offload (Options B / D / J) also covers all four and is the only
   path that works with **no** instruction file at all. Native subagents
   (Option A) remain a Claude/OpenCode-only enhancement, never the load-bearing
   mechanism — so the plan's "any harness with native subagents" requirement is
   met structurally either way.
 
-Recommended posture (aligned with §7 — Option F first, AMF-driven build only if
+Recommended posture (aligned with §7 — Option F first, AIW-driven build only if
 it proves necessary):
 
 | Harness | Path | Degradation |
 | --- | --- | --- |
-| Claude Code | Option F (instruction edit); AMF-driven build (D/J + optional headless "why") only if F is insufficient; native subagent (A) only if it measures better | none |
-| OpenCode | needs `ensure_review_claude_md` harness-awareness first; then Option F; AMF-driven build as the Claude fallback | notes absent until the instruction is delivered |
+| Claude Code | Option F (instruction edit); AIW-driven build (D/J + optional headless "why") only if F is insufficient; native subagent (A) only if it measures better | none |
+| OpenCode | needs `ensure_review_claude_md` harness-awareness first; then Option F; AIW-driven build as the Claude fallback | notes absent until the instruction is delivered |
 | Codex | as OpenCode; no native-subagent variant | as OpenCode |
-| Pi | as OpenCode; `--no-tools` headless makes an AMF-driven writer clean here | as OpenCode |
+| Pi | as OpenCode; `--no-tools` headless makes an AIW-driven writer clean here | as OpenCode |
 
 So there is **no degraded feature tier** for the core saving *once the
 instruction reaches a harness* — the primary agent stops reading
@@ -742,7 +742,7 @@ here.
 
 > **Applies to Step 2 only.** The recommended Step 1 (Option F, §7.4) is an edit
 > to the `CLAUDE.local.md` instruction block and adds **no** registry prompt.
-> This section maps the integration for the *deferred* AMF-driven writer, so the
+> This section maps the integration for the *deferred* AIW-driven writer, so the
 > design is ready if Step 1 proves insufficient.
 
 ### 6.1 What final review uses today
@@ -827,7 +827,7 @@ existing `PromptId`.
 is in `PromptId::ALL`:
 
 - **Resolution:** `resolve_template_layered` — feature (DB, keyed by workdir
-  path) → project (`amf.json` `ExtensionConfig::prompt_overrides`) → global
+  path) → project (`aiw.json` `ExtensionConfig::prompt_overrides`) → global
   (DB) → built-in; nearest wins; within the winning layer a per-harness
   template beats the shared one (`src/prompts/resolve.rs:141`). Read fresh each
   call (`resolve_headless_template`, `src/app/mod.rs:3261`).
@@ -835,11 +835,11 @@ is in `PromptId::ALL`:
   automatically (it iterates `all_specs()`); editable per scope; `d,d` clears
   the effective override.
 - **Team override:** a project can set house style for notes in committed
-  `amf.json` (`src/prompts/project.rs`); an individual overrides per-feature or
-  globally in `amf.db` without affecting the team.
+  `aiw.json` (`src/prompts/project.rs`); an individual overrides per-feature or
+  globally in `aiw.db` without affecting the team.
 - **Silent default drift (documented caveat):** "Once any layer supplies an
   override the built-in default is never read." A user who customises
-  `review.notes_writer` will not pick up a later improvement to AMF's built-in
+  `review.notes_writer` will not pick up a later improvement to AIW's built-in
   template — same trade-off as every other registry prompt, but it bites harder
   here because the prompt runs **automatically every turn**: a stale or broken
   override degrades silently rather than being noticed at an interactive
@@ -859,7 +859,7 @@ is in `PromptId::ALL`:
 
 ### 7.1 The field of options
 
-Three families (§3): **A** agent-driven native subagent; **B/C/D** AMF-driven
+Three families (§3): **A** agent-driven native subagent; **B/C/D** AIW-driven
 offload (headless one-shot / dedicated session / hook append); **F–K**
 reduce the loop in place (§3.6). `docs/backlog/token-efficiency-plan.md` §7
 already points at the last family — drop the per-batch instruction and lean on
@@ -874,11 +874,11 @@ Ratings: ✅ strong / ➖ mixed / ❌ weak.
 | **A** native subagent | ✅ high | ➖ maybe *worse* on large diffs (spawn overhead ×B + primary still describes each batch) | ➖ medium (prompt-only, non-deterministic; no test infra) | ❌ Claude only (+OpenCode maybe) | ❌ model may not delegate; silent subagent failure | ➖ invisible when it works, confusing narration when not |
 | **B** headless one-shot (batched ×1) | ✅ ~total | ✅ well below baseline (one cold start, nothing persists) | ➖ medium (one gated call site; lock vs `archive_review_notes`) | ✅ all 4 | ➖ output trusted un-reviewed; "why" needs the transcript fed in | ➖ toast + latency before notes appear |
 | **C** dedicated session | ✅ ~total for primary | ❌ up (second full context) | ❌ high (lifecycle, paste fragility, idle signal, read-only fence, resource gate) | ✅ all 4 (tmux) | ➖ two agents / worktree race risk | ❌ unrequested session; against `resource_gate` |
-| **D** hook append (model-free) | ✅ total | ✅ ~zero added | ➖ low–medium (script + hook / AMF-side call) | ✅ all 4 | ✅ can't hallucinate; fails to "no note" | ➖ "what", no "why" (`g` covers semantics) |
+| **D** hook append (model-free) | ✅ total | ✅ ~zero added | ➖ low–medium (script + hook / AIW-side call) | ✅ all 4 | ✅ can't hallucinate; fails to "no note" | ➖ "what", no "why" (`g` covers semantics) |
 | **F** blind append (no read) | ✅ ~total (no read, no carry) | ✅ well below baseline (write-only) | ✅ **trivial — a one-line instruction change, no new code** | ✅ all 4 | ➖ instruction compliance; **fails toward today's behaviour** | ✅ none — notes look exactly as they do now |
 | **G** end-of-turn harvest | ✅ ~total | ✅ ~zero marginal | ➖ low (hook/scrape) | ✅ all 4 | ➖ hook/IPC reliability (like D) | ✅ ~none |
 | **H** note once at stop/review | ✅ high (1 read+write, not B) | ✅ well below baseline | ✅ low | ✅ all 4 | ➖ compliance; coarser "why" | ➖ notes appear later / in one lump |
-| **J** AMF "what" + agent "why" | ✅ ~total | ✅ ~zero + tiny agent `why:` | ➖ medium (AMF mechanical writer) | ✅ all 4 | ✅ mostly mechanical + small agent add | ➖ ~none |
+| **J** AIW "what" + agent "why" | ✅ ~total | ✅ ~zero + tiny agent `why:` | ➖ medium (AIW mechanical writer) | ✅ all 4 | ✅ mostly mechanical + small agent add | ➖ ~none |
 | **K** terser format | ➖ lower (smaller file) | ✅ ~half the write | ✅ trivial | ✅ all 4 | ✅ nothing new | ✅ denser panel |
 
 ### 7.3 Reading the scores against the premise
@@ -886,13 +886,13 @@ Ratings: ✅ strong / ➖ mixed / ❌ weak.
 §2 found the loop is a **modest** cost — negligible on small changes, order
 $0.5 on a large branch, and the **read** (plus its context carry), not the
 write, is the dominant term. That, plus §3.6's finding that **the read is
-redundant with dedup AMF already runs every turn**, reframes the whole problem:
+redundant with dedup AIW already runs every turn**, reframes the whole problem:
 
 - It rules **C** out: a second full agent context to save ~$0.5 is a bad trade
   and fights `resource_gate`.
 - It weakens **A**: a Claude-only mechanism that may not reduce net spend on the
   case that matters is not worth the non-determinism.
-- It makes a **heavy AMF-driven build (D + a headless "why" pass) look
+- It makes a **heavy AIW-driven build (D + a headless "why" pass) look
   disproportionate** to the size of the win, *if a one-line instruction change
   gets most of the way there.*
 - **Option F does get most of the way there.** It removes both dominant terms,
@@ -900,7 +900,7 @@ redundant with dedup AMF already runs every turn**, reframes the whole problem:
   new code, and its worst-case failure is "the agent reads the file anyway" —
   i.e. today.
 
-### 7.4 Recommendation — Option F now, AMF-driven build only if it proves necessary
+### 7.4 Recommendation — Option F now, AIW-driven build only if it proves necessary
 
 **Step 1 (do this): blind append (Option F), plus Options I and K.**
 - Rewrite the Review-Mode block in `ensure_review_claude_md`
@@ -909,8 +909,8 @@ redundant with dedup AMF already runs every turn**, reframes the whole problem:
   file already covered.* Optionally switch the section format to the terser
   `- <path>: <why>` form (Option K) with a matching `review_note_path_from_heading`
   variant.
-- Have AMF inject the changed-file list and suppress notes for renames / pure
-  formatting / trivial one-liners (Option I) — AMF already has the diff.
+- Have AIW inject the changed-file list and suppress notes for renames / pure
+  formatting / trivial one-liners (Option I) — AIW already has the diff.
 - Everything downstream is unchanged: `archive_review_notes` still runs every
   turn and still collapses to newest-per-path (§3.6), the diff-viewer panel
   still reads via `load_review_notes`.
@@ -923,12 +923,12 @@ redundant with dedup AMF already runs every turn**, reframes the whole problem:
   separate, small prerequisite that benefits Option F and Step 2 equally; it is
   not part of this recommendation.
 
-**Step 2 (only if Step 1 is insufficient): the AMF-driven fallback.**
+**Step 2 (only if Step 1 is insufficient): the AIW-driven fallback.**
 Dogfood a large branch with Option F in place. If agent-authored notes are
 still too costly (loose batching), too unreliable (agent keeps reading the file
 or skipping notes), or the "why" quality regresses, escalate to the previous
 recommendation:
-- **Layer 1:** AMF writes model-free mechanical notes on the end-of-turn IPC
+- **Layer 1:** AIW writes model-free mechanical notes on the end-of-turn IPC
   hook (`archive_review_notes_after_agent_turn`, `src/app/notifications.rs:367`);
   the Review-Mode instruction is removed entirely (Option D core / J).
 - **Layer 2 (opt-in, default off):** one `HeadlessRunner` `review.notes_writer`
@@ -940,17 +940,17 @@ reviewer's per-file semantic escape hatch (`src/app/review.rs:1629`).
 
 **Why F first**
 - The win is modest (§2), so match the effort to it: a one-line instruction
-  change before a multi-part AMF build.
+  change before a multi-part AIW build.
 - It keeps agent-authored "why" — the panel's main value over the raw diff —
   at no added cost, instead of trading it away and buying it back with a
   headless pass.
 - It fails safe *toward the status quo*, not toward "notes silently missing".
-- It doesn't foreclose Step 2: if F underperforms, the AMF-driven build is
+- It doesn't foreclose Step 2: if F underperforms, the AIW-driven build is
   still there, now with real dogfood data on whether the "why" pass is needed.
 
 **Rejected outright:** C (cost + complexity + `resource_gate` conflict); A as
 the primary mechanism (harness coverage + non-determinism + spawn overhead);
-per-batch B (least efficient B variant). **Deferred:** the full AMF-driven
+per-batch B (least efficient B variant). **Deferred:** the full AIW-driven
 build (Step 2) — designed, not built, pending Step 1's results.
 
 ## 8. Follow-up go/no-go
@@ -959,8 +959,8 @@ build (Step 2) — designed, not built, pending Step 1's results.
 
 The saving is **real but modest** (§2): negligible on small changes, order $0.5
 on a large branch, dominated by the file *read*, which §3.6 shows is redundant
-with dedup AMF already runs every turn. So the follow-up should **start with
-the one-line instruction change (Option F)** and only build the AMF-driven
+with dedup AIW already runs every turn. So the follow-up should **start with
+the one-line instruction change (Option F)** and only build the AIW-driven
 notes writer if dogfooding shows F is not enough. Nothing here justifies a new
 session type or schema change.
 
@@ -973,7 +973,7 @@ session type or schema change.
    already covered* (Option F). Update `strip_between_markers` handling and the
    block-content tests (`src/app/tests.rs:1124`, `:7603`, `:11492`).
 2. Inject the changed-file list and suppress notes for renames / pure
-   formatting / trivial one-liners (Option I) — AMF has the diff via the same
+   formatting / trivial one-liners (Option I) — AIW has the diff via the same
    `diff::` plumbing `save_review_snapshot` uses.
 3. Optionally switch the section format to the terser `- <path>: <why>` form
    (Option K) with a matching `review_note_path_from_heading` branch and a
@@ -1045,7 +1045,7 @@ scheduled)**
   (`src/app/tests.rs:11492`). Agree this is sufficient given no integration rig.
 - **P4 — Config surface.** Name/scope/default of the enrichment flag
   (`final_review_notes_enrichment`?), living in `ExtensionConfig` /
-  per-project `amf.json` beside `final_review_check_command` /
+  per-project `aiw.json` beside `final_review_check_command` /
   `final_review_post_to_pr`.
 
 ### 8.4 Open questions to carry into the follow-up
@@ -1080,7 +1080,7 @@ scheduled)**
    Acceptable (it is non-blocking and best-effort) but should be stated in the
    flag's docs.
 6. **Reviewer-visible provenance** — should the panel distinguish
-   AMF-mechanical notes from enriched notes from agent-authored ones (older
+   AIW-mechanical notes from enriched notes from agent-authored ones (older
    features), so a reviewer knows how much to trust a section? Small UI
    decision, worth making deliberately.
 7. **Override drift for an every-turn prompt** (§6.3) — ship the "resolved

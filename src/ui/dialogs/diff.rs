@@ -452,7 +452,10 @@ const REVIEW_HELP_SECTIONS: &[(&str, &[(&str, &str)])] = &[
             ("W", "Toggle ignore-whitespace (git diff -w)"),
             ("e", "Expand / collapse the developer notes panel"),
             ("", "(while expanded, j / k scroll the note)"),
-            ("i", "Install or repair this file's syntax parser"),
+            (
+                "i",
+                "Download (git clone) + install this file's syntax parser",
+            ),
             ("E", "Open this file in $EDITOR"),
             ("b", "Diff against a different base ref"),
         ],

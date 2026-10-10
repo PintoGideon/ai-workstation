@@ -5,7 +5,7 @@
 # scratch instance with no real repo path handy.
 #
 # Run with:
-#   ./amf-capture.sh --scenario scenarios/create-project-flow.txt --keep
+#   ./aiw-capture.sh --scenario scenarios/create-project-flow.txt --keep
 
 note:The empty dashboard establishes the starting state before project creation begins.
 shot:dashboard-empty

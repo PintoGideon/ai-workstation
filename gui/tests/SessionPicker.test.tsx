@@ -95,12 +95,12 @@ it("shows a failed pre-check in place until another session is chosen", () => {
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-it("asks no name for VS Code or TODOs and reports an unreadable amf.json", () => {
+it("asks no name for VS Code or TODOs and reports an unreadable aiw.json", () => {
   const { onCreate } = dialog({
     options: pickerOptions({
       builtin: [{ kind: "vscode", label: "VS Code", disabled: null }, { kind: "todos", label: "TODOs", disabled: null }],
       custom: [],
-      config_warning: "/repo/amf.json could not be parsed: expected value. Only global custom sessions are listed.",
+      config_warning: "/repo/aiw.json could not be parsed: expected value. Only global custom sessions are listed.",
       feature_stopped: true,
     }),
   });
@@ -121,10 +121,10 @@ const editor = (id: string, state: FeatureEditor["state"]): FeatureEditor => ({
 it("closes only after confirming the listed windows and shows what was left running", async () => {
   vi.mocked(invoke).mockResolvedValue({
     already_closed: false,
-    message: "closed 1 editor (2 processes); left VS Code running (AMF did not open this window)",
+    message: "closed 1 editor (2 processes); left VS Code running (AIW did not open this window)",
     editors: {
       killed: [{ name: "VS Code", processes: 2 }],
-      skipped: [{ name: "VS Code", reason: "AMF did not open this window", deliberate: true }],
+      skipped: [{ name: "VS Code", reason: "AIW did not open this window", deliberate: true }],
       pending: [], summary: null,
     },
   });
@@ -133,9 +133,9 @@ it("closes only after confirming the listed windows and shows what was left runn
     editors={[editor("owned", "open"), editor("foreign", "not_owned")]}
     onOpen={vi.fn()} onClosed={onClosed} onError={vi.fn()} />);
 
-  expect(screen.getByText("Not AMF's")).toBeTruthy();
-  expect(screen.getByText(/AMF never closes it/)).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: /Close windows AMF opened/ }));
+  expect(screen.getByText("Not AIW's")).toBeTruthy();
+  expect(screen.getByText(/AIW never closes it/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /Close windows AIW opened/ }));
   expect(screen.getByText("Close this VS Code window?")).toBeTruthy();
   expect(invoke).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Close windows" }));
@@ -143,13 +143,13 @@ it("closes only after confirming the listed windows and shows what was left runn
   await waitFor(() => expect(onClosed).toHaveBeenCalled());
   expect(invoke).toHaveBeenCalledWith("close_editors", { target: { project_id: "p", feature_id: "f" }, seen: ["owned", "foreign"] });
   expect(screen.getByText("Closed VS Code (2 processes ended)")).toBeTruthy();
-  expect(screen.getByText("Left VS Code running: AMF did not open this window")).toBeTruthy();
+  expect(screen.getByText("Left VS Code running: AIW did not open this window")).toBeTruthy();
 });
 
 it("offers no close when every window belongs to someone else", () => {
   render(<VscodePanel target={{ project_id: "p", feature_id: "f" }} workdir="/wt" opening={false}
     editors={[editor("foreign", "not_owned")]} onOpen={vi.fn()} onClosed={vi.fn()} onError={vi.fn()} />);
-  expect((screen.getByRole("button", { name: /Close windows AMF opened/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: /Close windows AIW opened/ }) as HTMLButtonElement).disabled).toBe(true);
 });
 
 function snapshot(extraSessions: WorkspaceSnapshot["projects"][0]["features"][0]["sessions"] = [],

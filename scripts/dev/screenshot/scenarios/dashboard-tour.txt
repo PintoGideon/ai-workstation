@@ -4,7 +4,7 @@
 # src/handlers/normal.rs / CLAUDE.md's key dispatch section.
 #
 # Run with:
-#   ./amf-capture.sh --scenario scenarios/dashboard-tour.txt --keep
+#   ./aiw-capture.sh --scenario scenarios/dashboard-tour.txt --keep
 
 shot:dashboard
 

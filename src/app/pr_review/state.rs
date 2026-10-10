@@ -293,10 +293,10 @@ pub struct CompactReviewState {
     /// The proposed replacement text, editable before writing.
     pub editor: TextEditor,
     /// The doc exactly as the compact pass read it. The write re-reads the file
-    /// and compares against this before overwriting, so findings another AMF
+    /// and compares against this before overwriting, so findings another AIW
     /// session appended while the agent ran (or while this dialog sat open) are
     /// re-applied rather than clobbered — the cross-project doc in particular is
-    /// shared by every AMF session on the machine.
+    /// shared by every AIW session on the machine.
     pub original_content: String,
     /// Set once a write has been refused because the doc on disk diverged in
     /// ways an append can't explain. The next confirm overwrites deliberately,
@@ -321,7 +321,7 @@ pub struct CompactReviewState {
 pub struct AiReviewRunProgress {
     pub stage: crate::app::ai_review::AiReviewStage,
     /// Wall-clock start for a live elapsed timer. This state is intentionally
-    /// not persisted; an in-flight headless process belongs to this AMF
+    /// not persisted; an in-flight headless process belongs to this AIW
     /// process and cannot be resumed after restart.
     pub started_at: std::time::Instant,
     /// Latest sanitized activity label from the harness's structured stream.
@@ -339,7 +339,7 @@ pub struct AiReviewRunState {
     pub progress: AiReviewRunProgress,
 }
 
-/// State for the full-screen AI Review pane — AMF's own review of a PR's
+/// State for the full-screen AI Review pane — AIW's own review of a PR's
 /// diff, independent of PR Triage (see `crate::app::ai_review`'s module doc
 /// for why this is a separate workflow rather than bolted onto triage).
 #[derive(Debug, Clone)]
@@ -959,7 +959,7 @@ pub struct ReplyState {
     pub editor: TextEditor,
     /// Whether the initial body came back from an agent fix session. Agent
     /// drafts receive AI-authorship attribution; deterministic templates and
-    /// user-written not-needed replies receive channel-only AMF attribution.
+    /// user-written not-needed replies receive channel-only AIW attribution.
     /// Only ever `true` for [`crate::app::pr_review::ReplyKind::Done`] — see
     /// [`crate::app::pr_review::App::open_reply`].
     pub agent_drafted: bool,
@@ -1053,9 +1053,9 @@ pub struct FixConfirmState {
     /// injecting marks all of them `Fixing` and clears the marked set. `None`
     /// for an ordinary single-comment fix (only the selected comment is marked).
     pub batch: Option<Vec<u64>>,
-    /// Per-comment correlation ids embedded in the prompt's `amf reply-draft`
+    /// Per-comment correlation ids embedded in the prompt's `aiw reply-draft`
     /// handoff commands. They become authoritative only when the user confirms
-    /// injection, at which point AMF invalidates any older stored draft.
+    /// injection, at which point AIW invalidates any older stored draft.
     pub reply_draft_requests: Vec<crate::app::pr_review::ReplyDraftRequest>,
 }
 
@@ -1077,7 +1077,7 @@ impl PrReviewState {
 
     /// Indices into `review.comments` that pass the current filter, ordered by
     /// `sort_mode`. With `hide_resolved` on, GitHub-resolved comments are
-    /// dropped. AMF follow-up replies whose root is present are always
+    /// dropped. AIW follow-up replies whose root is present are always
     /// collated under that root's detail view instead of duplicated here.
     pub fn visible_indices(&self) -> Vec<usize> {
         let indices = self
@@ -1086,7 +1086,7 @@ impl PrReviewState {
             .iter()
             .enumerate()
             .filter(|(_, c)| {
-                !self.review.is_collated_amf_reply(c) && (!self.hide_resolved || !c.is_resolved)
+                !self.review.is_collated_aiw_reply(c) && (!self.hide_resolved || !c.is_resolved)
             })
             .map(|(i, _)| i)
             .collect();
@@ -1098,7 +1098,7 @@ impl PrReviewState {
     /// hidden selection's nearest visible neighbor when a filter or refresh
     /// hides it. Must stay unfiltered so `self.selected` itself can always be
     /// located by `position()`, even when `selected` is the very comment that
-    /// just became hidden (e.g. an orphaned AMF reply that a refresh just
+    /// just became hidden (e.g. an orphaned AIW reply that a refresh just
     /// collated under its now-present root); the neighbor search then walks
     /// this order and tests `visible_indices().contains()` to find the
     /// nearest comment that's actually shown.

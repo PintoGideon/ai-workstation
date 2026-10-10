@@ -7,10 +7,10 @@ offline `gh` that answers only the PR sweep's read-only queries. No agent is
 launched and nothing reaches GitHub. Only owned GUI/Vite process groups and the
 private tmux server are stopped on exit.
 
-One file lives outside the scratch directory: the thinking marker. AMF's hooks
-and readers hard-code `/tmp/amf-thinking/<tmux session>`, so the fixture writes
+One file lives outside the scratch directory: the thinking marker. AIW's hooks
+and readers hard-code `/tmp/aiw-thinking/<tmux session>`, so the fixture writes
 one there, under a tmux session name made unique with this run's PID so it can
-never be a real AMF session's marker, and removes it on exit.
+never be a real AIW session's marker, and removes it on exit.
 """
 
 import json
@@ -42,7 +42,7 @@ def encode(path):
     return "".join(c if c.isalnum() and c.isascii() else "-" for c in str(path))
 
 
-with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
+with tempfile.TemporaryDirectory(prefix="aiw-gui-sidebar-") as temporary:
     scratch = pathlib.Path(temporary)
     with socket.socket() as inspector_socket:
         inspector_socket.bind(("127.0.0.1", 0))
@@ -51,7 +51,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
     config = scratch / "config"
     state = scratch / "state"
     fixture_bin = scratch / "bin"
-    for directory in [home, config / "amf/notifications", state / "amf", fixture_bin]:
+    for directory in [home, config / "ai_workstation/notifications", state / "ai_workstation", fixture_bin]:
         directory.mkdir(parents=True)
     shutil.copyfile(workspace / "scripts/dev/screenshot/fixtures/gui-sidebar-gh.py", fixture_bin / "gh")
     (fixture_bin / "gh").chmod(0o755)
@@ -66,16 +66,16 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
         XDG_CACHE_HOME=str(home / ".cache"),
         GDK_BACKEND="x11",
         WEBKIT_INSPECTOR_HTTP_SERVER=inspector_address,
-        AMF_TMUX_SOCKET=str(scratch / "sidebar-tmux.sock"),
-        AMF_GUI_GH_CALLS=str(gh_calls),
+        AIW_TMUX_SOCKET=str(scratch / "sidebar-tmux.sock"),
+        AIW_GUI_GH_CALLS=str(gh_calls),
         PATH=str(fixture_bin) + os.pathsep + os.environ["PATH"],
     )
     git_env = env | {
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "AMF demo",
+        "GIT_AUTHOR_NAME": "AIW demo",
         "GIT_AUTHOR_EMAIL": "demo@example.com",
-        "GIT_COMMITTER_NAME": "AMF demo",
+        "GIT_COMMITTER_NAME": "AIW demo",
         "GIT_COMMITTER_EMAIL": "demo@example.com",
     }
 
@@ -126,7 +126,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
         ("Capture the session sidebar", "pending"),
     ], 1):
         (tasks / f"{index}.json").write_text(json.dumps({"id": str(index), "subject": title, "status": status}))
-    (worktree["round-totals"] / "AMF_PLAN.md").write_text("# Invoice rounding plan\n\n- [x] Read the API\n- [ ] Round negative totals\n- [ ] Capture the sidebar\n")
+    (worktree["round-totals"] / "AIW_PLAN.md").write_text("# Invoice rounding plan\n\n- [x] Read the API\n- [ ] Round negative totals\n- [ ] Capture the sidebar\n")
     codex_id = "sidebar-codex-fixture"
     codex_dir = home / ".codex/sessions" / datetime.now().strftime("%Y/%m/%d")
     codex_dir.mkdir(parents=True)
@@ -142,9 +142,9 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
                 "last_token_usage": {"input_tokens": 147000, "output_tokens": 1000, "total_tokens": 148000}}}},
     ]
     (codex_dir / f"rollout-{codex_id}.jsonl").write_text("".join(json.dumps(event | {"timestamp": now}) + "\n" for event in events))
-    tmux = ["tmux", "-S", env["AMF_TMUX_SOCKET"]]
+    tmux = ["tmux", "-S", env["AIW_TMUX_SOCKET"]]
     # PID-suffixed: the name keys the shared thinking marker below.
-    tmux_name = f"amf-session-sidebar-round-totals-{os.getpid()}"
+    tmux_name = f"aiw-session-sidebar-round-totals-{os.getpid()}"
     harness = str(workspace / "scripts/dev/screenshot/fixtures/gui-scroll-harness.py")
 
     def offline_window(window):
@@ -152,8 +152,8 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
         received_dir.mkdir()
         return shlex.join(["/usr/bin/python3", harness, "transcript", str(received_dir)])
 
-    if os.environ.get("AMF_GUI_FRESH_CONTEXT") == "1":
-        (config / "amf/config.json").write_text(json.dumps({
+    if os.environ.get("AIW_GUI_FRESH_CONTEXT") == "1":
+        (config / "ai_workstation/config.json").write_text(json.dumps({
             "low_memory_warn_mb": 0, "max_concurrent_agents": 100,
         }))
         received_dir = scratch / "fresh-context"
@@ -171,7 +171,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
 
     # The hooks' thinking marker for round-totals, kept fresh the way a busy
     # agent's tool calls keep it fresh.
-    marker = pathlib.Path("/tmp/amf-thinking") / tmux_name
+    marker = pathlib.Path("/tmp/aiw-thinking") / tmux_name
     stop_marker = threading.Event()
 
     def keep_thinking():
@@ -205,9 +205,9 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
                 time.sleep(0.25)
         else:
             raise RuntimeError("The isolated frontend did not become ready")
-        gui = subprocess.Popen([str(workspace / "target/debug/amf-gui")], cwd=scratch, env=env,
+        gui = subprocess.Popen([str(workspace / "target/debug/aiw-gui")], cwd=scratch, env=env,
                                stdout=gui_log, stderr=subprocess.STDOUT, start_new_session=True)
-        dbpath = config / "amf/amf.db"
+        dbpath = config / "ai_workstation/aiw.db"
         for _ in range(60):
             if gui.poll() is not None:
                 raise RuntimeError(f"The isolated GUI exited ({gui.returncode}):\n" + (out / "gui.log").read_text())
@@ -235,7 +235,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
             ("f-round", "p-invoice", "round-totals", "round-totals", worktree["round-totals"], 1,
              tmux_name, "vibeless", 1, 1, "idle", None, None, "Round totals", 0, ago(minutes=5), 0, None),
             ("f-release", "p-invoice", "release-prep", "release-prep", repo, 0,
-             f"amf-session-sidebar-release-prep-{os.getpid()}", "supervibe", 0, 0, "stopped", None, None, None, 1, ago(days=2), 1, None),
+             f"aiw-session-sidebar-release-prep-{os.getpid()}", "supervibe", 0, 0, "stopped", None, None, None, 1, ago(days=2), 1, None),
         ]
         sessions_rows = [
             ("s-claude", "f-round", "claude", "Claude 1", "claude", "sess-round", 0),
@@ -278,10 +278,10 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
                        ((int(version[0]) if version else 0) + 1,))
 
         subprocess.run(
-            ["/usr/bin/python3", os.environ.get("AMF_GUI_CAPTURE_FRAMES",
+            ["/usr/bin/python3", os.environ.get("AIW_GUI_CAPTURE_FRAMES",
                                                 str(workspace / "scripts/dev/screenshot/capture-gui-session-sidebar-frames.py")),
              str(out), str(gui.pid), inspector_address, str(dbpath)],
-            # The driver is not AMF: it keeps the real HOME, where the capture
+            # The driver is not AIW: it keeps the real HOME, where the capture
             # helpers' Python modules may be installed per user.
             env=os.environ.copy(), check=True,
         )
@@ -291,7 +291,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
         assert all(not part.startswith("query=mutation") for call in calls for part in call), calls
         for window in ["claude", "codex"]:
             assert json.loads((scratch / window / "transcript-received.json").read_text()) == []
-        if os.environ.get("AMF_GUI_FRESH_CONTEXT") == "1":
+        if os.environ.get("AIW_GUI_FRESH_CONTEXT") == "1":
             assert json.loads((scratch / "fresh-context/transcript-received.json").read_text()) == []
         print(f"PASS: {len(calls)} offline read-only gh call(s); no input delivered to either harness fixture", flush=True)
     finally:

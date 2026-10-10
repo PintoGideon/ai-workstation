@@ -22,14 +22,14 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
-/// The VS Code CLI AMF launches: `code` on `PATH`.
+/// The VS Code CLI AIW launches: `code` on `PATH`.
 pub(crate) fn vscode_cli() -> std::ffi::OsString {
     #[cfg(test)]
     {
         TEST_VSCODE_CLI
             .with(|cli| cli.borrow().clone())
             .map(std::ffi::OsString::from)
-            .unwrap_or_else(|| "amf-test-no-vscode-cli".into())
+            .unwrap_or_else(|| "aiw-test-no-vscode-cli".into())
     }
     #[cfg(not(test))]
     {
@@ -47,7 +47,7 @@ pub(crate) fn vscode_cli_available() -> bool {
         .is_ok()
 }
 
-/// A VS Code window AMF just asked for.
+/// A VS Code window AIW just asked for.
 #[derive(Debug, Clone)]
 pub(crate) struct VscodeLaunch {
     pub workdir: std::path::PathBuf,
@@ -58,27 +58,30 @@ pub(crate) struct VscodeLaunch {
 pub(crate) fn session_kind_for_agent(agent: &AgentKind) -> SessionKind {
     match agent {
         AgentKind::Claude => SessionKind::Claude,
-        AgentKind::Opencode => SessionKind::Opencode,
         AgentKind::Codex => SessionKind::Codex,
         AgentKind::Pi => SessionKind::Pi,
+        AgentKind::Gemini => SessionKind::Gemini, // FORK
+        AgentKind::Cursor => SessionKind::Cursor, // FORK
     }
 }
 
 fn label_for_agent(agent: &AgentKind) -> String {
     match agent {
         AgentKind::Claude => "Claude".to_string(),
-        AgentKind::Opencode => "Opencode".to_string(),
         AgentKind::Codex => "Codex".to_string(),
         AgentKind::Pi => "Pi".to_string(),
+        AgentKind::Gemini => "Gemini".to_string(), // FORK
+        AgentKind::Cursor => "Cursor".to_string(), // FORK
     }
 }
 
 fn kind_label(kind: &SessionKind) -> &'static str {
     match kind {
         SessionKind::Claude => "Claude",
-        SessionKind::Opencode => "Opencode",
         SessionKind::Codex => "Codex",
         SessionKind::Pi => "Pi",
+        SessionKind::Gemini => "Gemini", // FORK
+        SessionKind::Cursor => "Cursor", // FORK
         SessionKind::Terminal => "terminal",
         SessionKind::Nvim => "Neovim",
         SessionKind::Vscode => "VSCode",
@@ -126,9 +129,10 @@ impl SessionStop {
 pub(crate) fn agent_for_session_kind(kind: &SessionKind) -> Option<AgentKind> {
     match kind {
         SessionKind::Claude => Some(AgentKind::Claude),
-        SessionKind::Opencode => Some(AgentKind::Opencode),
         SessionKind::Codex => Some(AgentKind::Codex),
         SessionKind::Pi => Some(AgentKind::Pi),
+        SessionKind::Gemini => Some(AgentKind::Gemini), // FORK
+        SessionKind::Cursor => Some(AgentKind::Cursor), // FORK
         _ => None,
     }
 }
@@ -139,7 +143,6 @@ fn harness_session_picker_kind(kind: &SessionKind) -> Option<AgentKind> {
     match kind {
         SessionKind::Claude => Some(AgentKind::Claude),
         SessionKind::Codex => Some(AgentKind::Codex),
-        SessionKind::Opencode => Some(AgentKind::Opencode),
         _ => None,
     }
 }
@@ -155,16 +158,13 @@ pub(crate) fn persisted_resume_id(session: &FeatureSession) -> Option<String> {
                 })
                 .map(|source| source.id.clone())
         }),
-        SessionKind::Opencode => session
-            .token_usage_source
-            .as_ref()
-            .filter(|source| source.provider == crate::token_tracking::TokenUsageProvider::Opencode)
-            .map(|source| source.id.clone()),
         SessionKind::Codex => session
             .token_usage_source
             .as_ref()
             .filter(|source| source.provider == crate::token_tracking::TokenUsageProvider::Codex)
             .map(|source| source.id.clone()),
+        // FORK: Gemini/Cursor keep their hook-reported session id here.
+        SessionKind::Gemini | SessionKind::Cursor => session.claude_session_id.clone(),
         _ => None,
     };
     id.filter(|id| !id.trim().is_empty())
@@ -185,23 +185,19 @@ pub(crate) fn saved_sessions_for_kind(
             .into_iter()
             .map(|session| (session.id, session.title, session.updated))
             .collect()),
-        SessionKind::Opencode => Ok(super::opencode::fetch_opencode_sessions(workdir)?
-            .into_iter()
-            .map(|session| (session.id, session.title, session.updated))
-            .collect()),
         _ => Ok(Vec::new()),
     }
 }
 
 impl App {
     /// Intercept opening a persisted agent pane whose tmux session has
-    /// disappeared *and* that AMF can offer a real choice about. Returns `true`
+    /// disappeared *and* that AIW can offer a real choice about. Returns `true`
     /// when the stopped-session dialog was opened, allowing callers to preserve
     /// their normal running-session behavior.
     ///
     /// Deliberately narrow: the dialog only earns its keypress when the pane
     /// vanished behind the user's back (a crash, a reboot, an external
-    /// `tmux kill-server`) *and* AMF holds a saved harness ID, so "resume" and
+    /// `tmux kill-server`) *and* AIW holds a saved harness ID, so "resume" and
     /// "clear" actually differ. Everything else — a feature stopped from the
     /// dashboard with `x`, a feature created but never started, a harness with
     /// no resume support such as Pi — falls through to the ordinary start path
@@ -328,7 +324,7 @@ impl App {
         self.selection = Selection::Session(pi, fi, si);
 
         // Hand off to the harness's own transcript picker, which lists every
-        // saved session on disk (not just the one AMF recorded) and knows how
+        // saved session on disk (not just the one AIW recorded) and knows how
         // to start a stopped feature against the chosen one.
         if choice == StoppedSessionChoice::PickSession {
             self.mode = AppMode::Normal;
@@ -351,7 +347,7 @@ impl App {
             StoppedSessionChoice::PickSession | StoppedSessionChoice::Cancel => unreachable!(),
         };
 
-        // A sync tick or another AMF process may have recreated the tmux
+        // A sync tick or another AIW process may have recreated the tmux
         // session while the dialog was open. In that case, open it without
         // launching a duplicate harness.
         if self.tmux.session_exists(&tmux_session) {
@@ -437,7 +433,6 @@ impl App {
         match harness_session_picker_kind(kind) {
             Some(AgentKind::Claude) => self.pick_claude_session(),
             Some(AgentKind::Codex) => self.pick_codex_session(),
-            Some(AgentKind::Opencode) => self.pick_opencode_session(),
             _ => {}
         }
     }
@@ -515,6 +510,8 @@ impl App {
 
     /// Open the custom session picker for the currently
     pub fn open_session_picker(&mut self) -> Result<()> {
+        #[cfg(not(test))]
+        self.reconcile_vanished_windows(); // FORK: don't offer closed windows
         use crate::app::BuiltinSessionOption;
         use crate::app::SessionPickerState;
 
@@ -815,11 +812,11 @@ impl App {
     ) -> Result<()> {
         self.tmux.create_window(tmux_session, window, workdir)?;
 
-        let status_dir = crate::extension::generated_amf_subdir(workdir, "session-status");
+        let status_dir = crate::extension::generated_aiw_subdir(workdir, "session-status");
         let status_dir_str = status_dir.to_string_lossy().into_owned();
         let env_prefix = TmuxManager::shell_env_prefix(&[
-            ("AMF_SESSION_ID", session_id),
-            ("AMF_STATUS_DIR", &status_dir_str),
+            ("AIW_SESSION_ID", session_id),
+            ("AIW_STATUS_DIR", &status_dir_str),
         ]);
         let shell_cmd = if let Some(cmd) = command {
             format!("{} bash -c '{}'", env_prefix, cmd.replace('\'', "'\\''"),)
@@ -1006,9 +1003,11 @@ impl App {
                 .add_terminal_session_for_picker(pi, fi, label)
                 .map(|_| ()),
             SessionKind::Nvim => self.add_nvim_session_for_picker(pi, fi, label).map(|_| ()),
-            SessionKind::Claude | SessionKind::Opencode | SessionKind::Codex | SessionKind::Pi => {
-                self.add_agent_session_for_picker(pi, fi, kind, label)
-            }
+            SessionKind::Claude
+            | SessionKind::Codex
+            | SessionKind::Pi
+            | SessionKind::Gemini // FORK
+            | SessionKind::Cursor => self.add_agent_session_for_picker(pi, fi, kind, label),
             SessionKind::Vscode => self.add_vscode_session_for_picker(pi, fi),
             _ => anyhow::bail!("unsupported session type"),
         }
@@ -1278,12 +1277,12 @@ impl App {
         let feature_id = feature.id.clone();
 
         // Windows already open on this worktree, captured *before* the launch:
-        // whichever match appears afterwards is the one AMF opened, and that
+        // whichever match appears afterwards is the one AIW opened, and that
         // difference is the only proof of ownership worth killing on.
         let before = crate::resources::procs::existing_vscode_windows(&workdir);
 
-        // `--new-window` is what makes the instance AMF's own. Without it the
-        // folder is handed to whatever window happens to be running, which AMF
+        // `--new-window` is what makes the instance AIW's own. Without it the
+        // folder is handed to whatever window happens to be running, which AIW
         // must never close on the user's behalf.
         let command = format!("code --new-window {}", workdir.display());
         std::process::Command::new(vscode_cli())
@@ -1311,7 +1310,7 @@ impl App {
     /// Because VS Code is a singleton application, "a new local window" only
     /// exists when this launch is what *started* VS Code. Handing a folder to a
     /// running instance produces a window but no new eligible process, and that
-    /// launch stays not-owned for good — correctly, since AMF cannot close that
+    /// launch stays not-owned for good — correctly, since AIW cannot close that
     /// window without closing the instance around it.
     ///
     /// A launch still resolving when its feature is stopped is not lost: the
@@ -1384,7 +1383,7 @@ impl App {
 
             let Some(found) = found else {
                 // Left not-owned on purpose: a reused window, or a remote one
-                // with no local process, is not AMF's to close.
+                // with no local process, is not AIW's to close.
                 return;
             };
 
@@ -1394,7 +1393,7 @@ impl App {
                     found.pid,
                     std::time::Duration::from_secs(2),
                 );
-                if let Ok(db) = crate::db::AmfDb::open(&db_path) {
+                if let Ok(db) = crate::db::AiwDb::open(&db_path) {
                     let _ = db.delete_launched_editor(&record.id);
                 }
                 return;
@@ -1404,7 +1403,7 @@ impl App {
             // process inheriting this PID cannot pass the kill-time check.
             let started =
                 crate::resources::procs::start_time_for_pid(found.pid).unwrap_or_default();
-            if let Ok(db) = crate::db::AmfDb::open(&db_path) {
+            if let Ok(db) = crate::db::AiwDb::open(&db_path) {
                 let _ = db.set_launched_editor_owner(&record.id, found.pid, true, &started);
             }
         });
@@ -1475,10 +1474,6 @@ impl App {
                 self.tmux
                     .launch_claude(&tmux_session, &window, &session_id, None, extra_args)?;
             }
-            AgentKind::Opencode => {
-                self.tmux
-                    .launch_opencode(&tmux_session, &window, &session_id)?;
-            }
             AgentKind::Codex => {
                 let codex_args = self.screenshot_launch_args(
                     &session_id,
@@ -1490,6 +1485,18 @@ impl App {
             }
             AgentKind::Pi => {
                 self.tmux.launch_pi(&tmux_session, &window, &session_id)?;
+            }
+            // FORK: Gemini/Cursor
+            AgentKind::Gemini | AgentKind::Cursor => {
+                crate::fork::extra_agents::launch(
+                    self.tmux.as_ref(),
+                    &agent,
+                    &tmux_session,
+                    &window,
+                    &session_id,
+                    &mode,
+                    None,
+                )?;
             }
         }
 
@@ -1723,18 +1730,6 @@ impl App {
                     self.screenshot_launch_args(session_id, true, extra_args)?,
                 )?;
             }
-            AgentKind::Opencode if resume_id.is_some() => {
-                self.tmux.launch_opencode_with_session(
-                    tmux_session,
-                    window,
-                    session_id,
-                    resume_id,
-                )?;
-            }
-            AgentKind::Opencode => {
-                self.tmux
-                    .launch_opencode(tmux_session, window, session_id)?;
-            }
             AgentKind::Codex => {
                 let codex_args = self.screenshot_launch_args(
                     session_id,
@@ -1746,6 +1741,18 @@ impl App {
             }
             AgentKind::Pi => {
                 self.tmux.launch_pi(tmux_session, window, session_id)?;
+            }
+            // FORK: Gemini/Cursor
+            AgentKind::Gemini | AgentKind::Cursor => {
+                crate::fork::extra_agents::launch(
+                    self.tmux.as_ref(),
+                    agent,
+                    tmux_session,
+                    window,
+                    session_id,
+                    mode,
+                    resume_id.as_deref(),
+                )?;
             }
         }
         Ok(())
@@ -1823,10 +1830,10 @@ impl App {
                     .arg("-c")
                     .arg(cmd)
                     .current_dir(&workdir)
-                    .env("AMF_SESSION_ID", &session_id)
+                    .env("AIW_SESSION_ID", &session_id)
                     .env(
-                        "AMF_STATUS_DIR",
-                        workdir.join(".amf").join("session-status"),
+                        "AIW_STATUS_DIR",
+                        workdir.join(".aiw").join("session-status"),
                     )
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
@@ -1835,7 +1842,7 @@ impl App {
 
             // Clean up status file and DB entry.
             let status_file = workdir
-                .join(".amf")
+                .join(".aiw")
                 .join("session-status")
                 .join(format!("{}.txt", session_id));
             let _ = std::fs::remove_file(status_file);
@@ -2008,10 +2015,10 @@ impl App {
                     .arg("-c")
                     .arg(cmd)
                     .current_dir(&workdir)
-                    .env("AMF_SESSION_ID", &session_id)
+                    .env("AIW_SESSION_ID", &session_id)
                     .env(
-                        "AMF_STATUS_DIR",
-                        workdir.join(".amf").join("session-status"),
+                        "AIW_STATUS_DIR",
+                        workdir.join(".aiw").join("session-status"),
                     )
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
@@ -2019,7 +2026,7 @@ impl App {
             }
 
             let status_file = workdir
-                .join(".amf")
+                .join(".aiw")
                 .join("session-status")
                 .join(format!("{}.txt", session_id));
             let _ = std::fs::remove_file(status_file);
@@ -2150,7 +2157,7 @@ impl App {
             return Ok(false);
         }
         if self.tmux.window_exists(&tmux_session, &session.tmux_window) {
-            // Up after all (recreated from outside AMF): the flag is what is
+            // Up after all (recreated from outside AIW): the flag is what is
             // stale, not the window.
             if session.stopped {
                 self.set_session_stopped(pi, fi, si, false);
@@ -2208,11 +2215,11 @@ impl App {
                     };
                     if runnable {
                         let status_dir =
-                            crate::extension::generated_amf_subdir(&workdir, "session-status");
+                            crate::extension::generated_aiw_subdir(&workdir, "session-status");
                         let status_dir_str = status_dir.to_string_lossy().into_owned();
                         let env_prefix = TmuxManager::shell_env_prefix(&[
-                            ("AMF_SESSION_ID", &session.id),
-                            ("AMF_STATUS_DIR", &status_dir_str),
+                            ("AIW_SESSION_ID", &session.id),
+                            ("AIW_STATUS_DIR", &status_dir_str),
                         ]);
                         let shell_cmd = if let Some(ref cmd) = session.command {
                             format!("{} bash -c '{}'", env_prefix, cmd.replace('\'', "'\\''"))
@@ -2230,9 +2237,10 @@ impl App {
                 // Todos has no tmux window and never reaches here.
                 SessionKind::Terminal | SessionKind::Todos => {}
                 SessionKind::Claude
-                | SessionKind::Opencode
                 | SessionKind::Codex
-                | SessionKind::Pi => {
+                | SessionKind::Pi
+                | SessionKind::Gemini // FORK
+                | SessionKind::Cursor => {
                     unreachable!(
                         "agent-harness kinds are handled by launch_agent_session_window above"
                     )

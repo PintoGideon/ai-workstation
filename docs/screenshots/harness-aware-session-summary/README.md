@@ -1,12 +1,12 @@
 # Harness-aware session summaries
 
-Captured with the repository's `/amf-screenshot` workflow from an isolated AMF
+Captured with the repository's `/aiw-screenshot` workflow from an isolated AIW
 instance against a throwaway git repository. The capture fixture supplies a
 deterministic fake `codex` executable for both the interactive feature session
 and the restricted headless summary call; it does not contact a provider or
 consume tokens.
 
-This proves that AMF carries the selected Codex feature through the asynchronous
+This proves that AIW carries the selected Codex feature through the asynchronous
 summary flow and displays Codex's result. The exact restricted command contract
 and harness propagation are also covered by `summary::tests` and
 `headless::tests`.
@@ -20,10 +20,10 @@ Open [gallery.html](gallery.html) to view the capture sequence.
 
 ## 1. Codex is enabled in the isolated workspace
 
-The fixture passes AMF's real harness availability check before the feature is
+The fixture passes AIW's real harness availability check before the feature is
 created.
 
-![Codex enabled in AMF's harness manager](002-codex-harness-verified.png)
+![Codex enabled in AIW's harness manager](002-codex-harness-verified.png)
 
 ## 2. A Codex feature is selected for summarization
 
@@ -34,7 +34,7 @@ Codex before the summary action begins.
 
 ## 3. Summary generation remains asynchronous
 
-Pressing `Z` shows AMF's existing non-blocking generation state while the
+Pressing `Z` shows AIW's existing non-blocking generation state while the
 headless runner works.
 
 ![Codex feature while its summary is generating](004-codex-summary-generating.png)

@@ -23,7 +23,7 @@
 
 ## Why / problem
 
-Add a Learning Mode overlay to AMF that lets a user browse a project's
+Add a Learning Mode overlay to AIW that lets a user browse a project's
 files (whole tree or branch-changed), select a file / hunk / line
 range, and ask an AI agent questions about that selection, with Q&A
 history persisted per project.
@@ -121,8 +121,8 @@ outcome.
   entry — whatever its intent — offers "make actionable", which creates
   a TODO-style item carrying the anchor plus an editable title/body
   seeded from the answer. Entries with no follow-up simply stay notes.
-  v1 uses the queued-TODO path because AMF already has per-project TODO
-  storage (`src/db/todos.rs`, `AmfDb::add_todo`) and a
+  v1 uses the queued-TODO path because AIW already has per-project TODO
+  storage (`src/db/todos.rs`, `AiwDb::add_todo`) and a
   spawn-agent-from-item flow (`App::todos_spawn_agent`,
   `src/app/todos.rs`); the seeded-composer-scoped-to-range and
   inline-suggested-patch mechanisms are deferred, not rejected.
@@ -138,7 +138,7 @@ outcome.
   by what they do ("answer from just this file" vs "let the agent read
   the rest of the repo, slower"), not by their internal mode names.
 - **Harness/model:** **user-selectable** in the Learning Mode UI —
-  every harness AMF supports (Claude, Codex, Opencode, Pi) is
+  every harness AIW supports (Claude, Codex, Opencode, Pi) is
   selectable — but it is **pre-selected** to `store.available_harnesses`'
   first entry, falling back to the project's `preferred_agent`, exactly
   as the final-review harness pick does (`src/app/review.rs:3558`). A
@@ -268,7 +268,7 @@ Question → `HeadlessRunner::run(harness, workdir, prompt, model,
 harness, workdir, prompt, model)` in the feature's `workdir`, same
 question, intent, and level, tools allowed to explore.
 
-Both calls block, so each runs on its own thread. Follow AMF's
+Both calls block, so each runs on its own thread. Follow AIW's
 established async shape: `std::sync::mpsc::channel()` +
 `std::thread::spawn` (as in `src/app/ai_review.rs`) with a
 `poll_learning_answers_bg()` drained from the main loop next to the
@@ -299,7 +299,7 @@ Loads/creates the project's list via
 opens a small editor pre-filled with a title (the Action answer's lead
 line, or a truncated first line for an Explain answer) and a body
 containing `path:start-end`, the question, and the answer excerpt.
-Written via `AmfDb::add_todo`. Nothing is written until the user
+Written via `AiwDb::add_todo`. Nothing is written until the user
 confirms, since an auto-generated title from an explanatory answer is
 usually wrong. The confirm dialog states in plain language that this
 only adds a note to the project's TODO list and changes no files. The
@@ -336,7 +336,7 @@ duplicating it.
   shape: plain TEXT `project_id`/`feature_id` with no FK to
   projects/features, explicit delete helpers, `ON DELETE CASCADE` from
   session to Q&A rows and from a parent Q&A row to its follow-ups.
-- `AmfDb` methods to load/upsert a learning session and
+- `AiwDb` methods to load/upsert a learning session and
   list/upsert/delete Q&A rows, plus
   `delete_learning_sessions_for_project`, wired into project deletion
   the way `delete_list_for_project` is.
@@ -453,13 +453,13 @@ picked up in parallel with whatever is left of Epics 5 and 6.
       `spawned_session_id`) to the list in `src/db/migrations.rs`
       following the `MIGRATION_011` todo-table pattern; add
       `src/db/learning.rs` with load/create/list/upsert/delete methods
-      on `AmfDb`, plus per-project cleanup mirroring
+      on `AiwDb`, plus per-project cleanup mirroring
       `delete_list_for_project` (wired into `delete_project`).
       Verified: `migration_019_upgrades_a_pre_learning_database`,
       `fresh_database_lands_at_the_latest_version`,
       `migrations_are_idempotent`, twelve `db::learning` round-trip /
       cascade tests, and a manual replay against a copy of the real
-      `~/.config/amf/amf.db` (v18 → 21, 8 projects, cascades both ways,
+      `~/.config/ai_workstation/aiw.db` (v18 → 21, 8 projects, cascades both ways,
       `integrity_check` and `foreign_key_check` ok). Re-run after the
       renumbering below, against a copy rewound to a genuine pre-Learning-Mode
       state (learning tables dropped, `schema_version` rows ≥ 19 removed) —
@@ -747,7 +747,7 @@ picked up in parallel with whatever is left of Epics 5 and 6.
       `a_failed_deep_dive_can_be_retried`, and the handler-level
       `d_sends_the_answer_you_are_reading_back_with_the_repo_open`.
       **Verified against real Claude**, driving the built binary in tmux
-      against a throwaway copy of `~/.config/amf/amf.db`: asked "In one
+      against a throwaway copy of `~/.config/ai_workstation/aiw.db`: asked "In one
       sentence, what is this project?" at the project anchor, and the
       no-tools answer **fabricated a `Bash: ls -la && cat README.md`
       tool call and its output** — a `crates/` directory, a
@@ -847,7 +847,7 @@ picked up in parallel with whatever is left of Epics 5 and 6.
       `the_answer_footer_leads_with_what_the_entry_kind_makes_likely`,
       and the handler-level `i_re_files_the_answer_you_are_reading`.
       **Verified by driving the built binary** in a 140×44 tmux against a
-      throwaway copy of `~/.config/amf/amf.db` with real history: `i`
+      throwaway copy of `~/.config/ai_workstation/aiw.db` with real history: `i`
       flipped the row to `! change` and the pane title to *Ask for a
       change*, the answer text and question were untouched, the footer
       re-ordered to `D` before `F` with the hint reading *file as a
@@ -870,7 +870,7 @@ picked up in parallel with whatever is left of Epics 5 and 6.
       `LearningActionEditor` — an editable title seeded from the answer, the
       note that would be written shown in full, and a statement that this adds
       a note about the code rather than a change to it. `Enter` writes it via
-      `AmfDb::add_todo`, `Esc` writes nothing. The editor lives inside
+      `AiwDb::add_todo`, `Esc` writes nothing. The editor lives inside
       `LearningViewState` like the pickers, so walking away from it returns to
       exactly the browsing state underneath, and the answer pane stays open
       behind it — keeping an answer is not the start of something else the way
@@ -1056,7 +1056,7 @@ picked up in parallel with whatever is left of Epics 5 and 6.
         block is now opened at that single point rather than by each
         caller remembering to. This bites Learning Mode hardest, because
         a newcomer-pitched answer is written in exactly that shape, but
-        the fix is shared with every markdown surface in AMF. Tests:
+        the fix is shared with every markdown surface in AIW. Tests:
         `render_markdown_keeps_whatever_opens_a_list_item`,
         `render_markdown_keeps_inline_code_opening_a_footnote_body`.
       - **The answer pane stated its status twice** ("answered by Claude
@@ -1067,7 +1067,7 @@ picked up in parallel with whatever is left of Epics 5 and 6.
 - [x] Close the honesty gaps found by using the finished surface — each
       one a case where the UI stated something the code didn't
       guarantee:
-      - **A run interrupted by AMF exiting reloaded as "thinking…"
+      - **A run interrupted by AIW exiting reloaded as "thinking…"
         forever.** `App::reconcile_interrupted_qa` (called from the
         history load) fails any row that is stored in-flight but has no
         live run in this process, keeping the question so it can be
@@ -1109,7 +1109,7 @@ picked up in parallel with whatever is left of Epics 5 and 6.
         returns the pre-truncation total so the overlay can say how many
         files it is not showing, and point at branch-changes scope.
         Covered by `a_huge_repo_listing_is_capped_and_says_so`.
-      - `AmfDb::finish_learning_qa` persists a finished run by id rather
+      - `AiwDb::finish_learning_qa` persists a finished run by id rather
         than rewriting the whole row, so a completion can't overwrite an
         edit made while the answer was generating.
 - [x] Add error handling and debug logging (`log_info` / `log_warn` /
@@ -1255,11 +1255,11 @@ picked up in parallel with whatever is left of Epics 5 and 6.
       keeping its follow-ups with the question they continue. It covers every
       built behaviour and claims nothing that isn't. This docs pass adds a
       `Documentation` block under `[Unreleased]`, following the existing
-      precedent for README-only changes, ending on "nothing about AMF's
+      precedent for README-only changes, ending on "nothing about AIW's
       behavior changes" — because nothing does.
-      **`README.md`** — a bullet under *What AMF does*, `K` in the dashboard
+      **`README.md`** — a bullet under *What AIW does*, `K` in the dashboard
       keybindings table, and *Understand a codebase you didn't write* as the
-      **first** user workflow, since it is the one that needs no prior AMF
+      **first** user workflow, since it is the one that needs no prior AIW
       knowledge. Written for someone who has not used the mode: what it is,
       that nothing in it changes their files and `S` is the single exception,
       that they do not have to know what to ask (Start here, `t`), the two ask
@@ -1329,8 +1329,8 @@ The file list is a flat, alphabetically sorted list of every path in
 the repo (`build_repo_tree_entries`, `src/app/learning.rs`), rendered
 into a pane that is 24% of the terminal — about 32 columns at 140. On
 this repo that is 500-odd rows where the first screenful reads
-`…ude/commands/amf/ai-review.m`, `…e/commands/amf/pr-continue.m`,
-`…ude/commands/amf/pr-create.m`: paths truncated to near-identical
+`…ude/commands/aiw/ai-review.m`, `…e/commands/aiw/pr-continue.m`,
+`…ude/commands/aiw/pr-create.m`: paths truncated to near-identical
 stubs, sorted so that dotfile directories come first and `src/` is
 dozens of `j` presses away. The user this mode is built for does not
 know the repo's layout, and the list that is supposed to teach it to
@@ -1430,12 +1430,12 @@ collapse. This is a second, general case of that, not a new mechanism.
       its real place in the tree — so a test asserting a collapse hid it must
       say which copy it means (`is_tree_file`). Two assertions were wrong
       about this before the code was.
-      **Captured** as nine frames driven against a clone of AMF's own
+      **Captured** as nine frames driven against a clone of AIW's own
       repository (484 files), the case Epic 7 was written about, via
       `scripts/dev/screenshot/scenarios/learning-mode-file-tree.txt`. No
       question is asked, so the scenario needs no harness and costs nothing to
       re-run. The opening frame is the whole argument for the epic: where the
-      flat list gave three truncated `…ude/commands/amf/…` stubs, the pane now
+      flat list gave three truncated `…ude/commands/aiw/…` stubs, the pane now
       shows every top-level folder with its file count, `src/` open at its
       subfolders, and readable leaf names — the repo's layout, on one screen.
 
@@ -1557,7 +1557,7 @@ collapse. This is a second, general case of that, not a new mechanism.
   decided; the maximum number of concurrent headless runs, and whether
   runs are capped per harness (rate limits, cost), are not.
 - **Cost/usage attribution is unaddressed** — and this matters more for
-  the target user, who may not realise each question spends money. AMF
+  the target user, who may not realise each question spends money. AIW
   tracks token usage per agent session, but Learning Mode's headless
   runs have no session row. `HeadlessRunner::run` / `run_read_only` do
   not report usage — only `run_with_progress` does — so surfacing cost
@@ -1578,7 +1578,7 @@ collapse. This is a second, general case of that, not a new mechanism.
 
 Being built now, on the `learning-mode` branch. The feature exists to
 make an unfamiliar codebase approachable without asking the user to
-learn AMF's agent workflow first — so the newcomer framing above (no
+learn AIW's agent workflow first — so the newcomer framing above (no
 mutation, starter questions, defined jargon, cheap follow-ups) is the
 product, not decoration around it. Anything that trades that framing
 for developer convenience should be treated as a change of scope, not a

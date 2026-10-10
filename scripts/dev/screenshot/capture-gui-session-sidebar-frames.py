@@ -186,12 +186,12 @@ try:
     assert evaluate("document.querySelector('.sb-context').dataset.band") == 'warning'
     capture('001-claude-full-sidebar.png',
         'Claude sidebar runs its own collectors without a TUI: input/output/effective tokens, cost/model, warning estimated context, current plan, issue/PR, thinking marker, summary, last prompt and agent TODOs. Unsupported quota is omitted.',
-        ['Claude Sidebar','Input','Output','Effective','Cost','Model','AMF_PLAN.md','PR#321','thinking'],
+        ['Claude Sidebar','Input','Output','Effective','Cost','Model','AIW_PLAN.md','PR#321','thinking'],
         "!!document.querySelector('.sb-todos [role=progressbar]') && !document.querySelector('.sb-usage')")
 
     evaluate(f"{BODY}.scrollTop={BODY}.scrollHeight")
     capture('002-claude-todos-and-prompt.png',
-        'The lower sidebar shows the clamped prompt with View/Reuse, a 1/3 TODO bar, and the linked AMF TODO title clamped to two lines with completion. TUI-only signals are explicitly unavailable.',
+        'The lower sidebar shows the clamped prompt with View/Reuse, a 1/3 TODO bar, and the linked AIW TODO title clamped to two lines with completion. TUI-only signals are explicitly unavailable.',
         ['Finish: invoice rounding','TODOS','ACTIVE TODO','Complete','running tool calls'],
         "document.querySelector('.sb-todos [role=progressbar]').getAttribute('aria-valuenow')==='1'")
     fill('Keep this unsent draft.')

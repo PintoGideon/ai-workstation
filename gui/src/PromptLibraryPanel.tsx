@@ -107,7 +107,7 @@ export default function PromptLibraryPanel({ initialScope, initialTarget, projec
       <div className="library-list" role="group" aria-label="Prompt library entries">
         {library.isLoading && <p className="muted">Loading prompts…</p>}
         {library.data?.entries.length === 0 && <EmptyState icon="file" title={search ? "No matching prompts" : "No saved prompts"}>
-          {search ? "Try a different search or library scope." : "Save prompts in the TUI or configure templates in amf.json to use them here."}
+          {search ? "Try a different search or library scope." : "Save prompts in the TUI or configure templates in aiw.json to use them here."}
         </EmptyState>}
         {library.data?.entries.map((entry) => <button key={entry.key} disabled={busy}
           className={`library-item ${selected?.key === entry.key ? "library-item-active" : ""}`}

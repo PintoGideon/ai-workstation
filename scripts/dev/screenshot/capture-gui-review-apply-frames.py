@@ -260,13 +260,13 @@ try:
     fill("Suggested replacement", '    style: "decimal",')
     save("Save suggestion")
     expand_threads()
-    source_path.write_text(applied_source + "\n// Changed outside AMF\n")
+    source_path.write_text(applied_source + "\n// Changed outside AIW\n")
     externally_changed = source_path.read_text()
     begin_application()
     click("Apply replacement")
     ready()
     wait('document.body.innerText.includes("File changed since you opened it")')
-    capture("004-stale-source-refused.png", "An edit outside AMF makes local application fail with a refresh instruction; the saved replacement remains available and the external edit is preserved.", ["File changed since you opened it", "refresh changes", 'style: "decimal"', "Apply replacement"], allow_alert=True)
+    capture("004-stale-source-refused.png", "An edit outside AIW makes local application fail with a refresh instruction; the saved replacement remains available and the external edit is preserved.", ["File changed since you opened it", "refresh changes", 'style: "decimal"', "Apply replacement"], allow_alert=True)
     assert source_path.read_text() == externally_changed
     assert application_count() == 1
     assert any(c.get("suggestion") == '    style: "decimal",' for c in progress()["line_comments"]["invoice.ts"])

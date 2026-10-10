@@ -32,12 +32,12 @@ struct IpcMsg {
     msg_type: Option<String>,
     source: Option<String>,
     session_id: Option<String>,
-    amf_session: Option<String>,
-    amf_feature_session_id: Option<String>,
+    aiw_session: Option<String>,
+    aiw_feature_session_id: Option<String>,
     provider_session_id: Option<String>,
-    amf_tmux_session: Option<String>,
+    aiw_tmux_session: Option<String>,
     #[allow(dead_code)] // explicit tmux window, currently logged by hooks/plugins for diagnostics
-    amf_tmux_window: Option<String>,
+    aiw_tmux_window: Option<String>,
     cwd: Option<String>,
     message: Option<String>,
     notification_type: Option<String>,
@@ -62,7 +62,7 @@ struct IpcMsg {
     /// Why the session stopped, on `type: "attention"` messages: `question`,
     /// `completed`, `waiting`, or `clear`. Anything else degrades to
     /// `waiting` — see [`AttentionState::from_event_kind`].
-    amf_event_kind: Option<String>,
+    aiw_event_kind: Option<String>,
 }
 
 /// Notification files older than this are considered abandoned and are
@@ -81,7 +81,7 @@ struct NotificationJson {
     message: Option<String>,
     #[serde(alias = "type")]
     notification_type: Option<String>,
-    amf_session: Option<String>,
+    aiw_session: Option<String>,
     proceed_signal: Option<String>,
     request_id: Option<String>,
     reply_socket: Option<String>,
@@ -146,7 +146,7 @@ impl NotificationJson {
 impl App {
     /// Every file-fallback notification on disk, resolved to its feature:
     /// each feature's own `.claude/notifications/` first (owned by that
-    /// feature), then the global directory (matched by AMF session, then
+    /// feature), then the global directory (matched by AIW session, then
     /// cwd). Reading never removes or answers anything.
     pub(crate) fn read_notification_files(&self) -> Vec<PendingInput> {
         let mut inputs = Vec::new();
@@ -170,7 +170,7 @@ impl App {
             }
         }
 
-        let global_notify_dir = crate::project::amf_config_dir().join("notifications");
+        let global_notify_dir = crate::project::aiw_config_dir().join("notifications");
         if let Ok(entries) = std::fs::read_dir(&global_notify_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -179,7 +179,7 @@ impl App {
                 };
                 let cwd_path = PathBuf::from(notif.cwd.as_deref().unwrap_or_default());
                 let (project_name, feature_name, _, _) =
-                    self.project_feature_for_message(notif.amf_session.as_deref(), &cwd_path);
+                    self.project_feature_for_message(notif.aiw_session.as_deref(), &cwd_path);
                 inputs.push(notif.into_pending_input(path, project_name, feature_name));
             }
         }
@@ -199,7 +199,7 @@ impl App {
 
         Self::hash_notification_dir_state(
             &mut hasher,
-            &crate::project::amf_config_dir().join("notifications"),
+            &crate::project::aiw_config_dir().join("notifications"),
         );
         hasher.finish()
     }
@@ -229,7 +229,7 @@ impl App {
     /// `scan_notifications` reparse an ever-growing directory. Called once
     /// at startup and on a long interval by the main loop.
     pub fn prune_stale_notifications(&self) {
-        let global_dir = crate::project::amf_config_dir().join("notifications");
+        let global_dir = crate::project::aiw_config_dir().join("notifications");
         let mut removed = Self::prune_notification_dir(&global_dir);
 
         for project in &self.store.projects {
@@ -289,7 +289,7 @@ impl App {
 
     fn bind_exact_token_usage_source_from_ipc(&mut self, msg: &IpcMsg) {
         let Some(feature_session_id) = msg
-            .amf_feature_session_id
+            .aiw_feature_session_id
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -316,9 +316,18 @@ impl App {
                         continue;
                     }
 
+                    // FORK: Gemini/Cursor have no usage provider; keep their
+                    // hook-reported session id as the resume id instead.
+                    if matches!(session.kind, SessionKind::Gemini | SessionKind::Cursor) {
+                        if session.claude_session_id.as_deref() != Some(provider_session_id) {
+                            session.claude_session_id = Some(provider_session_id.to_string());
+                            changed = true;
+                        }
+                        break 'outer;
+                    }
                     let Some(provider) = provider_for_session_kind(&session.kind) else {
                         ignored_log = Some(format!(
-                            "ignored exact usage binding for unsupported session kind {:?} (amf_session_id={feature_session_id})",
+                            "ignored exact usage binding for unsupported session kind {:?} (aiw_session_id={feature_session_id})",
                             session.kind
                         ));
                         break 'outer;
@@ -355,11 +364,11 @@ impl App {
             return;
         }
 
-        if let Some((tmux_session, tmux_window, amf_id, provider_id)) = binding_log {
+        if let Some((tmux_session, tmux_window, aiw_id, provider_id)) = binding_log {
             self.log_info(
                 "usage",
                 format!(
-                    "bound exact usage source from IPC: amf_session_id={amf_id} provider_session_id={provider_id} tmux={tmux_session}:{tmux_window}"
+                    "bound exact usage source from IPC: aiw_session_id={aiw_id} provider_session_id={provider_id} tmux={tmux_session}:{tmux_window}"
                 ),
             );
         }
@@ -438,14 +447,14 @@ impl App {
         (project_name, feature_name, agent_name, indices)
     }
 
-    fn project_feature_for_amf_session(&self, amf_session: Option<&str>) -> FeatureMatch {
-        let Some(amf_session) = amf_session.filter(|value| !value.is_empty()) else {
+    fn project_feature_for_aiw_session(&self, aiw_session: Option<&str>) -> FeatureMatch {
+        let Some(aiw_session) = aiw_session.filter(|value| !value.is_empty()) else {
             return (None, None, None, None);
         };
 
         for (pi, project) in self.store.projects.iter().enumerate() {
             for (fi, feature) in project.features.iter().enumerate() {
-                if feature.tmux_session == amf_session {
+                if feature.tmux_session == aiw_session {
                     return (
                         Some(project.name.clone()),
                         Some(feature.name.clone()),
@@ -461,10 +470,10 @@ impl App {
 
     fn project_feature_for_message(
         &self,
-        amf_session: Option<&str>,
+        aiw_session: Option<&str>,
         cwd_path: &Path,
     ) -> FeatureMatch {
-        let by_session = self.project_feature_for_amf_session(amf_session);
+        let by_session = self.project_feature_for_aiw_session(aiw_session);
         if by_session.3.is_some() {
             by_session
         } else {
@@ -486,12 +495,12 @@ impl App {
         }
 
         let cwd_path = PathBuf::from(msg.cwd.as_deref().unwrap_or_default());
-        let amf_session = msg
-            .amf_session
+        let aiw_session = msg
+            .aiw_session
             .as_deref()
-            .or(msg.amf_tmux_session.as_deref())
+            .or(msg.aiw_tmux_session.as_deref())
             .or(msg.session_id.as_deref());
-        let Some((pi, fi)) = self.project_feature_for_message(amf_session, &cwd_path).3 else {
+        let Some((pi, fi)) = self.project_feature_for_message(aiw_session, &cwd_path).3 else {
             return;
         };
         let feature = &self.store.projects[pi].features[fi];
@@ -836,10 +845,7 @@ impl App {
             return;
         }
 
-        if matches!(
-            msg_type.as_str(),
-            "opencode-sidebar-updated" | "sidebar-updated"
-        ) {
+        if matches!(msg_type.as_str(), "sidebar-updated") {
             let cwd = raw.get("cwd").and_then(|v| v.as_str()).unwrap_or_default();
             let cwd_path = PathBuf::from(cwd);
             if let Some((pi, fi)) = self.project_feature_for_cwd(&cwd_path).3 {
@@ -1036,12 +1042,12 @@ impl App {
             // clears here rather than waiting for the thinking transition
             // `sync.rs` will never see.
             let cwd_path = PathBuf::from(msg.cwd.as_deref().unwrap_or_default());
-            let amf_session = msg
-                .amf_tmux_session
+            let aiw_session = msg
+                .aiw_tmux_session
                 .as_deref()
-                .or(msg.amf_session.as_deref());
+                .or(msg.aiw_session.as_deref());
             if let (_, _, _, Some((pi, fi))) =
-                self.project_feature_for_message(amf_session, &cwd_path)
+                self.project_feature_for_message(aiw_session, &cwd_path)
             {
                 let tmux_session = self.store.projects[pi].features[fi].tmux_session.clone();
                 self.clear_attention(&tmux_session);
@@ -1093,7 +1099,7 @@ impl App {
         }
 
         if msg_type == "thinking-start" {
-            if let Some(feature_session_id) = msg.amf_feature_session_id.as_ref() {
+            if let Some(feature_session_id) = msg.aiw_feature_session_id.as_ref() {
                 self.ipc_thinking_feature_sessions
                     .insert(feature_session_id.clone());
             }
@@ -1105,7 +1111,7 @@ impl App {
         }
 
         if msg_type == "thinking-stop" {
-            if let Some(feature_session_id) = msg.amf_feature_session_id.as_ref() {
+            if let Some(feature_session_id) = msg.aiw_feature_session_id.as_ref() {
                 self.ipc_thinking_feature_sessions
                     .remove(feature_session_id);
             }
@@ -1120,15 +1126,15 @@ impl App {
         // input, so a harness can report its lifecycle here without any risk
         // to the notification flow.
         if msg_type == "attention" {
-            let kind = msg.amf_event_kind.as_deref();
+            let kind = msg.aiw_event_kind.as_deref();
             let cwd_path = PathBuf::from(msg.cwd.as_deref().unwrap_or_default());
-            let amf_session = msg
-                .amf_tmux_session
+            let aiw_session = msg
+                .aiw_tmux_session
                 .as_deref()
-                .or(msg.amf_session.as_deref());
+                .or(msg.aiw_session.as_deref());
 
             let Some((_, _, _, Some((pi, fi)))) =
-                Some(self.project_feature_for_message(amf_session, &cwd_path))
+                Some(self.project_feature_for_message(aiw_session, &cwd_path))
             else {
                 self.log_debug(
                     "attention",
@@ -1198,7 +1204,7 @@ impl App {
 
         if msg_type == "tool-start" {
             let cwd_path = PathBuf::from(msg.cwd.as_deref().unwrap_or_default());
-            if let Some(feature_session_id) = msg.amf_feature_session_id.as_ref() {
+            if let Some(feature_session_id) = msg.aiw_feature_session_id.as_ref() {
                 self.ipc_tool_feature_sessions
                     .insert(feature_session_id.clone());
             }
@@ -1235,7 +1241,7 @@ impl App {
 
         if msg_type == "tool-stop" {
             let cwd_path = PathBuf::from(msg.cwd.as_deref().unwrap_or_default());
-            if let Some(feature_session_id) = msg.amf_feature_session_id.as_ref() {
+            if let Some(feature_session_id) = msg.aiw_feature_session_id.as_ref() {
                 self.ipc_tool_feature_sessions.remove(feature_session_id);
             }
             let label = msg
@@ -1299,9 +1305,6 @@ impl App {
                     }
                 }
             }
-            if let Some((pi, fi)) = self.project_feature_for_cwd(&cwd_path).3 {
-                self.refresh_sidebar_plan_for_feature(pi, fi);
-            }
             if let Some((codex_session, codex_window)) =
                 self.codex_feature_for_message(session_id.as_deref(), &cwd_path)
             {
@@ -1314,7 +1317,7 @@ impl App {
             return;
         }
 
-        let amf_session = msg.amf_session.clone();
+        let aiw_session = msg.aiw_session.clone();
         let session_id = msg.session_id.unwrap_or_default();
         let cwd = msg.cwd.unwrap_or_default();
         let source = msg.source.unwrap_or_default();
@@ -1331,7 +1334,7 @@ impl App {
         // a toast) instead, so it never steals focus; entering the feature
         // view or selecting it from the picker opens it from there.
         let (found_project_name_for_open, found_feature_name_for_open, _, _) =
-            self.project_feature_for_message(amf_session.as_deref(), &cwd_path);
+            self.project_feature_for_message(aiw_session.as_deref(), &cwd_path);
         let open_diff_review_now = is_structured_diff_review
             && match &self.mode {
                 AppMode::Viewing(view) => {
@@ -1367,14 +1370,9 @@ impl App {
             return;
         }
 
-        // Resolve project/feature from the AMF tmux session first, then cwd.
+        // Resolve project/feature from the AIW tmux session first, then cwd.
         let (project_name, feature_name, agent_name, indices) =
-            self.project_feature_for_message(amf_session.as_deref(), &cwd_path);
-        if let Some((pi, fi)) = indices
-            && self.store.projects[pi].features[fi].agent == AgentKind::Codex
-        {
-            self.refresh_sidebar_plan_for_feature(pi, fi);
-        }
+            self.project_feature_for_message(aiw_session.as_deref(), &cwd_path);
 
         // For diff-review while viewing the matching
         // feature, write the proceed signal immediately when

@@ -3,16 +3,16 @@
 # invokes a model and never contacts GitHub.
 set -euo pipefail
 
-AMF_BIN="${AMF_BIN:?AMF_BIN must point at the running capture binary}"
-PR_NUMBER="${AMF_SCREENSHOT_PR_NUMBER:?AMF_SCREENSHOT_PR_NUMBER is required}"
+AIW_BIN="${AIW_BIN:?AIW_BIN must point at the running capture binary}"
+PR_NUMBER="${AIW_SCREENSHOT_PR_NUMBER:?AIW_SCREENSHOT_PR_NUMBER is required}"
 WORKDIR="${GITHUB_WORKSPACE:-$(git rev-parse --show-toplevel)}"
 REPOSITORY="${GITHUB_REPOSITORY:-}"
 
-[[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "AMF_SCREENSHOT_PR_NUMBER must be a positive number" >&2; exit 1; }
+[[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "AIW_SCREENSHOT_PR_NUMBER must be a positive number" >&2; exit 1; }
 [[ "$REPOSITORY" =~ ^[[:alnum:]_.-]+/[[:alnum:]_.-]+$ ]] || { echo "GITHUB_REPOSITORY must be owner/name for the AI-review screenshot fixture" >&2; exit 1; }
 
 HEAD_SHA="$(git -C "$WORKDIR" rev-parse HEAD)"
-fixture="$(mktemp "${TMPDIR:-/tmp}/amf-ai-review-fixture.XXXXXX.json")"
+fixture="$(mktemp "${TMPDIR:-/tmp}/aiw-ai-review-fixture.XXXXXX.json")"
 trap 'rm -f "$fixture"' EXIT
 
 # All interpolated values above are constrained to GitHub/revision identifiers.
@@ -38,4 +38,4 @@ printf '%s\n' \
   '  "head_ref": "screenshot-fixture"' \
   '}' >"$fixture"
 
-"$AMF_BIN" automation seed-ai-review --file "$fixture"
+"$AIW_BIN" automation seed-ai-review --file "$fixture"

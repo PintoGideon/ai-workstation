@@ -9,7 +9,7 @@ fn hash_migration_sql(sql: &str) -> String {
     format!("{:x}", Sha256::digest(sql.as_bytes()))
 }
 
-/// `amf.db` is a single database shared by every AMF checkout on the
+/// `aiw.db` is a single database shared by every AIW checkout on the
 /// machine, keyed only by position in `migrations`. A dev/pre-release build
 /// (a WIP branch, a beta) can apply a migration under a version number that
 /// a later release reassigns to a different migration — the version counter
@@ -42,11 +42,11 @@ fn check_for_migration_drift(conn: &Connection, migrations: &[(&str, &str)]) -> 
         if recorded_hash != hash_migration_sql(expected_sql) {
             bail!(
                 "Database schema drift detected at schema_version {version}: this database \
-                 recorded \"{recorded_desc}\" there, but this build of AMF expects \"{expected_desc}\" \
-                 in that slot. This usually means a pre-release or development build of AMF ran a \
+                 recorded \"{recorded_desc}\" there, but this build of AIW expects \"{expected_desc}\" \
+                 in that slot. This usually means a pre-release or development build of AIW ran a \
                  different migration under the same version number before a release renumbered it. \
                  Refusing to start rather than run against a mismatched schema. Back up \
-                 ~/.config/amf/amf.db and reconcile schema_version by hand, or ask for help."
+                 ~/.config/ai_workstation/aiw.db and reconcile schema_version by hand, or ask for help."
             );
         }
     }
@@ -148,7 +148,7 @@ pub(super) fn run(conn: &Connection) -> Result<()> {
             MIGRATION_016,
         ),
         (
-            "Track editors AMF launched per feature so they can be reclaimed on stop",
+            "Track editors AIW launched per feature so they can be reclaimed on stop",
             MIGRATION_017,
         ),
         (
@@ -289,7 +289,7 @@ pub(super) fn run(conn: &Connection) -> Result<()> {
                     |row| row.get(0),
                 )?;
                 if current >= target {
-                    // Another AMF instance may have completed this migration
+                    // Another AIW instance may have completed this migration
                     // while we waited for the immediate write transaction.
                     transaction.commit()?;
                     continue;
@@ -309,6 +309,9 @@ pub(super) fn run(conn: &Connection) -> Result<()> {
             }
         }
     }
+
+    // FORK: AIW's own tables, outside the numbered slots (see FORK_SCHEMA).
+    conn.execute_batch(FORK_SCHEMA)?;
 
     Ok(())
 }
@@ -490,7 +493,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_review_cache_updated
 ";
 
 // A fix prompt carries a fresh request id for each comment. The agent sends its
-// proposed reviewer-facing reply back through AMF's IPC command with that id;
+// proposed reviewer-facing reply back through AIW's IPC command with that id;
 // updating only the matching row prevents a late response from an older fix
 // attempt from replacing the current draft.
 const MIGRATION_013: &str = "
@@ -629,7 +632,7 @@ CREATE TABLE IF NOT EXISTS session_bookmarks (
 );
 ";
 
-/// Editors AMF launched for a feature, so stopping the feature can reclaim
+/// Editors AIW launched for a feature, so stopping the feature can reclaim
 /// them (and the language servers they run) instead of leaving multi-GiB
 /// processes behind.
 ///
@@ -638,13 +641,13 @@ CREATE TABLE IF NOT EXISTS session_bookmarks (
 /// on every save, which would cascade-wipe these rows. Cleanup on feature
 /// deletion is explicit, in `db/editors.rs`.
 ///
-/// `dedicated` records whether AMF opened a window it owns (VS Code launched
+/// `dedicated` records whether AIW opened a window it owns (VS Code launched
 /// with `--new-window`) or merely handed a path to an instance that was already
 /// running. Only a dedicated launch may ever be killed.
 ///
-/// `command` is the argv AMF spawned, kept as the identity check at kill time:
+/// `command` is the argv AIW spawned, kept as the identity check at kill time:
 /// PIDs are recycled, and a bare liveness check would eventually signal an
-/// unrelated process. `started_at` is AMF's own launch timestamp, used to
+/// unrelated process. `started_at` is AIW's own launch timestamp, used to
 /// report age and to break ties in the report.
 const MIGRATION_017: &str = "
 CREATE TABLE IF NOT EXISTS launched_editors (
@@ -898,7 +901,7 @@ ALTER TABLE features ADD COLUMN selected_plan_path TEXT;
 /// Existing completed work stays completed and keeps its session association.
 /// Every incomplete row becomes not started with no association, including a
 /// row that happened to have the old `in_progress` bit or a historical spawned
-/// session. This is the settled migration rule: AMF must not infer that old
+/// session. This is the settled migration rule: AIW must not infer that old
 /// links still represent active TODO-specific launches.
 const MIGRATION_028: &str = "
 ALTER TABLE todos
@@ -912,7 +915,7 @@ SET status = CASE WHEN done != 0 THEN 'completed' ELSE 'not_started' END,
     agent_session_id = CASE WHEN done != 0 THEN spawned_session_id ELSE NULL END;
 ";
 
-/// A TODO reference belongs to an AMF agent session, rather than to the TODO's
+/// A TODO reference belongs to an AIW agent session, rather than to the TODO's
 /// lifecycle/work-state link.  Existing sessions predate this explicit launch
 /// provenance and therefore remain unreferenced.
 ///
@@ -1006,9 +1009,9 @@ CREATE INDEX IF NOT EXISTS idx_pr_investigations_pr
     ON pr_investigations(project_id, pr_number);
 ";
 
-/// Feature- and global-scope overrides of AMF's built-in headless prompt
+/// Feature- and global-scope overrides of AIW's built-in headless prompt
 /// templates (see `src/db/prompt_overrides.rs` and `src/prompts/`). Project
-/// scope is an `amf.json` `prompt_overrides` map, not a row here.
+/// scope is an `aiw.json` `prompt_overrides` map, not a row here.
 ///
 /// One row per `(prompt_id, scope, scope_key, harness)`: `scope` is
 /// `feature` or `global`, `scope_key` is the feature's workdir path (`NULL`
@@ -1061,7 +1064,7 @@ const MIGRATION_039: &str = "
 ALTER TABLE features ADD COLUMN issue_source TEXT;
 ";
 
-/// A prompt AMF computed to seed a session's composer, but couldn't deliver
+/// A prompt AIW computed to seed a session's composer, but couldn't deliver
 /// because the launch that would have carried it failed (e.g. the agent limit
 /// or a harness spawn error). Scoped by `workdir` rather than a feature id so
 /// it survives feature recreation and is found by the same lookup the
@@ -1165,7 +1168,7 @@ CREATE TABLE model_research (
 ";
 
 /// A session stopped on its own (`x` on its dashboard row) stays stopped
-/// across feature restarts and AMF restarts, so the flag lives with the
+/// across feature restarts and AIW restarts, so the flag lives with the
 /// session row rather than in memory. Defaults to running, which is what
 /// every existing session was.
 const MIGRATION_045: &str = "
@@ -1173,7 +1176,7 @@ ALTER TABLE feature_sessions ADD COLUMN stopped INTEGER NOT NULL DEFAULT 0;
 ";
 
 /// Re-apply 010's triage re-key for databases that never ran it. A dev build
-/// once recorded a different migration in slot 10 of the shared `amf.db`, so
+/// once recorded a different migration in slot 10 of the shared `aiw.db`, so
 /// when the re-key shipped there the runner saw the slot as taken and skipped
 /// it — leaving `PRIMARY KEY (pr_number, comment_id, head_sha)`, against which
 /// every triage upsert's `ON CONFLICT(pr_number, comment_id)` fails. Those
@@ -1212,6 +1215,18 @@ CREATE INDEX IF NOT EXISTS idx_pr_comment_triage_updated
 
 /// Historical scope ownership survives replacement of the live workspace store.
 const MIGRATION_047: &str = "CREATE TABLE screenshot_scopes (scope_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, feature_id TEXT NOT NULL, session_id TEXT NOT NULL, workdir TEXT NOT NULL, owner_json TEXT NOT NULL, retired INTEGER NOT NULL DEFAULT 0); CREATE INDEX screenshot_scopes_session ON screenshot_scopes(project_id,feature_id,session_id,workdir,retired);";
+
+// FORK: AI Workstation schema. Deliberately *not* a numbered migration:
+// `aiw.db` is shared with upstream AIW builds and the drift check above keys
+// every numbered slot to upstream's SQL, so an AIW table in slot 48 would make
+// AIW refuse to start the day an upstream release puts its own migration
+// there. Idempotent `IF NOT EXISTS` DDL applied after the numbered migrations
+// needs no slot; older and newer AIW builds simply ignore these tables.
+//
+// `aiw_hook_approvals`: one row per approved repo lifecycle hook, pinned to
+// the SHA-256 of repo path + hook name + exact command + script content
+// (`src/fork/hook_approval.rs`).
+pub(super) const FORK_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS aiw_hook_approvals (repo TEXT NOT NULL, hook TEXT NOT NULL, sha256 TEXT NOT NULL, command TEXT NOT NULL, approved_at TEXT NOT NULL, PRIMARY KEY (repo, hook, sha256));";
 
 #[cfg(test)]
 mod tests {
@@ -1329,7 +1344,7 @@ mod tests {
         conn.execute_batch(
             "INSERT INTO learning_sessions
                 (id, project_id, feature_id, title, created_at, updated_at)
-             VALUES ('s1', 'p1', 'f1', 'amf', datetime('now'), datetime('now'));
+             VALUES ('s1', 'p1', 'f1', 'aiw', datetime('now'), datetime('now'));
              INSERT INTO learning_qa
                 (id, learning_session_id, question, created_at, updated_at)
              VALUES ('q1', 's1', 'What is this?', datetime('now'), datetime('now'));",
@@ -1366,7 +1381,7 @@ mod tests {
         conn.execute_batch(
             "INSERT INTO learning_sessions
                 (id, project_id, feature_id, title, created_at, updated_at)
-             VALUES ('s1', 'p1', 'f1', 'amf', datetime('now'), datetime('now'));
+             VALUES ('s1', 'p1', 'f1', 'aiw', datetime('now'), datetime('now'));
              INSERT INTO learning_qa
                 (id, learning_session_id, question, created_at, updated_at)
              VALUES ('q1', 's1', 'What is this?', datetime('now'), datetime('now'));",
@@ -1822,7 +1837,7 @@ mod tests {
     }
 
     /// Replaying `run` over an already-migrated DB is a no-op, so a rollback to
-    /// an older AMF and back doesn't duplicate or drop anything.
+    /// an older AIW and back doesn't duplicate or drop anything.
     #[test]
     fn migrations_are_idempotent() {
         let conn = Connection::open_in_memory().unwrap();
@@ -1834,7 +1849,7 @@ mod tests {
         assert_eq!(rows, 47);
     }
 
-    /// `amf.db` is shared by every checkout on the machine, keyed only by
+    /// `aiw.db` is shared by every checkout on the machine, keyed only by
     /// position in the migrations list. A dev/pre-release build can apply a
     /// *different* migration under a version number a later release reuses
     /// (this happened for real: a WIP "remote_devices" migration recorded

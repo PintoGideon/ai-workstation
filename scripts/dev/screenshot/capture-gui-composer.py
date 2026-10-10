@@ -16,11 +16,11 @@ import tempfile
 import time
 import urllib.request
 
-port = int(os.environ.get("AMF_GUI_CAPTURE_PORT", "1420"))
+port = int(os.environ.get("AIW_GUI_CAPTURE_PORT", "1420"))
 out = pathlib.Path(sys.argv[1]).resolve()
 out.mkdir(parents=True, exist_ok=True)
 workspace = pathlib.Path(__file__).resolve().parents[3]
-with tempfile.TemporaryDirectory(prefix="amf-gui-composer-") as temporary:
+with tempfile.TemporaryDirectory(prefix="aiw-gui-composer-") as temporary:
     scratch = pathlib.Path(temporary)
     with socket.socket() as inspector_socket:
         inspector_socket.bind(("127.0.0.1", 0))
@@ -30,8 +30,8 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-composer-") as temporary:
     data = scratch / "data"
     cache = scratch / "cache"
     repo = scratch / "demo-api"
-    (config / "amf").mkdir(parents=True)
-    (state / "amf").mkdir(parents=True)
+    (config / "ai_workstation").mkdir(parents=True)
+    (state / "ai_workstation").mkdir(parents=True)
     data.mkdir()
     cache.mkdir()
     repo.mkdir()
@@ -43,14 +43,14 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-composer-") as temporary:
         XDG_CACHE_HOME=str(cache),
         GDK_BACKEND="x11",
         WEBKIT_INSPECTOR_HTTP_SERVER=inspector_address,
-        AMF_TMUX_SOCKET=str(scratch / "composer-tmux.sock"),
+        AIW_TMUX_SOCKET=str(scratch / "composer-tmux.sock"),
     )
     git_env = env | {
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "AMF demo",
+        "GIT_AUTHOR_NAME": "AIW demo",
         "GIT_AUTHOR_EMAIL": "demo@example.com",
-        "GIT_COMMITTER_NAME": "AMF demo",
+        "GIT_COMMITTER_NAME": "AIW demo",
         "GIT_COMMITTER_EMAIL": "demo@example.com",
     }
 
@@ -98,9 +98,9 @@ export function formatTotal(total: number): string {
     )
     (repo / "receipt.bin").write_bytes(b"\0receipt\0image")
     git("add", "receipt.bin")
-    tmux_name = "amf-gui-composer-proof"
-    tmux = ["tmux", "-S", env["AMF_TMUX_SOCKET"]]
-    harness = os.environ.get("AMF_GUI_CAPTURE_HARNESS", str(workspace / "scripts/dev/screenshot/fixtures/gui-composer-harness.py"))
+    tmux_name = "aiw-gui-composer-proof"
+    tmux = ["tmux", "-S", env["AIW_TMUX_SOCKET"]]
+    harness = os.environ.get("AIW_GUI_CAPTURE_HARNESS", str(workspace / "scripts/dev/screenshot/fixtures/gui-composer-harness.py"))
     import shlex
     def command(label, filename):
         return shlex.join(["/usr/bin/python3", harness, str(repo / filename), label])
@@ -119,7 +119,7 @@ export function formatTotal(total: number): string {
     gui_log = (out / "gui.log").open("w")
     vite = subprocess.Popen(
         ["npm", "run", "dev", "--", "--port", str(port)],
-        cwd=pathlib.Path(os.environ.get("AMF_GUI_CAPTURE_FRONTEND", str(workspace / "gui"))),
+        cwd=pathlib.Path(os.environ.get("AIW_GUI_CAPTURE_FRONTEND", str(workspace / "gui"))),
         stdout=vite_log,
         stderr=subprocess.STDOUT,
         start_new_session=True,
@@ -141,14 +141,14 @@ export function formatTotal(total: number): string {
         else:
             raise RuntimeError("The isolated frontend did not become ready")
         gui = subprocess.Popen(
-            [str(workspace / "target/debug/amf-gui")],
+            [str(workspace / "target/debug/aiw-gui")],
             cwd=scratch,
             env=env,
             stdout=gui_log,
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
-        dbpath = config / "amf/amf.db"
+        dbpath = config / "ai_workstation/aiw.db"
         for _ in range(60):
             if gui.poll() is not None:
                 raise RuntimeError(
@@ -200,7 +200,7 @@ export function formatTotal(total: number): string {
         subprocess.run(
             [
                 "/usr/bin/python3",
-                os.environ.get("AMF_GUI_CAPTURE_FRAMES", str(workspace / "scripts/dev/screenshot/capture-gui-composer-frames.py")),
+                os.environ.get("AIW_GUI_CAPTURE_FRAMES", str(workspace / "scripts/dev/screenshot/capture-gui-composer-frames.py")),
                 str(out),
                 str(gui.pid),
                 inspector_address,

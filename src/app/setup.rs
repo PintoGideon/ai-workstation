@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 
 use crate::project::{AgentKind, Feature, ProjectStore, SessionKind, VibeMode};
-use crate::theme::ThemeManager;
 
 use super::AppConfig;
 
@@ -16,41 +15,38 @@ const ATTENTION_SH: &str = include_str!("../../scripts/attention.sh");
 const CODEX_NOTIFY_SH: &str = include_str!("../../scripts/codex-notify.sh");
 const CODEX_DIFF_REVIEW_SH: &str = include_str!("../../scripts/codex-diff-review.sh");
 const SET_SESSION_STATUS_SH: &str = include_str!("../../scripts/set-session-status.sh");
-const INPUT_REQUEST_JS: &str = include_str!("../../.opencode/plugins/input-request.js");
-const CHANGE_TRACKER_JS: &str = include_str!("../../.opencode/plugins/change-tracker.js");
-const SIDEBAR_STATE_JS: &str = include_str!("../../.opencode/plugins/sidebar-state.js");
 const CUSTOM_DIFF_REVIEW_SH: &str =
     include_str!("../../plugins/diff-review/scripts/custom-diff-review.sh");
 
-const AMF_SKILLS: &[(&str, &str)] = &[
+const AIW_SKILLS: &[(&str, &str)] = &[
     (
         "add-session",
-        include_str!("../../skills/amf-add-session/SKILL.md"),
+        include_str!("../../skills/aiw-add-session/SKILL.md"),
     ),
     (
         "add-hook",
-        include_str!("../../skills/amf-add-hook/SKILL.md"),
+        include_str!("../../skills/aiw-add-hook/SKILL.md"),
     ),
     (
         "add-preset",
-        include_str!("../../skills/amf-add-preset/SKILL.md"),
+        include_str!("../../skills/aiw-add-preset/SKILL.md"),
     ),
     (
         "add-prompt",
-        include_str!("../../skills/amf-add-prompt/SKILL.md"),
+        include_str!("../../skills/aiw-add-prompt/SKILL.md"),
     ),
     (
         "configure",
-        include_str!("../../skills/amf-configure/SKILL.md"),
+        include_str!("../../skills/aiw-configure/SKILL.md"),
     ),
     (
         "release-notes",
-        include_str!("../../skills/amf-release-notes/SKILL.md"),
+        include_str!("../../skills/aiw-release-notes/SKILL.md"),
     ),
 ];
 const CLAUDE_SETTINGS_LOCAL_JSON: &str = "settings.local.json";
 const CLAUDE_SETTINGS_JSON: &str = "settings.json";
-const CLAUDE_STATE_JSON: &str = "amf-hook-state.json";
+const CLAUDE_STATE_JSON: &str = "aiw-hook-state.json";
 const HOOK_REFRESH_STAMP: &str = concat!(env!("CARGO_PKG_VERSION"), ":jqless-hooks-v9");
 const CLAUDE_MANAGED_SCRIPT_NAMES: &[&str] = &[
     "notify.sh",
@@ -145,8 +141,8 @@ fn ensure_gitignore_entry(path: &Path, entry: &str) {
 
 fn claude_managed_commands() -> Vec<String> {
     [
-        crate::project::amf_claude_hooks_dir(),
-        crate::project::amf_config_dir(),
+        crate::project::aiw_claude_hooks_dir(),
+        crate::project::aiw_config_dir(),
     ]
     .into_iter()
     .flat_map(|dir| {
@@ -194,7 +190,7 @@ pub(crate) fn claude_exec_hook_with_args(path: &Path, args: &[&str]) -> serde_js
     })
 }
 
-pub(crate) fn is_amf_claude_hook_command(command: &str, managed_commands: &[String]) -> bool {
+pub(crate) fn is_aiw_claude_hook_command(command: &str, managed_commands: &[String]) -> bool {
     let normalized = shell_unquote_single(command);
     if managed_commands
         .iter()
@@ -206,38 +202,51 @@ pub(crate) fn is_amf_claude_hook_command(command: &str, managed_commands: &[Stri
     // The config-dir resolver depends on HOME/XDG_CONFIG_HOME and can differ
     // across platforms or across runs (e.g. macOS' Library/Application
     // Support path, or a custom XDG_CONFIG_HOME pointed at an arbitrary
-    // directory). `amf_config_dir()` always resolves to `<config root>/amf`
-    // regardless of what the config root itself is named, so the only
-    // structural invariant we can rely on for a *previous* run's config root
-    // is that the immediate parent directory is literally named `amf`.
-    // Treat only AMF's known helper names under such a directory as managed
-    // so unrelated user hooks with the same basename are preserved.
+    // directory). `aiw_config_dir()` always resolves to
+    // `<config root>/ai_workstation` regardless of what the config root itself
+    // is named, so the only structural invariant we can rely on for a
+    // *previous* run's config root is the immediate parent directory's name.
+    // Treat only known helper names under such a directory as managed so
+    // unrelated user hooks with the same basename are preserved.
+    //
+    // FORK: hooks written by upstream AMF (`<config root>/amf/…` and
+    // `~/.amf/hooks/…`) are recognised too, so restarting a migrated feature
+    // replaces AMF's entries instead of running both sets side by side.
     let Some((parent, name)) = normalized.rsplit_once('/') else {
         return false;
     };
     let parent = Path::new(parent);
-    let is_legacy_config_dir = parent.file_name().and_then(|n| n.to_str()) == Some("amf");
-    let is_safe_hook_dir = parent.file_name().and_then(|n| n.to_str()) == Some("hooks")
-        && parent
-            .parent()
-            .and_then(Path::file_name)
+    let dir_name = |path: &Path| {
+        path.file_name()
             .and_then(|n| n.to_str())
-            == Some(".amf");
-    CLAUDE_MANAGED_SCRIPT_NAMES.contains(&name) && (is_legacy_config_dir || is_safe_hook_dir)
+            .map(str::to_string)
+    };
+    let parent_name = dir_name(parent);
+    let grandparent_name = parent.parent().and_then(dir_name);
+    let is_config_dir = matches!(
+        parent_name.as_deref(),
+        Some(crate::project::AIW_DIR_NAME | crate::project::LEGACY_AMF_DIR_NAME)
+    );
+    let is_safe_hook_dir = parent_name.as_deref() == Some("hooks")
+        && matches!(
+            grandparent_name.as_deref(),
+            Some(crate::project::AIW_DIR_NAME | ".amf")
+        );
+    CLAUDE_MANAGED_SCRIPT_NAMES.contains(&name) && (is_config_dir || is_safe_hook_dir)
 }
 
-fn is_unquoted_amf_claude_hook(hook: &serde_json::Value, managed_commands: &[String]) -> bool {
+fn is_unquoted_aiw_claude_hook(hook: &serde_json::Value, managed_commands: &[String]) -> bool {
     // Claude's exec form passes `command` directly when `args` is present, so
     // a bare path containing spaces is safe there. Only shell-form commands
     // without `args` need quoting and migration.
     !hook["args"].is_array()
         && hook["command"].as_str().is_some_and(|command| {
             !(command.starts_with('\'') && command.ends_with('\''))
-                && is_amf_claude_hook_command(command, managed_commands)
+                && is_aiw_claude_hook_command(command, managed_commands)
         })
 }
 
-fn has_unquoted_amf_claude_hooks(
+fn has_unquoted_aiw_claude_hooks(
     settings: &serde_json::Value,
     managed_commands: &[String],
 ) -> bool {
@@ -251,7 +260,7 @@ fn has_unquoted_amf_claude_hooks(
                         entry["hooks"].as_array().is_some_and(|hooks| {
                             hooks
                                 .iter()
-                                .any(|hook| is_unquoted_amf_claude_hook(hook, managed_commands))
+                                .any(|hook| is_unquoted_aiw_claude_hook(hook, managed_commands))
                         })
                     })
                 })
@@ -259,17 +268,17 @@ fn has_unquoted_amf_claude_hooks(
         })
 }
 
-fn is_amf_claude_hook_entry(entry: &serde_json::Value, managed_commands: &[String]) -> bool {
+fn is_aiw_claude_hook_entry(entry: &serde_json::Value, managed_commands: &[String]) -> bool {
     entry["hooks"].as_array().is_some_and(|hooks| {
         hooks.iter().any(|hook| {
             hook["command"]
                 .as_str()
-                .is_some_and(|command| is_amf_claude_hook_command(command, managed_commands))
+                .is_some_and(|command| is_aiw_claude_hook_command(command, managed_commands))
         })
     })
 }
 
-fn remove_amf_claude_hooks(settings: &mut serde_json::Value, managed_commands: &[String]) -> bool {
+fn remove_aiw_claude_hooks(settings: &mut serde_json::Value, managed_commands: &[String]) -> bool {
     let Some(hooks_obj) = settings
         .get_mut("hooks")
         .and_then(|value| value.as_object_mut())
@@ -292,7 +301,7 @@ fn remove_amf_claude_hooks(settings: &mut serde_json::Value, managed_commands: &
             continue;
         };
         let before = entries.len();
-        entries.retain(|entry| !is_amf_claude_hook_entry(entry, managed_commands));
+        entries.retain(|entry| !is_aiw_claude_hook_entry(entry, managed_commands));
         changed |= entries.len() != before;
     }
 
@@ -306,11 +315,11 @@ fn remove_amf_claude_hooks(settings: &mut serde_json::Value, managed_commands: &
     changed
 }
 
-/// Rewrite AMF-owned commands in an inherited Claude settings file without
+/// Rewrite AIW-owned commands in an inherited Claude settings file without
 /// replacing its hook layout. Worktrees can inherit `.claude` settings from
 /// the root repository, so refreshing only the worktree-local file leaves a
 /// stale root command active in Claude.
-fn migrate_amf_claude_hooks_to_runtime_dir(
+fn migrate_aiw_claude_hooks_to_runtime_dir(
     settings_path: &Path,
     managed_commands: &[String],
 ) -> bool {
@@ -328,7 +337,7 @@ fn migrate_amf_claude_hooks_to_runtime_dir(
         return false;
     };
 
-    let runtime_dir = crate::project::amf_claude_hooks_dir();
+    let runtime_dir = crate::project::aiw_claude_hooks_dir();
     let mut changed = false;
     for entries in hooks
         .values_mut()
@@ -345,7 +354,7 @@ fn migrate_amf_claude_hooks_to_runtime_dir(
                 let Some(command) = hook.get("command").and_then(serde_json::Value::as_str) else {
                     continue;
                 };
-                if !is_amf_claude_hook_command(command, managed_commands) {
+                if !is_aiw_claude_hook_command(command, managed_commands) {
                     continue;
                 }
                 let normalized = shell_unquote_single(command);
@@ -388,7 +397,7 @@ fn repair_inherited_repo_claude_hooks(
     [CLAUDE_SETTINGS_LOCAL_JSON, CLAUDE_SETTINGS_JSON]
         .into_iter()
         .filter(|name| {
-            migrate_amf_claude_hooks_to_runtime_dir(&claude_dir.join(name), managed_commands)
+            migrate_aiw_claude_hooks_to_runtime_dir(&claude_dir.join(name), managed_commands)
         })
         .count()
 }
@@ -487,11 +496,11 @@ fn cleanup_claude_settings_file(path: &Path, state_path: Option<&Path>) {
 
     let managed_commands = claude_managed_commands();
     let mut settings = read_json_object(path);
-    let had_amf_hooks = remove_amf_claude_hooks(&mut settings, &managed_commands);
+    let had_aiw_hooks = remove_aiw_claude_hooks(&mut settings, &managed_commands);
 
     if let Some(state_path) = state_path {
         update_claude_permissions(&mut settings, state_path, false);
-    } else if had_amf_hooks
+    } else if had_aiw_hooks
         && let Some(allow) = settings
             .pointer_mut("/permissions/allow")
             .and_then(|value| value.as_array_mut())
@@ -568,6 +577,7 @@ fn write_atomic(path: &Path, content: &str, mode: Option<u32>) -> std::io::Resul
 /// Avoids unnecessary write syscalls when the file is already up to date,
 /// which matters because `ensure_notify_scripts` is called once per feature
 /// on startup. The write itself is atomic (see `write_atomic`).
+#[cfg(not(unix))]
 fn write_if_changed(path: &Path, content: &str) {
     if std::fs::read_to_string(path).ok().as_deref() == Some(content) {
         return;
@@ -591,8 +601,8 @@ fn write_executable_if_changed(path: &Path, content: &str) {
 }
 
 pub fn ensure_notify_scripts() {
-    let config_dir = crate::project::amf_config_dir();
-    let claude_hooks_dir = crate::project::amf_claude_hooks_dir();
+    let config_dir = crate::project::aiw_config_dir();
+    let claude_hooks_dir = crate::project::aiw_claude_hooks_dir();
     let _ = std::fs::create_dir_all(&config_dir);
     let _ = std::fs::create_dir_all(&claude_hooks_dir);
     write_executable_if_changed(&claude_hooks_dir.join("notify.sh"), NOTIFY_SH);
@@ -615,10 +625,6 @@ pub fn ensure_notify_scripts() {
         &config_dir.join("set-session-status.sh"),
         SET_SESSION_STATUS_SH,
     );
-    let plugins_dir = config_dir.join("plugins");
-    let _ = std::fs::create_dir_all(&plugins_dir);
-    write_if_changed(&plugins_dir.join("input-request.js"), INPUT_REQUEST_JS);
-    write_if_changed(&plugins_dir.join("change-tracker.js"), CHANGE_TRACKER_JS);
     write_executable_if_changed(
         &claude_hooks_dir.join("custom-diff-review.sh"),
         CUSTOM_DIFF_REVIEW_SH,
@@ -626,14 +632,14 @@ pub fn ensure_notify_scripts() {
 }
 
 /// Path of the version-stamp file used to skip hook/plugin refresh when
-/// the AMF binary version has not changed since the last startup.
+/// the AIW binary version has not changed since the last startup.
 fn hook_refresh_stamp_path() -> std::path::PathBuf {
-    crate::project::amf_config_dir().join("last_hook_refresh_version")
+    crate::project::aiw_config_dir().join("last_hook_refresh_version")
 }
 
 /// Returns `true` when the stamp matches the current binary version, meaning
 /// every feature's hooks and plugins were already refreshed by this exact
-/// version of AMF and nothing needs to be rewritten.
+/// version of AIW and nothing needs to be rewritten.
 fn hooks_already_current() -> bool {
     std::fs::read_to_string(hook_refresh_stamp_path())
         .ok()
@@ -644,33 +650,6 @@ fn hooks_already_current() -> bool {
 /// Record that hooks have been refreshed for the current binary version.
 fn mark_hooks_current() {
     let _ = std::fs::write(hook_refresh_stamp_path(), HOOK_REFRESH_STAMP);
-}
-
-/// Refresh opencode plugin files in all known opencode feature
-/// workdirs, so existing sessions/worktrees pick up plugin fixes
-/// without requiring feature recreation.
-///
-/// Writes the version stamp after running so that subsequent startups
-/// on the same binary version skip both this pass and the Claude hooks
-/// pass (which runs first and also checks the stamp).
-pub fn refresh_opencode_plugins_for_store(store: &ProjectStore) -> usize {
-    if hooks_already_current() {
-        return 0;
-    }
-    let mut refreshed = 0usize;
-    for project in &store.projects {
-        for feature in &project.features {
-            if !matches!(feature.agent, AgentKind::Opencode) {
-                continue;
-            }
-            ensure_opencode_plugins(&feature.workdir, &feature.mode);
-            refreshed += 1;
-        }
-    }
-    // Both refresh passes are now complete for this version; stamp so the
-    // next startup skips both.
-    mark_hooks_current();
-    refreshed
 }
 
 pub fn refresh_claude_hooks_for_store(store: &ProjectStore) -> usize {
@@ -693,9 +672,7 @@ pub fn refresh_claude_hooks_for_store(store: &ProjectStore) -> usize {
             refreshed += 1;
         }
     }
-    // Do not write the stamp here; the opencode pass runs next and writes it
-    // once both passes are done.  If this store has no opencode features the
-    // opencode function still runs (empty loop) and stamps correctly.
+    mark_hooks_current();
     refreshed
 }
 
@@ -711,7 +688,7 @@ pub fn repair_unquoted_claude_hooks_for_store(store: &ProjectStore) -> usize {
             let has_stale_hook = [CLAUDE_SETTINGS_LOCAL_JSON, CLAUDE_SETTINGS_JSON]
                 .into_iter()
                 .map(|name| read_json_object(&claude_dir.join(name)))
-                .any(|settings| has_unquoted_amf_claude_hooks(&settings, &managed_commands));
+                .any(|settings| has_unquoted_aiw_claude_hooks(&settings, &managed_commands));
             if !has_stale_hook {
                 continue;
             }
@@ -772,12 +749,11 @@ pub(crate) fn migrate_app_config(config: &mut AppConfig) -> bool {
 /// The configuration exactly as it is on disk, touching nothing.
 ///
 /// [`load_config`] is a write path in three ways: it creates `config.json` when
-/// it is missing, rewrites it when a key migrates, and pushes the configured
-/// theme into opencode's own config. `amf doctor` needs the same settings and
-/// must leave all of that alone, so it reads through here instead — migrations
+/// it is missing and rewrites it when a key migrates. `aiw doctor` needs the
+/// same settings and must leave all of that alone, so it reads through here instead — migrations
 /// are applied in memory only.
 pub fn read_config() -> AppConfig {
-    let config_path = crate::project::amf_config_dir().join("config.json");
+    let config_path = crate::project::aiw_config_dir().join("config.json");
     let mut config: AppConfig = std::fs::read_to_string(&config_path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
@@ -787,9 +763,9 @@ pub fn read_config() -> AppConfig {
 }
 
 pub fn load_config() -> AppConfig {
-    let config_path = crate::project::amf_config_dir().join("config.json");
+    let config_path = crate::project::aiw_config_dir().join("config.json");
 
-    let config = if config_path.exists() {
+    if config_path.exists() {
         let mut config: AppConfig = std::fs::read_to_string(&config_path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
@@ -810,44 +786,7 @@ pub fn load_config() -> AppConfig {
             serde_json::to_string_pretty(&config).unwrap_or_default(),
         );
         config
-    };
-
-    if let Some(ref theme) = config.opencode_theme {
-        let _ = update_opencode_theme(theme);
     }
-
-    config
-}
-
-pub fn update_opencode_theme(theme: &str) -> anyhow::Result<()> {
-    let opencode_config_path = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("opencode")
-        .join("opencode.json");
-
-    let mut config: serde_json::Value = if opencode_config_path.exists() {
-        std::fs::read_to_string(&opencode_config_path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_else(|| serde_json::json!({}))
-    } else {
-        serde_json::json!({})
-    };
-
-    if let Some(obj) = config.as_object_mut() {
-        obj.insert("theme".to_string(), serde_json::json!(theme));
-    }
-
-    if let Some(parent) = opencode_config_path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-
-    std::fs::write(
-        &opencode_config_path,
-        serde_json::to_string_pretty(&config)?,
-    )?;
-
-    Ok(())
 }
 
 pub fn remove_old_diff_review_plugin(repo: &Path) {
@@ -892,46 +831,11 @@ pub fn remove_old_diff_review_plugin(repo: &Path) {
     }
 }
 
-fn ensure_opencode_plugins(workdir: &Path, mode: &VibeMode) {
-    let plugins_dir = workdir.join(".opencode").join("plugins");
-    let _ = std::fs::create_dir_all(&plugins_dir);
-    let _ = ThemeManager::inject_opencode_themes(workdir);
-
-    let bundled_plugins_dir = crate::project::amf_config_dir().join("plugins");
-    let bundled_input_request = bundled_plugins_dir.join("input-request.js");
-    let dst_input_request = plugins_dir.join("input-request.js");
-
-    let dst_change_tracker = plugins_dir.join("change-tracker.js");
-    let dst_sidebar_state = plugins_dir.join("sidebar-state.js");
-
-    // Remove stale script-based diff-review artifacts injected by older
-    // versions (the native AMF diff viewer replaced them).
-    for stale in [
-        "diff-review.js",
-        "diff-review.sh",
-        "feedback-prompt.sh",
-        "explain.sh",
-    ] {
-        let _ = std::fs::remove_file(plugins_dir.join(stale));
-    }
-    let _ = std::fs::remove_file(&dst_change_tracker);
-    let _ = std::fs::remove_file(&dst_sidebar_state);
-
-    if bundled_input_request.exists() {
-        let _ = std::fs::copy(&bundled_input_request, &dst_input_request);
-    }
-    let _ = std::fs::write(&dst_sidebar_state, SIDEBAR_STATE_JS);
-
-    if matches!(mode, VibeMode::Vibeless) {
-        let _ = std::fs::write(&dst_change_tracker, CHANGE_TRACKER_JS);
-    }
-}
-
 fn ensure_codex_notify_hook(workdir: &Path) {
     let codex_dir = workdir.join(".codex");
     let _ = std::fs::create_dir_all(&codex_dir);
 
-    let hook_path = codex_dir.join("amf-codex-notify.sh");
+    let hook_path = codex_dir.join("aiw-codex-notify.sh");
     let _ = std::fs::write(&hook_path, CODEX_NOTIFY_SH);
     #[cfg(unix)]
     {
@@ -939,8 +843,8 @@ fn ensure_codex_notify_hook(workdir: &Path) {
         let _ = std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755));
     }
 
-    let global_hook_path = crate::project::amf_config_dir().join("codex-notify.sh");
-    crate::codex_config::ensure_user_config_notify_hook(&global_hook_path);
+    // FORK: no write to ~/.codex/config.toml; the hook is passed per launch
+    // by `codex_config::launch_override_args`.
 
     let project_config_path = codex_dir.join("config.toml");
     if project_config_path.exists() {
@@ -963,18 +867,19 @@ fn ensure_codex_notify_hook(workdir: &Path) {
 fn agent_skills_dir(workdir: &Path, agent: &AgentKind) -> Option<PathBuf> {
     match agent {
         AgentKind::Claude => Some(workdir.join(".claude").join("skills")),
-        AgentKind::Opencode => Some(workdir.join(".opencode").join("skills")),
         AgentKind::Codex => Some(workdir.join(".agents").join("skills")),
         AgentKind::Pi => None,
+        // FORK: Gemini/Cursor read AGENTS.md/CLAUDE.md, not a skills dir.
+        AgentKind::Gemini | AgentKind::Cursor => None,
     }
 }
 
-fn ensure_amf_skills(workdir: &Path, agent: &AgentKind) {
+fn ensure_aiw_skills(workdir: &Path, agent: &AgentKind) {
     let Some(skills_dir) = agent_skills_dir(workdir, agent) else {
         return;
     };
-    for (name, content) in AMF_SKILLS {
-        let skill_dir = skills_dir.join(format!("amf-{name}"));
+    for (name, content) in AIW_SKILLS {
+        let skill_dir = skills_dir.join(format!("aiw-{name}"));
         let skill_path = skill_dir.join("SKILL.md");
         if std::fs::read_to_string(&skill_path).ok().as_deref() == Some(content) {
             continue;
@@ -984,12 +889,12 @@ fn ensure_amf_skills(workdir: &Path, agent: &AgentKind) {
     }
 }
 
-fn cleanup_amf_skills(workdir: &Path, agent: &AgentKind) {
+fn cleanup_aiw_skills(workdir: &Path, agent: &AgentKind) {
     let Some(skills_dir) = agent_skills_dir(workdir, agent) else {
         return;
     };
-    for (name, _) in AMF_SKILLS {
-        let _ = std::fs::remove_dir_all(skills_dir.join(format!("amf-{name}")));
+    for (name, _) in AIW_SKILLS {
+        let _ = std::fs::remove_dir_all(skills_dir.join(format!("aiw-{name}")));
     }
 }
 
@@ -1003,42 +908,12 @@ fn cleanup_claude_notification_hooks(workdir: &Path) {
 
     let _ = std::fs::remove_file(claude_dir.join("latest-prompt.txt"));
     let _ = std::fs::remove_dir_all(claude_dir.join("notifications"));
-    cleanup_amf_skills(workdir, &AgentKind::Claude);
-}
-
-fn cleanup_opencode_plugins(workdir: &Path) {
-    let plugins_dir = workdir.join(".opencode").join("plugins");
-    let themes_dir = workdir.join(".opencode").join("themes");
-    let sidebar_dir = workdir.join(".amf").join("opencode-sidebar");
-
-    for file in [
-        "input-request.js",
-        "diff-review.js",
-        "diff-review.sh",
-        "change-tracker.js",
-        "sidebar-state.js",
-        "feedback-prompt.sh",
-        "explain.sh",
-    ] {
-        let _ = std::fs::remove_file(plugins_dir.join(file));
-    }
-
-    for theme in [
-        "amf.json",
-        "amf-tokyonight.json",
-        "amf-catppuccin.json",
-        "amf-gruvbox.json",
-    ] {
-        let _ = std::fs::remove_file(themes_dir.join(theme));
-    }
-
-    let _ = std::fs::remove_dir_all(sidebar_dir);
-    cleanup_amf_skills(workdir, &AgentKind::Opencode);
+    cleanup_aiw_skills(workdir, &AgentKind::Claude);
 }
 
 fn cleanup_codex_notify_hook(workdir: &Path) {
     let codex_dir = workdir.join(".codex");
-    let hook_path = codex_dir.join("amf-codex-notify.sh");
+    let hook_path = codex_dir.join("aiw-codex-notify.sh");
 
     let _ = std::fs::remove_file(&hook_path);
     let project_config_path = codex_dir.join("config.toml");
@@ -1057,22 +932,25 @@ fn cleanup_codex_notify_hook(workdir: &Path) {
             }
         }
     }
-    cleanup_amf_skills(workdir, &AgentKind::Codex);
+    cleanup_aiw_skills(workdir, &AgentKind::Codex);
 }
 
 pub fn cleanup_agent_injected_files(workdir: &Path, agent: &AgentKind) {
     match agent {
         AgentKind::Claude => cleanup_claude_notification_hooks(workdir),
-        AgentKind::Opencode => cleanup_opencode_plugins(workdir),
         AgentKind::Codex => cleanup_codex_notify_hook(workdir),
         AgentKind::Pi => {}
+        // FORK: remove the Gemini/Cursor hooks AIW merged in.
+        AgentKind::Gemini | AgentKind::Cursor => {
+            crate::fork::extra_agents::cleanup_hooks(workdir, agent)
+        }
     }
 }
 
 fn resolve_diff_review_command(workdir: &Path, repo: &Path) -> Option<String> {
     let script_name = "custom-diff-review.sh";
     let script_suffix = ["plugins", "diff-review", "scripts", script_name];
-    let amf_root = std::env::current_exe()
+    let aiw_root = std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent()?.parent()?.parent().map(PathBuf::from));
 
@@ -1080,10 +958,10 @@ fn resolve_diff_review_command(workdir: &Path, repo: &Path) -> Option<String> {
     let mut candidates = vec![
         under_plugins(workdir.to_path_buf()),
         under_plugins(repo.to_path_buf()),
-        crate::project::amf_claude_hooks_dir().join(script_name),
+        crate::project::aiw_claude_hooks_dir().join(script_name),
     ];
-    if let Some(amf_root) = amf_root {
-        candidates.push(under_plugins(amf_root));
+    if let Some(aiw_root) = aiw_root {
+        candidates.push(under_plugins(aiw_root));
     }
 
     candidates
@@ -1100,18 +978,21 @@ pub fn ensure_notification_hooks(
     is_worktree: bool,
 ) {
     // Feature creation / restart should not depend on startup having
-    // already staged the helper scripts into the AMF runtime directory.
+    // already staged the helper scripts into the AIW runtime directory.
     ensure_notify_scripts();
     remove_old_diff_review_plugin(repo);
+    // FORK: keep the helper files below out of commits (.git/info/exclude).
+    crate::fork::git_exclude::exclude_aiw_helper_files(workdir);
 
-    if matches!(agent, AgentKind::Opencode) {
-        ensure_opencode_plugins(workdir, mode);
-        ensure_amf_skills(workdir, agent);
-        return;
-    }
     if matches!(agent, AgentKind::Codex) {
         ensure_codex_notify_hook(workdir);
-        ensure_amf_skills(workdir, agent);
+        ensure_aiw_skills(workdir, agent);
+        return;
+    }
+    // FORK: Gemini/Cursor hooks merge into .gemini/settings.json and
+    // .cursor/hooks.json (git-excluded); see src/fork/extra_agents.rs.
+    if crate::fork::extra_agents::is_extra(agent) {
+        crate::fork::extra_agents::ensure_hooks(workdir, agent);
         return;
     }
 
@@ -1119,7 +1000,7 @@ pub fn ensure_notification_hooks(
     let settings_path = claude_dir.join(CLAUDE_SETTINGS_LOCAL_JSON);
     let state_path = claude_dir.join(CLAUDE_STATE_JSON);
 
-    let hooks_dir = crate::project::amf_claude_hooks_dir();
+    let hooks_dir = crate::project::aiw_claude_hooks_dir();
     let managed_commands = claude_managed_commands();
     repair_inherited_repo_claude_hooks(workdir, repo, is_worktree, &managed_commands);
     let notify_path = hooks_dir.join("notify.sh");
@@ -1139,7 +1020,7 @@ pub fn ensure_notification_hooks(
     };
 
     let mut settings = read_json_object(&settings_path);
-    remove_amf_claude_hooks(&mut settings, &managed_commands);
+    remove_aiw_claude_hooks(&mut settings, &managed_commands);
 
     // Stop: clear active thinking + write stop notification. The turn ending
     // is what "completed, awaiting review" means for Claude.
@@ -1241,30 +1122,43 @@ pub fn ensure_notification_hooks(
     ensure_gitignore_entry(&claude_gitignore, "final-review-feedback.md");
     ensure_gitignore_entry(&claude_gitignore, "final-review-feedback-archive.md");
     ensure_gitignore_entry(&claude_gitignore, "latest-prompt.txt");
-    ensure_gitignore_entry(&claude_gitignore, "skills/amf-*/");
+    ensure_gitignore_entry(&claude_gitignore, "skills/aiw-*/");
 
-    ensure_amf_skills(workdir, agent);
+    ensure_aiw_skills(workdir, agent);
 }
 
-const PLAN_BEGIN: &str = "<!-- AMF:plan-instructions:begin -->";
-const PLAN_END: &str = "<!-- AMF:plan-instructions:end -->";
-const PLAN_IGNORE_BEGIN: &str = "# AMF:plan-instructions:begin";
-const PLAN_IGNORE_END: &str = "# AMF:plan-instructions:end";
-const REVIEW_BEGIN: &str = "<!-- AMF:review-instructions:begin -->";
-const REVIEW_END: &str = "<!-- AMF:review-instructions:end -->";
+const PLAN_BEGIN: &str = "<!-- AIW:plan-instructions:begin -->";
+const PLAN_END: &str = "<!-- AIW:plan-instructions:end -->";
+const PLAN_IGNORE_BEGIN: &str = "# AIW:plan-instructions:begin";
+const PLAN_IGNORE_END: &str = "# AIW:plan-instructions:end";
+const REVIEW_BEGIN: &str = "<!-- AIW:review-instructions:begin -->";
+const REVIEW_END: &str = "<!-- AIW:review-instructions:end -->";
 
-/// Every marker-delimited block AMF writes into a checkout. Add a new one here
-/// when adding a managed block, or review questions will treat a checkout AMF
+/// FORK: the same blocks as written before the rename (in checkouts set up by
+/// upstream AMF). Recognised so they are replaced, not duplicated; never
+/// written.
+const LEGACY_PLAN_BEGIN: &str = "<!-- AMF:plan-instructions:begin -->";
+const LEGACY_PLAN_END: &str = "<!-- AMF:plan-instructions:end -->";
+const LEGACY_PLAN_IGNORE_BEGIN: &str = "# AMF:plan-instructions:begin";
+const LEGACY_PLAN_IGNORE_END: &str = "# AMF:plan-instructions:end";
+const LEGACY_REVIEW_BEGIN: &str = "<!-- AMF:review-instructions:begin -->";
+const LEGACY_REVIEW_END: &str = "<!-- AMF:review-instructions:end -->";
+
+/// Every marker-delimited block AIW writes into a checkout. Add a new one here
+/// when adding a managed block, or review questions will treat a checkout AIW
 /// itself touched as having local changes.
-const MANAGED_BLOCKS: [(&str, &str); 3] = [
+const MANAGED_BLOCKS: [(&str, &str); 6] = [
     (PLAN_BEGIN, PLAN_END),
     (PLAN_IGNORE_BEGIN, PLAN_IGNORE_END),
     (REVIEW_BEGIN, REVIEW_END),
+    (LEGACY_PLAN_BEGIN, LEGACY_PLAN_END),
+    (LEGACY_PLAN_IGNORE_BEGIN, LEGACY_PLAN_IGNORE_END),
+    (LEGACY_REVIEW_BEGIN, LEGACY_REVIEW_END),
 ];
 
-/// `s` without any AMF-managed block — what the file would be had AMF never
-/// touched it (up to trailing whitespace, which AMF normalises on write).
-pub fn strip_amf_managed_blocks(s: &str) -> String {
+/// `s` without any AIW-managed block — what the file would be had AIW never
+/// touched it (up to trailing whitespace, which AIW normalises on write).
+pub fn strip_aiw_managed_blocks(s: &str) -> String {
     MANAGED_BLOCKS
         .iter()
         .fold(s.to_string(), |acc, (begin, end)| {
@@ -1276,13 +1170,13 @@ pub fn ensure_plan_mode_instructions(workdir: &Path, agent: &AgentKind, enabled:
     const BEGIN: &str = PLAN_BEGIN;
     const END: &str = PLAN_END;
     const BLOCK: &str = concat!(
-        "<!-- AMF:plan-instructions:begin -->\n\n",
+        "<!-- AIW:plan-instructions:begin -->\n\n",
         "## Plan Mode\n\n",
-        "This feature has a user-authored plan at `AMF_PLAN.md`.\n\n",
+        "This feature has a user-authored plan at `AIW_PLAN.md`.\n\n",
         "Before doing implementation work, read the plan. Treat its decisions ",
         "as settled unless the user says otherwise, and keep its task ",
         "checkboxes and notes current as work progresses.\n\n",
-        "<!-- AMF:plan-instructions:end -->\n",
+        "<!-- AIW:plan-instructions:end -->\n",
     );
     const AGENTS_IGNORE_BEGIN: &str = PLAN_IGNORE_BEGIN;
     const AGENTS_IGNORE_END: &str = PLAN_IGNORE_END;
@@ -1294,7 +1188,9 @@ pub fn ensure_plan_mode_instructions(workdir: &Path, agent: &AgentKind, enabled:
         "AGENTS.md"
     });
     let instruction_file_existed = md_path.exists();
-    let current = std::fs::read_to_string(&md_path).unwrap_or_default();
+    let raw = std::fs::read_to_string(&md_path).unwrap_or_default();
+    // FORK: an upstream block is replaced by AIW's, never kept alongside it.
+    let current = strip_between_markers(&raw, LEGACY_PLAN_BEGIN, LEGACY_PLAN_END);
     let has_block = current.contains(BEGIN);
     let gitignore_path = workdir.join(".gitignore");
 
@@ -1314,7 +1210,7 @@ pub fn ensure_plan_mode_instructions(workdir: &Path, agent: &AgentKind, enabled:
     }
 
     if enabled {
-        // Replace older AMF-managed content as well as injecting a missing
+        // Replace older AIW-managed content as well as injecting a missing
         // block, so upgrades can migrate plan paths and future guidance
         // without leaving restarted agents pointed at stale instructions.
         let unmanaged = if has_block {
@@ -1327,11 +1223,11 @@ pub fn ensure_plan_mode_instructions(workdir: &Path, agent: &AgentKind, enabled:
         } else {
             format!("{}\n{}", unmanaged.trim_end(), BLOCK)
         };
-        if content != current {
+        if content != raw {
             let _ = std::fs::write(&md_path, content);
         }
     } else {
-        if has_block {
+        if has_block || current != raw {
             let stripped = strip_between_markers(&current, BEGIN, END);
             if stripped.trim().is_empty() {
                 let _ = std::fs::remove_file(&md_path);
@@ -1342,9 +1238,11 @@ pub fn ensure_plan_mode_instructions(workdir: &Path, agent: &AgentKind, enabled:
 
         if !uses_claude_local
             && let Ok(ignore) = std::fs::read_to_string(&gitignore_path)
-            && ignore.contains(AGENTS_IGNORE_BEGIN)
+            && (ignore.contains(AGENTS_IGNORE_BEGIN) || ignore.contains(LEGACY_PLAN_IGNORE_BEGIN))
         {
             let stripped = strip_between_markers(&ignore, AGENTS_IGNORE_BEGIN, AGENTS_IGNORE_END);
+            let stripped =
+                strip_between_markers(&stripped, LEGACY_PLAN_IGNORE_BEGIN, LEGACY_PLAN_IGNORE_END);
             if stripped.trim().is_empty() {
                 let _ = std::fs::remove_file(&gitignore_path);
             } else {
@@ -1379,7 +1277,7 @@ pub fn ensure_review_claude_md(workdir: &Path, enabled: bool) {
     const BEGIN: &str = REVIEW_BEGIN;
     const END: &str = REVIEW_END;
     const BLOCK: &str = concat!(
-        "<!-- AMF:review-instructions:begin -->\n\n",
+        "<!-- AIW:review-instructions:begin -->\n\n",
         "## Review Mode\n\n",
         "You are in **REVIEW MODE**. When you finish a logical ",
         "batch of related changes (not after every individual ",
@@ -1387,13 +1285,13 @@ pub fn ensure_review_claude_md(workdir: &Path, enabled: bool) {
         "touched in that batch to `.claude/review-notes.md`. Keep ",
         "each note to 1-2 sentences: what changed and why.\n\n",
         "**Do not read `.claude/review-notes.md` or its archive first — ",
-        "just append.** After every turn AMF keeps only your most recent ",
+        "just append.** After every turn AIW keeps only your most recent ",
         "note per file and moves the rest to ",
         "`.claude/review-notes-archive.md`, so a later note for a file ",
         "always supersedes an earlier one. Rely on your own memory of ",
         "this session to avoid re-noting a file you have already covered ",
         "when nothing has changed; if you do re-note one, write the ",
-        "fuller current explanation and let AMF drop the stale copy.\n\n",
+        "fuller current explanation and let AIW drop the stale copy.\n\n",
         "Use this exact format per file:\n\n",
         "```\n",
         "## <relative-file-path> — <brief title>\n\n",
@@ -1403,13 +1301,15 @@ pub fn ensure_review_claude_md(workdir: &Path, enabled: bool) {
         "Appending without reading keeps the reviewer's context of your\n",
         "reasoning without spending your context window re-reading a\n",
         "growing file every batch.\n\n",
-        "<!-- AMF:review-instructions:end -->\n",
+        "<!-- AIW:review-instructions:end -->\n",
     );
 
     // CLAUDE.local.md is Claude Code's designated gitignored variant of
     // CLAUDE.md — it is read automatically but never committed.
     let md_path = workdir.join("CLAUDE.local.md");
-    let current = std::fs::read_to_string(&md_path).unwrap_or_default();
+    let raw = std::fs::read_to_string(&md_path).unwrap_or_default();
+    // FORK: an upstream block is replaced by AIW's, never kept alongside it.
+    let current = strip_between_markers(&raw, LEGACY_REVIEW_BEGIN, LEGACY_REVIEW_END);
     let has_block = current.contains(BEGIN);
 
     // Ensure CLAUDE.local.md is gitignored at the workdir root.
@@ -1430,9 +1330,9 @@ pub fn ensure_review_claude_md(workdir: &Path, enabled: bool) {
             );
         }
 
-        // Replace an older AMF-managed block as well as injecting a missing
+        // Replace an older AIW-managed block as well as injecting a missing
         // one, so existing Review Mode features receive current retention
-        // guidance after an AMF upgrade.
+        // guidance after an AIW upgrade.
         let unmanaged = if has_block {
             strip_between_markers(&current, BEGIN, END)
         } else {
@@ -1443,10 +1343,10 @@ pub fn ensure_review_claude_md(workdir: &Path, enabled: bool) {
         } else {
             format!("{}\n{}", unmanaged.trim_end(), BLOCK)
         };
-        if content != current {
+        if content != raw {
             let _ = std::fs::write(&md_path, content);
         }
-    } else if has_block {
+    } else if has_block || current != raw {
         let stripped = strip_between_markers(&current, BEGIN, END);
         if stripped.trim().is_empty() {
             let _ = std::fs::remove_file(&md_path);

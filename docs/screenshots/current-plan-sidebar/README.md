@@ -1,18 +1,18 @@
 # Current plan in the agent sidebar
 
-Captured with the repository's `/amf-screenshot` workflow from an isolated AMF
+Captured with the repository's `/aiw-screenshot` workflow from an isolated AIW
 instance against a throwaway project. The walkthrough verifies the current-plan
 sidebar section and shortcut, the read-only Markdown viewer, worktree-scoped
 plan selection, and persistence of a manually selected replacement.
 
 ## 1. The current plan is visible and has a leader shortcut
 
-The agent sidebar identifies `AMF_PLAN.md`, and the `Ctrl+Space` menu exposes
+The agent sidebar identifies `AIW_PLAN.md`, and the `Ctrl+Space` menu exposes
 `n` as **Open current plan**.
 
 ![Current plan sidebar section and leader shortcut](01-sidebar-and-shortcut.png)
 
-## 2. The current plan opens in AMF's Markdown viewer
+## 2. The current plan opens in AIW's Markdown viewer
 
 The plan opens read-only without leaving the feature's embedded session flow.
 

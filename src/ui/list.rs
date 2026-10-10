@@ -6,7 +6,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{List, ListItem}, // FORK: G11 panels come from `fork_chrome`
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -57,8 +57,10 @@ pub fn rainbow_spans(text: &str, theme: &Theme) -> Vec<Span<'static>> {
 }
 
 pub(crate) fn shorten_path(path: &Path) -> String {
-    if let Some(home) = dirs::home_dir()
-        && let Ok(rest) = path.strip_prefix(&home)
+    // FORK: home looked up once, not per row per frame.
+    static HOME: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    if let Some(home) = HOME.get_or_init(dirs::home_dir)
+        && let Ok(rest) = path.strip_prefix(home)
     {
         return format!("~/{}", rest.display());
     }
@@ -129,37 +131,10 @@ fn context_indicator_style(indicator: &ContextIndicator, theme: &Theme) -> Style
 
 pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
     let visible_height = area.height.saturating_sub(2) as usize;
-    let theme = app.theme.clone();
 
+    // FORK: G11 designed empty state.
     if app.store.projects.is_empty() {
-        let empty = Paragraph::new(Line::from(vec![
-            Span::styled(
-                " No projects yet. Press ",
-                Style::default().fg(theme.text_muted.to_color()),
-            ),
-            Span::styled(
-                "N",
-                Style::default()
-                    .fg(theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                " to create one.",
-                Style::default().fg(theme.text_muted.to_color()),
-            ),
-        ]))
-        .block(
-            Block::default()
-                .title(Span::styled(
-                    " Projects ",
-                    Style::default()
-                        .fg(theme.primary.to_color())
-                        .add_modifier(Modifier::BOLD),
-                ))
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme.border.to_color())),
-        );
-        frame.render_widget(empty, area);
+        super::fork_chrome::draw_no_projects(frame, area, &app.theme);
         return;
     }
 
@@ -173,6 +148,9 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
     };
     let end_idx = app.visible_window_end_for_items(&visible, visible_height);
     let visible_slice = &visible[start..end_idx];
+    // FORK: borrowed rather than cloned per frame; every `&mut app` call is above.
+    let theme = &app.theme;
+    let guide = super::fork_chrome::guide_style(theme);
 
     let items: Vec<ListItem> = visible_slice
         .iter()
@@ -197,7 +175,8 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
             let line = match item {
                 VisibleItem::Project(pi) => {
                     let project = &app.store.projects[*pi];
-                    let collapse_icon = if project.collapsed { ">" } else { "v" };
+                    // FORK: G11 disclosure triangles.
+                    let collapse_icon = if project.collapsed { "▸" } else { "▾" };
 
                     let mut spans = vec![
                         Span::styled(format!(" {} ", collapse_icon), Style::default().fg(muted)),
@@ -214,10 +193,15 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                     ];
 
                     if project.features.is_empty() {
-                        spans.push(Span::styled(
-                            "  (press n to add a feature)",
-                            Style::default().fg(muted),
-                        ));
+                        // FORK: G11 designed empty state.
+                        spans.extend([
+                            Span::styled(
+                                "  · no features yet — press ",
+                                Style::default().fg(muted),
+                            ),
+                            Span::styled("n", super::fork_chrome::key_style(theme)),
+                            Span::styled(" to add one", Style::default().fg(muted)),
+                        ]);
                     }
 
                     if let Some(feature_name) = app.paused_plan_interview_for_project(&project.name)
@@ -292,7 +276,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         Span::styled(
                             format!(" {} ", state.glyph(app.config.nerd_font)),
                             Style::default()
-                                .fg(state.color(&theme))
+                                .fg(state.color(theme))
                                 .add_modifier(Modifier::BOLD),
                         )
                     } else if is_waiting_for_input {
@@ -309,7 +293,9 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         let throbber = throbber_widgets_tui::Throbber::default()
                             .throbber_style(
                                 Style::default()
-                                    .fg(theme.primary.to_color())
+                                    // FORK: "working" status colour (blue in AIW themes,
+                                    // `primary` in upstream ones).
+                                    .fg(theme.status_working.to_color())
                                     .add_modifier(Modifier::BOLD),
                             )
                             .throbber_set(throbber_widgets_tui::BRAILLE_EIGHT_DOUBLE)
@@ -344,9 +330,9 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                     let collapse_icon = if feature.sessions.is_empty() {
                         " "
                     } else if feature.collapsed {
-                        ">"
+                        "▸" // FORK: G11 disclosure triangles
                     } else {
-                        "v"
+                        "▾"
                     };
 
                     let name_style = if is_being_deleted {
@@ -383,7 +369,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         )],
                         VibeMode::SuperVibe => {
                             let mut spans = vec![Span::raw(" [")];
-                            spans.extend(rainbow_spans("supervibe", &theme));
+                            spans.extend(rainbow_spans("supervibe", theme));
                             spans.push(Span::raw("]"));
                             spans
                         }
@@ -397,7 +383,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
 
                     let display_name = feature.nickname.as_ref().unwrap_or(&feature.name);
                     let mut line_spans = vec![
-                        Span::styled(connector, Style::default().fg(muted)),
+                        Span::styled(connector, guide), // FORK: G11 guide lines
                         status_dot,
                         Span::styled(format!("{} ", collapse_icon), Style::default().fg(muted)),
                         Span::styled(display_name, name_style),
@@ -451,7 +437,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                     } else if let Some(pr) = app.terminal_pr_for_feature(&feature.id) {
                         // A branch with no open PR but a merged/closed one is
                         // finished work, not "no PR" — show that instead of
-                        // nothing (see D3 in AMF_PLAN.md).
+                        // nothing (see D3 in AIW_PLAN.md).
                         let (word, color) = match pr.state {
                             crate::github::TerminalPrState::Merged => {
                                 (pr.state.label(), theme.pr_merged.to_color())
@@ -531,11 +517,19 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                                 .add_modifier(Modifier::BOLD),
                         ));
                     }
+                    // FORK: G11 metadata is dim; amber is reserved for "needs you".
                     line_spans.push(Span::styled(
                         format!(" {}", format_age(feature.created_at)),
-                        Style::default().fg(theme.warning.to_color()),
+                        Style::default().fg(theme.text_muted.to_color()),
                     ));
                     line_spans.push(Span::styled(badge, Style::default().fg(muted)));
+                    if session_count == 0 {
+                        // FORK: G11 designed empty state.
+                        line_spans.push(Span::styled(
+                            " · no sessions",
+                            Style::default().fg(theme.text_muted.to_color()),
+                        ));
+                    }
                     // Sessions stopped individually stay on the dashboard, so
                     // say how many when the feature row is collapsed over them.
                     let stopped_sessions = feature.sessions.iter().filter(|s| s.stopped).count();
@@ -566,9 +560,12 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         span.content = format!(" — {}", span.content).into();
                         line_spans.push(span);
                     } else if let Some(summary) = &feature.summary {
+                        // FORK: G11 dim italic, not amber.
                         line_spans.push(Span::styled(
                             format!(" — {}", summary),
-                            Style::default().fg(theme.warning.to_color()),
+                            Style::default()
+                                .fg(theme.text_muted.to_color())
+                                .add_modifier(Modifier::ITALIC),
                         ));
                     }
                     Line::from(line_spans)
@@ -599,10 +596,6 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                             "* ",
                             Style::default().fg(theme.session_icon_claude.to_color()),
                         ),
-                        SessionKind::Opencode => Span::styled(
-                            "* ",
-                            Style::default().fg(theme.session_icon_opencode.to_color()),
-                        ),
                         SessionKind::Codex => Span::styled(
                             "* ",
                             Style::default().fg(theme.session_icon_codex.to_color()),
@@ -610,6 +603,15 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         SessionKind::Pi => Span::styled(
                             "* ",
                             Style::default().fg(theme.session_icon_codex.to_color()),
+                        ),
+                        // FORK: Gemini/Cursor theme colours
+                        SessionKind::Gemini => Span::styled(
+                            "* ",
+                            Style::default().fg(theme.session_icon_gemini.to_color()),
+                        ),
+                        SessionKind::Cursor => Span::styled(
+                            "* ",
+                            Style::default().fg(theme.session_icon_cursor.to_color()),
                         ),
                         SessionKind::Terminal => Span::styled(
                             "> ",
@@ -713,7 +715,8 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         + UnicodeWidthStr::width(branch)
                         + UnicodeWidthStr::width(state_icon.content.as_ref())
                         + UnicodeWidthStr::width(kind_icon.content.as_ref());
-                    let row_width = usize::from(area.width.saturating_sub(2));
+                    // FORK: G11 borders + one column of padding each side.
+                    let row_width = usize::from(area.width.saturating_sub(4));
                     let (display_label, show_context_indicator) = fit_session_label(
                         &session.label,
                         prefix_width,
@@ -721,14 +724,14 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         context_indicator.as_ref(),
                     );
                     let mut main_spans = vec![
-                        Span::styled(vert, Style::default().fg(muted)),
-                        Span::styled(branch, Style::default().fg(muted)),
+                        Span::styled(vert, guide), // FORK: G11 guide lines
+                        Span::styled(branch, guide),
                         state_icon,
                         kind_icon,
                         Span::styled(display_label, name_style),
                     ];
                     if show_context_indicator && let Some(indicator) = context_indicator {
-                        let style = context_indicator_style(&indicator, &theme);
+                        let style = context_indicator_style(&indicator, theme);
                         main_spans.push(Span::raw("  "));
                         main_spans.push(Span::styled(indicator.text, style));
                     }
@@ -742,8 +745,8 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                             "   │   "
                         };
                         let status_line = Line::from(vec![
-                            Span::styled(status_vert, Style::default().fg(muted)),
-                            Span::styled(status_pad, Style::default().fg(muted)),
+                            Span::styled(status_vert, guide), // FORK: G11 guide lines
+                            Span::styled(status_pad, guide),
                             Span::styled(
                                 text.as_str(),
                                 Style::default().fg(theme.status_detail.to_color()),
@@ -769,19 +772,81 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
         })
         .collect();
 
-    let list = List::new(items).block(
-        Block::default()
-            .title(Span::styled(
-                " Projects ",
-                Style::default()
-                    .fg(theme.primary.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border.to_color())),
-    );
+    // FORK: G11 rounded, padded panel with dim totals on the right and an
+    // accent bar beside the selected row (drawn in the left padding column).
+    let mut selected_rows = None;
+    let mut offset = 0usize;
+    for item in visible_slice {
+        let height = item_height(app, item);
+        if item_is_selected(app, item) {
+            selected_rows = Some(offset..offset + height);
+            break;
+        }
+        offset += height;
+    }
+    let block = super::fork_chrome::padded_panel(" Projects ", theme)
+        .title(list_totals(app, theme).right_aligned());
+    let list = List::new(items).block(block);
 
     frame.render_widget(list, area);
+
+    if let Some(rows) = selected_rows {
+        let inner_height = usize::from(area.height.saturating_sub(2));
+        let bar_style = super::fork_chrome::key_style(theme);
+        for row in rows.start..rows.end.min(inner_height) {
+            let position = (area.x + 1, area.y + 1 + row as u16);
+            if let Some(cell) = frame.buffer_mut().cell_mut(position) {
+                cell.set_symbol("▎").set_style(bar_style);
+            }
+        }
+    }
+}
+
+/// FORK: whether `item` is the selected row.
+fn item_is_selected(app: &App, item: &VisibleItem) -> bool {
+    match (&app.selection, item) {
+        (Selection::Project(a), VisibleItem::Project(b)) => a == b,
+        (Selection::Feature(a1, a2), VisibleItem::Feature(b1, b2)) => a1 == b1 && a2 == b2,
+        (Selection::Session(a1, a2, a3), VisibleItem::Session(b1, b2, b3)) => {
+            a1 == b1 && a2 == b2 && a3 == b3
+        }
+        _ => false,
+    }
+}
+
+/// FORK: rows a list item takes (a session with status text takes two).
+fn item_height(app: &App, item: &VisibleItem) -> usize {
+    match item {
+        VisibleItem::Session(pi, fi, si) => {
+            let session = &app.store.projects[*pi].features[*fi].sessions[*si];
+            if session.status_text.is_some() { 2 } else { 1 }
+        }
+        _ => 1,
+    }
+}
+
+/// FORK: the list panel's right-hand title: `3 projects · 12 features · 30 sessions`.
+fn list_totals(app: &App, theme: &Theme) -> Line<'static> {
+    let projects = app.store.projects.len();
+    let (features, sessions) = app
+        .store
+        .projects
+        .iter()
+        .flat_map(|project| project.features.iter())
+        .fold((0, 0), |(features, sessions), feature| {
+            (features + 1, sessions + feature.sessions.len())
+        });
+    let plural =
+        |count: usize, word: &str| format!("{count} {word}{}", if count == 1 { "" } else { "s" });
+    Line::from(Span::styled(
+        format!(
+            " {} · {} · {} ",
+            plural(projects, "project"),
+            plural(features, "feature"),
+            plural(sessions, "session")
+        ),
+        super::fork_chrome::dim_style(theme),
+    ))
 }
 
 #[cfg(test)]
@@ -922,7 +987,7 @@ mod tests {
             branch: "usage-feat".to_string(),
             workdir: PathBuf::from("/tmp/usage-feat"),
             is_worktree: true,
-            tmux_session: "amf-usage-feat".to_string(),
+            tmux_session: "aiw-usage-feat".to_string(),
             sessions,
             collapsed: true,
             mode: VibeMode::default(),
@@ -1025,7 +1090,7 @@ mod tests {
             branch: "usage-feat".to_string(),
             workdir: PathBuf::from("/tmp/usage-feat"),
             is_worktree: true,
-            tmux_session: "amf-usage-feat".to_string(),
+            tmux_session: "aiw-usage-feat".to_string(),
             sessions: vec![session],
             collapsed: false,
             mode: VibeMode::default(),
@@ -1099,12 +1164,7 @@ mod tests {
 
     #[test]
     fn every_supported_agent_row_shows_its_context_indicator() {
-        for kind in [
-            SessionKind::Claude,
-            SessionKind::Codex,
-            SessionKind::Opencode,
-            SessionKind::Pi,
-        ] {
+        for kind in [SessionKind::Claude, SessionKind::Codex, SessionKind::Pi] {
             let rendered = buffer_text(&render_session_row(
                 kind.clone(),
                 "Agent session",
@@ -1186,8 +1246,8 @@ mod tests {
     #[test]
     fn narrow_rows_truncate_the_name_and_keep_the_critical_text() {
         let rendered = buffer_text(&render_session_row(
-            SessionKind::Opencode,
-            "A very long OpenCode session name",
+            SessionKind::Codex,
+            "A very long Codex session name",
             Some(context_snapshot(
                 91,
                 ContextBand::Critical,

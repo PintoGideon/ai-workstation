@@ -22,7 +22,7 @@ it("keeps independent choices across remounts and fresh preference reads", () =>
   fireEvent.click(screen.getByRole("button", { name: "Hide projects sidebar" }));
   expect(screen.queryByRole("navigation")).toBeNull();
   expect(screen.getByRole("button", { name: "Hide agent" })).toBeTruthy();
-  expect(localStorage.getItem("amf.gui.collapsed.projectsSidebar")).toBe("1");
+  expect(localStorage.getItem("aiw.gui.collapsed.projectsSidebar")).toBe("1");
   first.unmount();
   resetSidebarPrefsForTest();
   render(<Layout />);
@@ -31,8 +31,8 @@ it("keeps independent choices across remounts and fresh preference reads", () =>
   chord(window, "P");
   expect(screen.getByRole("navigation", { name: "Workspace" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Show agent" })).toBeTruthy();
-  expect(localStorage.getItem("amf.gui.collapsed.projectsSidebar")).toBe("0");
-  expect(localStorage.getItem("amf.gui.collapsed.sessionSidebar")).toBe("1");
+  expect(localStorage.getItem("aiw.gui.collapsed.projectsSidebar")).toBe("0");
+  expect(localStorage.getItem("aiw.gui.collapsed.sessionSidebar")).toBe("1");
 });
 
 it("leaves terminal, editable, repeated and dialog keys alone", () => {

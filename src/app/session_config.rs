@@ -264,34 +264,41 @@ impl App {
 fn is_agent_session(kind: &SessionKind) -> bool {
     matches!(
         kind,
-        SessionKind::Claude | SessionKind::Opencode | SessionKind::Codex | SessionKind::Pi
+        SessionKind::Claude
+            | SessionKind::Codex
+            | SessionKind::Pi
+            | SessionKind::Gemini // FORK
+            | SessionKind::Cursor
     )
 }
 
 fn session_kind_for_agent(agent: &AgentKind) -> SessionKind {
     match agent {
         AgentKind::Claude => SessionKind::Claude,
-        AgentKind::Opencode => SessionKind::Opencode,
         AgentKind::Codex => SessionKind::Codex,
         AgentKind::Pi => SessionKind::Pi,
+        AgentKind::Gemini => SessionKind::Gemini, // FORK
+        AgentKind::Cursor => SessionKind::Cursor, // FORK
     }
 }
 
 fn session_label_base(agent: &AgentKind) -> &'static str {
     match agent {
         AgentKind::Claude => "Claude",
-        AgentKind::Opencode => "Opencode",
         AgentKind::Codex => "Codex",
         AgentKind::Pi => "Pi",
+        AgentKind::Gemini => "Gemini", // FORK
+        AgentKind::Cursor => "Cursor", // FORK
     }
 }
 
 fn session_window_prefix(agent: &AgentKind) -> &'static str {
     match agent {
         AgentKind::Claude => "claude",
-        AgentKind::Opencode => "opencode",
         AgentKind::Codex => "codex",
         AgentKind::Pi => "pi",
+        AgentKind::Gemini => "gemini", // FORK
+        AgentKind::Cursor => "cursor", // FORK
     }
 }
 

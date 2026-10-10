@@ -2,7 +2,7 @@
 """Offline `gh` for the sidebar-parity capture: answers only the dashboard
 PR sweep's two read-only GraphQL queries and refuses everything else.
 
-Every invocation is appended to $AMF_GUI_GH_CALLS so the capture can prove
+Every invocation is appended to $AIW_GUI_GH_CALLS so the capture can prove
 that no other GitHub command (and no write) ran.
 """
 
@@ -12,7 +12,7 @@ import re
 import sys
 
 args = sys.argv[1:]
-with open(os.environ["AMF_GUI_GH_CALLS"], "a") as log:
+with open(os.environ["AIW_GUI_GH_CALLS"], "a") as log:
     log.write(json.dumps(args) + "\n")
 
 if args[:2] != ["api", "graphql"]:

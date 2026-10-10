@@ -19,7 +19,7 @@ import urllib.request
 out = pathlib.Path(sys.argv[1]).resolve()
 out.mkdir(parents=True, exist_ok=True)
 workspace = pathlib.Path(__file__).resolve().parents[3]
-with tempfile.TemporaryDirectory(prefix="amf-gui-review-ai-") as temporary:
+with tempfile.TemporaryDirectory(prefix="aiw-gui-review-ai-") as temporary:
     scratch = pathlib.Path(temporary)
     with socket.socket() as inspector_socket:
         inspector_socket.bind(("127.0.0.1", 0))
@@ -27,8 +27,8 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-review-ai-") as temporary:
     config = scratch / "config"
     state = scratch / "state"
     repo = scratch / "demo-api"
-    (config / "amf").mkdir(parents=True)
-    (state / "amf").mkdir(parents=True)
+    (config / "ai_workstation").mkdir(parents=True)
+    (state / "ai_workstation").mkdir(parents=True)
     repo.mkdir()
     env = os.environ.copy()
     env.update(
@@ -46,14 +46,14 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-review-ai-") as temporary:
     # CLI fixtures are private to this capture. Never call a paid harness.
     fixture_bin = scratch / "bin"
     fixture_bin.mkdir()
-    for harness in ["claude", "codex", "opencode", "pi"]:
+    for harness in ["claude", "codex", "pi"]:
         destination = fixture_bin / harness
         shutil.copyfile(workspace / "scripts/dev/screenshot/fixtures/gui-review-ai-harness.py", destination)
         destination.chmod(0o755)
     env["PATH"] = str(fixture_bin) + os.pathsep + env["PATH"]
-    env["AMF_GUI_AI_CALLS"] = str(scratch / "ai-calls.jsonl")
-    pathlib.Path(env["AMF_GUI_AI_CALLS"]).write_text("")
-    env["AMF_TMUX_SOCKET"] = str(scratch / "private-tmux.sock")
+    env["AIW_GUI_AI_CALLS"] = str(scratch / "ai-calls.jsonl")
+    pathlib.Path(env["AIW_GUI_AI_CALLS"]).write_text("")
+    env["AIW_TMUX_SOCKET"] = str(scratch / "private-tmux.sock")
     # Claude discovery prefers HOME's native versions over PATH. Mount an
     # empty directory over them only inside this GUI's namespace, preserving
     # HOME and leaving the installed binaries untouched.
@@ -61,7 +61,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-review-ai-") as temporary:
     empty_versions.mkdir()
     gui_pid_path = scratch / "gui.pid"
     command = ["/bin/sh", "-c", 'echo "$$" > "$1"; exec "$2"', "gui-capture",
-               str(gui_pid_path), str(workspace / "target/debug/amf-gui")]
+               str(gui_pid_path), str(workspace / "target/debug/aiw-gui")]
     versions = pathlib.Path.home() / ".local/share/claude/versions"
     if versions.exists():
         if not shutil.which("bwrap"):
@@ -74,9 +74,9 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-review-ai-") as temporary:
     git_env = env | {
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "AMF demo",
+        "GIT_AUTHOR_NAME": "AIW demo",
         "GIT_AUTHOR_EMAIL": "demo@example.com",
-        "GIT_COMMITTER_NAME": "AMF demo",
+        "GIT_COMMITTER_NAME": "AIW demo",
         "GIT_COMMITTER_EMAIL": "demo@example.com",
     }
 
@@ -124,7 +124,7 @@ export function formatTotal(total: number): string {
     )
     (repo / "receipt.bin").write_bytes(b"\0receipt\0image")
     git("add", "receipt.bin")
-    (repo / ".git/amf-gui-ai-fixture").write_text("offline fixture")
+    (repo / ".git/aiw-gui-ai-fixture").write_text("offline fixture")
     # Do not accidentally capture a different Vite server on the pinned port.
     try:
         with socket.create_connection(("localhost", 1420), timeout=1):
@@ -162,7 +162,7 @@ export function formatTotal(total: number): string {
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
-        dbpath = config / "amf/amf.db"
+        dbpath = config / "ai_workstation/aiw.db"
         for _ in range(60):
             if gui.poll() is not None:
                 raise RuntimeError(
@@ -195,7 +195,7 @@ export function formatTotal(total: number): string {
                     "Round invoice totals",
                     "round-invoice-totals",
                     str(repo),
-                    "amf-gui-shot-unused",
+                    "aiw-gui-shot-unused",
                     "stopped",
                     stamp,
                     stamp,
@@ -211,7 +211,7 @@ export function formatTotal(total: number): string {
         subprocess.run(
             [
                 "/usr/bin/python3",
-                env.get("AMF_GUI_AI_FRAMES", str(workspace / "scripts/dev/screenshot/capture-gui-review-ai-frames.py")),
+                env.get("AIW_GUI_AI_FRAMES", str(workspace / "scripts/dev/screenshot/capture-gui-review-ai-frames.py")),
                 str(out),
                 gui_pid_path.read_text().strip(),
                 inspector_address,
@@ -230,7 +230,7 @@ export function formatTotal(total: number): string {
             assert (
                 db.execute("SELECT count(*) FROM feature_sessions").fetchone()[0] == 0
             )
-        shutil.copyfile(env["AMF_GUI_AI_CALLS"], out / "fixture-calls.jsonl")
+        shutil.copyfile(env["AIW_GUI_AI_CALLS"], out / "fixture-calls.jsonl")
     finally:
         for child in [gui, vite]:
             if child and child.poll() is None:
@@ -242,7 +242,7 @@ export function formatTotal(total: number): string {
                     child.wait()
         # The GUI's tmux observer daemonizes onto the private socket; stop
         # that server too so no capture process outlives the run.
-        subprocess.run(["tmux", "-S", env["AMF_TMUX_SOCKET"], "kill-server"],
+        subprocess.run(["tmux", "-S", env["AIW_TMUX_SOCKET"], "kill-server"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         gui_log.close()
         vite_log.close()

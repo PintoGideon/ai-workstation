@@ -74,8 +74,9 @@ impl GuiHandle {
         let kind = match self.app.store.projects[pi].features[fi].agent {
             AgentKind::Claude => SessionKind::Claude,
             AgentKind::Codex => SessionKind::Codex,
-            AgentKind::Opencode => SessionKind::Opencode,
             AgentKind::Pi => SessionKind::Pi,
+            AgentKind::Gemini => SessionKind::Gemini, // FORK
+            AgentKind::Cursor => SessionKind::Cursor, // FORK
         };
         let added = self.add_session(
             FeatureTarget {

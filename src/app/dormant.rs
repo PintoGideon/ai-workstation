@@ -3,7 +3,7 @@
 //! Dormancy is deliberately an **and** of two independent signals:
 //!
 //! - the agent has produced no output for N minutes (tmux's own
-//!   `window_activity`, which survives AMF restarts), and
+//!   `window_activity`, which survives AIW restarts), and
 //! - the feature has not been opened for X hours (`Feature::last_accessed`).
 //!
 //! Either alone is a bad signal. An agent can sit quiet for an hour while you
@@ -31,7 +31,7 @@ pub struct DormantFeature {
     pub feature_name: String,
     /// Since the agent last produced output.
     pub idle: Duration,
-    /// Since the feature was last opened in AMF.
+    /// Since the feature was last opened in AIW.
     pub unattended: Duration,
     pub workdir: PathBuf,
     /// Only a worktree can be reclaimed by deleting it; the repo dir cannot.
@@ -102,7 +102,7 @@ pub fn dormant_features(
     for (pi, project) in store.projects.iter().enumerate() {
         for (fi, feature) in project.features.iter().enumerate() {
             // A stopped feature has no agent to be idle. Whatever it still
-            // holds on disk is `amf doctor`'s department.
+            // holds on disk is `aiw doctor`'s department.
             if feature.status == ProjectStatus::Stopped {
                 continue;
             }
@@ -231,7 +231,7 @@ impl App {
         Ok(())
     }
 
-    /// Close the editor AMF opened for the selected feature, leaving the agent
+    /// Close the editor AIW opened for the selected feature, leaving the agent
     /// running — the language server is usually the larger half.
     pub fn dormant_kill_editor_selected(&mut self) {
         let Some(target) = self.selected_dormant() else {
@@ -371,7 +371,7 @@ mod tests {
             branch: name.to_string(),
             workdir: PathBuf::from("/tmp").join(name),
             is_worktree: true,
-            tmux_session: format!("amf-{name}"),
+            tmux_session: format!("aiw-{name}"),
             sessions: Vec::new(),
             collapsed: true,
             mode: VibeMode::default(),
@@ -418,10 +418,10 @@ mod tests {
         };
 
         let activity = HashMap::from([
-            ("amf-quiet".to_string(), ago(now, 2 * 3600)),
-            ("amf-quieter".to_string(), ago(now, 6 * 3600)),
-            ("amf-busy".to_string(), now),
-            ("amf-stopped".to_string(), ago(now, 40 * 3600)),
+            ("aiw-quiet".to_string(), ago(now, 2 * 3600)),
+            ("aiw-quieter".to_string(), ago(now, 6 * 3600)),
+            ("aiw-busy".to_string(), now),
+            ("aiw-stopped".to_string(), ago(now, 40 * 3600)),
         ]);
 
         let dormant = dormant_features(&store, &activity, now, IDLE, UNATTENDED, &|_| false);
@@ -437,17 +437,17 @@ mod tests {
     #[test]
     fn latest_activity_takes_the_busiest_window_in_a_session() {
         let activity = vec![
-            ("amf-a".to_string(), "claude".to_string(), 1_000),
-            ("amf-a".to_string(), "terminal".to_string(), 5_000),
-            ("amf-b".to_string(), "claude".to_string(), 2_000),
+            ("aiw-a".to_string(), "claude".to_string(), 1_000),
+            ("aiw-a".to_string(), "terminal".to_string(), 5_000),
+            ("aiw-b".to_string(), "claude".to_string(), 2_000),
         ];
         let latest = latest_activity_by_session(&activity);
         assert_eq!(
-            latest["amf-a"],
+            latest["aiw-a"],
             Utc.timestamp_opt(5_000, 0).single().unwrap()
         );
         assert_eq!(
-            latest["amf-b"],
+            latest["aiw-b"],
             Utc.timestamp_opt(2_000, 0).single().unwrap()
         );
     }

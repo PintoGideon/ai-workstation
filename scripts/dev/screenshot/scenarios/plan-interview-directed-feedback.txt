@@ -6,7 +6,7 @@
 # tokens on synthesis. The scenario stops in the instruction editor and makes
 # no directed-revision call.
 
-run:python3 "$SCRIPT_DIR/seed_plan_draft.py" "$XDG_CONFIG_HOME/amf/amf.db"
+run:python3 "$SCRIPT_DIR/seed_plan_draft.py" "$XDG_CONFIG_HOME/ai_workstation/aiw.db"
 wait:500
 
 # Select the seeded feature, open its on-demand interview, and resume the

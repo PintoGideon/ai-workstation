@@ -15,7 +15,7 @@ export interface ThemeCatalog {
   errors: string[];
   directory: string;
 }
-const key = "amf.gui.theme";
+const key = "aiw.gui.theme";
 const listeners = new Set<() => void>();
 let preference: string | undefined;
 export function readThemePreference(): string {
@@ -70,7 +70,7 @@ export function applyTheme(theme: GuiTheme | undefined) {
   root.style.removeProperty("--terminal-bg");
   if (theme?.terminal.background) root.style.setProperty("--terminal-bg", theme.terminal.background);
   else if (theme?.tokens["terminal-bg"]) root.style.setProperty("--terminal-bg", theme.tokens["terminal-bg"]);
-  window.dispatchEvent(new Event("amf-theme-change"));
+  window.dispatchEvent(new Event("aiw-theme-change"));
 }
 export function resetThemesForTest() {
   preference = undefined;

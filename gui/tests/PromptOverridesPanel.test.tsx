@@ -34,7 +34,7 @@ const view = (rows: OverrideRow[] = [walkthrough, summary], extra: Partial<Overr
   context, context_label: "Project / Feature", repo: "/repo", workdir: "/worktree", harness: "codex",
   scopes: [
     { scope: "feature", label: "This feature", available: true, reason: null },
-    { scope: "project", label: "This project (amf.json)", available: true, reason: null },
+    { scope: "project", label: "This project (aiw.json)", available: true, reason: null },
     { scope: "global", label: "Global (all projects)", available: true, reason: null },
   ], project_config_error: null, rows, ...extra,
 });
@@ -68,7 +68,7 @@ it("lists every prompt with its source and shows the effective template, placeho
   fireEvent.click(screen.getByText("Built-in default"));
   expect(screen.getByLabelText("Built-in default").textContent).toBe("Summarize {{recent_lines}}");
   const slots = screen.getAllByRole("listitem").map((item) => item.textContent);
-  expect(slots[0]).toContain("Project (amf.json) · all harnesses");
+  expect(slots[0]).toContain("Project (aiw.json) · all harnesses");
   expect(slots[1]).toContain("Global · Codex");
   expect(slots[1]).toContain("in effect");
   expect(calls("prompt_overrides_load")[0][1]).toEqual({ context, harness: null });
@@ -85,7 +85,7 @@ it("saves a new override at the chosen scope and harness with the revision it wa
   fireEvent.change(template(), { target: { value: "Mine" } });
   const button = screen.getByRole("button", { name: "Save override" });
   fireEvent.click(button); fireEvent.click(button);
-  await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Saved the Project (amf.json) · Pi override"));
+  await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Saved the Project (aiw.json) · Pi override"));
   expect(save).toHaveBeenCalledTimes(1);
   expect(save).toHaveBeenCalledWith({ context, prompt_id: "review.walkthrough", scope: "project", harness: "pi",
     template: "Mine", revision: "r1", view_harness: null });
@@ -141,7 +141,7 @@ it("protects unsaved edits on Escape, prompt switches and context changes, and o
   fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
   expect(screen.getByLabelText("Effective template").textContent).toBe("GLOBAL codex {{recent_lines}}");
 
-  fireEvent.click(screen.getByRole("button", { name: "Edit Project (amf.json) · all harnesses" }));
+  fireEvent.click(screen.getByRole("button", { name: "Edit Project (aiw.json) · all harnesses" }));
   expect(template().value).toBe("PROJECT {{recent_lines}}");
   fireEvent.change(template(), { target: { value: "edited" } });
   fireEvent.change(screen.getByRole("combobox", { name: "Override context" }), { target: { value: JSON.stringify({ kind: "global" }) } });
@@ -207,12 +207,12 @@ it("explains why a pending call's manager opened on Global until another context
   await act(async () => undefined);
 });
 
-it("reports a broken amf.json and disables unavailable scopes with their reason", async () => {
+it("reports a broken aiw.json and disables unavailable scopes with their reason", async () => {
   mount(() => view([walkthrough], {
-    project_config_error: "/repo/amf.json is not valid JSON (EOF); fix it first",
+    project_config_error: "/repo/aiw.json is not valid JSON (EOF); fix it first",
     scopes: [
-      { scope: "feature", label: "This feature", available: false, reason: "No AMF database is open" },
-      { scope: "project", label: "This project (amf.json)", available: false, reason: "/repo/amf.json is not valid JSON (EOF); fix it first" },
+      { scope: "feature", label: "This feature", available: false, reason: "No AIW database is open" },
+      { scope: "project", label: "This project (aiw.json)", available: false, reason: "/repo/aiw.json is not valid JSON (EOF); fix it first" },
       { scope: "global", label: "Global (all projects)", available: true, reason: null },
     ],
   }));
@@ -222,7 +222,7 @@ it("reports a broken amf.json and disables unavailable scopes with their reason"
   expect(scope.value).toBe("global");
   const options = Array.from(scope.options);
   expect(options.find((option) => option.value === "project")?.disabled).toBe(true);
-  expect(options.find((option) => option.value === "feature")?.textContent).toContain("No AMF database is open");
+  expect(options.find((option) => option.value === "feature")?.textContent).toContain("No AIW database is open");
   fireEvent.change(template(), { target: { value: "   " } });
   expect((screen.getByRole("button", { name: "Save override" }) as HTMLButtonElement).disabled).toBe(true);
   await act(async () => undefined);

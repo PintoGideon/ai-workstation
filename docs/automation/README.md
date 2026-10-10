@@ -1,23 +1,23 @@
 # Automation
 
-AMF now exposes machine-friendly automation entrypoints:
+AIW now exposes machine-friendly automation entrypoints:
 
 ```bash
-amf automation create-project --file docs/automation/create-project.example.json
-amf automation create-feature --file docs/automation/create-feature.example.json
-amf automation create-batch-features --file docs/automation/create-batch-features.example.json
-amf automation seed-ai-review --file docs/automation/seed-ai-review.template.json
+aiw automation create-project --file docs/automation/create-project.example.json
+aiw automation create-feature --file docs/automation/create-feature.example.json
+aiw automation create-batch-features --file docs/automation/create-batch-features.example.json
+aiw automation seed-ai-review --file docs/automation/seed-ai-review.template.json
 ```
 
-The command sends a request to the running AMF dashboard over the same local IPC system used by hook notifications. AMF applies the request inside the dashboard process and prints a JSON response.
+The command sends a request to the running AIW dashboard over the same local IPC system used by hook notifications. AIW applies the request inside the dashboard process and prints a JSON response.
 
 ## Requirements
 
-- A normal `amf` dashboard instance must already be running.
+- A normal `aiw` dashboard instance must already be running.
 - For `create-project`, `path` must exist.
-- For `create-feature`, `project_name` must already exist in AMF.
+- For `create-feature`, `project_name` must already exist in AIW.
 - For `create-batch-features`, `workspace_path` must be inside a git repository.
-- For `create-project` and `create-batch-features`, `project_name` must not already exist in AMF.
+- For `create-project` and `create-batch-features`, `project_name` must not already exist in AIW.
 
 ## Seed AI Review (screenshot fixture only)
 
@@ -28,7 +28,7 @@ used to fabricate a real review result.
 
 Use [`seed-ai-review.template.json`](seed-ai-review.template.json) as the
 field reference. With `open: true`, `workdir` and `repository` (`owner/name`)
-are required and AMF opens the fixture pane immediately. Screenshot CI uses
+are required and AIW opens the fixture pane immediately. Screenshot CI uses
 this mode so a scenario can prove review presentation and the post disclosure
 without any authenticated Claude/Codex harness.
 
@@ -36,11 +36,11 @@ For a local visual check, the repository scenario supplies those fields from
 the environment and opens the fixture in the isolated screenshot harness:
 
 ```bash
-AMF_SCREENSHOT_PR_NUMBER=123 \
+AIW_SCREENSHOT_PR_NUMBER=123 \
 GITHUB_REPOSITORY=owner/repository \
-scripts/dev/screenshot/amf-capture.sh \
+scripts/dev/screenshot/aiw-capture.sh \
   --scenario scripts/dev/screenshot/scenarios/ai-review-completed-fixture.txt \
-  --out-dir /tmp/amf-ai-review-fixture
+  --out-dir /tmp/aiw-ai-review-fixture
 ```
 
 ## Create Project
@@ -49,15 +49,15 @@ Use [`create-project.template.json`](create-project.template.json) as the contra
 
 Fields:
 
-- `path`: repo or directory to register as the AMF project
-- `project_name`: the AMF-visible project name
-- `dry_run`: validate and preview without changing AMF state
+- `path`: repo or directory to register as the AIW project
+- `project_name`: the AIW-visible project name
+- `dry_run`: validate and preview without changing AIW state
 
 Example:
 
 ```bash
-cat docs/automation/create-project.example.json | amf automation create-project --dry-run
-amf automation create-project --file docs/automation/create-project.example.json
+cat docs/automation/create-project.example.json | aiw automation create-project --dry-run
+aiw automation create-project --file docs/automation/create-project.example.json
 ```
 
 Typical success response:
@@ -82,22 +82,22 @@ Use [`create-feature.template.json`](create-feature.template.json) as the contra
 
 Fields:
 
-- `project_name`: an existing AMF project
+- `project_name`: an existing AIW project
 - `branch`: feature / branch name to create
-- `agent`: `claude`, `codex`, or `opencode`
+- `agent`: `claude`, `codex`, `pi`, `gemini` or `cursor`
 - `mode`: `vibeless`, `vibe`, or `supervibe`
 - `review`: separate toggle for diff-review / final-review flows
 - `use_worktree`: whether to create a git worktree or reuse the project repo
 - `hook_choice`: optional answer for prompted `on_worktree_created` hooks
-- `dry_run`: validate and preview without changing AMF state
+- `dry_run`: validate and preview without changing AIW state
 
 If a repo has a prompted `on_worktree_created` hook, `--dry-run` returns a `worktree_hook_prompt` object with the hook title and valid options. An agent can use that response to pick a `hook_choice` before making the real call.
 
 Example:
 
 ```bash
-cat docs/automation/create-feature.example.json | amf automation create-feature --dry-run
-amf automation create-feature --file docs/automation/create-feature.example.json
+cat docs/automation/create-feature.example.json | aiw automation create-feature --dry-run
+aiw automation create-feature --file docs/automation/create-feature.example.json
 ```
 
 Typical success response:
@@ -112,7 +112,7 @@ Typical success response:
   "branch": "automation-feature",
   "workdir": "/home/you/code/my-repo/.worktrees/automation-feature",
   "is_worktree": true,
-  "tmux_session": "amf-automation-feature",
+  "tmux_session": "aiw-automation-feature",
   "started": true,
   "worktree_hook_ran": false,
   "worktree_hook_prompt": {
@@ -130,26 +130,26 @@ Use [`create-batch-features.template.json`](create-batch-features.template.json)
 Key fields:
 
 - `workspace_path`: any path inside the target repo
-- `project_name`: the AMF project to create
+- `project_name`: the AIW project to create
 - `feature_count`: how many parallel features to create
 - `feature_prefix`: generated features will be `prefix1`, `prefix2`, ...
-- `agent`: `claude`, `codex`, or `opencode`
+- `agent`: `claude`, `codex`, `pi`, `gemini` or `cursor`
 - `mode`: `vibeless`, `vibe`, or `supervibe`
 - `review`: separate toggle for diff-review / final-review flows
-- `dry_run`: validate and preview without changing AMF state
+- `dry_run`: validate and preview without changing AIW state
 
 ## Example
 
 Dry run from stdin:
 
 ```bash
-cat docs/automation/create-batch-features.example.json | amf automation create-batch-features --dry-run
+cat docs/automation/create-batch-features.example.json | aiw automation create-batch-features --dry-run
 ```
 
 Apply from a file:
 
 ```bash
-amf automation create-batch-features --file docs/automation/create-batch-features.example.json
+aiw automation create-batch-features --file docs/automation/create-batch-features.example.json
 ```
 
 Typical success response:
@@ -168,7 +168,7 @@ Typical success response:
       "name": "plan-1",
       "branch": "plan-1",
       "workdir": "/home/you/code/my-repo/.worktrees/plan-1",
-      "tmux_session": "amf-plan-1",
+      "tmux_session": "aiw-plan-1",
       "started": true
     }
   ],

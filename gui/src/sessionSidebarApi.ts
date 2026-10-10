@@ -50,7 +50,7 @@ export interface SessionSidebarSection {
 
 export interface SessionSidebarView {
   session_id: string;
-  harness: "claude" | "codex" | "opencode" | "pi";
+  harness: "claude" | "codex" | "pi" | "gemini" | "cursor"; // FORK
   title: string;
   sections: SessionSidebarSection[];
   notes: string[];

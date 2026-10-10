@@ -20,7 +20,7 @@ wait:900
 key:c
 wait:500
 
-run:AMF_BIN="$AMF_BIN" "$SCRIPT_DIR/seed-ai-review-fixture.sh" >/dev/null
+run:AIW_BIN="$AIW_BIN" "$SCRIPT_DIR/seed-ai-review-fixture.sh" >/dev/null
 wait:300
 
 key:A

@@ -25,7 +25,7 @@ impl App {
             .any(|other| other.id != feature.id && other.tmux_session == feature.tmux_session)
     }
 
-    /// A legacy feature may still have a name such as `amf-main`, shared with
+    /// A legacy feature may still have a name such as `aiw-main`, shared with
     /// another project. Never treat that other feature's tmux session as ours.
     pub(crate) fn disambiguate_feature_tmux_session(&mut self, pi: usize, fi: usize) -> Result<()> {
         let Some(feature) = self.store.projects.get(pi).and_then(|p| p.features.get(fi)) else {
@@ -81,9 +81,10 @@ impl App {
     pub(crate) fn default_session_name_for_agent(agent: &AgentKind) -> String {
         match agent {
             AgentKind::Claude => "Claude 1".to_string(),
-            AgentKind::Opencode => "Opencode 1".to_string(),
             AgentKind::Codex => "Codex 1".to_string(),
             AgentKind::Pi => "Pi 1".to_string(),
+            AgentKind::Gemini => "Gemini 1".to_string(), // FORK
+            AgentKind::Cursor => "Cursor 1".to_string(), // FORK
         }
     }
 
@@ -100,8 +101,16 @@ impl App {
         let detail = error.to_string();
         if detail.contains("Worktree path already exists") {
             format!("A worktree named '{branch}' already exists for this repo")
-        } else if detail.contains("already checked out") {
-            format!("Branch '{branch}' is already checked out in another worktree")
+        // FORK: git's old ("already checked out at") and 2.4x+ ("is already
+        // used by worktree at") wording; our own pre-check already reads well.
+        } else if let Some(path) =
+            crate::fork::worktree_paths::branch_in_use_path_from_git_error(&detail)
+        {
+            if detail.starts_with(&format!("Branch '{branch}' is already checked out in ")) {
+                detail
+            } else {
+                crate::fork::worktree_paths::branch_in_use_message(branch, path.as_deref())
+            }
         } else {
             detail
         }
@@ -363,6 +372,19 @@ impl App {
         let (workdir, is_worktree) = if let Some(wt) = &selected_worktree {
             (wt.path.clone(), true)
         } else if use_worktree {
+            // FORK: a repo-supplied hook needs one-time approval, asked before
+            // anything is created; the dialog replays `create_feature`.
+            let ext = merge_project_extension_config(&self.config.extension, &project_repo);
+            let Some(worktree_hook) = self.gate_repo_hook(
+                &project_repo,
+                crate::fork::hook_approval::HookName::WorktreeCreated,
+                ext.lifecycle_hooks.on_worktree_created.clone(),
+                &project_repo,
+                crate::fork::hook_approval::HookResume::Create,
+            ) else {
+                return Ok(());
+            };
+
             let wt_path = match self.worktree.create(&project_repo, &worktree_name, &branch) {
                 Ok(path) => path,
                 Err(err) => {
@@ -373,9 +395,7 @@ impl App {
                 }
             };
 
-            let ext = merge_project_extension_config(&self.config.extension, &project_repo);
-
-            if let Some(ref hook_cfg) = ext.lifecycle_hooks.on_worktree_created {
+            if let Some(ref hook_cfg) = worktree_hook {
                 if let Some(prompt) = hook_cfg.prompt() {
                     self.start_hook_prompt(
                         hook_cfg.script().to_string(),
@@ -520,8 +540,9 @@ impl App {
                 let expected_kind = match prepared.agent {
                     AgentKind::Claude => SessionKind::Claude,
                     AgentKind::Codex => SessionKind::Codex,
-                    AgentKind::Opencode => SessionKind::Opencode,
                     AgentKind::Pi => SessionKind::Pi,
+                    AgentKind::Gemini => SessionKind::Gemini, // FORK
+                    AgentKind::Cursor => SessionKind::Cursor, // FORK
                 };
                 anyhow::ensure!(
                     project.features.iter().any(|f| f.id == selection.feature_id
@@ -667,7 +688,7 @@ impl App {
             ),
             Ok(ReapplyOutcome::Conflict) => {
                 return Err(anyhow::anyhow!(SAVE_CONFLICT_MESSAGE).context(
-                    "feature was not saved: another AMF process kept changing the workspace; retry creation (any created worktree was kept)",
+                    "feature was not saved: another AIW process kept changing the workspace; retry creation (any created worktree was kept)",
                 ));
             }
             Err(error) => {
@@ -897,9 +918,10 @@ impl App {
 
         let session_kind = match feature.agent {
             AgentKind::Claude => SessionKind::Claude,
-            AgentKind::Opencode => SessionKind::Opencode,
             AgentKind::Codex => SessionKind::Codex,
             AgentKind::Pi => SessionKind::Pi,
+            AgentKind::Gemini => SessionKind::Gemini, // FORK
+            AgentKind::Cursor => SessionKind::Cursor, // FORK
         };
         if let Some(session_name) = session_name {
             feature.add_session_named(session_kind, session_name);
@@ -1228,6 +1250,8 @@ impl App {
             .unwrap_or(&feature.sessions[0].tmux_window)
             .to_string();
 
+        // FORK: reserve the feature's port block (AIW_PORT) before tmux starts.
+        crate::fork::ports::prepare_feature_session(&feature.id, &feature.tmux_session);
         self.tmux.create_session_with_window(
             &feature.tmux_session,
             &first_window,
@@ -1239,7 +1263,7 @@ impl App {
         // Running again: a later disappearance is no longer an expected stop.
         self.user_stopped_features.remove(&feature.id);
         self.tmux
-            .set_session_env(&feature.tmux_session, "AMF_SESSION", &feature.tmux_session)?;
+            .set_session_env(&feature.tmux_session, "AIW_SESSION", &feature.tmux_session)?;
 
         // Sessions stopped individually stay stopped: no window, no harness.
         for session in feature
@@ -1342,23 +1366,6 @@ impl App {
                         },
                     )?;
                 }
-                SessionKind::Opencode => {
-                    launched_agent_sessions += 1;
-                    if let Some(resume_id) = resume_override {
-                        self.tmux.launch_opencode_with_session(
-                            &feature.tmux_session,
-                            &session.tmux_window,
-                            &session.id,
-                            resume_id,
-                        )?;
-                    } else {
-                        self.tmux.launch_opencode(
-                            &feature.tmux_session,
-                            &session.tmux_window,
-                            &session.id,
-                        )?;
-                    }
-                }
                 SessionKind::Codex => {
                     launched_agent_sessions += 1;
                     let mut codex_args =
@@ -1366,16 +1373,16 @@ impl App {
                     codex_args.extend(analyzer_args.clone());
                     // In vibeless mode, launch a diff-review watcher alongside
                     // Codex so each file change can be approved/rejected via
-                    // the AMF popup.
+                    // the AIW popup.
                     let watcher_path =
-                        crate::project::amf_config_dir().join("codex-diff-review.sh");
+                        crate::project::aiw_config_dir().join("codex-diff-review.sh");
                     if matches!(feature.mode, crate::project::VibeMode::Vibeless)
                         && watcher_path.exists()
                     {
                         let cmd = format!(
                             "{} {} {} &",
                             TmuxManager::shell_env_prefix(&[(
-                                "AMF_SESSION",
+                                "AIW_SESSION",
                                 &feature.tmux_session
                             )]),
                             watcher_path.display(),
@@ -1406,6 +1413,23 @@ impl App {
                         &session.tmux_window,
                         &session.id,
                     )?;
+                }
+                // FORK: Gemini/Cursor
+                SessionKind::Gemini | SessionKind::Cursor => {
+                    launched_agent_sessions += 1;
+                    if let Some(agent) = super::session_ops::agent_for_session_kind(&session.kind) {
+                        crate::fork::extra_agents::launch(
+                            self.tmux.as_ref(),
+                            &agent,
+                            &feature.tmux_session,
+                            &session.tmux_window,
+                            &session.id,
+                            &feature.mode,
+                            resume_override
+                                .unwrap_or_else(|| session.claude_session_id.clone())
+                                .as_deref(),
+                        )?;
+                    }
                 }
                 SessionKind::Nvim => {
                     self.tmux
@@ -1439,12 +1463,12 @@ impl App {
                         }
                     }
                     let status_dir =
-                        crate::extension::generated_amf_subdir(&feature.workdir, "session-status");
+                        crate::extension::generated_aiw_subdir(&feature.workdir, "session-status");
                     let session_id = session.id.clone();
                     let status_dir_str = status_dir.to_string_lossy().into_owned();
                     let env_prefix = TmuxManager::shell_env_prefix(&[
-                        ("AMF_SESSION_ID", &session_id),
-                        ("AMF_STATUS_DIR", &status_dir_str),
+                        ("AIW_SESSION_ID", &session_id),
+                        ("AIW_STATUS_DIR", &status_dir_str),
                     ]);
                     let shell_cmd = if let Some(ref cmd) = session.command {
                         format!("{} bash -c '{}'", env_prefix, cmd.replace('\'', "'\\''"),)
@@ -1539,6 +1563,16 @@ impl App {
 
         // If on_start has a prompt, show the picker first.
         let on_start = self.active_extension.lifecycle_hooks.on_start.clone();
+        // FORK: a repo-supplied hook needs one-time approval first.
+        let Some(on_start) = self.gate_feature_hook(
+            pi,
+            fi,
+            crate::fork::hook_approval::HookName::Start,
+            on_start,
+            crate::fork::hook_approval::HookResume::Start { pi, fi },
+        ) else {
+            return Ok(());
+        };
         if let Some(ref cfg) = on_start
             && let Some(prompt) = cfg.prompt()
         {
@@ -1636,6 +1670,16 @@ impl App {
         // Clone hook and workdir data before mutable borrow.
         let on_stop_hook = self.active_extension.lifecycle_hooks.on_stop.clone();
         let workdir_for_hook = feature.workdir.clone();
+        // FORK: a repo-supplied hook needs one-time approval first.
+        let Some(on_stop_hook) = self.gate_feature_hook(
+            pi,
+            fi,
+            crate::fork::hook_approval::HookName::Stop,
+            on_stop_hook,
+            crate::fork::hook_approval::HookResume::Stop,
+        ) else {
+            return Ok(());
+        };
 
         // If on_stop has a prompt, show the picker first.
         if let Some(ref cfg) = on_stop_hook
@@ -1707,7 +1751,7 @@ impl App {
         self.user_stopped_features.insert(feature_id.clone());
         self.clear_sidebar_state_for_session(&tmux_session);
 
-        // The tmux session is gone, but the editor AMF opened for this feature
+        // The tmux session is gone, but the editor AIW opened for this feature
         // is not in tmux — and neither are the language servers under it, which
         // are the heaviest thing the feature was holding.
         let editor_report = self
@@ -1728,10 +1772,10 @@ impl App {
 
     /// Run on_stop commands for all custom sessions in a
     /// feature and clean up their status files and DB rows. Fire-and-forget.
-    fn run_custom_session_on_stop(feature: &Feature, db: Option<&crate::db::AmfDb>) {
+    fn run_custom_session_on_stop(feature: &Feature, db: Option<&crate::db::AiwDb>) {
         use crate::project::SessionKind;
 
-        let status_dir = feature.workdir.join(".amf").join("session-status");
+        let status_dir = feature.workdir.join(".aiw").join("session-status");
 
         for session in &feature.sessions {
             if session.kind != SessionKind::Custom {
@@ -1742,8 +1786,8 @@ impl App {
                     .arg("-c")
                     .arg(cmd)
                     .current_dir(&feature.workdir)
-                    .env("AMF_SESSION_ID", &session.id)
-                    .env("AMF_STATUS_DIR", &status_dir)
+                    .env("AIW_SESSION_ID", &session.id)
+                    .env("AIW_STATUS_DIR", &status_dir)
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
                     .spawn();
@@ -1894,6 +1938,8 @@ impl App {
                 }
             }
             DeleteStage::RemovingWorktree => {
+                // FORK: drop now-empty app-owned worktree folders.
+                crate::fork::worktree_paths::prune_empty_dirs(&state.repo, &state.workdir);
                 state.stage = DeleteStage::Completed;
             }
             DeleteStage::Completed => {}
@@ -2083,6 +2129,11 @@ impl App {
                 }
                 DeleteStage::RemovingWorktree => {
                     if deletion.child.is_none() {
+                        // FORK: drop now-empty app-owned worktree folders.
+                        crate::fork::worktree_paths::prune_empty_dirs(
+                            &deletion.repo,
+                            &deletion.workdir,
+                        );
                         deletion.stage = DeleteStage::Completed;
                     }
                 }
@@ -2266,6 +2317,20 @@ impl App {
             return Ok(());
         }
 
+        // FORK: a repo-supplied hook needs one-time approval, asked before
+        // the worktree is created; the dialog replays `create_forked_feature`.
+        let global_ext = load_global_extension_config();
+        let ext = merge_project_extension_config(&global_ext, &project_repo);
+        let Some(worktree_hook) = self.gate_repo_hook(
+            &project_repo,
+            crate::fork::hook_approval::HookName::WorktreeCreated,
+            ext.lifecycle_hooks.on_worktree_created.clone(),
+            &project_repo,
+            crate::fork::hook_approval::HookResume::Fork,
+        ) else {
+            return Ok(());
+        };
+
         // Create worktree from source branch
         let workdir =
             self.worktree
@@ -2287,11 +2352,8 @@ impl App {
             let _ = std::fs::write(claude_dir.join("context.md"), md);
         }
 
-        // Check for lifecycle hooks
-        let global_ext = load_global_extension_config();
-        let ext = merge_project_extension_config(&global_ext, &project_repo);
-
-        if let Some(ref hook_cfg) = ext.lifecycle_hooks.on_worktree_created {
+        // Check for lifecycle hooks (gated above).
+        if let Some(ref hook_cfg) = worktree_hook {
             if let Some(prompt) = hook_cfg.prompt() {
                 self.start_hook_prompt(
                     hook_cfg.script().to_string(),
@@ -2517,6 +2579,32 @@ pub(crate) struct LaunchTarget {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // FORK: branch-in-use wording (git 2.53 and older).
+    #[test]
+    fn branch_in_use_errors_name_the_checkout() {
+        let expected = "Branch 'main' is already checked out in /home/me/repo — choose a new branch name or turn off 'use worktree'";
+        for git in [
+            "git worktree add failed: fatal: 'main' is already used by worktree at '/home/me/repo'",
+            "git worktree add failed: fatal: 'main' is already checked out at '/home/me/repo'",
+        ] {
+            assert_eq!(
+                App::worktree_create_branch_error("main", &anyhow::anyhow!(git)),
+                expected
+            );
+        }
+        assert_eq!(
+            App::worktree_create_branch_error("main", &anyhow::anyhow!(expected)),
+            expected
+        );
+        assert_eq!(
+            App::worktree_create_branch_error(
+                "x",
+                &anyhow::anyhow!("git worktree add failed: boom")
+            ),
+            "git worktree add failed: boom"
+        );
+    }
 
     #[test]
     fn reconciles_missing_worktree_remove_failure() {

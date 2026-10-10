@@ -11,7 +11,7 @@
 When a Claude session is bridged to claude.ai via Remote Control, the
 fastest way to pick it up on a phone is to scan a code — that is exactly
 what standalone `claude remote-control` server mode offers (press space
-for a QR). AMF's embedded TUI can't click the footer link, and copying a
+for a QR). AIW's embedded TUI can't click the footer link, and copying a
 URL to then send it to a phone is clumsy. A QR overlay rendered in the
 TUI lets you point your phone at the screen and open the session
 directly.

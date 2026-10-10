@@ -11,7 +11,6 @@ use std::time::{Duration, Instant};
 
 use super::PromptAnalysis;
 use crate::db::plan_interviews::{PlanInterviewRecord, PlanInterviewStage};
-use crate::db::remote_devices::RemoteDevice;
 use crate::editor::TextEditor;
 use crate::extension::{
     ConfiguredPlanQuestion, CustomSessionConfig, FeaturePreset, LifecycleHooks,
@@ -197,10 +196,10 @@ impl PendingInput {
     /// replaces this entry instead of queueing beside it.
     ///
     /// Identity is the feature, which is the granularity everything else in
-    /// AMF already uses for this: a feature owns one tmux session, the
+    /// AIW already uses for this: a feature owns one tmux session, the
     /// attention layer is keyed by it, and `sync.rs` clears pending inputs by
     /// it. `session_id` is only the fallback for a notification that could not
-    /// be resolved to a feature — it holds the AMF tmux session when the hook
+    /// be resolved to a feature — it holds the AIW tmux session when the hook
     /// environment supplied one and the harness's own session id otherwise, so
     /// two reports of one stop can disagree about it.
     pub fn is_same_session_wait(&self, other: &PendingInput) -> bool {
@@ -328,28 +327,6 @@ pub struct ProjectAgentConfigState {
 }
 
 #[derive(Debug, Clone)]
-pub struct OpencodeSessionInfo {
-    pub id: String,
-    pub slug: Option<String>,
-    pub title: String,
-    pub updated: i64,
-}
-
-#[derive(Debug, Clone)]
-pub struct OpencodeSessionPickerState {
-    pub sessions: Vec<OpencodeSessionInfo>,
-    pub selected: usize,
-    pub workdir: PathBuf,
-    /// The `FeatureSession::id` this picker was opened from (or, when opened
-    /// from the feature row rather than a specific session, the feature's
-    /// first opencode-kind session) — the *only* session a restore may
-    /// overwrite. Every other opencode session in the feature keeps its own
-    /// saved id. `None` when the feature had no sessions at all yet (they
-    /// are created fresh on restore, so the lone one created is the target).
-    pub target_session_id: Option<String>,
-}
-
-#[derive(Debug, Clone)]
 pub struct ClaudeSessionPickerState {
     pub sessions: Vec<super::claude_sessions::ClaudeSessionInfo>,
     pub selected: usize,
@@ -382,7 +359,7 @@ pub enum StoppedSessionChoice {
     Resume,
     Clear,
     /// Hand off to the harness's saved-transcript picker (the `S` path), so
-    /// older sessions than the one AMF has recorded stay reachable.
+    /// older sessions than the one AIW has recorded stay reachable.
     PickSession,
     Cancel,
 }
@@ -740,7 +717,7 @@ impl ComposeState {
 }
 
 /// One row in the `Latest Prompt` recall list: either a prompt actually sent
-/// to the harness (scanned from its transcript) or one AMF computed to seed a
+/// to the harness (scanned from its transcript) or one AIW computed to seed a
 /// session but couldn't deliver, stashed by
 /// [`crate::app::App::stash_lost_prompt`] when the launch that would have
 /// carried it failed. Kept as a separate variant rather than folded into
@@ -783,7 +760,7 @@ pub struct PromptLibraryEntry {
     pub template: crate::prompt_library::PromptTemplate,
     pub source: crate::prompt_library::PromptSource,
     /// Resolved on-disk location this entry is read from / written to:
-    /// the SQLite store for `User`, the relevant `.amf/config.json` for
+    /// the SQLite store for `User`, the relevant `aiw.json` for
     /// config sources. Filled in by `rebuild_prompt_library`; `None` when
     /// the scope has no resolvable location (no project context, or the
     /// empty test store path).
@@ -866,7 +843,7 @@ pub struct PromptEditorState {
     pub editor: TextEditor,
     pub return_to: Box<AppMode>,
     /// Where a save will land, for the editor's destination hint: the
-    /// SQLite store for `User`, the relevant `.amf/config.json` otherwise.
+    /// SQLite store for `User`, the relevant `aiw.json` otherwise.
     /// `None` when unresolvable (no project context, or the test store).
     pub dest_path: Option<PathBuf>,
 }
@@ -1008,7 +985,7 @@ impl PromptOverrideScope {
     pub fn label(self) -> &'static str {
         match self {
             PromptOverrideScope::Feature => "This feature",
-            PromptOverrideScope::Project => "This project (amf.json)",
+            PromptOverrideScope::Project => "This project (aiw.json)",
             PromptOverrideScope::Global => "Global (all projects)",
         }
     }
@@ -1371,7 +1348,7 @@ pub enum TodoLaunchAction {
     /// project/global TODO, a feature the user picks), composer seeded with the
     /// TODO, editable and unsent.
     SpawnSession,
-    /// Create a new AMF feature and git worktree for this TODO — no plan
+    /// Create a new AIW feature and git worktree for this TODO — no plan
     /// interview — then seed its agent with the TODO.
     SpawnInNewFeature,
     /// Run the guided plan interview with the TODO as its brief.
@@ -1415,7 +1392,7 @@ pub enum TodoPlanDestination {
     /// The feature hosting the TODO list. Accepting spawns a seeded session
     /// there; nothing new is checked out.
     HostFeature,
-    /// A new AMF feature and git worktree, created through the ordinary
+    /// A new AIW feature and git worktree, created through the ordinary
     /// create-feature wizard with plan mode on.
     NewFeature,
 }
@@ -1753,6 +1730,8 @@ pub enum AppMode {
     DeletingFeature(String, String),
     DeletingFeatureInProgress(DeletingFeatureState),
     Viewing(ViewState),
+    // FORK: split view — several live agent sessions tiled (DESIGN.md §4.1).
+    SplitView(Box<crate::app::fork_split::SplitViewState>),
     Help(HelpState),
     NotificationPicker(usize, Option<ViewState>),
     SessionSwitcher(super::SessionSwitcherState),
@@ -1768,12 +1747,6 @@ pub enum AppMode {
     CommandPicker(super::CommandPickerState),
     Searching(SearchState),
     NamingNewSession(NewSessionNameState),
-    OpencodeSessionPicker(OpencodeSessionPickerState),
-    ConfirmingOpencodeSession {
-        session_id: String,
-        workdir: PathBuf,
-        target_session_id: Option<String>,
-    },
     ClaudeSessionPicker(ClaudeSessionPickerState),
     ConfirmingClaudeSession {
         session_id: String,
@@ -1828,7 +1801,7 @@ pub enum AppMode {
     /// Reviewing the compact pass's proposed replacement doc before it's
     /// written — full-screen, editable, nothing written until confirmed.
     ReviewMemoryCompactReview(CompactReviewState),
-    /// Reviewing/triaging findings from AMF's own AI review of a PR's diff —
+    /// Reviewing/triaging findings from AIW's own AI review of a PR's diff —
     /// its own workflow, independent of `PrReview` (see `crate::app::ai_review`).
     AiReview(AiReviewState),
     /// Running the AI PR review's diff-fetch + review pass off the UI thread
@@ -1840,6 +1813,8 @@ pub enum AppMode {
     DiffReviewPrompt(DiffReviewState),
     RunningHook(RunningHookState),
     HookPrompt(HookPromptState),
+    // FORK: one-time approval of a repository's lifecycle hook.
+    ApprovingRepoHook(Box<crate::fork::hook_approval::HookApprovalState>),
     LatestPrompt(LatestPromptState),
     PromptLibrary(PromptLibraryState),
     PromptEditor(PromptEditorState),
@@ -1882,165 +1857,13 @@ pub enum AppMode {
     Dormant(DormantViewState),
     /// Global context-window/severity settings (`w` on the dashboard).
     ContextSettings(ContextSettingsState),
-    /// Pairing a phone to the Remote Control companion app: a one-time code
-    /// (shown as a QR + digits) that `App::process_pairing_exchange`
-    /// validates against `POST /pair/exchange` requests relayed from the
-    /// server thread (`docs/backlog/remote-control-companion-app-plan.md`,
-    /// Epic 4). This struct *is* the pending-pairing state — there is no
-    /// separate copy on `App`, so closing the dialog (which drops it)
-    /// invalidates the code.
-    RemotePairing(RemotePairingState),
-}
-
-impl AppMode {
-    /// The mode this one stashed to restore verbatim on exit, if any — a
-    /// sub-mode opened over an overlay (e.g. `TodoImplementChoice` over
-    /// `Todos`) keeps that overlay alive inside it.
-    pub fn stashed_mode(&self) -> Option<&AppMode> {
-        match self {
-            AppMode::TodoImplementChoice(state) => Some(&state.origin),
-            AppMode::TodoSpawnTarget(state) => Some(&state.origin),
-            AppMode::PromptEditor(state) => Some(&state.return_to),
-            AppMode::SkillPicker(state) => Some(&state.return_to),
-            AppMode::PromptPrecall(pending) => Some(&pending.prior_mode),
-            AppMode::SyntaxLanguagePicker(state) => state.return_to.as_deref(),
-            _ => None,
-        }
-    }
-
-    /// Whether this mode is, or has stashed underneath it, the TODOs
-    /// overlay — whose in-memory panes will be restored as they are.
-    pub fn holds_todos_overlay(&self) -> bool {
-        let mut mode = Some(self);
-        while let Some(current) = mode {
-            if matches!(current, AppMode::Todos(_)) {
-                return true;
-            }
-            mode = current.stashed_mode();
-        }
-        false
-    }
+    // FORK(no-cloud): the Remote Control `RemotePairing` mode was removed.
 }
 
 /// The view to return to plus the stable TODO identity to complete.
 pub struct TodoReferenceCompletionState {
     pub view: ViewState,
     pub todo_id: String,
-}
-
-/// UI status for the active `RemotePairing` dialog.
-pub enum PairingDialogStatus {
-    /// No exchange attempt has resolved yet.
-    Waiting,
-    /// A device successfully paired; `Esc`/`Enter` closes the dialog.
-    Paired { device_name: String },
-    /// The most recent attempt failed, or the code expired/locked out —
-    /// human-readable, shown directly, and cleared by `r` regenerating.
-    Failed(String),
-}
-
-pub struct RemotePairingState {
-    /// The current one-time code. Also embedded in `qr_payload`.
-    pub code: String,
-    /// The URL the QR encodes, minus the code: `AppConfig::remote_public_url`
-    /// when set, else `http://<addr>`. Shown under the QR so the address can
-    /// be typed when a camera isn't handy.
-    pub url: String,
-    /// Pre-rendered half-block QR glyphs (`crate::qr::render_qr_lines`),
-    /// one `String` per row. Empty when encoding failed (shouldn't happen
-    /// for this payload shape) — the dialog falls back to the digits alone.
-    pub qr_lines: Vec<String>,
-    pub expires_at: Instant,
-    /// Failed exchange attempts against `code` so far.
-    pub attempts: u32,
-    /// Set once `attempts` hits the cap — the code is dead even if it
-    /// hasn't expired yet; only `r` (a fresh code) recovers.
-    pub locked: bool,
-    pub status: PairingDialogStatus,
-    /// Which sub-screen of the dialog is showing — the pairing code itself,
-    /// or the paired-devices list (`v`) with per-device revoke. Lives here
-    /// rather than as a separate `AppMode` because it's a view toggle on
-    /// the same dialog, not a new destination — `Esc` from the devices list
-    /// returns to `Pairing`, and only `Esc` from `Pairing` closes the dialog.
-    pub view: PairingDialogView,
-    /// Set when `url` is an address no phone can open — the server's own
-    /// loopback or wildcard bind, because no `remote_public_url` is
-    /// configured. The dialog says so instead of showing a QR that can
-    /// only fail.
-    pub url_unreachable: bool,
-    /// Where `url` came from — shown under it, and what decides whether a
-    /// later Tailscale probe may replace it (`App::refresh_pairing_url`).
-    pub url_source: PairingUrlSource,
-    /// Whether `url` answered as AMF when this computer asked it for
-    /// `/health` (`App::check_pairing_reach`). Advisory: it is checked from
-    /// here, not from the phone, so a pass doesn't promise the phone gets
-    /// through — but a failure means the QR leads nowhere.
-    pub reach: PairingReach,
-    /// The session view the dialog was opened over (`Ctrl+Space Q` from a
-    /// session), restored on close — the same shape as the bookmark
-    /// picker's `from_view`.
-    pub from_view: Option<ViewState>,
-}
-
-/// The `RemotePairing` dialog's current sub-screen.
-pub enum PairingDialogView {
-    Pairing,
-    Devices(RemoteDevicesListState),
-    /// Step-by-step Tailscale setup (`s`), scrolled by `scroll` rows.
-    /// `max_scroll` is written by the draw, the only place that knows how
-    /// many rows the wrapped steps take at the current size, so scrolling
-    /// stops at the last step instead of running on past it.
-    Setup {
-        scroll: u16,
-        max_scroll: std::cell::Cell<u16>,
-    },
-}
-
-/// Where the pairing QR's address comes from, most explicit first.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PairingUrlSource {
-    /// `remote_public_url` in config.json — never second-guessed.
-    Configured,
-    /// The HTTPS address `tailscale serve` answers on for AMF's port.
-    Tailscale,
-    /// The server's own bind address: fine on the LAN or over `adb
-    /// reverse`, never for install or push.
-    Direct,
-}
-
-/// What asking the pairing address for AMF's `/health` from this computer
-/// found.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PairingReach {
-    /// Not asked: `url_unreachable` already says no phone can open it.
-    NotChecked,
-    Checking,
-    Reachable,
-    /// Something answered, but not with AMF's `ok` — another service, or a
-    /// tunnel whose own error page stands in for an AMF it can't reach.
-    NotAmf(String),
-    /// Nothing answered. Carries a short reason ("timed out").
-    Unreachable(String),
-}
-
-impl PairingReach {
-    pub fn failed(&self) -> bool {
-        matches!(self, PairingReach::NotAmf(_) | PairingReach::Unreachable(_))
-    }
-}
-
-/// The paired-devices list shown by pressing `v` in the pairing dialog.
-pub struct RemoteDevicesListState {
-    /// Loaded once on `v` — every paired device, most recently paired
-    /// first (`AmfDb::list_remote_devices`'s own ordering). Revoking
-    /// updates this copy directly rather than reloading, so the cursor
-    /// position is stable across a revoke.
-    pub devices: Vec<RemoteDevice>,
-    pub selected: usize,
-    /// Set by a first `d` press on a revocable row; a second `d` while set
-    /// performs the revoke. Any other key clears it — mirrors the prompt
-    /// overrides manager's `confirm_clear` (`app/prompt_overrides.rs`).
-    pub confirm_revoke: bool,
 }
 
 /// Pending dispatch of a finished review's feedback to a freshly-spun-up
@@ -2216,6 +2039,8 @@ pub enum ThemePickerEntry {
         label: &'static str,
         themes: Vec<crate::theme::ThemeName>,
     },
+    /// FORK: non-selectable section title ("Dark" / "Light").
+    Header(&'static str),
 }
 
 impl ThemePickerEntry {
@@ -2225,6 +2050,7 @@ impl ThemePickerEntry {
         match self {
             ThemePickerEntry::Theme(name) => Some(*name),
             ThemePickerEntry::Group { themes, .. } => themes.first().copied(),
+            ThemePickerEntry::Header(_) => None, // FORK
         }
     }
 
@@ -2232,48 +2058,7 @@ impl ThemePickerEntry {
     /// (Catppuccin, Gruvbox Material) collapsed into groups so they don't
     /// clog the single-level list.
     pub fn build() -> Vec<Self> {
-        use crate::theme::ThemeName::*;
-
-        vec![
-            ThemePickerEntry::Theme(Default),
-            ThemePickerEntry::Theme(Amf),
-            ThemePickerEntry::Theme(Dracula),
-            ThemePickerEntry::Theme(Nord),
-            ThemePickerEntry::Theme(GruvboxDark),
-            ThemePickerEntry::Theme(GruvboxLight),
-            ThemePickerEntry::Group {
-                label: "Catppuccin",
-                themes: vec![
-                    CatppuccinLatte,
-                    CatppuccinFrappe,
-                    CatppuccinMacchiato,
-                    CatppuccinMocha,
-                ],
-            },
-            ThemePickerEntry::Group {
-                label: "Gruvbox Material",
-                themes: vec![
-                    GruvboxMaterialDarkHard,
-                    GruvboxMaterialDarkMedium,
-                    GruvboxMaterialDarkSoft,
-                    GruvboxMaterialLightHard,
-                    GruvboxMaterialLightMedium,
-                    GruvboxMaterialLightSoft,
-                    GruvboxMaterialMixDarkHard,
-                    GruvboxMaterialMixDarkMedium,
-                    GruvboxMaterialMixDarkSoft,
-                    GruvboxMaterialMixLightHard,
-                    GruvboxMaterialMixLightMedium,
-                    GruvboxMaterialMixLightSoft,
-                    GruvboxMaterialOriginalDarkHard,
-                    GruvboxMaterialOriginalDarkMedium,
-                    GruvboxMaterialOriginalDarkSoft,
-                    GruvboxMaterialOriginalLightHard,
-                    GruvboxMaterialOriginalLightMedium,
-                    GruvboxMaterialOriginalLightSoft,
-                ],
-            },
-        ]
+        crate::fork::theme_picker::entries() // FORK: grouped into dark / light sections
     }
 }
 
@@ -2821,11 +2606,10 @@ impl CreateFeatureState {
         worktrees: Vec<WorktreeInfo>,
         is_first_feature: bool,
     ) -> Self {
-        let cwd = std::env::current_dir().unwrap_or_default();
-        let branch = crate::worktree::WorktreeManager::current_branch(&cwd)
-            .ok()
-            .flatten()
-            .unwrap_or_default();
+        // FORK: never pre-fill the branch with the currently checked-out one
+        // (AIW used the process cwd's branch): that branch is already in use,
+        // so a worktree create on it can only fail.
+        let branch = String::new();
 
         let step = if worktrees.is_empty() {
             CreateFeatureStep::Branch
@@ -3129,7 +2913,7 @@ pub struct PlanInterviewState {
     /// The custom-answer buffer captured when the editor was opened, restored
     /// verbatim if the edit is cancelled with `Esc`.
     pub custom_answer_backup: Option<String>,
-    /// Where the accepted plan is written (`<workdir>/AMF_PLAN.md`). Held
+    /// Where the accepted plan is written (`<workdir>/AIW_PLAN.md`). Held
     /// separately from `pending_launch` because an on-demand interview has an
     /// existing feature's workdir and no launch at all.
     pub workdir: PathBuf,
@@ -3201,7 +2985,7 @@ pub struct PlanInterviewState {
     /// Explicit frontier model chosen for this plan's Expert review.
     pub expert_model: Option<String>,
     /// Reasoning level picked with `expert_model`. Not persisted with the draft
-    /// (that would need a schema change on the shared `amf.db`), so a resumed
+    /// (that would need a schema change on the shared `aiw.db`), so a resumed
     /// interview falls back to `review_reasoning_for(PlanPreflight)`.
     pub expert_reasoning: Option<crate::headless::ReasoningLevel>,
     /// The picker was confirmed this session, so `expert_reasoning` is
@@ -4761,7 +4545,6 @@ pub enum SessionFilter {
     #[default]
     All,
     Claude,
-    Opencode,
     Codex,
     Terminal,
     Nvim,
@@ -4769,10 +4552,9 @@ pub enum SessionFilter {
 }
 
 impl SessionFilter {
-    pub const ALL: [SessionFilter; 7] = [
+    pub const ALL: [SessionFilter; 6] = [
         SessionFilter::All,
         SessionFilter::Claude,
-        SessionFilter::Opencode,
         SessionFilter::Codex,
         SessionFilter::Terminal,
         SessionFilter::Nvim,
@@ -4783,7 +4565,6 @@ impl SessionFilter {
         match self {
             SessionFilter::All => "all",
             SessionFilter::Claude => "claude",
-            SessionFilter::Opencode => "opencode",
             SessionFilter::Codex => "codex",
             SessionFilter::Terminal => "terminal",
             SessionFilter::Nvim => "nvim",
@@ -4853,8 +4634,8 @@ mod tests {
     }
 
     #[test]
-    fn session_filter_all_has_seven_variants() {
-        assert_eq!(SessionFilter::ALL.len(), 7);
+    fn session_filter_all_has_six_variants() {
+        assert_eq!(SessionFilter::ALL.len(), 6);
     }
 
     // ── branch_mismatch ───────────────────────────────────

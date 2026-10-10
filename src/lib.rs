@@ -1,11 +1,11 @@
-//! Shared library behind AMF's front ends: the `amf` TUI binary
+//! Shared library behind AIW's front ends: the `aiw` TUI binary
 //! (`src/main.rs` -> `cli::run`) and the desktop GUI.
 //!
 //! Only `cli` and the modules the GUI calls are `pub`: `automation` and
 //! `project` for request/response types, and the `gui_*` contract modules,
 //! which wrap the same `App` operations the TUI uses. Everything else stays a
 //! plain `mod`, which keeps it fully visible within this crate without
-//! changing its *effective* visibility from what it was as part of the `amf`
+//! changing its *effective* visibility from what it was as part of the `aiw`
 //! binary: widening a module to `pub mod` pulls its whole public surface into
 //! clippy's API-hygiene lints (`should_implement_trait` and friends) even
 //! where nothing outside the crate calls it yet. Widen deliberately, module
@@ -13,6 +13,7 @@
 
 pub mod automation;
 pub mod cli;
+pub mod fork; // FORK: AI Workstation additions (DESIGN.md)
 pub mod gui_contract;
 pub mod gui_debug_log;
 pub mod gui_diff;
@@ -53,7 +54,6 @@ mod handlers;
 mod headless;
 mod highlight;
 mod hook_payload;
-mod http_client;
 mod ipc;
 mod markdown;
 mod model_evidence;
@@ -63,16 +63,10 @@ mod pi;
 mod plan_interview;
 mod prompt_library;
 mod prompts;
-mod qr;
-mod remote_push;
-mod remote_server;
-mod remote_terminal;
 mod resources;
 mod review_batch;
 mod screenshot_evidence;
-mod screenshot_sources;
 mod summary;
-mod tailscale;
 mod theme;
 mod tmux;
 mod tmux_observer;
@@ -80,7 +74,6 @@ mod token_tracking;
 mod traits;
 mod transcript;
 mod ui;
-mod upgrade;
 mod usage;
 mod worddiff;
 mod worktree;

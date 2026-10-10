@@ -1,11 +1,11 @@
 # Plan-mode interview draft persistence
 
-Captured with the `/amf-screenshot` workflow from an isolated AMF instance
+Captured with the `/aiw-screenshot` workflow from an isolated AIW instance
 against a throwaway repository, using
 `scripts/dev/screenshot/scenarios/plan-interview-resume.txt`. The scenario
 answers part of a plan-mode interview, abandons it, then re-creates the same
 feature — so it exercises the real draft round-trip without reading or
-modifying user projects, the normal AMF database, or any agent session. Plan
+modifying user projects, the normal AIW database, or any agent session. Plan
 mode defers the feature launch and every pass aborts before accepting, so no
 feature is created and no agent starts.
 

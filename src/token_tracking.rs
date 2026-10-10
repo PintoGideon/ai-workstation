@@ -19,7 +19,6 @@ use crate::project::SessionKind;
 #[serde(rename_all = "lowercase")]
 pub enum TokenUsageProvider {
     Claude,
-    Opencode,
     Codex,
 }
 
@@ -86,9 +85,7 @@ struct UsageCacheEntry {
 #[derive(Debug, Clone)]
 pub struct SessionTokenTracker {
     home_dir: Option<PathBuf>,
-    data_dir: Option<PathBuf>,
     codex_sessions: Option<(Instant, Vec<CodexSessionRecord>)>,
-    opencode_sessions: Option<(Instant, Vec<OpencodeSessionMeta>)>,
     usage_cache: HashMap<TokenUsageSource, UsageCacheEntry>,
     /// Set when a cache entry actually changed since the last DB flush.
     dirty: bool,
@@ -98,9 +95,7 @@ impl Default for SessionTokenTracker {
     fn default() -> Self {
         Self {
             home_dir: dirs::home_dir(),
-            data_dir: dirs::data_dir(),
             codex_sessions: None,
-            opencode_sessions: None,
             usage_cache: HashMap::new(),
             dirty: false,
         }
@@ -109,12 +104,10 @@ impl Default for SessionTokenTracker {
 
 impl SessionTokenTracker {
     #[allow(dead_code)] // exercised only by unit tests
-    pub fn new(home_dir: Option<PathBuf>, data_dir: Option<PathBuf>) -> Self {
+    pub fn new(home_dir: Option<PathBuf>) -> Self {
         Self {
             home_dir,
-            data_dir,
             codex_sessions: None,
-            opencode_sessions: None,
             usage_cache: HashMap::new(),
             dirty: false,
         }
@@ -181,9 +174,6 @@ impl SessionTokenTracker {
             TokenUsageProvider::Claude => {
                 self.discover_claude_source(workdir, created_at, excluded_ids)
             }
-            TokenUsageProvider::Opencode => {
-                self.discover_opencode_source(workdir, created_at, excluded_ids)
-            }
             TokenUsageProvider::Codex => {
                 self.discover_codex_source(workdir, created_at, excluded_ids)
             }
@@ -222,7 +212,6 @@ impl SessionTokenTracker {
             TokenUsageProvider::Claude => {
                 self.read_claude_usage(workdir, &source.id, &mut parse_state)
             }
-            TokenUsageProvider::Opencode => self.read_opencode_usage(&source.id),
             TokenUsageProvider::Codex => {
                 self.read_codex_usage(workdir, &source.id, &mut parse_state)
             }
@@ -251,11 +240,6 @@ impl SessionTokenTracker {
                 .map(|dir| dir.join(format!("{}.jsonl", source.id)))
                 .and_then(|path| file_modified_millis(&path))
                 .map(|millis| millis / 1000),
-            TokenUsageProvider::Opencode => self
-                .opencode_sessions()
-                .iter()
-                .find(|meta| meta.id == source.id && meta.directory == workdir)
-                .map(|meta| meta.updated / 1000),
             TokenUsageProvider::Codex => self
                 .home_dir
                 .as_deref()
@@ -277,7 +261,6 @@ impl SessionTokenTracker {
     ) -> Option<u64> {
         match source.provider {
             TokenUsageProvider::Claude => self.claude_usage_signature(workdir, &source.id),
-            TokenUsageProvider::Opencode => self.opencode_usage_signature(&source.id),
             TokenUsageProvider::Codex => self.codex_usage_signature(workdir, &source.id),
         }
     }
@@ -595,147 +578,6 @@ impl SessionTokenTracker {
             })
     }
 
-    fn discover_opencode_source(
-        &mut self,
-        workdir: &Path,
-        created_at: DateTime<Utc>,
-        excluded_ids: &HashSet<String>,
-    ) -> Option<TokenUsageSource> {
-        let threshold = created_at.timestamp_millis() - 120_000;
-        let created_at_millis = created_at.timestamp_millis();
-        let mut closest_match: Option<(String, u64)> = None;
-        let mut newest_any: Option<(String, i64)> = None;
-
-        for meta in self.opencode_sessions() {
-            if meta.directory != workdir {
-                continue;
-            }
-            if excluded_ids.contains(&meta.id) {
-                continue;
-            }
-
-            if newest_any
-                .as_ref()
-                .is_none_or(|(_, updated)| meta.updated > *updated)
-            {
-                newest_any = Some((meta.id.clone(), meta.updated));
-            }
-            let distance = meta.updated.abs_diff(created_at_millis);
-            if meta.updated >= threshold
-                && closest_match
-                    .as_ref()
-                    .is_none_or(|(_, updated)| distance < *updated)
-            {
-                closest_match = Some((meta.id.clone(), distance));
-            }
-        }
-
-        closest_match
-            .or(newest_any.map(|(id, _)| (id, 0)))
-            .map(|(id, _)| TokenUsageSource {
-                provider: TokenUsageProvider::Opencode,
-                id,
-            })
-    }
-
-    fn read_opencode_usage(&self, session_id: &str) -> Option<SessionTokenUsage> {
-        let storage_root = self.opencode_storage_root()?;
-        let message_root = storage_root.join("message").join(session_id);
-        let part_root = storage_root.join("part");
-        if !is_real_dir(&message_root) {
-            return None;
-        }
-
-        let mut input_tokens = 0u64;
-        let mut output_tokens = 0u64;
-        let mut cache_read_tokens = 0u64;
-        let mut cache_write_tokens = 0u64;
-        let mut reasoning_tokens = 0u64;
-
-        for message_path in walk_files_with_extension(&message_root, "json") {
-            let Some(message_id) = message_path.file_stem().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            let parts_dir = part_root.join(message_id);
-            if !is_real_dir(&parts_dir) {
-                continue;
-            }
-
-            for part_path in walk_files_with_extension(&parts_dir, "json") {
-                let Ok(contents) = std::fs::read_to_string(part_path) else {
-                    continue;
-                };
-                let Ok(part) = serde_json::from_str::<OpencodePart>(&contents) else {
-                    continue;
-                };
-                if part.session_id != session_id || part.part_type != "step-finish" {
-                    continue;
-                }
-                let Some(tokens) = part.tokens else {
-                    continue;
-                };
-
-                input_tokens = input_tokens.saturating_add(tokens.input);
-                output_tokens = output_tokens.saturating_add(tokens.output);
-                reasoning_tokens = reasoning_tokens.saturating_add(tokens.reasoning);
-                cache_read_tokens = cache_read_tokens
-                    .saturating_add(tokens.cache.as_ref().map_or(0, |cache| cache.read));
-                cache_write_tokens = cache_write_tokens
-                    .saturating_add(tokens.cache.as_ref().map_or(0, |cache| cache.write));
-            }
-        }
-
-        Some(SessionTokenUsage {
-            source: TokenUsageSource {
-                provider: TokenUsageProvider::Opencode,
-                id: session_id.to_string(),
-            },
-            input_tokens,
-            output_tokens,
-            cache_read_tokens,
-            cache_write_tokens,
-            reasoning_tokens,
-            total_tokens: input_tokens
-                .saturating_add(output_tokens)
-                .saturating_add(cache_read_tokens)
-                .saturating_add(cache_write_tokens)
-                .saturating_add(reasoning_tokens),
-        })
-    }
-
-    fn opencode_usage_signature(&self, session_id: &str) -> Option<u64> {
-        let paths = self.opencode_usage_paths(session_id)?;
-        metadata_signature_for_paths(paths)
-    }
-
-    fn opencode_usage_paths(&self, session_id: &str) -> Option<Vec<PathBuf>> {
-        let storage_root = self.opencode_storage_root()?;
-        let message_root = storage_root.join("message").join(session_id);
-        let part_root = storage_root.join("part");
-        if !is_real_dir(&message_root) {
-            return None;
-        }
-
-        let mut paths = walk_files_with_extension(&message_root, "json");
-        if paths.is_empty() {
-            return Some(paths);
-        }
-
-        let message_ids = paths
-            .iter()
-            .filter_map(|path| path.file_stem().and_then(|name| name.to_str()))
-            .map(str::to_string)
-            .collect::<Vec<_>>();
-        for message_id in message_ids {
-            let parts_dir = part_root.join(message_id);
-            if is_real_dir(&parts_dir) {
-                paths.extend(walk_files_with_extension(&parts_dir, "json"));
-            }
-        }
-
-        Some(paths)
-    }
-
     fn claude_projects_dir(&self, workdir: &Path) -> Option<PathBuf> {
         self.home_dir.as_ref().map(|home| {
             home.join(".claude")
@@ -750,12 +592,6 @@ impl SessionTokenTracker {
             .map(|home| home.join(".codex").join("sessions"))
     }
 
-    fn opencode_storage_root(&self) -> Option<PathBuf> {
-        self.data_dir
-            .as_ref()
-            .map(|data| data.join("opencode").join("storage"))
-    }
-
     fn codex_sessions(&mut self) -> &[CodexSessionRecord] {
         if self
             .codex_sessions
@@ -765,20 +601,6 @@ impl SessionTokenTracker {
             self.refresh_codex_sessions();
         }
         self.codex_sessions
-            .as_ref()
-            .map(|(_, sessions)| sessions.as_slice())
-            .unwrap_or(&[])
-    }
-
-    fn opencode_sessions(&mut self) -> &[OpencodeSessionMeta] {
-        if self
-            .opencode_sessions
-            .as_ref()
-            .is_none_or(|(loaded_at, _)| loaded_at.elapsed().as_secs() >= 30)
-        {
-            self.refresh_opencode_sessions();
-        }
-        self.opencode_sessions
             .as_ref()
             .map(|(_, sessions)| sessions.as_slice())
             .unwrap_or(&[])
@@ -802,25 +624,11 @@ impl SessionTokenTracker {
             .unwrap_or_default();
         self.codex_sessions = Some((Instant::now(), sessions));
     }
-
-    fn refresh_opencode_sessions(&mut self) {
-        let sessions = self
-            .opencode_storage_root()
-            .map(|root| {
-                walk_files_with_extension(&root.join("session"), "json")
-                    .into_iter()
-                    .filter_map(|path| parse_opencode_session_meta(&path))
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-        self.opencode_sessions = Some((Instant::now(), sessions));
-    }
 }
 
 pub fn provider_for_session_kind(session_kind: &SessionKind) -> Option<TokenUsageProvider> {
     match session_kind {
         SessionKind::Claude => Some(TokenUsageProvider::Claude),
-        SessionKind::Opencode => Some(TokenUsageProvider::Opencode),
         SessionKind::Codex => Some(TokenUsageProvider::Codex),
         _ => None,
     }
@@ -985,7 +793,7 @@ pub fn format_token_usage_summary(
 
 /// Format only the estimated dollar cost for a usage snapshot. This keeps
 /// non-dashboard disclosures (for example, an AI-authored PR reply) on the
-/// same configured rates and rounding rules as AMF's usage meters.
+/// same configured rates and rounding rules as AIW's usage meters.
 pub fn format_token_cost(usage: &SessionTokenUsage, pricing: &TokenPricingConfig) -> String {
     format_dollar_cost(pricing.cost_usd(usage))
 }
@@ -1149,11 +957,13 @@ fn parse_codex_session_meta(path: &Path) -> Option<CodexSessionMeta> {
     // timestamps and is accurate enough for "newest session" comparisons.
     let updated = file_modified_millis(path).map(|ms| ms / 1000).unwrap_or(0);
 
-    let contents = std::fs::read_to_string(path).ok()?;
+    // FORK: read up to the `session_meta` line only, not the whole rollout.
+    let lines = crate::fork::line_fold::file_lines(path)?;
     let mut id: Option<String> = None;
     let mut cwd: Option<PathBuf> = None;
 
-    for line in contents.lines() {
+    for line in lines {
+        let line = line.ok()?;
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
@@ -1255,70 +1065,14 @@ impl From<CodexTokenUsage> for CodexUsageSnapshot {
     }
 }
 
-#[derive(Debug, Clone)]
-struct OpencodeSessionMeta {
-    id: String,
-    directory: PathBuf,
-    updated: i64,
-}
-
-fn parse_opencode_session_meta(path: &Path) -> Option<OpencodeSessionMeta> {
-    let session: OpencodeSessionFile =
-        serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
-    Some(OpencodeSessionMeta {
-        id: session.id,
-        directory: PathBuf::from(session.directory),
-        updated: session.time.updated,
-    })
-}
-
-#[derive(Debug, Deserialize)]
-struct OpencodeSessionFile {
-    id: String,
-    directory: String,
-    time: OpencodeTime,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpencodeTime {
-    updated: i64,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpencodePart {
-    #[serde(rename = "sessionID")]
-    session_id: String,
-    #[serde(rename = "type")]
-    part_type: String,
-    tokens: Option<OpencodeTokens>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpencodeTokens {
-    input: u64,
-    output: u64,
-    #[serde(default)]
-    reasoning: u64,
-    #[serde(default)]
-    cache: Option<OpencodeCache>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpencodeCache {
-    #[serde(default)]
-    read: u64,
-    #[serde(default)]
-    write: u64,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::TimeZone;
     use tempfile::TempDir;
 
-    fn tracker_with_roots(home: &Path, data: &Path) -> SessionTokenTracker {
-        SessionTokenTracker::new(Some(home.to_path_buf()), Some(data.to_path_buf()))
+    fn tracker_with_roots(home: &Path, _data: &Path) -> SessionTokenTracker {
+        SessionTokenTracker::new(Some(home.to_path_buf()))
     }
 
     #[test]
@@ -1326,10 +1080,6 @@ mod tests {
         assert_eq!(
             provider_for_session_kind(&SessionKind::Claude),
             Some(TokenUsageProvider::Claude)
-        );
-        assert_eq!(
-            provider_for_session_kind(&SessionKind::Opencode),
-            Some(TokenUsageProvider::Opencode)
         );
         assert_eq!(
             provider_for_session_kind(&SessionKind::Codex),
@@ -1618,50 +1368,6 @@ mod tests {
             tracker.discover_source(&SessionKind::Codex, &workdir, created_at),
             None
         );
-    }
-
-    #[test]
-    fn discovers_and_reads_opencode_usage_from_storage() {
-        let home = TempDir::new().unwrap();
-        let data = TempDir::new().unwrap();
-        let workdir = PathBuf::from("/tmp/opencode-worktree");
-        let storage = data.path().join("opencode").join("storage");
-        let session_dir = storage.join("session").join("project-1");
-        let message_dir = storage.join("message").join("ses-1");
-        let part_dir = storage.join("part").join("msg-1");
-        std::fs::create_dir_all(&session_dir).unwrap();
-        std::fs::create_dir_all(&message_dir).unwrap();
-        std::fs::create_dir_all(&part_dir).unwrap();
-        std::fs::write(
-            session_dir.join("ses-1.json"),
-            "{\"id\":\"ses-1\",\"directory\":\"/tmp/opencode-worktree\",\"time\":{\"updated\":1773439500000}}",
-        )
-        .unwrap();
-        std::fs::write(
-            message_dir.join("msg-1.json"),
-            "{\"id\":\"msg-1\",\"sessionID\":\"ses-1\"}",
-        )
-        .unwrap();
-        std::fs::write(
-            part_dir.join("part-1.json"),
-            "{\"sessionID\":\"ses-1\",\"type\":\"step-finish\",\"tokens\":{\"input\":50,\"output\":4,\"reasoning\":3,\"cache\":{\"read\":7,\"write\":2}}}",
-        )
-        .unwrap();
-
-        let mut tracker = tracker_with_roots(home.path(), data.path());
-        let created_at = Utc.with_ymd_and_hms(2026, 3, 13, 14, 4, 0).unwrap();
-        let source = tracker
-            .discover_source(&SessionKind::Opencode, &workdir, created_at)
-            .unwrap();
-        assert_eq!(source.id, "ses-1");
-
-        let usage = tracker.read_usage(&source, &workdir).unwrap();
-        assert_eq!(usage.input_tokens, 50);
-        assert_eq!(usage.output_tokens, 4);
-        assert_eq!(usage.reasoning_tokens, 3);
-        assert_eq!(usage.cache_read_tokens, 7);
-        assert_eq!(usage.cache_write_tokens, 2);
-        assert_eq!(usage.total_tokens, 66);
     }
 
     #[test]

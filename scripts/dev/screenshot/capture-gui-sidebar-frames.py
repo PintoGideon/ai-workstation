@@ -224,7 +224,7 @@ try:
     wait(f"Array.from({NAV}.querySelectorAll('.tree-session-label')).some(l=>l.textContent==='Shell' && l.closest('.tree-feature').textContent.includes('release-prep'))")
     capture(
         "004-tui-change-adopted.png",
-        "Collapse changes another AMF process writes to the shared store reach the open GUI on its next poll: Invoice API "
+        "Collapse changes another AIW process writes to the shared store reach the open GUI on its next poll: Invoice API "
         "is expanded again, Round totals is collapsed over its sessions, release-prep shows its stopped sessions, and "
         "Docs site is collapsed.",
         ["Round totals", "release-prep"],

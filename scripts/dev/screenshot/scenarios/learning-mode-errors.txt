@@ -26,12 +26,12 @@
 #   echo 'API_TOKEN=x' > "$DEMO/credentials.env"
 #   chmod 000 "$DEMO/credentials.env" "$DEMO/vendor-cache"
 #
-# The row counts in the j-presses below assume the file list AMF ends up
+# The row counts in the j-presses below assume the file list AIW ends up
 # with after it writes its own .claude/ hooks and skills into the project.
 # If those change, recount against frame 003 rather than trusting them.
 #
 # Run with:
-#   ./amf-capture.sh --scenario <scratch>/learning-mode-errors.txt \
+#   ./aiw-capture.sh --scenario <scratch>/learning-mode-errors.txt \
 #     --seed <scratch>/seed-project.json \
 #     --seed-feature <scratch>/seed-feature.json \
 #     --geometry 140x40

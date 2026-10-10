@@ -29,7 +29,7 @@ db_path = sys.argv[1]
 repo_root = sys.argv[2]
 pr_number = int(sys.argv[3])
 
-OWNER, REPO = "eldridgerdev", "agent-mainframe"
+OWNER, REPO = "example-org", "ai-workstation"
 QUESTION_ID = 710101
 CHANGE_ID = 710102
 
@@ -124,7 +124,7 @@ conn.execute(
     "INSERT OR REPLACE INTO features "
     "(id, project_id, name, branch, workdir, is_worktree, tmux_session, mode, agent, status, collapsed, created_at, last_accessed) "
     "VALUES ('ctx-demo-feature', ?, 'investigate context demo', 'pr-triage-investigate-optionally', ?, 0, "
-    "'amf-ctx-demo', 'vibe', 'codex', 'stopped', 0, datetime('now'), datetime('now'))",
+    "'aiw-ctx-demo', 'vibe', 'codex', 'stopped', 0, datetime('now'), datetime('now'))",
     (project_id, repo_root),
 )
 

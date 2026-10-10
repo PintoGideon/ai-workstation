@@ -19,7 +19,7 @@ pub enum ContextBand {
 }
 
 /// Whether the usage value came directly from the harness or includes an
-/// AMF calculation/heuristic that must be marked as an estimate in the UI.
+/// AIW calculation/heuristic that must be marked as an estimate in the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ContextProvenance {
@@ -39,7 +39,7 @@ pub enum ContextFreshness {
     Stale,
 }
 
-/// Why AMF started a new context-usage generation.
+/// Why AIW started a new context-usage generation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ContextResetReason {
@@ -135,15 +135,15 @@ pub struct SessionContextSnapshot {
     pub freshness: ContextFreshness,
     /// When the harness data represented by this snapshot was observed.
     pub sampled_at: DateTime<Utc>,
-    /// Most recent time AMF attempted to refresh this snapshot.
+    /// Most recent time AIW attempted to refresh this snapshot.
     pub checked_at: DateTime<Utc>,
     pub reset: ContextResetMetadata,
 }
 
-/// Transient context state for one AMF agent session.
+/// Transient context state for one AIW agent session.
 ///
 /// Keeping this outside the persisted project model avoids turning an old
-/// sample into apparently fresh telemetry after an AMF restart. The reset
+/// sample into apparently fresh telemetry after an AIW restart. The reset
 /// metadata remains available while a post-compaction sample is pending even
 /// though there is deliberately no percentage to render.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

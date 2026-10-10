@@ -9,14 +9,12 @@ use crate::token_tracking::{
 fn provider_to_str(p: &TokenUsageProvider) -> &'static str {
     match p {
         TokenUsageProvider::Claude => "claude",
-        TokenUsageProvider::Opencode => "opencode",
         TokenUsageProvider::Codex => "codex",
     }
 }
 
 fn provider_from_str(s: &str) -> TokenUsageProvider {
     match s {
-        "opencode" => TokenUsageProvider::Opencode,
         "codex" => TokenUsageProvider::Codex,
         _ => TokenUsageProvider::Claude,
     }
@@ -28,7 +26,9 @@ pub fn load(conn: &Connection) -> Result<Vec<DbTokenCacheEntry>> {
                 has_usage, input_tokens, output_tokens,
                 cache_read_tokens, cache_write_tokens,
                 reasoning_tokens, total_tokens, parse_state
-         FROM token_usage_cache",
+         FROM token_usage_cache
+         -- FORK: rows cached for the removed OpenCode harness are ignored.
+         WHERE source_provider != 'opencode'",
     )?;
 
     let entries = stmt

@@ -2,6 +2,8 @@ use super::*;
 
 impl App {
     pub fn open_session_switcher(&mut self) {
+        #[cfg(not(test))]
+        self.reconcile_vanished_windows(); // FORK: don't offer closed windows
         let (
             project_name,
             feature_name,

@@ -11,11 +11,11 @@ use tree_sitter_language::LanguageFn;
 use super::detect::{HighlightGrammarSpec, HighlightInstallState, HighlightLanguage};
 use super::model::{HighlightedLine, HighlightedSpan, HighlightedText, SyntaxClass};
 
+// FORK(no-cloud): only `Warn` is left; `Info`/`Error` came from the removed
+// automatic parser re-download.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StartupValidationLevel {
-    Info,
     Warn,
-    Error,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,24 +165,16 @@ where
                     ),
                 });
 
-                match reinstall_language(language) {
-                    Ok(summary) => {
-                        messages.push(StartupValidationMessage {
-                            level: StartupValidationLevel::Info,
-                            message: summary,
-                        });
-                    }
-                    Err(repair_error) => {
-                        messages.push(StartupValidationMessage {
-                            level: StartupValidationLevel::Error,
-                            message: format!(
-                                "Failed to repair {} parser after startup validation: {}",
-                                language.picker_title(),
-                                repair_error
-                            ),
-                        });
-                    }
-                }
+                // FORK(no-cloud): AIW re-ran the installer (a `git clone`
+                // from GitHub) here, unasked, at startup. AIW only says so;
+                // re-downloading is the user's call in the syntax picker.
+                messages.push(StartupValidationMessage {
+                    level: StartupValidationLevel::Warn,
+                    message: format!(
+                        "{} parser needs repair: open the syntax picker (p) and press i to re-download it",
+                        language.picker_title()
+                    ),
+                });
             }
         }
     }
@@ -431,10 +423,6 @@ where
 
 fn validate_installed_parser(language: HighlightLanguage) -> Result<()> {
     load_package(language).map(|_| ())
-}
-
-fn reinstall_language(language: HighlightLanguage) -> Result<String> {
-    install_language(language, |_| {})
 }
 
 #[cfg(target_os = "macos")]

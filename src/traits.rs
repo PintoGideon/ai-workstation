@@ -37,14 +37,6 @@ pub trait TmuxOps: Send + Sync {
         resume_id: Option<String>,
         extra_args: Vec<String>,
     ) -> Result<()>;
-    fn launch_opencode(&self, session: &str, window: &str, feature_session_id: &str) -> Result<()>;
-    fn launch_opencode_with_session(
-        &self,
-        session: &str,
-        window: &str,
-        feature_session_id: &str,
-        resume_id: Option<String>,
-    ) -> Result<()>;
     fn launch_codex(
         &self,
         session: &str,
@@ -54,6 +46,15 @@ pub trait TmuxOps: Send + Sync {
         extra_args: Vec<String>,
     ) -> Result<()>;
     fn launch_pi(&self, session: &str, window: &str, feature_session_id: &str) -> Result<()>;
+    // FORK: generic launcher for Gemini/Cursor (see src/fork/extra_agents.rs)
+    fn launch_program(
+        &self,
+        session: &str,
+        window: &str,
+        feature_session_id: &str,
+        program: &str,
+        args: Vec<String>,
+    ) -> Result<()>;
     fn run_shell_command(&self, session: &str, window: &str, command: &str) -> Result<()>;
     fn send_keys(&self, session: &str, window: &str, keys: &str) -> Result<()>;
     fn send_literal(&self, session: &str, window: &str, text: &str) -> Result<()>;

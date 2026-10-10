@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::project::Feature;
 
-pub(crate) const DEFAULT_PLAN_FILE: &str = "AMF_PLAN.md";
+pub(crate) const DEFAULT_PLAN_FILE: &str = "AIW_PLAN.md";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum EffectivePlan {
@@ -26,7 +26,7 @@ pub(crate) enum SelectedPlanPathError {
     NotMarkdown,
 }
 
-/// Resolve the one plan AMF should present for a feature.
+/// Resolve the one plan AIW should present for a feature.
 ///
 /// The conventional worktree plan always wins. A manual selection is only
 /// effective while it continues to satisfy the same worktree and file-type
@@ -218,7 +218,7 @@ mod tests {
 
         assert_eq!(
             plan_sidebar_display_text(workdir.path(), None).as_deref(),
-            Some("Current: AMF_PLAN.md")
+            Some("Current: AIW_PLAN.md")
         );
     }
 

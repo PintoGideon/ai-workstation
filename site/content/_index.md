@@ -1,16 +1,16 @@
 +++
-title = "Agent Mainframe"
+title = "AI Workstation"
 template = "index.html"
 
 [extra]
 headline = "Run multiple AI coding agents in parallel, without losing track of them."
-subhead = "AMF is a terminal dashboard for managing Claude Code, Codex, OpenCode, and Pi sessions. It organizes work by project and feature, creates isolated git worktrees when needed, and shows which agents are asking a question and which have finished work waiting to be reviewed."
-install_cmd = "cargo install agent-mainframe --locked\namf"
-install_note = "The crate installs the amf binary. Keep ~/.cargo/bin in your PATH. This source installation requires Rust, a C compiler, and tmux."
+subhead = "AIW is a terminal dashboard for managing Claude Code, Codex, and Pi sessions. It organizes work by project and feature, creates isolated git worktrees when needed, and shows which agents are asking a question and which have finished work waiting to be reviewed."
+install_cmd = "cargo +1.99.0 install --path . --locked\naiw"
+install_note = "The crate installs the aiw binary. Keep ~/.cargo/bin in your PATH. This source installation requires Rust, a C compiler, and tmux."
 hero_image = "images/dashboard.png"
-hero_image_alt = "AMF dashboard showing a project with four concurrent Claude agent sessions, each on its own git worktree"
+hero_image_alt = "AIW dashboard showing a project with four concurrent Claude agent sessions, each on its own git worktree"
 
-agents = ["Claude Code", "Codex", "OpenCode", "Pi"]
+agents = ["Claude Code", "Codex", "Pi"]
 
 [[extra.features]]
 title = "One dashboard, many agents"
@@ -39,4 +39,4 @@ body = "Reusable prompts, scoped TODO lists, themes, lifecycle hooks, and worksp
 
 ## About the project
 
-🤖 AMF is a terminal-based control center for running AI coding agents (Claude Code, Codex, OpenCode, Pi) against your own repos — built for everyday developers, not teams burning enterprise budgets on the priciest frontier models. It's designed around subscription plans people already have through work or pay for out of pocket, so you get real leverage from AI-assisted coding without needing a premium API tier. Full transparency is the core value: every prompt is visible and editable, every diff is reviewable before it lands, and nothing happens in a black box — whether you want to read every line an agent writes or just skim the summary and trust the process. The goal is to make AI-assisted development practical and honest for the average developer, not just the well-funded ones.
+🤖 AIW is a terminal-based control center for running AI coding agents (Claude Code, Codex, Pi) against your own repos — built for everyday developers, not teams burning enterprise budgets on the priciest frontier models. It's designed around subscription plans people already have through work or pay for out of pocket, so you get real leverage from AI-assisted coding without needing a premium API tier. Full transparency is the core value: every prompt is visible and editable, every diff is reviewable before it lands, and nothing happens in a black box — whether you want to read every line an agent writes or just skim the summary and trust the process. The goal is to make AI-assisted development practical and honest for the average developer, not just the well-funded ones.

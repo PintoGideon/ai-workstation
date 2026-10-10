@@ -319,13 +319,15 @@ impl App {
             .unwrap_or(&feature.sessions[0].tmux_window)
             .to_string();
 
+        // FORK: reserve the feature's port block (AIW_PORT) before tmux starts.
+        crate::fork::ports::prepare_feature_session(&feature.id, &feature.tmux_session);
         self.tmux.create_session_with_window(
             &feature.tmux_session,
             &first_window,
             &feature.workdir,
         )?;
         self.tmux
-            .set_session_env(&feature.tmux_session, "AMF_SESSION", &feature.tmux_session)?;
+            .set_session_env(&feature.tmux_session, "AIW_SESSION", &feature.tmux_session)?;
 
         for session in feature
             .sessions_to_start()
@@ -387,13 +389,6 @@ impl App {
                         extra_args,
                     )?;
                 }
-                SessionKind::Opencode => {
-                    self.tmux.launch_opencode(
-                        &feature.tmux_session,
-                        &session.tmux_window,
-                        &session.id,
-                    )?;
-                }
                 SessionKind::Codex => {
                     let codex_args =
                         crate::codex_config::launch_override_args(&feature.workdir, &feature.mode);
@@ -411,6 +406,20 @@ impl App {
                         &session.tmux_window,
                         &session.id,
                     )?;
+                }
+                // FORK: Gemini/Cursor
+                SessionKind::Gemini | SessionKind::Cursor => {
+                    if let Some(agent) = super::session_ops::agent_for_session_kind(&session.kind) {
+                        crate::fork::extra_agents::launch(
+                            self.tmux.as_ref(),
+                            &agent,
+                            &feature.tmux_session,
+                            &session.tmux_window,
+                            &session.id,
+                            &feature.mode,
+                            session.claude_session_id.as_deref(),
+                        )?;
+                    }
                 }
                 SessionKind::Nvim => {
                     self.tmux

@@ -1,6 +1,5 @@
 use super::support::*;
 use crate::app::attention::{AttentionSource, AttentionState};
-use crate::app::sync::pane_shows_thinking_hint;
 use crate::app::util::{latest_prompt_path, read_latest_prompt};
 use crate::app::*;
 use crate::project::{
@@ -51,78 +50,40 @@ fn poll_sidebar_load_results_updates_feature_caches() {
         Box::new(MockWorktreeOps::new()),
     );
 
-    app.pending_sidebar_loads.insert("amf-my-feat".to_string());
+    app.pending_sidebar_loads.insert("aiw-my-feat".to_string());
     app.sidebar_load_tx
         .send(crate::app::SidebarLoadResult {
-            tmux_session: "amf-my-feat".to_string(),
+            tmux_session: "aiw-my-feat".to_string(),
             signature: 7,
             changed: true,
             latest_prompt: Some("lazy prompt".to_string()),
             model_text: Some("Model: openai/gpt-5.5".to_string()),
-            opencode_sidebar: Some(crate::app::opencode_storage::OpencodeSidebarData {
-                session_id: "ses-1".to_string(),
-                title: Some("Loaded later".to_string()),
-                latest_prompt: Some("lazy prompt".to_string()),
-                status: Some("busy".to_string()),
-                last_tool: Some("edit".to_string()),
-                todo_count: Some(2),
-                todo_preview: vec!["finish parser".to_string(), "wire UI".to_string()],
-                pending_permission: None,
-                last_error: None,
-                lsp_summary: Some("ready".to_string()),
-                live_summary: Some("live summary".to_string()),
-                model: Some("gpt-5.5".to_string()),
-                provider: Some("openai".to_string()),
-                reasoning_tokens: Some(12),
-                additions: Some(3),
-                deletions: Some(1),
-                files: Some(1),
-            }),
-            plan_text: Some("Current: AMF_PLAN.md".to_string()),
+            plan_text: Some("Current: AIW_PLAN.md".to_string()),
         })
         .unwrap();
 
     app.poll_sidebar_load_results();
 
     assert_eq!(
-        app.latest_prompt_for_session("amf-my-feat"),
+        app.latest_prompt_for_session("aiw-my-feat"),
         Some("lazy prompt")
     );
     assert_eq!(
         app.sidebar_effective_plan_cache
-            .get("amf-my-feat")
+            .get("aiw-my-feat")
             .map(String::as_str),
-        Some("Current: AMF_PLAN.md")
-    );
-    assert_eq!(
-        app.opencode_sidebar_cache
-            .get("amf-my-feat")
-            .and_then(|data| data.title.as_deref()),
-        Some("Loaded later")
+        Some("Current: AIW_PLAN.md")
     );
     assert_eq!(
         app.sidebar_model_cache
-            .get("amf-my-feat")
+            .get("aiw-my-feat")
             .map(String::as_str),
         Some("Model: openai/gpt-5.5")
     );
-    assert!(!app.pending_sidebar_loads.contains("amf-my-feat"));
+    assert!(!app.pending_sidebar_loads.contains("aiw-my-feat"));
 }
 
 // ── thinking hint parsing ─────────────────────────────────
-
-#[test]
-fn pane_shows_thinking_hint_detects_supported_markers() {
-    assert!(pane_shows_thinking_hint("Esc to interrupt"));
-    assert!(pane_shows_thinking_hint("press ESC interrupt to stop"));
-    assert!(pane_shows_thinking_hint("Ctrl+C to interrupt"));
-}
-
-#[test]
-fn pane_shows_thinking_hint_ignores_unrelated_text() {
-    assert!(!pane_shows_thinking_hint("waiting for input"));
-    assert!(!pane_shows_thinking_hint("all done"));
-}
 
 // ── sync_statuses ─────────────────────────────────────────────
 
@@ -131,7 +92,7 @@ fn sync_statuses_stopped_becomes_idle_when_session_live() {
     let mut tmux = MockTmuxOps::new();
     tmux.expect_list_sessions()
         .times(1)
-        .returning(|| Ok(vec!["amf-my-feat".to_string()]));
+        .returning(|| Ok(vec!["aiw-my-feat".to_string()]));
 
     let store = store_with_feature(ProjectStatus::Stopped);
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
@@ -152,40 +113,17 @@ fn sync_statuses_active_becomes_stopped_when_session_gone() {
 
     let store = store_with_feature(ProjectStatus::Active);
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.pending_sidebar_loads.insert("amf-my-feat".to_string());
+    app.pending_sidebar_loads.insert("aiw-my-feat".to_string());
     app.latest_prompt_cache
-        .insert("amf-my-feat".to_string(), prompt_entry("cached prompt"));
-    app.opencode_sidebar_cache.insert(
-        "amf-my-feat".to_string(),
-        crate::app::opencode_storage::OpencodeSidebarData {
-            session_id: "ses-1".to_string(),
-            title: Some("cached".to_string()),
-            latest_prompt: None,
-            status: None,
-            last_tool: None,
-            todo_count: None,
-            todo_preview: Vec::new(),
-            pending_permission: None,
-            last_error: None,
-            lsp_summary: None,
-            live_summary: None,
-            model: None,
-            provider: None,
-            reasoning_tokens: None,
-            additions: None,
-            deletions: None,
-            files: None,
-        },
-    );
+        .insert("aiw-my-feat".to_string(), prompt_entry("cached prompt"));
     app.sync_statuses();
 
     assert_eq!(
         app.store.projects[0].features[0].status,
         ProjectStatus::Stopped
     );
-    assert!(app.latest_prompt_for_session("amf-my-feat").is_none());
-    assert!(!app.opencode_sidebar_cache.contains_key("amf-my-feat"));
-    assert!(!app.pending_sidebar_loads.contains("amf-my-feat"));
+    assert!(app.latest_prompt_for_session("aiw-my-feat").is_none());
+    assert!(!app.pending_sidebar_loads.contains("aiw-my-feat"));
 }
 
 #[test]
@@ -193,7 +131,7 @@ fn sync_statuses_idle_stays_idle_when_session_live() {
     let mut tmux = MockTmuxOps::new();
     tmux.expect_list_sessions()
         .times(1)
-        .returning(|| Ok(vec!["amf-my-feat".to_string()]));
+        .returning(|| Ok(vec!["aiw-my-feat".to_string()]));
 
     let store = store_with_feature(ProjectStatus::Idle);
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
@@ -418,7 +356,7 @@ fn active_pr_successor_replaces_badge_and_invalidates_old_pr_targets() {
         _ => unreachable!(),
     };
     app.pr_review_return = Some(PrReviewReturn {
-        session: "amf-my-feat".to_string(),
+        session: "aiw-my-feat".to_string(),
         window: "pr-triage".to_string(),
         state: old_state.clone(),
     });
@@ -483,14 +421,14 @@ fn active_pr_successor_prevents_returning_to_stashed_predecessor() {
         _ => unreachable!(),
     };
     app.pr_review_return = Some(PrReviewReturn {
-        session: "amf-my-feat".to_string(),
+        session: "aiw-my-feat".to_string(),
         window: "pr-triage".to_string(),
         state: old_state,
     });
     app.mode = AppMode::Viewing(ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
-        "amf-my-feat".to_string(),
+        "aiw-my-feat".to_string(),
         "pr-triage".to_string(),
         "PR Triage".to_string(),
         SessionKind::Claude,
@@ -586,7 +524,7 @@ fn unchanged_active_pr_badge_does_not_cancel_explicit_closed_pr_fetch() {
 #[test]
 fn terminal_pr_found_updates_cache_and_persists_to_db() {
     use crate::app::sync::{TerminalPrLookup, TerminalPrUpdate};
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use crate::github::{TerminalPr, TerminalPrState};
 
     let store = store_with_feature(ProjectStatus::Idle);
@@ -596,7 +534,7 @@ fn terminal_pr_found_updates_cache_and_persists_to_db() {
         Box::new(MockWorktreeOps::new()),
     );
     let db_file = NamedTempFile::new().unwrap();
-    app.db = Some(AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(AiwDb::open(db_file.path()).unwrap());
 
     let feature = &app.store.projects[0].features[0];
     let feature_id = feature.id.clone();
@@ -758,7 +696,7 @@ fn confirmed_no_terminal_pr_is_cached_and_cleared_when_branch_reopens() {
 /// store doesn't have is simply not applied.
 #[test]
 fn load_terminal_prs_from_db_seeds_only_matching_features() {
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use crate::github::{TerminalPr, TerminalPrState};
 
     let store = store_with_feature(ProjectStatus::Idle);
@@ -772,7 +710,7 @@ fn load_terminal_prs_from_db_seeds_only_matching_features() {
     let branch = app.store.projects[0].features[0].branch.clone();
 
     let db_file = NamedTempFile::new().unwrap();
-    let db = AmfDb::open(db_file.path()).unwrap();
+    let db = AiwDb::open(db_file.path()).unwrap();
     let pr = TerminalPr {
         number: 5,
         state: TerminalPrState::Merged,
@@ -807,7 +745,7 @@ fn predecessor_invalidation_preserves_live_successor_ai_review() {
         _ => unreachable!(),
     };
     app.pr_review_return = Some(PrReviewReturn {
-        session: "amf-my-feat".to_string(),
+        session: "aiw-my-feat".to_string(),
         window: "pr-triage".to_string(),
         state: successor.clone(),
     });
@@ -848,10 +786,9 @@ fn predecessor_invalidation_preserves_live_successor_ai_review() {
 }
 
 #[test]
-fn sync_thinking_status_drains_sidebar_results_for_opencode_features() {
+fn sync_thinking_status_drains_sidebar_results() {
     let repo = TempDir::new().unwrap();
-    let mut store = store_with_repo(repo.path().to_path_buf(), ProjectStatus::Idle);
-    store.projects[0].features[0].agent = AgentKind::Opencode;
+    let store = store_with_repo(repo.path().to_path_buf(), ProjectStatus::Idle);
 
     let mut app = App::new_for_test(
         store,
@@ -859,190 +796,100 @@ fn sync_thinking_status_drains_sidebar_results_for_opencode_features() {
         Box::new(MockWorktreeOps::new()),
     );
 
-    app.pending_sidebar_loads.insert("amf-my-feat".to_string());
+    app.pending_sidebar_loads.insert("aiw-my-feat".to_string());
     app.sidebar_load_tx
         .send(crate::app::SidebarLoadResult {
-            tmux_session: "amf-my-feat".to_string(),
+            tmux_session: "aiw-my-feat".to_string(),
             signature: 9,
             changed: true,
             latest_prompt: Some("warm prompt".to_string()),
             model_text: None,
-            opencode_sidebar: Some(crate::app::opencode_storage::OpencodeSidebarData {
-                session_id: "ses-1".to_string(),
-                title: Some("Warm cache".to_string()),
-                latest_prompt: Some("warm prompt".to_string()),
-                status: Some("busy".to_string()),
-                last_tool: Some("edit".to_string()),
-                todo_count: Some(1),
-                todo_preview: vec!["finish parser".to_string()],
-                pending_permission: None,
-                last_error: None,
-                lsp_summary: None,
-                live_summary: None,
-                model: None,
-                provider: None,
-                reasoning_tokens: None,
-                additions: None,
-                deletions: None,
-                files: None,
-            }),
             plan_text: None,
         })
         .unwrap();
 
-    assert!(app.sync_thinking_status());
+    app.sync_thinking_status();
     assert_eq!(
-        app.latest_prompt_for_session("amf-my-feat"),
+        app.latest_prompt_for_session("aiw-my-feat"),
         Some("warm prompt")
     );
-    assert_eq!(
-        app.opencode_sidebar_cache
-            .get("amf-my-feat")
-            .and_then(|data| data.title.as_deref()),
-        Some("Warm cache")
-    );
-    assert!(app.is_feature_thinking("amf-my-feat"));
-    assert!(!app.pending_sidebar_loads.contains("amf-my-feat"));
-}
-
-#[test]
-fn ipc_opencode_sidebar_update_queues_sidebar_refresh() {
-    let repo = TempDir::new().unwrap();
-    let mut store = store_with_repo(repo.path().to_path_buf(), ProjectStatus::Idle);
-    store.projects[0].features[0].agent = AgentKind::Opencode;
-
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "opencode-sidebar-updated",
-        "source": "opencode-sidebar",
-        "session_id": "ses-1",
-        "cwd": repo.path(),
-    }));
-
-    assert!(app.pending_sidebar_loads.contains("amf-my-feat"));
+    assert!(!app.pending_sidebar_loads.contains("aiw-my-feat"));
 }
 
 #[test]
 fn sync_thinking_status_keeps_a_question_raised_while_the_session_is_busy() {
     let repo = TempDir::new().unwrap();
     let mut store = store_with_repo(repo.path().to_path_buf(), ProjectStatus::Idle);
-    store.projects[0].features[0].agent = AgentKind::Opencode;
+    store.projects[0].features[0].agent = AgentKind::Claude;
 
     let mut app = App::new_for_test(
         store,
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
+    // Thinking comes from IPC events, so the verdict is fully test-driven.
+    app.ipc = Some(crate::ipc::start(&repo.path().join("ipc.sock")).unwrap());
 
-    let sidebar_data = |status: &str| crate::app::opencode_storage::OpencodeSidebarData {
-        session_id: "ses-1".to_string(),
-        title: None,
-        latest_prompt: None,
-        status: Some(status.to_string()),
-        last_tool: None,
-        todo_count: None,
-        todo_preview: vec![],
-        pending_permission: None,
-        last_error: None,
-        lsp_summary: None,
-        live_summary: None,
-        model: None,
-        provider: None,
-        reasoning_tokens: None,
-        additions: None,
-        deletions: None,
-        files: None,
-    };
-
-    app.opencode_sidebar_cache
-        .insert("amf-my-feat".to_string(), sidebar_data("busy"));
+    app.ipc_thinking_sessions.insert("aiw-my-feat".to_string());
     app.sync_thinking_status();
 
-    // The harness asks something without going idle first: OpenCode stays busy
-    // while its `question` tool is open, and Claude keeps its thinking marker
-    // through a permission prompt. Polling must not retire it.
+    // The harness asks something without going idle first: Claude keeps its
+    // thinking marker through a permission prompt. Polling must not retire it.
     app.record_attention(
-        "amf-my-feat",
-        &AgentKind::Opencode,
+        "aiw-my-feat",
+        &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
     app.sync_thinking_status();
     app.sync_thinking_status();
     assert_eq!(
-        app.attention_for("amf-my-feat").map(|r| r.state),
+        app.attention_for("aiw-my-feat").map(|r| r.state),
         Some(AttentionState::Question),
         "a question must survive polls while the session is still busy"
     );
 
     // Going idle does not retire it either — that is what a blocked agent
     // looks like from here, so the inferred completion must not win.
-    app.opencode_sidebar_cache
-        .insert("amf-my-feat".to_string(), sidebar_data("idle"));
+    app.ipc_thinking_sessions.remove("aiw-my-feat");
     app.sync_thinking_status();
     assert_eq!(
-        app.attention_for("amf-my-feat").map(|r| r.state),
+        app.attention_for("aiw-my-feat").map(|r| r.state),
         Some(AttentionState::Question)
     );
 
     // Working again is the actual new-output transition, and clears it.
-    app.opencode_sidebar_cache
-        .insert("amf-my-feat".to_string(), sidebar_data("busy"));
+    app.ipc_thinking_sessions.insert("aiw-my-feat".to_string());
     app.sync_thinking_status();
-    assert!(app.attention_for("amf-my-feat").is_none());
+    assert!(app.attention_for("aiw-my-feat").is_none());
 }
 
 #[test]
 fn sync_thinking_status_raises_review_ready_after_watched_session_finishes() {
     let repo = TempDir::new().unwrap();
     let mut store = store_with_repo(repo.path().to_path_buf(), ProjectStatus::Idle);
-    store.projects[0].features[0].agent = AgentKind::Opencode;
+    store.projects[0].features[0].agent = AgentKind::Codex;
 
     let mut app = App::new_for_test(
         store,
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
+    app.ipc = Some(crate::ipc::start(&repo.path().join("ipc.sock")).unwrap());
 
     app.awaiting_review_fixes.insert(
-        "amf-my-feat".to_string(),
+        "aiw-my-feat".to_string(),
         AwaitingReviewFix {
             started_thinking: false,
         },
     );
 
-    let sidebar_data = |status: &str| crate::app::opencode_storage::OpencodeSidebarData {
-        session_id: "ses-1".to_string(),
-        title: None,
-        latest_prompt: None,
-        status: Some(status.to_string()),
-        last_tool: None,
-        todo_count: None,
-        todo_preview: vec![],
-        pending_permission: None,
-        last_error: None,
-        lsp_summary: None,
-        live_summary: None,
-        model: None,
-        provider: None,
-        reasoning_tokens: None,
-        additions: None,
-        deletions: None,
-        files: None,
-    };
-
     // Still working: `started_thinking` flips true, no notification yet.
-    app.opencode_sidebar_cache
-        .insert("amf-my-feat".to_string(), sidebar_data("busy"));
+    app.ipc_thinking_sessions.insert("aiw-my-feat".to_string());
     app.sync_thinking_status();
     assert!(
         app.awaiting_review_fixes
-            .get("amf-my-feat")
+            .get("aiw-my-feat")
             .is_some_and(|w| w.started_thinking),
         "watched session should be marked as having started thinking"
     );
@@ -1054,11 +901,10 @@ fn sync_thinking_status_raises_review_ready_after_watched_session_finishes() {
     // Goes idle: the watched session raises a distinct "review-ready"
     // notification instead of (not in addition to) the generic one, and the
     // watch entry is cleared.
-    app.opencode_sidebar_cache
-        .insert("amf-my-feat".to_string(), sidebar_data("idle"));
+    app.ipc_thinking_sessions.remove("aiw-my-feat");
     app.sync_thinking_status();
 
-    assert!(!app.awaiting_review_fixes.contains_key("amf-my-feat"));
+    assert!(!app.awaiting_review_fixes.contains_key("aiw-my-feat"));
     assert_eq!(app.pending_inputs.len(), 1);
     let notif = &app.pending_inputs[0];
     assert_eq!(notif.notification_type, "review-ready");
@@ -1076,7 +922,7 @@ fn visible_animation_is_enabled_for_dashboard_thinking_features() {
     );
 
     assert!(!app.has_visible_animation());
-    app.thinking_features.insert("amf-my-feat".to_string());
+    app.thinking_features.insert("aiw-my-feat".to_string());
     assert!(app.has_visible_animation());
 }
 
@@ -1091,7 +937,7 @@ fn visible_animation_is_enabled_for_dashboard_summary_generation() {
 
     app.summary_state
         .generating
-        .insert("amf-my-feat".to_string());
+        .insert("aiw-my-feat".to_string());
     assert!(app.has_visible_animation());
 }
 
@@ -1172,7 +1018,8 @@ fn visible_animation_is_enabled_for_pr_review_running_screens() {
     assert!(app.has_visible_animation());
 }
 
-fn store_with_single_agent_session(
+// FORK: shared with fork_agents tests
+pub(super) fn store_with_single_agent_session(
     workdir: &std::path::Path,
     agent: AgentKind,
     kind: SessionKind,
@@ -1203,7 +1050,7 @@ fn store_with_single_agent_session(
         branch: "my-feat".to_string(),
         workdir: workdir.to_path_buf(),
         is_worktree: false,
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
@@ -1253,8 +1100,8 @@ fn sync_session_status_reads_first_line() {
     let store = store_with_custom_session(workdir.path(), session_id);
     let feature_id = store.projects[0].features[0].id.clone();
     let db_dir = TempDir::new().unwrap();
-    let db_path = db_dir.path().join("amf.db");
-    let db = crate::db::AmfDb::open(&db_path).unwrap();
+    let db_path = db_dir.path().join("aiw.db");
+    let db = crate::db::AiwDb::open(&db_path).unwrap();
     db.save_store(&store).unwrap();
     db.upsert_session_status(session_id, &feature_id, "API :3000 | DB :5432", None)
         .unwrap();
@@ -1277,7 +1124,7 @@ fn sync_session_status_reads_first_line() {
 fn sync_session_status_migrates_legacy_file_to_db() {
     let workdir = TempDir::new().unwrap();
     let session_id = "test-sess-migrate";
-    let status_dir = workdir.path().join(".amf").join("session-status");
+    let status_dir = workdir.path().join(".aiw").join("session-status");
     std::fs::create_dir_all(&status_dir).unwrap();
     std::fs::write(
         status_dir.join(format!("{}.txt", session_id)),
@@ -1287,8 +1134,8 @@ fn sync_session_status_migrates_legacy_file_to_db() {
 
     let store = store_with_custom_session(workdir.path(), session_id);
     let db_dir = TempDir::new().unwrap();
-    let db_path = db_dir.path().join("amf.db");
-    let db = crate::db::AmfDb::open(&db_path).unwrap();
+    let db_path = db_dir.path().join("aiw.db");
+    let db = crate::db::AiwDb::open(&db_path).unwrap();
     db.save_store(&store).unwrap();
 
     let mut app = App::new_for_test(
@@ -1316,7 +1163,6 @@ fn sync_session_status_migrates_legacy_file_to_db() {
 #[test]
 fn sync_session_status_shows_agent_token_usage() {
     let home = TempDir::new().unwrap();
-    let data = TempDir::new().unwrap();
     let workdir = TempDir::new().unwrap();
     let encoded = workdir
         .path()
@@ -1359,7 +1205,7 @@ fn sync_session_status_shows_agent_token_usage() {
         branch: "my-feat".to_string(),
         workdir: workdir.path().to_path_buf(),
         is_worktree: false,
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         sessions: vec![session],
         collapsed: true,
         mode: VibeMode::default(),
@@ -1400,20 +1246,14 @@ fn sync_session_status_shows_agent_token_usage() {
         extra: HashMap::new(),
     };
 
-    let mut tracker = SessionTokenTracker::new(
-        Some(home.path().to_path_buf()),
-        Some(data.path().to_path_buf()),
-    );
+    let mut tracker = SessionTokenTracker::new(Some(home.path().to_path_buf()));
     let mut app = App::new_for_test(
         store,
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.context_collector = crate::context_collectors::SessionContextCollector::with_roots(
-        home.path(),
-        data.path(),
-        data.path(),
-    );
+    app.context_collector =
+        crate::context_collectors::SessionContextCollector::with_home(home.path());
     app.sync_session_status_with_tracker(&mut tracker);
 
     assert_eq!(
@@ -1453,11 +1293,11 @@ fn sync_session_status_collects_isolated_pi_context_without_a_token_usage_provid
     let first_session =
         store.projects[0].features[0].add_session_named(SessionKind::Pi, "Pi".to_string());
     first_session.created_at = first_created;
-    let first_amf_session_id = first_session.id.clone();
+    let first_aiw_session_id = first_session.id.clone();
     let second_session =
         store.projects[0].features[0].add_session_named(SessionKind::Pi, "Pi 2".to_string());
     second_session.created_at = second_created;
-    let second_amf_session_id = second_session.id.clone();
+    let second_aiw_session_id = second_session.id.clone();
     let session_dir = home.path().join(".pi/agent/sessions/repo");
     std::fs::create_dir_all(&session_dir).unwrap();
     std::fs::write(
@@ -1490,23 +1330,20 @@ fn sync_session_status_collects_isolated_pi_context_without_a_token_usage_provid
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.context_collector = crate::context_collectors::SessionContextCollector::with_roots(
-        home.path(),
-        home.path(),
-        home.path(),
-    );
-    let mut tracker = SessionTokenTracker::new(Some(home.path().to_path_buf()), None);
+    app.context_collector =
+        crate::context_collectors::SessionContextCollector::with_home(home.path());
+    let mut tracker = SessionTokenTracker::new(Some(home.path().to_path_buf()));
 
     app.sync_session_status_with_tracker(&mut tracker);
 
     let first_snapshot = app
         .context_states
-        .get(&first_amf_session_id)
+        .get(&first_aiw_session_id)
         .and_then(|state| state.snapshot.as_ref())
         .expect("Pi should participate in the shared five-second sync");
     let second_snapshot = app
         .context_states
-        .get(&second_amf_session_id)
+        .get(&second_aiw_session_id)
         .and_then(|state| state.snapshot.as_ref())
         .expect("the second Pi session should have independent context state");
     assert_eq!(first_snapshot.used_tokens, 21_000);
@@ -1537,23 +1374,17 @@ fn session_status_sync_refreshes_all_context_harnesses_and_excludes_terminal() {
     let feature = &mut store.projects[0].features[0];
     let claude = feature.add_session_named(SessionKind::Claude, "Claude".to_string());
     claude.claude_session_id = Some("claude-all".to_string());
-    let claude_amf_id = claude.id.clone();
+    let claude_aiw_id = claude.id.clone();
     let codex = feature.add_session_named(SessionKind::Codex, "Codex".to_string());
     codex.set_token_usage_source_exact(TokenUsageSource {
         provider: TokenUsageProvider::Codex,
         id: "codex-all".to_string(),
     });
-    let codex_amf_id = codex.id.clone();
-    let opencode = feature.add_session_named(SessionKind::Opencode, "OpenCode".to_string());
-    opencode.set_token_usage_source_exact(TokenUsageSource {
-        provider: TokenUsageProvider::Opencode,
-        id: "open-all".to_string(),
-    });
-    let opencode_amf_id = opencode.id.clone();
+    let codex_aiw_id = codex.id.clone();
     let pi = feature.add_session_named(SessionKind::Pi, "Pi".to_string());
-    let pi_amf_id = pi.id.clone();
+    let pi_aiw_id = pi.id.clone();
     let terminal = feature.add_session_named(SessionKind::Terminal, "Terminal".to_string());
-    let terminal_amf_id = terminal.id.clone();
+    let terminal_aiw_id = terminal.id.clone();
 
     let encoded = workdir
         .path()
@@ -1584,35 +1415,6 @@ fn session_status_sync_refreshes_all_context_harnesses_and_excludes_terminal() {
         ),
     );
     write(
-        roots
-            .path()
-            .join("opencode/storage/session/project/open-all.json"),
-        serde_json::json!({
-            "id": "open-all",
-            "directory": workdir.path(),
-            "time": {"updated": 2_000}
-        })
-        .to_string(),
-    );
-    write(
-        roots
-            .path()
-            .join("opencode/storage/message/open-all/m1.json"),
-        serde_json::json!({
-            "id": "m1",
-            "role": "assistant",
-            "providerID": "test",
-            "modelID": "model",
-            "time": {"completed": 2_000},
-            "tokens": {"input": 80_000, "output": 0, "cache": {"read": 0, "write": 0}}
-        })
-        .to_string(),
-    );
-    write(
-        roots.path().join("opencode/models.json"),
-        r#"{"test":{"models":{"model":{"limit":{"context":100000}}}}}"#.to_string(),
-    );
-    write(
         roots.path().join(".pi/agent/sessions/repo/pi-all.jsonl"),
         format!(
             "{{\"type\":\"session\",\"version\":3,\"id\":\"pi-all\",\"cwd\":{}}}\n\
@@ -1630,24 +1432,13 @@ fn session_status_sync_refreshes_all_context_harnesses_and_excludes_terminal() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.context_collector = crate::context_collectors::SessionContextCollector::with_roots(
-        roots.path(),
-        roots.path(),
-        roots.path(),
-    );
-    let mut tracker = SessionTokenTracker::new(
-        Some(roots.path().to_path_buf()),
-        Some(roots.path().to_path_buf()),
-    );
+    app.context_collector =
+        crate::context_collectors::SessionContextCollector::with_home(roots.path());
+    let mut tracker = SessionTokenTracker::new(Some(roots.path().to_path_buf()));
 
     app.sync_session_status_with_tracker(&mut tracker);
 
-    for (session_id, percentage) in [
-        (claude_amf_id, 70),
-        (codex_amf_id, 75),
-        (opencode_amf_id, 80),
-        (pi_amf_id, 90),
-    ] {
+    for (session_id, percentage) in [(claude_aiw_id, 70), (codex_aiw_id, 75), (pi_aiw_id, 90)] {
         assert_eq!(
             app.context_states[&session_id]
                 .snapshot
@@ -1663,13 +1454,12 @@ fn session_status_sync_refreshes_all_context_harnesses_and_excludes_terminal() {
                 .is_eligible(&session_id, Some(context_state))
         );
     }
-    assert!(!app.context_states.contains_key(&terminal_amf_id));
+    assert!(!app.context_states.contains_key(&terminal_aiw_id));
 }
 
 #[test]
 fn sync_session_status_marks_discovered_codex_usage_as_inferred() {
     let home = TempDir::new().unwrap();
-    let data = TempDir::new().unwrap();
     let workdir = TempDir::new().unwrap();
     let session_dir = home
         .path()
@@ -1715,7 +1505,7 @@ fn sync_session_status_marks_discovered_codex_usage_as_inferred() {
         branch: "my-feat".to_string(),
         workdir: workdir.path().to_path_buf(),
         is_worktree: false,
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
@@ -1756,10 +1546,7 @@ fn sync_session_status_marks_discovered_codex_usage_as_inferred() {
         extra: HashMap::new(),
     };
 
-    let mut tracker = SessionTokenTracker::new(
-        Some(home.path().to_path_buf()),
-        Some(data.path().to_path_buf()),
-    );
+    let mut tracker = SessionTokenTracker::new(Some(home.path().to_path_buf()));
     let mut app = App::new_for_test(
         store,
         Box::new(MockTmuxOps::new()),
@@ -1783,7 +1570,6 @@ fn sync_session_status_marks_discovered_codex_usage_as_inferred() {
 #[test]
 fn sync_session_status_does_not_infer_stale_codex_usage_for_new_session() {
     let home = TempDir::new().unwrap();
-    let data = TempDir::new().unwrap();
     let workdir = TempDir::new().unwrap();
     let codex_dir = home.path().join(".codex");
     std::fs::create_dir_all(&codex_dir).unwrap();
@@ -1851,7 +1637,7 @@ fn sync_session_status_does_not_infer_stale_codex_usage_for_new_session() {
         branch: "my-feat".to_string(),
         workdir: workdir.path().to_path_buf(),
         is_worktree: false,
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
@@ -1892,10 +1678,7 @@ fn sync_session_status_does_not_infer_stale_codex_usage_for_new_session() {
         extra: HashMap::new(),
     };
 
-    let mut tracker = SessionTokenTracker::new(
-        Some(home.path().to_path_buf()),
-        Some(data.path().to_path_buf()),
-    );
+    let mut tracker = SessionTokenTracker::new(Some(home.path().to_path_buf()));
     let mut app = App::new_for_test(
         store,
         Box::new(MockTmuxOps::new()),
@@ -1914,7 +1697,6 @@ fn sync_session_status_does_not_infer_stale_codex_usage_for_new_session() {
 #[test]
 fn sync_session_status_does_not_duplicate_inferred_sources_in_feature() {
     let home = TempDir::new().unwrap();
-    let data = TempDir::new().unwrap();
     let workdir = TempDir::new().unwrap();
     let session_dir = home
         .path()
@@ -1967,7 +1749,7 @@ fn sync_session_status_does_not_duplicate_inferred_sources_in_feature() {
         branch: "my-feat".to_string(),
         workdir: workdir.path().to_path_buf(),
         is_worktree: false,
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         sessions: vec![first, second],
         collapsed: false,
         mode: VibeMode::default(),
@@ -2008,10 +1790,7 @@ fn sync_session_status_does_not_duplicate_inferred_sources_in_feature() {
         extra: HashMap::new(),
     };
 
-    let mut tracker = SessionTokenTracker::new(
-        Some(home.path().to_path_buf()),
-        Some(data.path().to_path_buf()),
-    );
+    let mut tracker = SessionTokenTracker::new(Some(home.path().to_path_buf()));
     let mut app = App::new_for_test(
         store,
         Box::new(MockTmuxOps::new()),
@@ -2066,7 +1845,7 @@ fn sync_session_status_checks_sidebar_inputs_off_thread() {
         branch: "my-feat".to_string(),
         workdir: workdir.path().to_path_buf(),
         is_worktree: false,
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
@@ -2116,28 +1895,28 @@ fn sync_session_status_checks_sidebar_inputs_off_thread() {
         crate::app::SidebarLoadRequest::from_feature(&app.store.projects[0].features[0])
             .signature();
     app.sidebar_load_signatures
-        .insert("amf-my-feat".to_string(), signature);
+        .insert("aiw-my-feat".to_string(), signature);
 
     let mut tracker = SessionTokenTracker::default();
     app.sync_session_status_with_tracker(&mut tracker);
 
     assert!(
-        app.pending_sidebar_loads.contains("amf-my-feat"),
+        app.pending_sidebar_loads.contains("aiw-my-feat"),
         "sidebar input checks should be queued off the UI thread"
     );
     for _ in 0..20 {
         app.poll_sidebar_load_results();
-        if !app.pending_sidebar_loads.contains("amf-my-feat") {
+        if !app.pending_sidebar_loads.contains("aiw-my-feat") {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
     assert!(
-        !app.pending_sidebar_loads.contains("amf-my-feat"),
+        !app.pending_sidebar_loads.contains("aiw-my-feat"),
         "unchanged sidebar input check should complete"
     );
     assert!(
-        app.latest_prompt_for_session("amf-my-feat") == Some("first prompt"),
+        app.latest_prompt_for_session("aiw-my-feat") == Some("first prompt"),
         "unchanged sidebar input check should leave the existing cache alone"
     );
 
@@ -2147,18 +1926,18 @@ fn sync_session_status_checks_sidebar_inputs_off_thread() {
     app.sync_session_status_with_tracker(&mut tracker);
 
     assert!(
-        app.pending_sidebar_loads.contains("amf-my-feat"),
+        app.pending_sidebar_loads.contains("aiw-my-feat"),
         "changed prompt inputs should queue a fresh sidebar load"
     );
     for _ in 0..20 {
         app.poll_sidebar_load_results();
-        if !app.pending_sidebar_loads.contains("amf-my-feat") {
+        if !app.pending_sidebar_loads.contains("aiw-my-feat") {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
     assert_eq!(
-        app.latest_prompt_for_session("amf-my-feat"),
+        app.latest_prompt_for_session("aiw-my-feat"),
         Some("updated prompt")
     );
 }
@@ -2173,7 +1952,7 @@ fn note_codex_prompt_submit_marks_repo_root_feature_thinking() {
         Box::new(MockWorktreeOps::new()),
     );
     app.pending_inputs.push(PendingInput {
-        session_id: "amf-my-feat".to_string(),
+        session_id: "aiw-my-feat".to_string(),
         cwd: workdir.path().display().to_string(),
         message: "Codex finished and is waiting for input".to_string(),
         notification_type: "input-request".to_string(),
@@ -2196,10 +1975,10 @@ fn note_codex_prompt_submit_marks_repo_root_feature_thinking() {
         reply_socket: None,
     });
 
-    app.note_codex_prompt_submit("amf-my-feat", "codex");
+    app.note_codex_prompt_submit("aiw-my-feat", "codex");
 
     assert!(
-        app.ipc_thinking_sessions.contains("amf-my-feat"),
+        app.ipc_thinking_sessions.contains("aiw-my-feat"),
         "repo-root codex feature should be marked thinking"
     );
     assert!(
@@ -2220,9 +1999,9 @@ fn note_codex_prompt_submit_marks_codex_session_in_non_codex_feature_thinking() 
         Box::new(MockWorktreeOps::new()),
     );
 
-    app.note_codex_prompt_submit("amf-my-feat", "codex");
+    app.note_codex_prompt_submit("aiw-my-feat", "codex");
 
-    assert!(app.ipc_thinking_sessions.contains("amf-my-feat"));
+    assert!(app.ipc_thinking_sessions.contains("aiw-my-feat"));
     assert!(app.ipc_thinking_feature_sessions.contains("codex-sess"));
 }
 
@@ -2237,7 +2016,7 @@ fn apply_codex_live_event_updates_feature_live_state() {
     );
 
     let changed = app.apply_codex_live_event(
-        "amf-my-feat",
+        "aiw-my-feat",
         &serde_json::json!({
             "type": "plan",
             "payload": { "text": "1. Inspect\n2. Patch" }
@@ -2246,7 +2025,7 @@ fn apply_codex_live_event_updates_feature_live_state() {
 
     assert!(changed);
     let live = app
-        .codex_live_thread("amf-my-feat")
+        .codex_live_thread("aiw-my-feat")
         .expect("expected live codex state");
     assert_eq!(live.plan_text.as_deref(), Some("1. Inspect\n2. Patch"));
 }
@@ -2301,7 +2080,7 @@ fn sync_session_status_skips_sidebar_refresh_when_sidebar_hidden() {
     let mut view = ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
-        "amf-my-feat".to_string(),
+        "aiw-my-feat".to_string(),
         "codex".to_string(),
         "Codex".to_string(),
         SessionKind::Codex,
@@ -2313,7 +2092,7 @@ fn sync_session_status_skips_sidebar_refresh_when_sidebar_hidden() {
 
     app.sync_session_status();
 
-    assert!(!app.pending_sidebar_loads.contains("amf-my-feat"));
+    assert!(!app.pending_sidebar_loads.contains("aiw-my-feat"));
 }
 
 #[test]
@@ -2328,7 +2107,7 @@ fn toggling_sidebar_back_on_triggers_sidebar_refresh() {
     let mut view = ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
-        "amf-my-feat".to_string(),
+        "aiw-my-feat".to_string(),
         "codex".to_string(),
         "Codex".to_string(),
         SessionKind::Codex,
@@ -2340,7 +2119,7 @@ fn toggling_sidebar_back_on_triggers_sidebar_refresh() {
 
     app.toggle_sidebar_in_view();
 
-    assert!(app.pending_sidebar_loads.contains("amf-my-feat"));
+    assert!(app.pending_sidebar_loads.contains("aiw-my-feat"));
 }
 
 #[test]
@@ -2356,7 +2135,7 @@ fn ipc_input_request_updates_codex_live_work_state() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "input-request",
         "source": "codex-notify",
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "message": "Need approval before applying the patch.",
         "tool_name": "Bash",
@@ -2364,7 +2143,7 @@ fn ipc_input_request_updates_codex_live_work_state() {
     }));
 
     assert_eq!(
-        app.codex_live_thread("amf-my-feat")
+        app.codex_live_thread("aiw-my-feat")
             .and_then(|live| live.sidebar_work_text())
             .as_deref(),
         Some(
@@ -2391,7 +2170,7 @@ fn set_mtime(path: &std::path::Path, modified: std::time::SystemTime) {
 /// A file-backed session wait, as the notification scan builds them.
 fn file_session_wait(file_path: &std::path::Path, message: &str) -> PendingInput {
     PendingInput {
-        session_id: "amf-my-feat".to_string(),
+        session_id: "aiw-my-feat".to_string(),
         cwd: String::new(),
         message: message.to_string(),
         notification_type: "input-request".to_string(),
@@ -2459,7 +2238,7 @@ fn collapsing_session_waits_prefers_a_file_report_over_a_stale_ipc_one() {
     // then the socket the IPC copy names is gone.
     let mut ipc = file_session_wait(std::path::Path::new(""), "Reported over IPC");
     ipc.request_id = Some("req-1".to_string());
-    ipc.reply_socket = Some("/tmp/amf-ipc-reply/req-1.sock".to_string());
+    ipc.reply_socket = Some("/tmp/aiw-ipc-reply/req-1.sock".to_string());
     let mut inputs = vec![ipc, file_session_wait(&file, "Rewritten as a file")];
     App::collapse_session_waits(&mut inputs);
 
@@ -2489,7 +2268,7 @@ fn a_rewritten_session_wait_file_does_not_toast_again() {
         std::fs::write(
             notify_dir.join("input-request.json"),
             serde_json::to_string(&serde_json::json!({
-                "session_id": "amf-my-feat",
+                "session_id": "aiw-my-feat",
                 "cwd": workdir.path().display().to_string(),
                 "message": message,
                 "type": "input-request",
@@ -2533,7 +2312,7 @@ fn repeated_stop_reports_leave_one_pending_input_per_session() {
     // what the session last said.
     for message in ["First stop", "Second stop", "Third stop"] {
         app.handle_ipc_message_value(serde_json::json!({
-            "session_id": "amf-my-feat",
+            "session_id": "aiw-my-feat",
             "cwd": workdir.path().display().to_string(),
             "message": message
         }));
@@ -2560,7 +2339,7 @@ fn a_re_reported_input_request_is_not_toasted_again() {
     let mut request = |message: &str| {
         app.handle_ipc_message_value(serde_json::json!({
             "type": "input-request",
-            "session_id": "amf-my-feat",
+            "session_id": "aiw-my-feat",
             "cwd": workdir.path().display().to_string(),
             "message": message
         }));
@@ -2583,7 +2362,7 @@ fn deduping_stops_is_per_session_not_global() {
     second.id = "feat-2".to_string();
     second.name = "other-feat".to_string();
     second.workdir = other.path().to_path_buf();
-    second.tmux_session = "amf-other-feat".to_string();
+    second.tmux_session = "aiw-other-feat".to_string();
     store.projects[0].features.push(second);
 
     let mut app = App::new_for_test(
@@ -2594,12 +2373,12 @@ fn deduping_stops_is_per_session_not_global() {
 
     for _ in 0..3 {
         app.handle_ipc_message_value(serde_json::json!({
-            "session_id": "amf-my-feat",
+            "session_id": "aiw-my-feat",
             "cwd": workdir.path().display().to_string(),
             "message": "waiting"
         }));
         app.handle_ipc_message_value(serde_json::json!({
-            "session_id": "amf-other-feat",
+            "session_id": "aiw-other-feat",
             "cwd": other.path().display().to_string(),
             "message": "waiting"
         }));
@@ -2628,7 +2407,7 @@ fn queued_diff_reviews_are_not_collapsed_into_one() {
     for path in ["src/main.rs", "src/app/mod.rs"] {
         app.handle_ipc_message_value(serde_json::json!({
             "type": "change-reason",
-            "session_id": "amf-my-feat",
+            "session_id": "aiw-my-feat",
             "cwd": workdir.path().display().to_string(),
             "message": "Review this",
             "relative_path": path,
@@ -2669,7 +2448,7 @@ fn ipc_turn_end_archives_superseded_review_notes_for_review_features() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "input-request",
         "source": "codex-notify",
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "message": "Codex finished and is waiting for input"
     }));
@@ -2695,9 +2474,9 @@ fn ipc_event_binds_exact_codex_usage_source_by_feature_session_id() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "input-request",
         "source": "codex-notify",
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "provider_session_id": "codex-provider-123",
-        "amf_feature_session_id": "codex-sess",
+        "aiw_feature_session_id": "codex-sess",
         "cwd": workdir.path().display().to_string(),
         "message": "Codex finished and is waiting for input"
     }));
@@ -2734,9 +2513,9 @@ fn ipc_event_binds_exact_claude_usage_source_by_feature_session_id() {
 
     app.handle_ipc_message_value(serde_json::json!({
         "type": "thinking-start",
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "provider_session_id": "claude-provider-123",
-        "amf_feature_session_id": "claude-sess",
+        "aiw_feature_session_id": "claude-sess",
         "cwd": workdir.path().display().to_string()
     }));
 
@@ -2746,45 +2525,6 @@ fn ipc_event_binds_exact_claude_usage_source_by_feature_session_id() {
         Some(TokenUsageSource {
             provider: TokenUsageProvider::Claude,
             id: "claude-provider-123".to_string(),
-        })
-    );
-    assert_eq!(
-        session.token_usage_source_match,
-        Some(TokenUsageSourceMatch::Exact)
-    );
-}
-
-#[test]
-fn ipc_event_binds_exact_opencode_usage_source_by_feature_session_id() {
-    let workdir = TempDir::new().unwrap();
-    let store = store_with_single_agent_session(
-        workdir.path(),
-        AgentKind::Opencode,
-        SessionKind::Opencode,
-        "opencode-sess",
-        "opencode",
-    );
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "input-request",
-        "session_id": "opencode-provider-123",
-        "provider_session_id": "opencode-provider-123",
-        "amf_feature_session_id": "opencode-sess",
-        "cwd": workdir.path().display().to_string(),
-        "message": "Agent finished and is waiting for input"
-    }));
-
-    let session = &app.store.projects[0].features[0].sessions[0];
-    assert_eq!(
-        session.token_usage_source,
-        Some(TokenUsageSource {
-            provider: TokenUsageProvider::Opencode,
-            id: "opencode-provider-123".to_string(),
         })
     );
     assert_eq!(
@@ -2811,9 +2551,9 @@ fn ipc_exact_usage_source_replaces_inferred_source() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "thinking-stop",
         "source": "codex-notify",
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "provider_session_id": "exact-codex-session",
-        "amf_feature_session_id": "codex-sess",
+        "aiw_feature_session_id": "codex-sess",
         "cwd": workdir.path().display().to_string()
     }));
 
@@ -2841,7 +2581,7 @@ fn ipc_prompt_submit_clears_codex_live_input_and_marks_thinking() {
         Box::new(MockWorktreeOps::new()),
     );
     app.apply_codex_live_event(
-        "amf-my-feat",
+        "aiw-my-feat",
         &serde_json::json!({
             "type": "requestUserInput",
             "payload": { "prompt": "Need approval before applying the patch." }
@@ -2851,14 +2591,14 @@ fn ipc_prompt_submit_clears_codex_live_input_and_marks_thinking() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "prompt-submit",
         "source": "codex-notify",
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "prompt": "Continue with the patch."
     }));
 
-    assert!(app.ipc_thinking_sessions.contains("amf-my-feat"));
+    assert!(app.ipc_thinking_sessions.contains("aiw-my-feat"));
     assert_eq!(
-        app.codex_live_thread("amf-my-feat")
+        app.codex_live_thread("aiw-my-feat")
             .and_then(|live| live.sidebar_work_text()),
         None
     );
@@ -2874,7 +2614,7 @@ fn ipc_prompt_submit_clears_codex_live_review_work() {
         Box::new(MockWorktreeOps::new()),
     );
     app.apply_codex_live_event(
-        "amf-my-feat",
+        "aiw-my-feat",
         &serde_json::json!({
             "type": "fileChange",
             "payload": {
@@ -2887,46 +2627,15 @@ fn ipc_prompt_submit_clears_codex_live_review_work() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "prompt-submit",
         "source": "codex-notify",
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "prompt": "Reviewed the diff and continue."
     }));
 
     assert_eq!(
-        app.codex_live_thread("amf-my-feat")
+        app.codex_live_thread("aiw-my-feat")
             .and_then(|live| live.sidebar_work_text()),
         None
-    );
-}
-
-#[test]
-fn ipc_prompt_submit_refreshes_sidebar_plan_cache() {
-    let workdir = TempDir::new().unwrap();
-    let store = store_with_codex_session(workdir.path(), false);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    let claude_dir = workdir.path().join(".claude");
-    std::fs::create_dir_all(&claude_dir).unwrap();
-    std::fs::write(
-        claude_dir.join("plan.md"),
-        "# Plan\n\n1. Refresh plan cache\n2. Render update\n",
-    )
-    .unwrap();
-
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "prompt-submit",
-        "source": "codex-notify",
-        "session_id": "amf-my-feat",
-        "cwd": workdir.path().display().to_string(),
-        "prompt": "Continue with the patch."
-    }));
-
-    assert_eq!(
-        app.sidebar_plan_for_session("amf-my-feat"),
-        Some("Plan\n1. Refresh plan cache\n2. Render update")
     );
 }
 
@@ -2943,7 +2652,7 @@ fn ipc_diff_review_updates_codex_live_review_state() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "diff-review",
         "source": "codex-notify",
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "file_path": "src/main.rs",
         "message": "Review the change before continuing.",
@@ -2951,7 +2660,7 @@ fn ipc_diff_review_updates_codex_live_review_state() {
     }));
 
     assert_eq!(
-        app.codex_live_thread("amf-my-feat")
+        app.codex_live_thread("aiw-my-feat")
             .and_then(|live| live.sidebar_work_text())
             .as_deref(),
         Some(
@@ -2961,7 +2670,7 @@ fn ipc_diff_review_updates_codex_live_review_state() {
 }
 
 #[test]
-fn ipc_diff_review_opens_from_amf_session_when_cwd_does_not_match_feature() {
+fn ipc_diff_review_opens_from_aiw_session_when_cwd_does_not_match_feature() {
     let workdir = TempDir::new().unwrap();
     let store = store_with_custom_session(workdir.path(), "custom-session");
     let mut app = App::new_for_test(
@@ -2969,11 +2678,11 @@ fn ipc_diff_review_opens_from_amf_session_when_cwd_does_not_match_feature() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.config.diff_review_viewer = DiffReviewViewer::Amf;
+    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
     app.mode = AppMode::Viewing(ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
-        "amf-my-feat".to_string(),
+        "aiw-my-feat".to_string(),
         "custom".to_string(),
         "Claude".to_string(),
         SessionKind::Claude,
@@ -2984,7 +2693,7 @@ fn ipc_diff_review_opens_from_amf_session_when_cwd_does_not_match_feature() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "diff-review",
         "session_id": "claude-hook-session",
-        "amf_session": "amf-my-feat",
+        "aiw_session": "aiw-my-feat",
         "cwd": "/tmp/not-the-feature-workdir",
         "message": "Review: src/main.rs",
         "file_path": workdir.path().join("src/main.rs").display().to_string(),
@@ -2996,7 +2705,7 @@ fn ipc_diff_review_opens_from_amf_session_when_cwd_does_not_match_feature() {
         "response_file": workdir.path().join("response.json").display().to_string(),
         "proceed_signal": workdir.path().join("proceed").display().to_string(),
         "request_id": "req-1",
-        "reply_socket": "/tmp/amf-ipc-reply/req-1.sock"
+        "reply_socket": "/tmp/aiw-ipc-reply/req-1.sock"
     }));
 
     match &app.mode {
@@ -3024,13 +2733,13 @@ fn ipc_diff_review_queues_with_toast_from_normal_mode() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.config.diff_review_viewer = DiffReviewViewer::Amf;
+    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
     app.mode = AppMode::Normal;
 
     app.handle_ipc_message_value(serde_json::json!({
         "type": "diff-review",
         "session_id": "claude-hook-session",
-        "amf_session": "amf-my-feat",
+        "aiw_session": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "message": "Review: src/main.rs",
         "relative_path": "src/main.rs",
@@ -3066,11 +2775,11 @@ fn ipc_diff_review_queues_when_viewing_a_different_feature() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.config.diff_review_viewer = DiffReviewViewer::Amf;
+    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
     app.mode = AppMode::Viewing(ViewState::new(
         "other-project".to_string(),
         "other-feat".to_string(),
-        "amf-other-feat".to_string(),
+        "aiw-other-feat".to_string(),
         "custom".to_string(),
         "Claude".to_string(),
         SessionKind::Claude,
@@ -3081,7 +2790,7 @@ fn ipc_diff_review_queues_when_viewing_a_different_feature() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "diff-review",
         "session_id": "claude-hook-session",
-        "amf_session": "amf-my-feat",
+        "aiw_session": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "message": "Review: src/main.rs",
         "relative_path": "src/main.rs",
@@ -3121,20 +2830,20 @@ fn ipc_tool_activity_temporarily_overrides_older_review_work() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "diff-review",
         "source": "codex-notify",
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "file_path": "src/main.rs",
         "message": "Review the change before continuing."
     }));
     app.handle_ipc_message_value(serde_json::json!({
         "type": "tool-start",
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "tool_name": "Bash"
     }));
 
     assert_eq!(
-        app.codex_live_thread("amf-my-feat")
+        app.codex_live_thread("aiw-my-feat")
             .and_then(|live| live.sidebar_work_text())
             .as_deref(),
         Some("State: running tool\nTool: Bash")
@@ -3142,13 +2851,13 @@ fn ipc_tool_activity_temporarily_overrides_older_review_work() {
 
     app.handle_ipc_message_value(serde_json::json!({
         "type": "tool-stop",
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "tool_name": "Bash"
     }));
 
     assert_eq!(
-        app.codex_live_thread("amf-my-feat")
+        app.codex_live_thread("aiw-my-feat")
             .and_then(|live| live.sidebar_work_text())
             .as_deref(),
         Some(
@@ -3170,14 +2879,14 @@ fn ipc_change_reason_adds_default_request_when_message_is_missing() {
     app.handle_ipc_message_value(serde_json::json!({
         "type": "change-reason",
         "source": "codex-notify",
-        "session_id": "amf-my-feat",
+        "session_id": "aiw-my-feat",
         "cwd": workdir.path().display().to_string(),
         "file_path": "src/main.rs",
         "tool_name": "Edit"
     }));
 
     assert_eq!(
-        app.codex_live_thread("amf-my-feat")
+        app.codex_live_thread("aiw-my-feat")
             .and_then(|live| live.sidebar_work_text())
             .as_deref(),
         Some(

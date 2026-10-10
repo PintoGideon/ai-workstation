@@ -48,7 +48,7 @@ not a regression.
 
 ### Proposed design
 
-AMF already solves the analogous problem once, for Final Review's line
+AIW already solves the analogous problem once, for Final Review's line
 comments: `App::reanchor_line_comments` (`src/app/review.rs:340`) walks
 each file and calls `reanchor_file_comments`, reporting how many moved
 and how many lost their anchor entirely. Model this on that rather than
@@ -198,11 +198,11 @@ their anchor — possibly addressed") is the right register.
       close, an edit, and a reopen, so the two file edits have to happen between
       the shots. One capture-harness gotcha worth recording for the next
       scenario that starts a session: the scratch instance uses the **real**
-      AMF tmux socket (`~/.local/state/amf/tmux.sock`, logged at startup), not
+      AIW tmux socket (`~/.local/state/ai_workstation/tmux.sock`, logged at startup), not
       an isolated one, so a feature session left behind by an earlier run
       survives into the next — and a second `S` then lands on a duplicate
       `claude-2` window name and fails with `tmux send-keys failed`. Three runs
-      were lost to a leftover `amf-notes-demo-feature` before that was spotted.
+      were lost to a leftover `aiw-notes-demo-feature` before that was spotted.
       Kill the feature session between runs, or don't pass `--keep` to a
       scenario that escalates.
 
@@ -224,7 +224,7 @@ their anchor — possibly addressed") is the right register.
   as freshly correct. `D` (re-ask with the repo open) is the existing
   mitigation and the marker at least makes the staleness visible, but a
   "this answer may describe an older version" register is not attempted.
-- **The check only runs on open.** Editing a file from another AMF session
+- **The check only runs on open.** Editing a file from another AIW session
   while the overlay is up will not re-mark anything until it is reopened.
   A cheap re-check on scope toggle (`s`, which already re-reads) would
   cover most of it if this turns out to matter.

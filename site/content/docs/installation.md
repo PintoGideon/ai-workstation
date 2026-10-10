@@ -1,20 +1,20 @@
 +++
 title = "Installation"
-description = "Install AMF from a release bundle or build it from source."
+description = "Build and install AIW from source."
 weight = 10
 +++
 
 ## Requirements
 
-Install at least one supported agent CLI and sign in to it before using AMF:
+Install at least one supported agent CLI and sign in to it before using AIW:
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 - [Codex](https://github.com/openai/codex)
-- [OpenCode](https://opencode.ai)
+- [Gemini CLI](https://github.com/google-gemini/gemini-cli)
+- [Cursor agent](https://cursor.com/cli)
 - Pi (`pi` must be available in `PATH`)
 
-Release bundles include `tmux`. A source installation requires `tmux` in
-`PATH`. Git is required for branch and worktree features, but AMF can manage
+AIW is installed from source and requires `tmux` in `PATH`. Git is required for branch and worktree features, but AIW can manage
 non-git directories without it.
 
 Optional tools:
@@ -25,80 +25,19 @@ Optional tools:
 - A [Nerd Font](https://www.nerdfonts.com/) provides the best icon rendering.
 - The `code` command enables VS Code sessions.
 
-## Release bundle (recommended)
-
-Download the archive for your platform from
-[GitHub Releases](https://github.com/eldridgerdev/agent-mainframe/releases),
-extract it, and place `amf` somewhere in your `PATH`.
-
-| Platform | Archive |
-| --- | --- |
-| Linux x86_64, most portable | `amf-x86_64-unknown-linux-musl.tar.gz` |
-| Linux x86_64, glibc | `amf-x86_64-unknown-linux-gnu.tar.gz` |
-| Linux aarch64 | `amf-aarch64-unknown-linux-gnu.tar.gz` |
-| macOS, Apple Silicon | `amf-aarch64-apple-darwin.tar.gz` |
-
-For example, on Linux x86_64:
-
-```bash
-curl -L https://github.com/eldridgerdev/agent-mainframe/releases/latest/download/amf-x86_64-unknown-linux-musl.tar.gz -o amf.tar.gz
-tar -xzf amf.tar.gz
-sudo mv amf-x86_64-unknown-linux-musl /opt/amf
-sudo ln -s /opt/amf/amf /usr/local/bin/amf
-```
-
-On macOS with Apple Silicon:
-
-```bash
-curl -L https://github.com/eldridgerdev/agent-mainframe/releases/latest/download/amf-aarch64-apple-darwin.tar.gz -o amf.tar.gz
-tar -xzf amf.tar.gz
-sudo install -m 755 amf-aarch64-apple-darwin/amf /usr/local/bin/amf
-```
-
-## Install from crates.io
-
-Install the `agent-mainframe` crate with Cargo:
-
-```bash
-cargo install agent-mainframe --locked
-```
-
-The crate installs the `amf` binary. Make sure `~/.cargo/bin` is in your
-`PATH`, then run:
-
-```bash
-amf
-```
-
-This source installation requires Rust, a C compiler, and `tmux`.
-
-If you don't already have Rust and Cargo installed, install them with
-[rustup](https://rustup.rs):
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-Restart your shell (or run `source "$HOME/.cargo/env"`) so `cargo` is on your
-`PATH`, then re-run the `cargo install` command above.
-
 ## Build from source
 
-Building uses the current stable Rust toolchain, a C compiler, and `tmux`.
-See "Install from crates.io" above for installing Rust via rustup if needed.
+AIW publishes no release bundles. Building needs Rust (via
+[rustup](https://rustup.rs)), a C compiler, and `tmux`:
 
 ```bash
-git clone https://github.com/eldridgerdev/agent-mainframe
-cd agent-mainframe
-cargo install --path . --locked
+cd ~/ai_workstation                      # your clone of the fork
+cargo +1.99.0 install --path . --locked  # installs `aiw` into ~/.cargo/bin
+aiw -V
 ```
 
 ## Upgrade
 
-```bash
-amf upgrade
-amf -V
-```
+AIW has no self-upgrade: pull the fork and run the same `cargo install`
+command again. See `CHANGELOG.md` in the repository for release notes.
 
-See the project's [CHANGELOG](https://github.com/eldridgerdev/agent-mainframe/blob/main/CHANGELOG.md)
-for release notes and migration guidance.

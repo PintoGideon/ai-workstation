@@ -1,7 +1,7 @@
 # Syntax Diff Fixtures
 
 This directory contains small source files used to test syntax
-highlighting in the AMF diff viewer.
+highlighting in the AIW diff viewer.
 
 Files:
 
@@ -12,7 +12,7 @@ Files:
 Recommended usage:
 
 1. Edit one of these files to create a diff.
-2. Open the AMF diff viewer for the current branch.
+2. Open the AIW diff viewer for the current branch.
 3. Verify token coloring for added, removed, and context lines.
 4. Repeat with each language variant when testing parser installs or
    diff rendering changes.

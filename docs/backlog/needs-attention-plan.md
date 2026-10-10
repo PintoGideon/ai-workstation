@@ -38,10 +38,10 @@ harnesses' own lifecycle hooks:
   prove down to `Waiting`, so the UI never shows a distinction the
   signal doesn't support.
 - Ingestion is a **separate** `type: "attention"` IPC message carrying
-  `amf_event_kind`, not an extension of the notification payload, so new
+  `aiw_event_kind`, not an extension of the notification payload, so new
   harness wiring cannot disturb the existing pending-input flow.
 - Nothing is persisted: the map lives on `App`, is rebuilt from events,
-  and is empty after a restart. No `amf.db` migration, and
+  and is empty after a restart. No `aiw.db` migration, and
   `ProjectStatus` is untouched — the dashboard composes the two at
   render time.
 - Clearing rides the **existing** thinking transition rather than adding
@@ -63,7 +63,7 @@ still qualifies as dormant.
 - [x] Per-harness `HarnessCapabilities` + `resolve` / `clears_on_open`.
 - [x] `waiting_stale_minutes` config key, threshold accessor, and
       ageing (`age_out_attention`). **Global-only**, matching its
-      siblings: `.amf/config.json` merging covers `ExtensionConfig`
+      siblings: `.aiw/config.json` merging covers `ExtensionConfig`
       only, so `max_concurrent_agents`, `low_memory_warn_mb`, and
       `dormant_*` have no project override either.
 - [x] `type: "attention"` IPC message + emitters: `scripts/attention.sh`

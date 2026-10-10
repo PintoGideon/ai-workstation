@@ -100,10 +100,10 @@ def click(text):
 def tauri(command, args=None):
     """Runs a Tauri command from the page and returns its JSON result."""
     evaluate(
-        f"window.__amfShot=undefined;window.__TAURI_INTERNALS__.invoke({json.dumps(command)},{json.dumps(args or {})}).then(v=>window.__amfShot={{ok:v}},e=>window.__amfShot={{err:e}})"
+        f"window.__aiwShot=undefined;window.__TAURI_INTERNALS__.invoke({json.dumps(command)},{json.dumps(args or {})}).then(v=>window.__aiwShot={{ok:v}},e=>window.__aiwShot={{err:e}})"
     )
-    wait("window.__amfShot!==undefined")
-    result = evaluate("window.__amfShot")
+    wait("window.__aiwShot!==undefined")
+    result = evaluate("window.__aiwShot")
     assert "err" not in result, result
     return result["ok"]
 
@@ -174,13 +174,13 @@ def capture(name, note, expects, expression=None):
 
 import os
 import sqlite3
-config_dir = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "amf"
+config_dir = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "ai_workstation"
 try:
     window.configure(x=0, y=0, width=1500, height=980)
     x.sync()
     wait('typeof window.__TAURI_INTERNALS__?.invoke === "function"')
     wait('!!document.querySelector("nav[aria-label=Workspace]")')
-    with sqlite3.connect(config_dir / "amf.db") as db:
+    with sqlite3.connect(config_dir / "aiw.db") as db:
         db.execute("UPDATE projects SET collapsed=0")
         db.execute("UPDATE features SET collapsed=0")
         db.execute("UPDATE store_meta SET value=CAST(value AS INTEGER)+1 WHERE key='store_version'")
@@ -194,7 +194,7 @@ try:
     wait('document.body.innerText.includes("PASS: every byte matches the expected text.")')
     commands = [json.loads(line) for line in (pathlib.Path(os.environ["XDG_STATE_HOME"]) / "tmux-commands.jsonl").read_text().splitlines()]
     assert not any("send-keys" in args for args in commands), "Input fell back to direct send-keys"
-    flags = subprocess.check_output([os.environ["AMF_GUI_CAPTURE_REAL_TMUX"], "-S", os.environ["AMF_TMUX_SOCKET"], "list-clients", "-t", "amf-gui-composer-proof", "-F", "#{client_flags}"], text=True)
+    flags = subprocess.check_output([os.environ["AIW_GUI_CAPTURE_REAL_TMUX"], "-S", os.environ["AIW_TMUX_SOCKET"], "list-clients", "-t", "aiw-gui-composer-proof", "-F", "#{client_flags}"], text=True)
     assert any("control-mode" in line and "no-output" in line for line in flags.splitlines()), flags
     assert json.loads((repo / "claude-received.json").read_text()) == [payload]
     assert json.loads((repo / "codex-received.json").read_text()) == []

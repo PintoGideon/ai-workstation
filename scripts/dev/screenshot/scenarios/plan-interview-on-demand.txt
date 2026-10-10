@@ -70,7 +70,7 @@ shot:dashboard-unchanged-after-abort
 
 # ---- Trigger 2: the command-picker entry ----
 
-# Ctrl+Space then 'a' opens the command picker focused on AMF's own
+# Ctrl+Space then 'a' opens the command picker focused on AIW's own
 # local commands, which is where the new entry lands.
 key:C-Space
 wait:300

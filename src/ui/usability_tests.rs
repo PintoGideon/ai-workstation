@@ -50,12 +50,7 @@ fn usability_project_form_shows_errors_and_cancel_at_standard_size() {
         dialogs::draw_create_project_dialog(
             frame,
             &state,
-            &[
-                AgentKind::Claude,
-                AgentKind::Codex,
-                AgentKind::Opencode,
-                AgentKind::Pi,
-            ],
+            &[AgentKind::Claude, AgentKind::Codex, AgentKind::Pi],
             Some("Error: Path does not exist: /missing"),
             &Theme::default(),
         )

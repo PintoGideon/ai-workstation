@@ -22,7 +22,9 @@ pub(super) fn draw_rows(frame: &mut Frame, area: Rect, setup: &FeatureSetupState
                 format!(
                     "{} — {}",
                     setup.mode.display_name(),
-                    setup.mode.description()
+                    // FORK: Gemini/Cursor word their modes differently.
+                    crate::fork::extra_agents::mode_description(&setup.agent(), &setup.mode)
+                        .unwrap_or(setup.mode.description())
                 )
             }
             FeatureSetupRow::Review => if setup.review { "on" } else { "off" }.to_string(),

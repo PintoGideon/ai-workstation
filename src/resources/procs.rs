@@ -48,7 +48,7 @@ fn parse_ps_output(raw: &str) -> Vec<ProcInfo> {
 }
 
 /// Whether a PID currently exists. `kill(pid, 0)` also succeeds for zombies,
-/// which is fine here: a zombie is still the process AMF started.
+/// which is fine here: a zombie is still the process AIW started.
 pub fn pid_alive(pid: i64) -> bool {
     if pid <= 0 {
         return false;
@@ -227,12 +227,12 @@ fn mentions_path(args: &str, path: &str) -> bool {
 
 /// How many editor windows a VS Code main process is currently hosting.
 ///
-/// VS Code is a singleton application: `--new-window` gives AMF its own window,
+/// VS Code is a singleton application: `--new-window` gives AIW its own window,
 /// but if that launch was the one that *started* VS Code, every window the user
 /// opens afterwards lives in the same process tree. Killing the main process
 /// then closes their work too, so ownership of the process is not on its own a
 /// licence to end it — the window count is what says whether it is still only
-/// AMF's.
+/// AIW's.
 ///
 /// Counted from Chromium renderer subprocesses, one per window (helpers such as
 /// the GPU process, utility processes, and the zygote carry a different
@@ -246,7 +246,7 @@ pub fn vscode_window_count(processes: &[ProcInfo], root: i64) -> usize {
         .count()
 }
 
-/// Find the VS Code window process AMF just opened on `workdir`.
+/// Find the VS Code window process AIW just opened on `workdir`.
 ///
 /// `before` is the set of matching PIDs captured immediately *before* the
 /// launch: the new window is whichever match was not already there. That
@@ -254,7 +254,7 @@ pub fn vscode_window_count(processes: &[ProcInfo], root: i64) -> usize {
 /// the folder to a running instance would look identical to a fresh window.
 ///
 /// Polls because VS Code takes seconds to come up, and gives up rather than
-/// guessing: `None` means "not AMF's to kill".
+/// guessing: `None` means "not AIW's to kill".
 pub fn find_new_vscode_window(
     workdir: &Path,
     before: &[i64],
@@ -390,7 +390,7 @@ mod tests {
     #[test]
     fn a_neighbouring_worktree_is_not_this_worktree() {
         // The prefix case: `/repo/feat` is a substring of `/repo/feature-two`,
-        // and a substring test would hand AMF a licence to kill the user's
+        // and a substring test would hand AIW a licence to kill the user's
         // window on the neighbouring worktree.
         let wt = PathBuf::from("/home/me/repo/.worktrees/feat");
         assert!(!is_vscode_for_workdir(
@@ -611,7 +611,7 @@ mod tests {
         );
         assert!(
             found.is_none(),
-            "a pre-existing window is not AMF's to kill"
+            "a pre-existing window is not AIW's to kill"
         );
 
         let _ = child.kill();

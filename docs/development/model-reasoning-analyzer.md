@@ -1,9 +1,12 @@
 # Model and reasoning analyzer: capability inventory
 
+> **AIW note:** OpenCode support was removed from AI Workstation; OpenCode
+> material below is kept as the original design record only.
+
 Inventory and first-release implementation checked on 2026-09-29, with Claude
 Code discovery and research added on 2026-09-30 and additional plan-review entry
 points, including Expert review advice, on 2026-10-01, against
-`AMF_PLAN.md`. The headless inventory includes the subsequent reasoning-picker
+`AIW_PLAN.md`. The headless inventory includes the subsequent reasoning-picker
 integration from main. In-place Codex session application was verified on
 2026-10-01 against Codex 0.159.3's installed protocol and an isolated no-turn
 probe. Other harnesses retain view-only session advice.
@@ -111,7 +114,7 @@ installed `codex --help` and `codex debug --help`, and catalog field inspection.
 
 ### OpenCode
 
-AMF's existing picker has Default/Custom, without a discovered catalog.
+AIW's existing picker has Default/Custom, without a discovered catalog.
 OpenCode identifies models by `provider/model`; reasoning variants are
 model/provider-specific and can be configured or disabled. Effective catalogs
 are scoped to the project. The CLI offers `models` (and metadata via
@@ -124,7 +127,7 @@ The installed interactive CLI advertises `--model` but no `--variant`;
 `opencode run` documents `--variant`. V2 documents `provider/model#variant`.
 These interfaces must not be mixed without checking the installed version.
 Current `TmuxOps::launch_opencode[_with_session]` accepts no extra arguments;
-therefore **no explicit model or variant is currently applicable through AMF's
+therefore **no explicit model or variant is currently applicable through AIW's
 interactive launch boundary**. HeadlessRunner can pass an explicit model and
 reasoning as `--variant`, but this is not effective provider/variant discovery.
 Extending interactive launch requires that discovery contract first.
@@ -135,7 +138,7 @@ Sources: [OpenCode CLI](https://opencode.ai/docs/cli/),
 
 ### Pi
 
-AMF's existing picker has Default/Custom and no catalog adapter. Pi exposes
+AIW's existing picker has Default/Custom and no catalog adapter. Pi exposes
 `--list-models`, provider-qualified model IDs, `--provider`, `--model`, and
 `--thinking`. Levels are model-specific; a requested unsupported level may be
 clamped. The provider registry/auth state, scoped model settings, custom models
@@ -154,7 +157,7 @@ Sources: [Pi CLI](https://github.com/earendil-works/pi/blob/main/packages/coding
 [Pi model selection](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md),
 [CLI argument validation](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/cli/args.ts).
 
-## Settings handoffs inside AMF
+## Settings handoffs inside AIW
 
 | Boundary | Current behavior | Analyzer treatment |
 | --- | --- | --- |
@@ -170,7 +173,7 @@ Sources: [Pi CLI](https://github.com/earendil-works/pi/blob/main/packages/coding
 `src/model_options.rs` is the pure boundary used by the analyzer workflow.
 `EligibleOptions::new` intersects resolved configured harnesses with current
 harness and model availability, installed model/reasoning controls, exact
-model-specific levels and the chosen AMF launch path. It excludes missing,
+model-specific levels and the chosen AIW launch path. It excludes missing,
 unknown, unavailable, malformed and contradictory capability reports. Identical
 duplicates are deduplicated; conflicting reports are not merged into broader
 access. Unresolved default models are not comparative options. `reasoning = None`
@@ -225,7 +228,7 @@ analyzer score, aggregation or historical measurement is derived from them.
 | Host-feature TODO Plan review | Reviewed implementation plan and resolved host/TODO; accept writes a separate plan and starts a TODO session/composer | `m`, advice only for the host harness |
 | New-feature TODO Full/Quick Plan review | Reviewed implementation plan and prepared destination; accept creates feature and links TODO | `m`, selection applies to initial implementation launch |
 | Direct TODO spawn | Destination/reservation/composer without a reviewed plan | Deferred |
-| Expert plan-review model picker | Draft plan, brief, answers, repository/reference context and resolved reviewer; separate headless critique | `m`, advice only for the reviewer; return to AMF picker |
+| Expert plan-review model picker | Draft plan, brief, answers, repository/reference context and resolved reviewer; separate headless critique | `m`, advice only for the reviewer; return to AIW picker |
 | AI/Final/PR review | Diff/head and review task; separate worker/launch | Deferred |
 | Existing agent session | Feature name/summary and effective plan when present; advice for the current harness | Dashboard session `m` or pane leader `B`; apply in place for exactly identified Codex daemon conversations, otherwise view-only |
 
@@ -272,7 +275,7 @@ destination, reviewer or configured-harness changes invalidate pending results;
 the worker rereads repository/reference context before returning advice.
 Cancellation restores the original picker, including its custom model buffer
 and selected effort. Custom-model typing keeps `m` as text. The dialog offers no
-Apply action: choose model/effort in the existing AMF picker and confirm review
+Apply action: choose model/effort in the existing AIW picker and confirm review
 separately. No critique starts or preference is persisted through this advice.
 
 Before-interview planning, direct TODO spawning and AI/Final/PR review entry
@@ -295,23 +298,23 @@ restart/resume and the unidentified “all 3” actions remain separate work.
 
 ### In-place existing-session application
 
-Codex advice offers Enter to apply when AMF has an exact Codex conversation
+Codex advice offers Enter to apply when AIW has an exact Codex conversation
 association, supplied by harness notifications or an explicit saved-session
 selection. Inferred transcript matches and unknown associations stay view-only.
 Application requires an existing tmux session/window and a loaded conversation
 on the running local shared daemon. `codex app-server proxy` connects without
-starting a daemon. AMF performs an HTTP Upgrade handshake and sends WebSocket
+starting a daemon. AIW performs an HTTP Upgrade handshake and sends WebSocket
 text frames through this raw byte tunnel; it does not send JSONL to the proxy.
 Handshake, reads and writes obey cancellation and a 30-second deadline per phase
 (preparation, the commit's pre-update checks, and post-update verification each
 get a fresh one), with bounded buffering and frame sizes. A missing connection or unsupported protocol
-produces an error; AMF does not restart a harness, load a thread, send a user turn
+produces an error; AIW does not restart a harness, load a thread, send a user turn
 or modify user defaults to work around it.
 
 A preparation worker verifies the daemon's OpenAI authentication, the provider
 configuration it reports for the target workdir (`config/read`; an environment
 override such as `OPENAI_BASE_URL` in the daemon's own process is not visible
-there, and AMF's environment says nothing about it), absence of unverifiable
+there, and AIW's environment says nothing about it), absence of unverifiable
 managed requirements,
 picker catalog and exact model/effort eligibility. `thread/read` must return the
 exact conversation ID, matching canonical workdir, OpenAI provider, loaded
@@ -410,7 +413,7 @@ Model fit is a qualified analyzer judgment; displayed tradeoffs come from the
 trusted note. Actual plan performance, duration and tokens remain unknown.
 
 The project-scoped table is independent of feature rows, keyed by stable project
-ID **and** repository path because AMF's global DB serves many checkouts. Existing
+ID **and** repository path because AIW's global DB serves many checkouts. Existing
 session results are not backfilled. Trials and future attributable observations
 need a separate producer contract: exact task/phase/fingerprint, effective
 harness/provider/model/effort, run boundaries, optional counters, outcome/check

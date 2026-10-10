@@ -10,7 +10,7 @@ import { applyTheme, readThemePreference, resetThemesForTest, resolveTheme, setT
 import { DARK_TERMINAL_THEME, LIGHT_TERMINAL_THEME } from "../src/terminalTheme";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const catalog: ThemeCatalog = {
-  tui_theme: "nord", directory: "/isolated/amf/gui-themes", errors: [],
+  tui_theme: "nord", directory: "/isolated/aiw/gui-themes", errors: [],
   themes: [
     { id: "nord", name: "Nord", mode: "dark", tokens: { accent: "#88c0d0" }, terminal: { background: "#2e3440" } },
     { id: "latte", name: "Latte", mode: "light", tokens: { bg: "#eff1f5" }, terminal: {} },
@@ -38,10 +38,10 @@ it("follows live TUI changes, then retains an independent GUI override until cle
   expect(document.documentElement.dataset.theme).toBe("dark");
   act(() => client.setQueryData(["theme-catalog"], { ...catalog, tui_theme: "latte" }));
   expect(document.documentElement.dataset.theme).toBe("dark");
-  expect(window.localStorage.getItem("amf.gui.theme")).toBe("nord");
+  expect(window.localStorage.getItem("aiw.gui.theme")).toBe("nord");
   fireEvent.change(screen.getByLabelText("Theme"), { target: { value: "follow-tui" } });
   expect(document.documentElement.dataset.theme).toBe("light");
-  expect(window.localStorage.getItem("amf.gui.theme")).toBeNull();
+  expect(window.localStorage.getItem("aiw.gui.theme")).toBeNull();
   expect(vi.mocked(invoke).mock.calls.every(([command]) => command === "theme_catalog")).toBe(true);
 });
 it("restores a saved choice across initialization and tolerates unavailable storage", () => {
@@ -93,9 +93,9 @@ it("reflects preferences from another GUI window", async () => {
   mount(); await screen.findByRole("option", { name: "Nord" });
   const setItem = vi.spyOn(Storage.prototype, "setItem");
   const removeItem = vi.spyOn(Storage.prototype, "removeItem");
-  act(() => window.dispatchEvent(new StorageEvent("storage", { key: "amf.gui.theme", newValue: "light" })));
+  act(() => window.dispatchEvent(new StorageEvent("storage", { key: "aiw.gui.theme", newValue: "light" })));
   expect(document.documentElement.dataset.theme).toBe("light");
-  act(() => window.dispatchEvent(new StorageEvent("storage", { key: "amf.gui.theme", newValue: null })));
+  act(() => window.dispatchEvent(new StorageEvent("storage", { key: "aiw.gui.theme", newValue: null })));
   expect(readThemePreference()).toBe("follow-tui");
   // Writing an external value back would bounce stale choices between windows.
   expect(setItem).not.toHaveBeenCalled();

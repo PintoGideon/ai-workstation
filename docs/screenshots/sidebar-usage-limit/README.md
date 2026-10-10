@@ -1,6 +1,6 @@
 # Harness usage box in the session sidebar
 
-Captured with the repository's `/amf-screenshot` workflow from an isolated AMF
+Captured with the repository's `/aiw-screenshot` workflow from an isolated AIW
 instance against a throwaway project, using the running machine's real Claude
 credentials so the rate-limit windows are populated. The walkthrough verifies
 that the new **Usage** box sits directly under **Status** and mirrors the
@@ -21,6 +21,6 @@ immediately after **Status** (before **Plan**), one window per line:
 `5h  41% left · 1h`, `7d  70% left · 3d` — percentages **remaining**, the
 inverse of the dashboard bar (58% used → 41% left, 30% used → 70% left). It is
 drawn in the `usage_low` accent colour and is omitted entirely for harnesses
-with no usage source (OpenCode, Pi) or before the usage cache is warm.
+with no usage source (Pi) or before the usage cache is warm.
 
 ![Usage box under Status in the agent sidebar](002-sidebar-usage-box.png)

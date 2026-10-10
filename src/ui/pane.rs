@@ -38,13 +38,11 @@ const LEADER_COMMANDS: &[(&str, &str)] = &[
     ("v", "Expand / collapse todos"),
     ("V", "Check pending diff review"),
     ("o", "Scroll mode"),
-    ("r", "Refresh statuses"),
+    ("r", "Refresh statuses + PR badges"),
     ("R", "Refresh pane sizing"),
     ("x", "Stop session"),
     ("c", "Copy Claude /rc URL"),
     ("O", "Open Claude /rc URL"),
-    ("C", "AMF Remote server on / off"),
-    ("Q", "Pair a phone (QR)"),
     ("f", "Final review"),
     ("G", "PR Triage"),
     ("W", "AI Review"),
@@ -53,7 +51,6 @@ const LEADER_COMMANDS: &[(&str, &str)] = &[
 ];
 
 const CLAUDE_SIDEBAR_WIDTH: u16 = 32;
-const OPENCODE_SIDEBAR_WIDTH: u16 = 36;
 const SIDEBAR_MIN_MAIN_WIDTH: u16 = 72;
 pub(crate) const SCROLLBAR_WIDTH: u16 = 1;
 
@@ -102,11 +99,8 @@ pub(crate) fn viewing_main_width(view: &ViewState, total_width: u16) -> u16 {
         .unwrap_or(total_width)
 }
 
-fn preferred_sidebar_width(view: &ViewState) -> u16 {
-    match view.session_kind {
-        SessionKind::Opencode => OPENCODE_SIDEBAR_WIDTH,
-        _ => CLAUDE_SIDEBAR_WIDTH,
-    }
+fn preferred_sidebar_width(_view: &ViewState) -> u16 {
+    CLAUDE_SIDEBAR_WIDTH
 }
 
 fn sidebar_width(view: &ViewState, total_width: u16) -> Option<u16> {
@@ -492,8 +486,9 @@ fn draw_startup_loading(
     let harness = match view.session_kind {
         SessionKind::Claude => "Claude",
         SessionKind::Codex => "Codex",
-        SessionKind::Opencode => "opencode",
         SessionKind::Pi => "Pi",
+        SessionKind::Gemini => "Gemini", // FORK
+        SessionKind::Cursor => "Cursor", // FORK
         _ => "agent",
     };
     let throbber = throbber_widgets_tui::Throbber::default()
@@ -748,8 +743,10 @@ fn sidebar_title_and_color(agent_kind: &SessionKind, theme: &Theme) -> (&'static
     let color = match agent_kind {
         SessionKind::Claude => theme.session_icon_claude.to_color(),
         SessionKind::Codex => theme.session_icon_codex.to_color(),
-        SessionKind::Opencode => theme.session_icon_opencode.to_color(),
         SessionKind::Pi => theme.primary.to_color(),
+        // FORK: Gemini/Cursor theme colours
+        SessionKind::Gemini => theme.session_icon_gemini.to_color(),
+        SessionKind::Cursor => theme.session_icon_cursor.to_color(),
         _ => theme.border.to_color(),
     };
     (sidebar_title(agent_kind), color)
@@ -1414,18 +1411,19 @@ mod tests {
         let (window, label) = match session_kind {
             crate::project::SessionKind::Claude => ("claude", "Claude"),
             crate::project::SessionKind::Codex => ("codex", "Codex"),
-            crate::project::SessionKind::Opencode => ("opencode", "Opencode"),
             crate::project::SessionKind::Terminal => ("terminal", "Terminal"),
             crate::project::SessionKind::Nvim => ("nvim", "Nvim"),
             crate::project::SessionKind::Vscode => ("vscode", "VSCode"),
             crate::project::SessionKind::Pi => ("pi", "Pi"),
+            crate::project::SessionKind::Gemini => ("gemini", "Gemini"), // FORK
+            crate::project::SessionKind::Cursor => ("cursor", "Cursor"), // FORK
             crate::project::SessionKind::Custom => ("custom", "Custom"),
             crate::project::SessionKind::Todos => ("todos", "TODOs"),
         };
         ViewState::new(
             "proj".into(),
             "feat".into(),
-            "amf-feat".into(),
+            "aiw-feat".into(),
             window.into(),
             label.into(),
             session_kind,
@@ -1661,7 +1659,7 @@ mod tests {
             summary_text: String::new(),
             issue_source_text: None,
             pr_triage_text: None,
-            plan_text: "Current: AMF_PLAN.md".into(),
+            plan_text: "Current: AIW_PLAN.md".into(),
             context_snapshot: None,
             context_hint_visible: false,
         };
@@ -1693,7 +1691,7 @@ mod tests {
             summary_text: "Sidebar ready.".into(),
             issue_source_text: None,
             pr_triage_text: Some("1 open PR".into()),
-            plan_text: "Current: AMF_PLAN.md".into(),
+            plan_text: "Current: AIW_PLAN.md".into(),
             context_snapshot: None,
             context_hint_visible: false,
         };

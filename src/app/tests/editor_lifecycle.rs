@@ -8,7 +8,7 @@ use tempfile::TempDir;
 // Editor reclamation on stop
 // ---------------------------------------------------------------------------
 
-/// Stand-in for a VS Code window AMF opened: a symlink to Bash named `code`,
+/// Stand-in for a VS Code window AIW opened: a symlink to Bash named `code`,
 /// launched with a VS Code-shaped argv, holding a child of its own the way a
 /// real window holds a language server.
 fn spawn_fake_editor(
@@ -92,13 +92,13 @@ fn app_with_db(workdir: &std::path::Path, db_file: &NamedTempFile) -> App {
     tmux.expect_kill_session().returning(|_| Ok(()));
 
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     app.selection = Selection::Feature(0, 0);
     app
 }
 
 #[test]
-fn stopping_a_feature_closes_the_editor_amf_opened() {
+fn stopping_a_feature_closes_the_editor_aiw_opened() {
     let tmp = TempDir::new().unwrap();
     let workdir = tmp.path().join("worktree");
     std::fs::create_dir_all(&workdir).unwrap();
@@ -203,7 +203,7 @@ fn kill_editor_on_stop_opt_out_leaves_the_editor_running() {
 }
 
 #[test]
-fn an_editor_amf_did_not_open_is_reported_not_killed() {
+fn an_editor_aiw_did_not_open_is_reported_not_killed() {
     let tmp = TempDir::new().unwrap();
     let workdir = tmp.path().join("worktree");
     std::fs::create_dir_all(&workdir).unwrap();
@@ -233,7 +233,7 @@ fn an_editor_amf_did_not_open_is_reported_not_killed() {
     assert!(crate::resources::procs::pid_alive(editor_pid));
     assert_eq!(
         report.summary().as_deref(),
-        Some("left VS Code running (AMF did not open this window)")
+        Some("left VS Code running (AIW did not open this window)")
     );
 
     let _ = editor.kill();
@@ -292,7 +292,7 @@ fn a_recycled_pid_is_never_signalled() {
 
 #[test]
 fn a_window_sharing_its_instance_with_others_is_left_alone() {
-    // AMF's launch started VS Code, so it owns the process — but the user has
+    // AIW's launch started VS Code, so it owns the process — but the user has
     // since opened other windows in it. Killing the process would close their
     // work, which no amount of memory is worth.
     let tmp = TempDir::new().unwrap();
@@ -407,7 +407,7 @@ fn stopping_while_the_window_is_still_opening_hands_it_to_the_resolver() {
     assert_eq!(report.pending, vec!["VS Code".to_string()]);
     assert!(
         report.skipped.is_empty(),
-        "a window still opening is not a window AMF does not own, got {:?}",
+        "a window still opening is not a window AIW does not own, got {:?}",
         report.skipped
     );
     assert_eq!(

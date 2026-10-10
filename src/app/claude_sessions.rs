@@ -120,32 +120,37 @@ fn is_real_dir(path: &Path) -> bool {
 }
 
 fn extract_latest_model(jsonl_path: &Path) -> Option<String> {
-    let file = File::open(jsonl_path).ok()?;
-    let reader = BufReader::new(file);
-    let mut latest = None;
+    // FORK: incremental — the sidebar asked again every time the agent wrote
+    // to the transcript, and each time the whole file was parsed
+    // (DESIGN.md §12.3). Same result as the full read.
+    static MODELS: std::sync::Mutex<Option<crate::fork::line_fold::LineFoldCache<Option<String>>>> =
+        std::sync::Mutex::new(None);
+    let mut cache = MODELS.lock().unwrap_or_else(|e| e.into_inner());
+    cache
+        .get_or_insert_with(Default::default)
+        .fold(jsonl_path, latest_model_line)
+        .flatten()
+}
 
-    for line in reader.lines() {
-        let line = line.ok()?;
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) else {
-            continue;
-        };
-
-        if entry["type"] == "assistant"
-            && let Some(model) = entry["message"]["model"]
-                .as_str()
-                .map(str::trim)
-                .filter(|model| !model.is_empty())
-        {
-            latest = Some(model.to_string());
-        }
+/// FORK: one transcript line of [`extract_latest_model`]'s fold.
+fn latest_model_line(latest: &mut Option<String>, line: &str) {
+    let line = line.trim();
+    if line.is_empty() {
+        return;
     }
 
-    latest
+    let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) else {
+        return;
+    };
+
+    if entry["type"] == "assistant"
+        && let Some(model) = entry["message"]["model"]
+            .as_str()
+            .map(str::trim)
+            .filter(|model| !model.is_empty())
+    {
+        *latest = Some(model.to_string());
+    }
 }
 
 fn extract_session_title(jsonl_path: &Path) -> Option<String> {

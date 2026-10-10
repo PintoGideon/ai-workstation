@@ -13,8 +13,6 @@ pub(crate) struct EvidenceWork {
     watcher: Option<notify::RecommendedWatcher>,
     watched: HashSet<PathBuf>,
     dirty: Arc<AtomicBool>,
-    pub(crate) remote: Option<RemoteScope>,
-    pub(crate) closed_requests: std::collections::VecDeque<String>,
 }
 
 impl EvidenceWork {
@@ -123,15 +121,6 @@ impl App {
 
     /// Call only after confirmed successful deletion. Missing root evidence is retained.
     pub(crate) fn screenshot_worktree_deleted(&mut self, workdir: &Path) -> Result<()> {
-        if self
-            .evidence_work
-            .remote
-            .as_ref()
-            .is_some_and(|r| r.context.workdir == workdir)
-            && let Some(remote) = self.evidence_work.remote.take()
-        {
-            remote.cancelled.store(true, Ordering::Release);
-        }
         if let Some(db) = &self.db {
             for (owner, _) in db.evidence_scopes(false)? {
                 if owner.is_worktree
@@ -158,11 +147,4 @@ pub(crate) fn launch_args(
         args = crate::codex_config::with_screenshot_guidance(&owner.workdir, &guidance, args)?;
     }
     Ok(args)
-}
-
-pub(crate) struct RemoteScope {
-    pub request_id: String,
-    pub context: crate::screenshot_sources::PrContext,
-    pub resources: std::collections::HashMap<String, crate::screenshot_sources::Resource>,
-    pub cancelled: Arc<AtomicBool>,
 }

@@ -6,11 +6,11 @@
   (`src/app/mod.rs`), usage refresh (`src/usage.rs`), token tracking
   (`src/token_tracking.rs`), Codex session index (`src/codex.rs`),
   sidebar session readers (`src/app/*_sessions.rs`), shipped PR
-  [#308](https://github.com/eldridgerdev/agent-mainframe/pull/308)
+  upstream PR #308
 
 ## Why / problem
 
-AMF was slow both before the first dashboard frame and for several
+AIW was slow both before the first dashboard frame and for several
 minutes afterward. The initial investigation found two distinct forms
 of degradation:
 
@@ -20,7 +20,7 @@ of degradation:
 
 The debug log captured a representative 38-second pre-dashboard gap:
 the filesystem watcher and tmux observer were ready at `12:07:38`, but
-AMF did not report startup complete until `12:08:16`. During the warm-up
+AIW did not report startup complete until `12:08:16`. During the warm-up
 period, input-to-draw latency reached 1.62 seconds and UI draws reached
 609 ms.
 
@@ -47,7 +47,7 @@ subsystems independently walking or parsing the same transcript trees.
 
 ### Shipped
 
-- [x] Detect whether the AMF binary supports dynamic loading before
+- [x] Detect whether the AIW binary supports dynamic loading before
   validating installed tree-sitter parsers.
 - [x] Skip parser validation and automatic repair when dynamic loading
   is unavailable, eliminating the repeated, guaranteed-failure rebuild

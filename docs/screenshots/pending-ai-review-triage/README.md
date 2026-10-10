@@ -1,6 +1,6 @@
 # Pending AI Review in PR Triage
 
-Captured from an isolated AMF instance against the read-only PR-review test
+Captured from an isolated AIW instance against the read-only PR-review test
 fixture (#343). The AI Review cache contained two representative unpublished
 findings; the capture stopped before confirming `W`, so it did not write to
 GitHub.
@@ -21,10 +21,10 @@ the model again.
 ## 3. Editable GitHub review
 
 Pressing `W` seeds the existing confirmation editor with the generated summary,
-folds general findings into the body, and adds AMF attribution.
+folds general findings into the body, and adds AIW attribution.
 
 ![Editable AI Review body before posting to GitHub](003-03-editable-review-body.png)
 
-After a successful post, AMF marks the included findings as published and
+After a successful post, AIW marks the included findings as published and
 refreshes the stashed PR Triage pane automatically. That final write was not
 performed for this artifact.

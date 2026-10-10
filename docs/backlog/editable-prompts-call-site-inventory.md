@@ -1,7 +1,7 @@
 # Editable Headless Prompts — call-site inventory
 
 **Status: shipped.** The feature this inventory scoped is implemented — the
-`src/prompts/` registry, `db/prompt_overrides.rs`, `amf.json`
+`src/prompts/` registry, `db/prompt_overrides.rs`, `aiw.json`
 `prompt_overrides`, the override manager (`E`), and the pre-call notice. This
 file is kept as the reference map from prompt IDs to call sites and
 placeholder sets. See `CHANGELOG.md` and the "Editable Headless Prompts"
@@ -9,7 +9,7 @@ section of `CLAUDE.md`.
 
 ---
 
-Every headless AI call in AMF, the prompt it sends, and its stable prompt ID +
+Every headless AI call in AIW, the prompt it sends, and its stable prompt ID +
 placeholder set in the registry.
 
 ## Method
@@ -177,7 +177,7 @@ so the sets below are user-visible, not just internal reference.
 
 | Prompt | Location | Delivery |
 |--------|----------|----------|
-| `REVIEW_FEEDBACK_PROMPT` | `app/review.rs` (`paste_review_prompt`, `:3666`) | pasted into the Final Review tmux session; `AMF_PLAN.md` lists `trigger_final_review()` but it makes no headless call |
+| `REVIEW_FEEDBACK_PROMPT` | `app/review.rs` (`paste_review_prompt`, `:3666`) | pasted into the Final Review tmux session; `AIW_PLAN.md` lists `trigger_final_review()` but it makes no headless call |
 | `PrComment::fix_prompt` / `combined_fix_prompt` | `app/pr_review.rs:885` / `:1261` | injected into the dedicated PR-triage tmux session |
 | `with_reply_draft_handoff` wrapper | `app/pr_review.rs:1280` | wraps the two above before injection |
 

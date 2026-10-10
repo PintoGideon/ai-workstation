@@ -57,7 +57,7 @@ def main() -> None:
             }
         )
         figures.append(
-            "<figure><div class=\"terminal\"><div class=\"bar\">AMF screenshot</div>"
+            "<figure><div class=\"terminal\"><div class=\"bar\">AIW screenshot</div>"
             f"<img src=\"{image_data_uri(frame)}\" alt=\"{escape(label)}\"></div>"
             f"<figcaption>{escape(label)}</figcaption></figure>"
         )
@@ -86,7 +86,7 @@ def main() -> None:
         json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
     )
 
-    title = f"AMF screenshot proof — PR #{args.pr_number}"
+    title = f"AIW screenshot proof — PR #{args.pr_number}"
     context = (
         f"{args.repository} · ref {args.ref} · {args.geometry} · "
         f"scenario {args.scenario} · artifact retention {args.retention_days} days"

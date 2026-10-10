@@ -1,6 +1,6 @@
 # Mouse-wheel scrolling at the plan review gate
 
-Captured from an isolated AMF instance against a throwaway repository using
+Captured from an isolated AIW instance against a throwaway repository using
 `scripts/dev/screenshot/scenarios/plan-review-mouse-scroll.txt`. The fixture
 seeds a draft that already contains a synthesized plan (`seed_plan_draft.py
 --long`), so reaching the review gate costs no agent tokens, and the plan is

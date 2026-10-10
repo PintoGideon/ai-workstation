@@ -4,13 +4,13 @@ description = "Get a first project and feature running."
 weight = 20
 +++
 
-1. Start AMF from a normal shell or an existing tmux session:
+1. Start AIW from a normal shell or an existing tmux session:
 
    ```bash
-   amf
+   aiw
    ```
 
-2. On first launch, choose the agent CLIs you want AMF to use. AMF checks that
+2. On first launch, choose the agent CLIs you want AIW to use. AIW checks that
    each selected CLI is installed. You can reopen this setup later with `A`.
 
 3. Press `N` to add a project, then enter its name and directory. The
@@ -27,7 +27,7 @@ weight = 20
    or custom session.
 
 <figure>
-  <img src="/images/dashboard.png" alt="AMF dashboard showing a project with four concurrent Claude agent sessions, each on its own git worktree">
+  <img src="/images/dashboard.png" alt="AIW dashboard showing a project with four concurrent Claude agent sessions, each on its own git worktree">
   <figcaption>A project with several features running side by side, each in its own worktree.</figcaption>
 </figure>
 

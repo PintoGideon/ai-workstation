@@ -1,7 +1,7 @@
 # Hierarchical file tree in the diff viewers
 
-Captured from an isolated, throwaway AMF instance
-(`scripts/dev/screenshot/amf-capture.sh`, 160x44) against a scratch demo repo
+Captured from an isolated, throwaway AIW instance
+(`scripts/dev/screenshot/aiw-capture.sh`, 160x44) against a scratch demo repo
 whose changeset deliberately spans a repo-root file, `docs/backlog/`,
 `src/app/`, `src/handlers/` and `src/ui/dialogs/`, so the tree has real depth.
 No real project, database or tmux session was touched.

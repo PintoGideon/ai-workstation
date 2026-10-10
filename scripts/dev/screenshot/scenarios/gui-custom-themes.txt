@@ -2,4 +2,4 @@
 note:The isolated TUI is ready before native theme selection validation.
 expect:0 projects, 0 features
 shot:gui-capture-ready
-run:AMF_GUI_CAPTURE_RUNNER="$SCRIPT_DIR/capture-gui-custom-themes.py" bash "$SCRIPT_DIR/capture-gui-diff.sh" "$OUT_DIR"
+run:AIW_GUI_CAPTURE_RUNNER="$SCRIPT_DIR/capture-gui-custom-themes.py" bash "$SCRIPT_DIR/capture-gui-diff.sh" "$OUT_DIR"

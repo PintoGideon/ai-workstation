@@ -2015,8 +2015,8 @@ index 1111111..2222222 100644
     fn init_repo_with_main() -> TempDir {
         let repo = TempDir::new().unwrap();
         git(repo.path(), &["init", "--initial-branch=main"]);
-        git(repo.path(), &["config", "user.name", "AMF Test"]);
-        git(repo.path(), &["config", "user.email", "amf@example.com"]);
+        git(repo.path(), &["config", "user.name", "AIW Test"]);
+        git(repo.path(), &["config", "user.email", "aiw@example.com"]);
         std::fs::write(repo.path().join("src.txt"), "base\n").unwrap();
         git(repo.path(), &["add", "src.txt"]);
         git(repo.path(), &["commit", "-m", "initial"]);

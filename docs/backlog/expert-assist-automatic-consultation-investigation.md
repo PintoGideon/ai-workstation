@@ -3,7 +3,7 @@
 ## Conclusion
 
 The highest-value insertion point is the plan interview's final review gate,
-after synthesis and before acceptance or implementation. At that point AMF has
+after synthesis and before acceptance or implementation. At that point AIW has
 the user's brief, answered discovery questions, a concrete plan, repository
 context, and attached evidence. Advice can still change the implementation
 approach before a cheaper model spends tokens following it.
@@ -21,7 +21,7 @@ been consulted. The automatic `off`/`suggest`/`require` policy was removed.
 1. Plan mode collects the brief and discovery answers, then synthesizes a
    concrete implementation plan.
 2. At the final review gate, the user may press `a` for **Expert review**.
-3. AMF requires an explicit frontier model for the plan's resolved harness.
+3. AIW requires an explicit frontier model for the plan's resolved harness.
    The user selects from the same verified presets used by AI Review, with
    `Custom…` available for unlisted IDs. Codex presets come from the visible
    catalog used by Codex's own picker, with its legacy availability table as a
@@ -80,7 +80,7 @@ versus
 implementation cost + retries + failed validation + late review
 ```
 
-AMF stores the reviewed plan fingerprint, lifecycle status, selected model,
+AIW stores the reviewed plan fingerprint, lifecycle status, selected model,
 token estimate, and whether an implementation brief was produced. This makes
 the consultation attributable without claiming savings that were not measured.
 Quality still needs scenario comparisons against an implementation-only

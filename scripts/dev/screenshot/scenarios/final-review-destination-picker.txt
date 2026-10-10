@@ -6,21 +6,21 @@
 # compact companion-feature setup overlay (own worktree, harness, mode, branch).
 #
 # Self-contained: `run:` steps build a tiny fixture repo with a reviewable diff
-# and register it with the scratch AMF instance, so no --seed is needed.
+# and register it with the scratch AIW instance, so no --seed is needed.
 #
 # Run with:
-#   ./amf-capture.sh --scenario scenarios/final-review-destination-picker.txt \
-#     --out-dir /tmp/amf-review-dest --geometry 120x40
+#   ./aiw-capture.sh --scenario scenarios/final-review-destination-picker.txt \
+#     --out-dir /tmp/aiw-review-dest --geometry 120x40
 
 run:set -e; FX="$SHOT_ROOT/fixture"; mkdir -p "$FX/src"; cd "$FX"; git init -q -b main; git config user.email t@example.com; git config user.name Tester; printf 'pub fn login(name: &str) -> bool {\n    !name.is_empty()\n}\n' > src/auth.rs; git add -A; git commit -qm "initial auth"; git checkout -q -b add-login; printf 'pub fn login(name: &str, token: &str) -> bool {\n    validate(name) && verify(token)\n}\n\nfn validate(name: &str) -> bool {\n    !name.is_empty() && name.len() <= 64\n}\n\nfn verify(token: &str) -> bool {\n    token.starts_with("tok_")\n}\n' > src/auth.rs; git add -A; git commit -qm "add token verification"
 run:printf '{"path":"%s/fixture","project_name":"review-demo","dry_run":false}' "$SHOT_ROOT" > "$SHOT_ROOT/project.json"
-run:$AMF_BIN automation create-project --file "$SHOT_ROOT/project.json"
+run:$AIW_BIN automation create-project --file "$SHOT_ROOT/project.json"
 run:printf '{"project_name":"review-demo","branch":"add-login","use_worktree":false,"agent":"claude","mode":"vibe","review":false,"plan_mode":false,"create_terminal":true,"enable_chrome":false,"hook_choice":null,"dry_run":false}' > "$SHOT_ROOT/feature.json"
-run:$AMF_BIN automation create-feature --file "$SHOT_ROOT/feature.json"
+run:$AIW_BIN automation create-feature --file "$SHOT_ROOT/feature.json"
 wait:1500
 # A second feature so the picker has an "another existing feature" row to offer.
 run:printf '{"project_name":"review-demo","branch":"hotfix-typo","use_worktree":true,"agent":"claude","mode":"vibe","review":false,"plan_mode":false,"create_terminal":false,"enable_chrome":false,"hook_choice":null,"dry_run":false}' > "$SHOT_ROOT/feature2.json"
-run:$AMF_BIN automation create-feature --file "$SHOT_ROOT/feature2.json"
+run:$AIW_BIN automation create-feature --file "$SHOT_ROOT/feature2.json"
 wait:2000
 
 note:The scratch dashboard shows the seeded review-demo project and its add-login feature, which has a real diff against main.

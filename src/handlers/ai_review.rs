@@ -6,7 +6,7 @@ use crate::app::App;
 /// Lines scrolled per detail-pane scroll keypress.
 const DETAIL_SCROLL_STEP: usize = 5;
 
-/// Key handling for the full-screen AI Review pane: AMF's own review of a
+/// Key handling for the full-screen AI Review pane: AIW's own review of a
 /// PR's diff, independent of PR Triage (see `crate::app::ai_review`'s module
 /// doc). Navigate findings, skip/edit them, regenerate (`A`), post to GitHub
 /// (`W`), and exit.

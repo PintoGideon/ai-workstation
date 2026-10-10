@@ -247,7 +247,7 @@ export default function App() {
   const [diffTarget, setDiffTarget] = useState<FeatureTarget | null>(null);
   const [supervisedTarget, setSupervisedTarget] = useState<FeatureTarget | null>(null);
   const [autoReviewEdits, setAutoReviewEdits] = useState(() => {
-    try { return localStorage.getItem("amf.autoReviewEdits") !== "off"; }
+    try { return localStorage.getItem("aiw.autoReviewEdits") !== "off"; }
     catch { return true; }
   });
   const [automaticEditId, setAutomaticEditId] = useState<string | null>(null);
@@ -1209,7 +1209,7 @@ export default function App() {
         ref={supervisedPanel} target={supervisedTarget} initialEditId={automaticEditId ?? undefined}
         autoOpen={autoReviewEdits} onAutoOpenChange={(enabled) => {
           setAutoReviewEdits(enabled);
-          try { localStorage.setItem("amf.autoReviewEdits", enabled ? "on" : "off"); } catch { /* Keep the preference for this window. */ }
+          try { localStorage.setItem("aiw.autoReviewEdits", enabled ? "on" : "off"); } catch { /* Keep the preference for this window. */ }
         }}
         otherWaiting={Object.entries(pendingEdits).reduce((total, [featureId, count]) =>
           total + (featureId === supervisedTarget.feature_id ? 0 : count), 0)}
@@ -1395,7 +1395,7 @@ export default function App() {
         {workspace.data && projects.length === 0 && !view && (
           <EmptyState
             icon="folder"
-            title="Welcome to AMF"
+            title="Welcome to AIW"
             action={
               <button className="btn btn-primary" onClick={() => setShowCreateProject(true)}>
                 <Icon name="plus" /> Add a project
@@ -1604,7 +1604,7 @@ export default function App() {
         <ApprovalDialog
           label="Approve new session"
           title={pendingAddSessionApproval.choice.type === "builtin"
-            && ["claude", "codex", "opencode", "pi"].includes(pendingAddSessionApproval.choice.kind)
+            && ["claude", "codex", "pi", "gemini", "cursor"].includes(pendingAddSessionApproval.choice.kind)
             ? "Start another agent?" : "Start this feature?"}
           message={pendingAddSessionApproval.message}
           confirmLabel="Start anyway"
@@ -1897,7 +1897,7 @@ function FeatureView({
   reviewBusy: boolean;
   onNewSession: () => void;
   newSessionLoading: boolean;
-  /** VS Code windows AMF launched for this feature. */
+  /** VS Code windows AIW launched for this feature. */
   editors: FeatureEditor[];
   vscodePanel: ReactNode;
   stoppedSessionIds: string[];
@@ -1940,7 +1940,7 @@ function FeatureView({
   const activeSession = sessions.find((session) => session.id === activeTab);
   const activeSessionRunning = activeSession !== undefined && isRunning(activeSession);
   const isAgent = activeSession !== undefined &&
-    ["claude", "codex", "opencode", "pi"].includes(activeSession.kind);
+    ["claude", "codex", "pi", "gemini", "cursor"].includes(activeSession.kind);
   const activeLifecycle = activeSession && sessionLifecycle(activeSession);
   const composer = target && isAgent ? (
     <PromptComposer key={`composer:${sessionKey(target)}`}
@@ -2084,7 +2084,7 @@ function FeatureView({
             aria-selected={activeTab === VSCODE_TAB}
             className={activeTab === VSCODE_TAB ? "tab tab-active" : "tab"}
             onClick={() => onTab(VSCODE_TAB)}
-            title="VS Code windows AMF opened for this feature"
+            title="VS Code windows AIW opened for this feature"
           >
             <Icon name="file" size={14} /> VS Code
             {editors.length > 0 && <span className="nav-count">{editors.length}</span>}
@@ -2198,7 +2198,7 @@ function CreateProjectForm({
     <Modal
       label="New project"
       title="New project"
-      subtitle="Register a repository with AMF."
+      subtitle="Register a repository with AIW."
       onClose={onCancel}
       onSubmit={() => onSubmit({
         path: path.trim(),

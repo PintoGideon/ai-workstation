@@ -1,6 +1,6 @@
 +++
 title = "Documentation"
-description = "Install, configure, and get productive with Agent Mainframe."
+description = "Install, configure, and get productive with AI Workstation."
 sort_by = "weight"
 template = "docs-index.html"
 page_template = "docs-page.html"

@@ -8,12 +8,12 @@
 ## Why / problem
 
 Interactive Remote Control (shipped) runs **one local Claude process per
-AMF feature** (`claude --remote-control "<name>"`) and mirrors it to
+AIW feature** (`claude --remote-control "<name>"`) and mirrors it to
 claude.ai / the Claude mobile app. It lets you **drive a session you
 already started locally** from your phone or a browser.
 
 It does **not** let you **start new work remotely**. To kick off a fresh
-task you still have to be at your machine to create the feature in AMF.
+task you still have to be at your machine to create the feature in AIW.
 
 Server mode (`claude remote-control`) is the piece that would let you
 spin up brand-new sessions on demand from web/mobile — useful when you
@@ -51,48 +51,48 @@ worktree.
 
 ### The core architectural tension
 
-AMF's model: **AMF** creates the feature, creates the worktree (under
+AIW's model: **AIW** creates the feature, creates the worktree (under
 `.worktrees/`), and owns one tmux session/window per agent, which it
 embeds and drives. Server mode **inverts** this: **Claude** spawns
-sessions and worktrees on demand, outside AMF's creation flow. A naive
-integration (run the server, then discover what it created) means AMF is
+sessions and worktrees on demand, outside AIW's creation flow. A naive
+integration (run the server, then discover what it created) means AIW is
 permanently racing to reconcile state it didn't author.
 
 ### The integration lever: worktree hooks
 
 The `--help` note is the key. Worktree mode accepts
-`WorktreeCreate`/`WorktreeRemove` hooks. That lets AMF **provision the
+`WorktreeCreate`/`WorktreeRemove` hooks. That lets AIW **provision the
 worktrees itself** instead of discovering them after the fact:
 
-- Launch the server with those hooks pointed at a small AMF-provided
-  command (e.g. `amf remote-worktree create|remove`, or scripts written
+- Launch the server with those hooks pointed at a small AIW-provided
+  command (e.g. `aiw remote-worktree create|remove`, or scripts written
   into the workspace like the existing notification hooks).
-- `WorktreeCreate`: AMF creates the worktree under its own
+- `WorktreeCreate`: AIW creates the worktree under its own
   `.worktrees/<name>` via `WorktreeManager`, registers a new `Feature`
   in the project (origin = `RemoteServer`), and returns the path to
-  Claude. AMF stays the source of truth for worktrees and features.
-- `WorktreeRemove`: AMF removes the worktree and marks/removes the
+  Claude. AIW stays the source of truth for worktrees and features.
+- `WorktreeRemove`: AIW removes the worktree and marks/removes the
   corresponding feature.
 
-This keeps AMF in the loop at creation time rather than reconciling
+This keeps AIW in the loop at creation time rather than reconciling
 blind, and reuses the existing worktree + feature machinery.
 
 ### The hard limitation (and how it reshapes the design)
 
-A server hosting N sessions is **one process in one tmux window**. AMF's
+A server hosting N sessions is **one process in one tmux window**. AIW's
 whole view UX is embedding a tmux pane per agent session. Server-spawned
-sessions do **not** each get their own pane, so AMF cannot embed/drive
+sessions do **not** each get their own pane, so AIW cannot embed/drive
 them individually the way it does features today. The live conversation
 for those sessions happens on claude.ai / web / mobile.
 
-So AMF's role for server mode is **not** "drive the agent." It is:
+So AIW's role for server mode is **not** "drive the agent." It is:
 
 1. **Run + surface the server** as a project-scoped background service.
 2. **Provision + track the worktrees** the server spawns (via hooks), so
-   the code those remote sessions produce lands in AMF-tracked worktrees
+   the code those remote sessions produce lands in AIW-tracked worktrees
    you can **diff, review, and clean up** locally.
 
-That is a genuinely different value proposition from the rest of AMF
+That is a genuinely different value proposition from the rest of AIW
 (provision + review, not embed + drive), which is the main reason it is
 deferred rather than treated as a natural extension.
 
@@ -103,7 +103,7 @@ deferred rather than treated as a natural extension.
     `{ spawn_mode, capacity, permission_mode, tmux_session, status }`.
     The server is project-scoped, not a per-feature Claude session.
   - `Feature` gains an origin marker (e.g. `source: FeatureSource` with
-    `Manual` | `RemoteServer`) so AMF treats server-spawned features'
+    `Manual` | `RemoteServer`) so AIW treats server-spawned features'
     lifecycle differently — it owns their worktree + review but not their
     conversation.
 - **Server lifecycle** (new `app/remote_server.rs`):
@@ -116,8 +116,8 @@ deferred rather than treated as a natural extension.
 - **Hook contract** (`app/setup.rs`, alongside existing hook writers):
   - Write `WorktreeCreate`/`WorktreeRemove` scripts into the workspace
     (never global config — same rule as notification hooks) that call
-    back into AMF over the existing IPC / marker-file path so the running
-    AMF process registers/removes the feature. **Exact input/output
+    back into AIW over the existing IPC / marker-file path so the running
+    AIW process registers/removes the feature. **Exact input/output
     contract must be confirmed against the docs before building.**
 - **UI surfacing**:
   - A project-scoped "Remote Server" row: running/stopped, URL, QR
@@ -142,7 +142,7 @@ Nothing started — this is a design only. Implementation items:
 - [ ] Server lifecycle module (`app/remote_server.rs`): start/stop in a
   dedicated tmux window, guarded by `remote_control_block_reason()`
 - [ ] `WorktreeCreate`/`WorktreeRemove` hook scripts written into the
-  workspace + AMF-side register/remove callback
+  workspace + AIW-side register/remove callback
 - [ ] UI: project-scoped "Remote Server" row (status, URL, QR, capacity)
 - [ ] UI: `[remote-spawned]` marker on server-originated features
 - [ ] Reconciliation in `app/sync.rs` (server-gone handling + orphan
@@ -155,7 +155,7 @@ Nothing started — this is a design only. Implementation items:
 - Exact `WorktreeCreate`/`WorktreeRemove` hook I/O contract (how the path
   is returned, env/args provided, failure semantics).
 - Whether the server exposes per-session identity (id / name / URL) in a
-  machine-parseable way, so AMF can map sessions → worktrees for display.
+  machine-parseable way, so AIW can map sessions → worktrees for display.
 - Whether an individual server session can be attached/embedded at all,
   or is strictly web/mobile-driven (assumed the latter above).
 - Minimum Claude Code version that supports server mode + the hooks.
@@ -163,9 +163,9 @@ Nothing started — this is a design only. Implementation items:
 ## Reasoning / when to build
 
 Build only if **"spin up parallel, isolated tasks from my phone, then
-review them in AMF later"** is a workflow that is actually wanted. For
+review them in AIW later"** is a workflow that is actually wanted. For
 "continue / drive work I already started," the shipped interactive
-integration already covers it, and AMF's own multi-feature model already
+integration already covers it, and AIW's own multi-feature model already
 provides parallelism (many features, each its own independently
 remote-controllable Claude).
 

@@ -3,15 +3,15 @@
 //!
 //! Registry metadata, layered resolution and both persistence stores are the
 //! shared ones: `crate::prompts` (feature → project → global → built-in),
-//! `amf.db`'s `prompt_overrides` table for feature/global scope and the repo's
-//! `amf.json` `prompt_overrides` key for project scope. Nothing here touches
+//! `aiw.db`'s `prompt_overrides` table for feature/global scope and the repo's
+//! `aiw.json` `prompt_overrides` key for project scope. Nothing here touches
 //! `App::mode`, so the manager can sit on top of an open plan interview or
 //! Final Review and its pre-call notice.
 //!
 //! Every prompt row carries a `revision` fingerprint of the overrides stored
 //! for it in the chosen context (and of that context's checkout paths). A save
 //! or clear must present the revision it was based on; a write made by the TUI,
-//! another window or a hand edit of `amf.json` in the meantime is refused and
+//! another window or a hand edit of `aiw.json` in the meantime is refused and
 //! the client must reload before trying again.
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -327,7 +327,7 @@ fn build_view(
             }
         })
         .collect();
-    let no_db = || Some("No AMF database is open".to_string());
+    let no_db = || Some("No AIW database is open".to_string());
     let scopes = vec![
         ScopeOption {
             scope: OverrideLayer::Feature,
@@ -343,7 +343,7 @@ fn build_view(
         },
         ScopeOption {
             scope: OverrideLayer::Project,
-            label: "This project (amf.json)",
+            label: "This project (aiw.json)",
             available: repo.is_some() && project_config_error.is_none(),
             reason: if repo.is_none() {
                 Some("Choose a project or feature context to save a project override".into())
@@ -577,11 +577,11 @@ pub fn precall_target(gui: &mut GuiHandle) -> GuiResult<PrecallOverrideTarget> {
                      Choose the right context before editing."
                 ),
                 (None, Some(workdir)) => format!(
-                    "No AMF feature or project matches {}, so this opened on Global. \
+                    "No AIW feature or project matches {}, so this opened on Global. \
                      Feature and project overrides for this call may differ.",
                     workdir.display()
                 ),
-                (None, None) => "AMF couldn't tell which feature or project this call runs in, so \
+                (None, None) => "AIW couldn't tell which feature or project this call runs in, so \
                      this opened on Global. Feature and project overrides for this call may \
                      differ."
                     .into(),
@@ -600,7 +600,7 @@ pub fn precall_target(gui: &mut GuiHandle) -> GuiResult<PrecallOverrideTarget> {
 mod tests {
     use super::*;
     use crate::app::App;
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use crate::gui_contract::GuiErrorKind;
     use crate::project::{Feature, Project, ProjectStore, VibeMode};
     use crate::traits::{MockTmuxOps, MockWorktreeOps};
@@ -642,7 +642,7 @@ mod tests {
         project.features.push(feature);
         let mut store = ProjectStore::empty();
         store.projects.push(project);
-        let db = AmfDb::open(&dir.path().join("amf.db")).unwrap();
+        let db = AiwDb::open(&dir.path().join("aiw.db")).unwrap();
         db.save_store(&store).unwrap();
         let (_, version) = db.load_store_versioned().unwrap();
         let mut app = App::new_for_test(
@@ -778,13 +778,13 @@ mod tests {
         let claude = load(&mut fx.gui, &ctx, Some(AgentKind::Claude)).unwrap();
         assert_eq!(row(&claude, id).source, OverrideLayer::Project);
         assert_eq!(row(&claude, id).source_harness, None);
-        // The project key is in the committed amf.json, not in .amf/.
-        let raw = std::fs::read_to_string(fx.dir.path().join("repo/amf.json")).unwrap();
+        // The project key is in the committed aiw.json, not in .aiw/.
+        let raw = std::fs::read_to_string(fx.dir.path().join("repo/aiw.json")).unwrap();
         assert!(raw.contains("PROJECT pi"), "{raw}");
     }
 
     #[test]
-    fn stale_saves_after_external_db_or_amf_json_edits_are_refused() {
+    fn stale_saves_after_external_db_or_aiw_json_edits_are_refused() {
         let mut fx = fixture();
         let ctx = fx.feature.clone();
         let id = PromptId::ReviewWalkthrough;
@@ -806,10 +806,10 @@ mod tests {
         assert_eq!(stale.kind, GuiErrorKind::Conflict);
         assert!(stale.message.contains("Reload"));
 
-        // A hand edit of amf.json for the same prompt is refused the same way.
+        // A hand edit of aiw.json for the same prompt is refused the same way.
         let view = load(&mut fx.gui, &ctx, None).unwrap();
         std::fs::write(
-            fx.dir.path().join("repo/amf.json"),
+            fx.dir.path().join("repo/aiw.json"),
             r#"{"prompt_overrides":{"review.walkthrough":{"template":"hand"}}}"#,
         )
         .unwrap();
@@ -840,9 +840,9 @@ mod tests {
     }
 
     #[test]
-    fn malformed_amf_json_is_reported_and_never_overwritten() {
+    fn malformed_aiw_json_is_reported_and_never_overwritten() {
         let mut fx = fixture();
-        let path = fx.dir.path().join("repo/amf.json");
+        let path = fx.dir.path().join("repo/aiw.json");
         std::fs::write(&path, "{ broken").unwrap();
         let ctx = fx.project.clone();
         let view = load(&mut fx.gui, &ctx, None).unwrap();
@@ -922,7 +922,7 @@ mod tests {
         );
         let empty = clear(&mut fx.gui, clear_req(&after, None)).unwrap();
         assert_eq!(row(&empty, id).source, OverrideLayer::BuiltIn);
-        let raw = std::fs::read_to_string(fx.dir.path().join("repo/amf.json")).unwrap();
+        let raw = std::fs::read_to_string(fx.dir.path().join("repo/aiw.json")).unwrap();
         assert!(!raw.contains("prompt_overrides"), "{raw}");
     }
 

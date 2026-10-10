@@ -86,7 +86,7 @@ impl TodoStatus {
 /// together for a TODO.
 ///
 /// `agent_session_id` is a [`crate::project::FeatureSession`] id, rather than
-/// a tmux name or harness-specific identifier. It is stable across AMF
+/// a tmux name or harness-specific identifier. It is stable across AIW
 /// restarts and works for every supported agent harness.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TodoWorkState {
@@ -655,7 +655,7 @@ pub fn set_work_state(conn: &Connection, todo_id: &str, work: &TodoWorkState) ->
     Ok(())
 }
 
-/// Reserve a TODO for a new agent in one conditional SQL statement. Two AMF
+/// Reserve a TODO for a new agent in one conditional SQL statement. Two AIW
 /// processes reading the same not-started row cannot both claim it.
 pub fn reserve_agent_launch(conn: &Connection, todo_id: &str) -> Result<bool> {
     Ok(conn.execute(
@@ -871,7 +871,7 @@ pub fn copy_todo(conn: &Connection, todo_id: &str, target_list_id: &str) -> Resu
 /// Persist a manual ordering: `ordered_ids` are written back as `sort_order`
 /// 0, 1, 2, … in the given sequence. The full list is checked and written
 /// inside one transaction, so a stale or mixed-scope order cannot partially
-/// renumber rows when another AMF process is editing TODOs at the same time.
+/// renumber rows when another AIW process is editing TODOs at the same time.
 pub fn reorder_todos(conn: &Connection, ordered_ids: &[String]) -> Result<()> {
     if ordered_ids.is_empty() {
         return Ok(());
@@ -920,7 +920,7 @@ pub fn reorder_todos(conn: &Connection, ordered_ids: &[String]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use tempfile::NamedTempFile;
 
     #[test]
@@ -998,9 +998,9 @@ mod tests {
         assert_eq!(state.agent_session_id.as_deref(), Some("session-1"));
     }
 
-    fn open_temp_db() -> (NamedTempFile, AmfDb) {
+    fn open_temp_db() -> (NamedTempFile, AiwDb) {
         let tmp = NamedTempFile::new().unwrap();
-        let db = AmfDb::open(tmp.path()).unwrap();
+        let db = AiwDb::open(tmp.path()).unwrap();
         (tmp, db)
     }
 
@@ -1294,7 +1294,7 @@ mod tests {
     fn todo_status_and_agent_association_survive_database_restart() {
         let tmp = NamedTempFile::new().unwrap();
         let (list_id, todo_id) = {
-            let db = AmfDb::open(tmp.path()).unwrap();
+            let db = AiwDb::open(tmp.path()).unwrap();
             let list = db
                 .create_todo_list(&project("proj-1"), Some("feat-1"))
                 .unwrap();
@@ -1309,7 +1309,7 @@ mod tests {
             (list.id, todo.id)
         };
 
-        let reopened = AmfDb::open(tmp.path()).unwrap();
+        let reopened = AiwDb::open(tmp.path()).unwrap();
         let loaded = reopened
             .todos(&list_id)
             .unwrap()

@@ -5,4 +5,4 @@
 note:The isolated TUI confirms the screenshot harness is ready before native dormancy proof begins.
 expect:0 projects, 0 features
 shot:gui-capture-ready
-run:env AMF_GUI_CAPTURE_RUNNER="$SCRIPT_DIR/capture-gui-dormancy.py" AMF_GUI_CAPTURE_FRAMES="$SCRIPT_DIR/capture-gui-dormancy-frames.py" bash "$SCRIPT_DIR/capture-gui-diff.sh" "$OUT_DIR"
+run:env AIW_GUI_CAPTURE_RUNNER="$SCRIPT_DIR/capture-gui-dormancy.py" AIW_GUI_CAPTURE_FRAMES="$SCRIPT_DIR/capture-gui-dormancy-frames.py" bash "$SCRIPT_DIR/capture-gui-diff.sh" "$OUT_DIR"

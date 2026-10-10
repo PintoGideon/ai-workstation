@@ -9,7 +9,7 @@
 #
 # Needs a seeded project + feature, asks a real question, and launches a
 # real agent session, so the harness must be authenticated:
-#   ./amf-capture.sh --scenario scenarios/learning-mode-escalate.txt \
+#   ./aiw-capture.sh --scenario scenarios/learning-mode-escalate.txt \
 #       --seed <project.json> --seed-feature <feature.json> \
 #       --geometry 140x44
 

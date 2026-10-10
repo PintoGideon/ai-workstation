@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Seed a throwaway project + feature for the plan-interview custom-answer
-# screenshot. The project's amf.json opts out of the built-in question bank
+# screenshot. The project's aiw.json opts out of the built-in question bank
 # and adds one required select question, so `P` opens an interview whose only
 # question is a choice question -- the surface the custom-answer box lives on.
 #
@@ -8,14 +8,14 @@
 # the scenario enables it in the isolated registry before calling this.
 set -euo pipefail
 
-AMF_BIN="${AMF_BIN:?AMF_BIN must point at the running capture binary}"
+AIW_BIN="${AIW_BIN:?AIW_BIN must point at the running capture binary}"
 
-demo_repo="$(mktemp -d "${TMPDIR:-/tmp}/amf-custom-answer-demo.XXXXXX")"
+demo_repo="$(mktemp -d "${TMPDIR:-/tmp}/aiw-custom-answer-demo.XXXXXX")"
 git init -q "$demo_repo"
 git -C "$demo_repo" config user.email screenshot@example.com
-git -C "$demo_repo" config user.name "AMF Screenshot"
+git -C "$demo_repo" config user.name "AIW Screenshot"
 
-cat >"$demo_repo/amf.json" <<'JSON'
+cat >"$demo_repo/aiw.json" <<'JSON'
 {
   "skip_builtin_questions": true,
   "plan_questions": [
@@ -59,5 +59,5 @@ cat >"$feature_seed" <<'JSON'
 }
 JSON
 
-"$AMF_BIN" automation create-project --file "$project_seed"
-"$AMF_BIN" automation create-feature --file "$feature_seed"
+"$AIW_BIN" automation create-project --file "$project_seed"
+"$AIW_BIN" automation create-feature --file "$feature_seed"

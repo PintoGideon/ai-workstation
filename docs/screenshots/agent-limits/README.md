@@ -1,7 +1,7 @@
 # Agent limits, autostart backoff, and dormant features
 
-Captured from an isolated, throwaway AMF instance
-(`scripts/dev/screenshot/amf-capture.sh`, 150x40, scenario
+Captured from an isolated, throwaway AIW instance
+(`scripts/dev/screenshot/aiw-capture.sh`, 150x40, scenario
 `scripts/dev/screenshot/scenarios/agent-limits.txt`) against a scratch demo
 repo, with `"max_concurrent_agents": 1` passed via the new `--config` flag —
 the interesting behavior is what happens *at* the limit, and a capture rarely
@@ -59,7 +59,7 @@ have run unprompted.
 
 ## 7. `x` — stopped again
 
-A stop also closes the editor AMF opened for the feature and the language
+A stop also closes the editor AIW opened for the feature and the language
 servers under it, reporting what it closed or deliberately left alone. This
 scratch instance has no editor, so the message is the ordinary one.
 

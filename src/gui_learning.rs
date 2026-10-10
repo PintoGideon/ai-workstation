@@ -613,7 +613,7 @@ fn keep_todo(gui: &mut GuiHandle, qa_id: &str, title: String, notes: String) -> 
     }
     if gui.app_for_workflow().db.is_none() {
         return Err(GuiError::conflict(
-            "AMF can't reach its database, so there's no TODO list to add to.",
+            "AIW can't reach its database, so there's no TODO list to add to.",
         ));
     }
     let app = gui.app_for_workflow();
@@ -744,8 +744,9 @@ pub fn launch_agent(
     let kind = match app.store.projects[s.pi].features[s.fi].agent {
         AgentKind::Claude => SessionKind::Claude,
         AgentKind::Codex => SessionKind::Codex,
-        AgentKind::Opencode => SessionKind::Opencode,
         AgentKind::Pi => SessionKind::Pi,
+        AgentKind::Gemini => SessionKind::Gemini, // FORK
+        AgentKind::Cursor => SessionKind::Cursor, // FORK
     };
     let response = gui.add_session(
         target,
@@ -837,7 +838,7 @@ fn content_syntax(
 mod tests {
     use super::*;
     use crate::app::App;
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use crate::gui_contract::GuiErrorKind;
     use crate::project::{Feature, Project, ProjectStore, VibeMode};
     use crate::traits::{MockTmuxOps, MockWorktreeOps};
@@ -867,7 +868,7 @@ mod tests {
         project.features.push(feature);
         let mut store = ProjectStore::empty();
         store.projects.push(project);
-        let db = AmfDb::open(&dir.path().join("learning.db")).unwrap();
+        let db = AiwDb::open(&dir.path().join("learning.db")).unwrap();
         db.save_store(&store).unwrap();
         let (_, version) = db.load_store_versioned().unwrap();
         let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
@@ -1032,7 +1033,7 @@ mod tests {
     fn stable_target_survives_reordering_and_deleted_feature_can_still_close() {
         let (dir, mut gui, target) = fixture(MockTmuxOps::new());
         begin(&mut gui, target.clone()).unwrap();
-        let writer = AmfDb::open(&dir.path().join("learning.db")).unwrap();
+        let writer = AiwDb::open(&dir.path().join("learning.db")).unwrap();
         let mut store = writer.load_store().unwrap();
         store.projects.insert(
             0,
@@ -1168,13 +1169,13 @@ mod tests {
         std::fs::write(dir.path().join(".gitignore"), "learning.db*\n").unwrap();
         std::fs::write(dir.path().join("README.md"), base).unwrap();
         git(&["init", "--initial-branch=main"]);
-        git(&["config", "user.name", "AMF Test"]);
+        git(&["config", "user.name", "AIW Test"]);
         git(&["config", "user.email", "test@example.com"]);
         git(&["add", "README.md", "other.rs"]);
         git(&["commit", "-m", "initial"]);
         git(&["checkout", "-b", "feature"]);
         std::fs::write(dir.path().join("README.md"), changed).unwrap();
-        let writer = AmfDb::open(&dir.path().join("learning.db")).unwrap();
+        let writer = AiwDb::open(&dir.path().join("learning.db")).unwrap();
         let mut store = writer.load_store().unwrap();
         store.projects[0].is_git = true;
         writer.save_store(&store).unwrap();

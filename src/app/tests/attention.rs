@@ -10,7 +10,7 @@ use std::collections::HashMap;
 // ---------------------------------------------------------------------------
 
 /// A store with `features.len()` features under one project, each with its own
-/// tmux session (`amf-feat-N`) and agent, so ordering across mixed harnesses
+/// tmux session (`aiw-feat-N`) and agent, so ordering across mixed harnesses
 /// can be exercised.
 fn store_with_agents(agents: &[AgentKind]) -> ProjectStore {
     let now = Utc::now();
@@ -23,7 +23,7 @@ fn store_with_agents(agents: &[AgentKind]) -> ProjectStore {
             branch: format!("feat-{i}"),
             workdir: PathBuf::from(format!("/tmp/test-workdir-{i}")),
             is_worktree: false,
-            tmux_session: format!("amf-feat-{i}"),
+            tmux_session: format!("aiw-feat-{i}"),
             sessions: vec![],
             collapsed: false,
             mode: VibeMode::default(),
@@ -79,19 +79,19 @@ fn attention_records_are_narrowed_to_harness_capability() {
     let mut app = app_with_agents(&[AgentKind::Claude, AgentKind::Codex, AgentKind::Pi]);
 
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
     app.record_attention(
-        "amf-feat-1",
+        "aiw-feat-1",
         &AgentKind::Codex,
         AttentionState::Question,
         AttentionSource::Hook,
     );
     app.record_attention(
-        "amf-feat-2",
+        "aiw-feat-2",
         &AgentKind::Pi,
         AttentionState::Question,
         AttentionSource::Hook,
@@ -99,15 +99,15 @@ fn attention_records_are_narrowed_to_harness_capability() {
 
     // Claude can prove it; Codex and Pi cannot and degrade rather than guess.
     assert_eq!(
-        app.attention_for("amf-feat-0").map(|r| r.state),
+        app.attention_for("aiw-feat-0").map(|r| r.state),
         Some(AttentionState::Question)
     );
     assert_eq!(
-        app.attention_for("amf-feat-1").map(|r| r.state),
+        app.attention_for("aiw-feat-1").map(|r| r.state),
         Some(AttentionState::Waiting)
     );
     assert_eq!(
-        app.attention_for("amf-feat-2").map(|r| r.state),
+        app.attention_for("aiw-feat-2").map(|r| r.state),
         Some(AttentionState::Waiting)
     );
 }
@@ -117,13 +117,13 @@ fn attention_question_is_not_downgraded_by_an_inferred_completion() {
     let mut app = app_with_agents(&[AgentKind::Claude]);
 
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::CompletedAwaitingReview,
         AttentionSource::Inferred,
@@ -132,7 +132,7 @@ fn attention_question_is_not_downgraded_by_an_inferred_completion() {
     // An agent blocked on an answer stays blocked; the sync fallback's
     // agent-agnostic "completed" must not overwrite the harness's better signal.
     assert_eq!(
-        app.attention_for("amf-feat-0").map(|r| r.state),
+        app.attention_for("aiw-feat-0").map(|r| r.state),
         Some(AttentionState::Question)
     );
 }
@@ -142,13 +142,13 @@ fn attention_question_is_retired_by_a_hook_completion() {
     let mut app = app_with_agents(&[AgentKind::Claude]);
 
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::CompletedAwaitingReview,
         AttentionSource::Hook,
@@ -158,7 +158,7 @@ fn attention_question_is_retired_by_a_hook_completion() {
     // so the question was answered. Holding onto it would strand the session in
     // the `i` list until it aged out.
     assert_eq!(
-        app.attention_for("amf-feat-0").map(|r| r.state),
+        app.attention_for("aiw-feat-0").map(|r| r.state),
         Some(AttentionState::CompletedAwaitingReview)
     );
 }
@@ -168,20 +168,20 @@ fn attention_completion_is_upgraded_by_a_later_question() {
     let mut app = app_with_agents(&[AgentKind::Claude]);
 
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::CompletedAwaitingReview,
         AttentionSource::Hook,
     );
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
 
     assert_eq!(
-        app.attention_for("amf-feat-0").map(|r| r.state),
+        app.attention_for("aiw-feat-0").map(|r| r.state),
         Some(AttentionState::Question)
     );
 }
@@ -191,20 +191,20 @@ fn attention_re_raise_keeps_the_original_timestamp() {
     let mut app = app_with_agents(&[AgentKind::Claude]);
 
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
-    let first = app.attention_for("amf-feat-0").unwrap().since;
+    let first = app.attention_for("aiw-feat-0").unwrap().since;
 
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
-    let second = app.attention_for("amf-feat-0").unwrap().since;
+    let second = app.attention_for("aiw-feat-0").unwrap().since;
 
     // Ageing must measure how long the user has ignored the question, not how
     // often the harness repeated itself.
@@ -215,17 +215,17 @@ fn attention_re_raise_keeps_the_original_timestamp() {
 fn attention_clears_when_the_session_produces_output_again() {
     let mut app = app_with_agents(&[AgentKind::Claude]);
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
 
-    assert!(app.clear_attention("amf-feat-0"));
-    assert!(app.attention_for("amf-feat-0").is_none());
+    assert!(app.clear_attention("aiw-feat-0"));
+    assert!(app.attention_for("aiw-feat-0").is_none());
     // Clearing an already-clear session reports no change, so callers can skip
     // a redraw.
-    assert!(!app.clear_attention("amf-feat-0"));
+    assert!(!app.clear_attention("aiw-feat-0"));
 }
 
 #[test]
@@ -234,25 +234,25 @@ fn attention_ages_out_past_the_stale_threshold() {
     app.config.waiting_stale_minutes = 30;
 
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
     app.record_attention(
-        "amf-feat-1",
+        "aiw-feat-1",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
 
     // Just inside the window survives; just outside it does not.
-    app.attention.get_mut("amf-feat-0").unwrap().since = Utc::now() - Duration::minutes(29);
-    app.attention.get_mut("amf-feat-1").unwrap().since = Utc::now() - Duration::minutes(31);
+    app.attention.get_mut("aiw-feat-0").unwrap().since = Utc::now() - Duration::minutes(29);
+    app.attention.get_mut("aiw-feat-1").unwrap().since = Utc::now() - Duration::minutes(31);
 
     assert!(app.age_out_attention());
-    assert!(app.attention_for("amf-feat-0").is_some());
-    assert!(app.attention_for("amf-feat-1").is_none());
+    assert!(app.attention_for("aiw-feat-0").is_some());
+    assert!(app.attention_for("aiw-feat-1").is_none());
 }
 
 #[test]
@@ -261,15 +261,15 @@ fn attention_ageing_is_disabled_by_zero() {
     app.config.waiting_stale_minutes = 0;
 
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
-    app.attention.get_mut("amf-feat-0").unwrap().since = Utc::now() - Duration::days(7);
+    app.attention.get_mut("aiw-feat-0").unwrap().since = Utc::now() - Duration::days(7);
 
     assert!(!app.age_out_attention());
-    assert!(app.attention_for("amf-feat-0").is_some());
+    assert!(app.attention_for("aiw-feat-0").is_some());
 }
 
 #[test]
@@ -278,37 +278,37 @@ fn needs_attention_sorts_questions_first_then_oldest() {
         AgentKind::Claude,
         AgentKind::Codex,
         AgentKind::Claude,
-        AgentKind::Opencode,
+        AgentKind::Gemini,
     ]);
 
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::CompletedAwaitingReview,
         AttentionSource::Hook,
     );
     // Codex narrows to Waiting, which sorts last.
     app.record_attention(
-        "amf-feat-1",
+        "aiw-feat-1",
         &AgentKind::Codex,
         AttentionState::Question,
         AttentionSource::Hook,
     );
     app.record_attention(
-        "amf-feat-2",
+        "aiw-feat-2",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
     app.record_attention(
-        "amf-feat-3",
-        &AgentKind::Opencode,
+        "aiw-feat-3",
+        &AgentKind::Gemini,
         AttentionState::Question,
         AttentionSource::Hook,
     );
 
     // feat-3's question is older than feat-2's, so it leads.
-    app.attention.get_mut("amf-feat-3").unwrap().since = Utc::now() - Duration::minutes(10);
+    app.attention.get_mut("aiw-feat-3").unwrap().since = Utc::now() - Duration::minutes(10);
 
     let ordered: Vec<String> = app
         .needs_attention()
@@ -325,7 +325,7 @@ fn needs_attention_sorts_questions_first_then_oldest() {
 fn needs_attention_skips_stopped_features() {
     let mut app = app_with_agents(&[AgentKind::Claude]);
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
@@ -342,7 +342,7 @@ fn needs_attention_skips_stopped_features() {
 /// `sync.rs` raises when a session goes idle.
 fn input_request_for(feature_name: &str) -> PendingInput {
     PendingInput {
-        session_id: format!("amf-{feature_name}"),
+        session_id: format!("aiw-{feature_name}"),
         cwd: String::new(),
         message: "waiting for input".to_string(),
         notification_type: "input-request".to_string(),
@@ -370,7 +370,7 @@ fn input_request_for(feature_name: &str) -> PendingInput {
 fn attention_rows_fold_the_input_request_the_same_feature_raised() {
     let mut app = app_with_agents(&[AgentKind::Claude]);
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
@@ -390,7 +390,7 @@ fn attention_rows_fold_the_input_request_the_same_feature_raised() {
 fn attention_rows_fold_a_bare_stop_the_same_way_as_an_input_request() {
     let mut app = app_with_agents(&[AgentKind::Claude]);
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::CompletedAwaitingReview,
         AttentionSource::Hook,
@@ -415,7 +415,7 @@ fn attention_rows_fold_a_bare_stop_the_same_way_as_an_input_request() {
 fn attention_rows_keep_unexplained_pending_inputs_after_the_explained_ones() {
     let mut app = app_with_agents(&[AgentKind::Claude, AgentKind::Claude]);
     app.record_attention(
-        "amf-feat-1",
+        "aiw-feat-1",
         &AgentKind::Claude,
         AttentionState::CompletedAwaitingReview,
         AttentionSource::Hook,
@@ -442,13 +442,13 @@ fn attention_rows_keep_unexplained_pending_inputs_after_the_explained_ones() {
 fn attention_rows_never_fold_one_pending_input_into_two_features() {
     let mut app = app_with_agents(&[AgentKind::Claude, AgentKind::Claude]);
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
     app.record_attention(
-        "amf-feat-1",
+        "aiw-feat-1",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
@@ -468,19 +468,19 @@ fn ageing_out_takes_the_input_request_the_record_explained() {
     let mut app = app_with_agents(&[AgentKind::Claude]);
     app.config.waiting_stale_minutes = 30;
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
-    app.attention.get_mut("amf-feat-0").unwrap().since = Utc::now() - Duration::minutes(31);
+    app.attention.get_mut("aiw-feat-0").unwrap().since = Utc::now() - Duration::minutes(31);
     app.pending_inputs.push(input_request_for("feat-0"));
 
     assert!(app.age_out_attention());
 
     // Dropping the record alone would leave the input request behind as a
     // standalone row, and the session would never leave the `i` list.
-    assert!(app.attention_for("amf-feat-0").is_none());
+    assert!(app.attention_for("aiw-feat-0").is_none());
     assert!(app.attention_rows().is_empty());
     assert!(app.pending_inputs.is_empty());
 }
@@ -490,12 +490,12 @@ fn ageing_out_leaves_pending_work_it_never_explained() {
     let mut app = app_with_agents(&[AgentKind::Claude]);
     app.config.waiting_stale_minutes = 30;
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
-    app.attention.get_mut("amf-feat-0").unwrap().since = Utc::now() - Duration::minutes(31);
+    app.attention.get_mut("aiw-feat-0").unwrap().since = Utc::now() - Duration::minutes(31);
 
     // A diff review on the same feature is separate work, not a description of
     // why the session stopped, so ageing must not silently discard it.
@@ -512,7 +512,7 @@ fn ageing_out_leaves_pending_work_it_never_explained() {
 fn badge_counts_keep_pending_work_the_attention_layer_cannot_explain() {
     let mut app = app_with_agents(&[AgentKind::Claude, AgentKind::Claude]);
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
@@ -538,19 +538,19 @@ fn badge_hit_columns_follow_the_rendered_title_not_a_hand_counted_constant() {
     use ratatui::layout::Rect;
 
     let badge = crate::ui::header::badge_text((1, 0, 0), 0).expect("badge");
-    let cwd = "/home/dev/code/agent-mainframe";
+    let cwd = "/home/dev/code/ai-workstation";
     // Wide enough that the help hint clamps nothing.
     let area = Rect::new(0, 0, 200, 3);
 
-    let columns = crate::ui::header::badge_hit_columns(area, cwd, "0.37.0", (1, 0, 0), 0)
+    let columns = crate::ui::header::badge_hit_columns(area, cwd, "0.37.0", (1, 0, 0), 0, None)
         .expect("badge is clickable");
 
     // The prefix is the border, then the spans `draw` renders ahead of the
-    // badge: " Agent Mainframe ", "v0.37.0 ", "| ", cwd. Spelled out here so a
+    // badge: " AI Workstation ", "v0.37.0 ", "| ", cwd. Spelled out here so a
     // version string of a different length cannot silently shift the hit box
     // out from under the badge.
-    let expected_start =
-        1 + (" Agent Mainframe ".len() + "v0.37.0 ".len() + "| ".len() + cwd.len());
+    // FORK: product name is "AI Workstation".
+    let expected_start = 1 + (" AI Workstation ".len() + "v0.37.0 ".len() + "| ".len() + cwd.len());
     assert_eq!(columns.start, expected_start as u16);
     assert_eq!(columns.end, columns.start + badge.len() as u16);
 }
@@ -560,9 +560,16 @@ fn a_narrow_header_shortens_the_cwd_rather_than_the_needs_attention_badge() {
     use ratatui::layout::Rect;
 
     let badge = crate::ui::header::badge_text((1, 0, 0), 0).expect("badge");
-    let cwd = "/home/dev/code/agent-mainframe/.worktrees/some-long-branch";
+    let cwd = "/home/dev/code/ai-workstation/.worktrees/some-long-branch";
     let full_width = |width: u16| {
-        crate::ui::header::badge_hit_columns(Rect::new(0, 0, width, 3), cwd, "0.37.0", (1, 0, 0), 0)
+        crate::ui::header::badge_hit_columns(
+            Rect::new(0, 0, width, 3),
+            cwd,
+            "0.37.0",
+            (1, 0, 0),
+            0,
+            None,
+        )
     };
 
     let wide = full_width(200).expect("badge is clickable");
@@ -603,13 +610,13 @@ fn a_waiting_session_still_counts_toward_dormancy_and_the_agent_gate() {
     // store, which cannot see the attention map — this pins that.
     let mut app = app_with_agents(&[AgentKind::Claude]);
     app.record_attention(
-        "amf-feat-0",
+        "aiw-feat-0",
         &AgentKind::Claude,
         AttentionState::Question,
         AttentionSource::Hook,
     );
 
-    let session_name = "amf-feat-0".to_string();
+    let session_name = "aiw-feat-0".to_string();
     app.store.projects[0].features[0]
         .sessions
         .push(FeatureSession {

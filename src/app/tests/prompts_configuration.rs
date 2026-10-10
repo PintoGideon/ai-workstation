@@ -136,9 +136,9 @@ fn app_config_waiting_stale_minutes_is_configurable_and_zero_disables() {
 }
 
 #[test]
-fn app_config_default_diff_review_viewer_is_amf() {
+fn app_config_default_diff_review_viewer_is_aiw() {
     let config = AppConfig::default();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Amf);
+    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
 }
 
 #[test]
@@ -359,9 +359,9 @@ fn migrate_app_config_is_noop_when_current() {
 }
 
 #[test]
-fn app_config_missing_diff_review_viewer_uses_amf_default() {
+fn app_config_missing_diff_review_viewer_uses_aiw_default() {
     let config: AppConfig = serde_json::from_str(r#"{"nerd_font":false}"#).unwrap();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Amf);
+    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
 }
 
 #[test]
@@ -371,28 +371,35 @@ fn app_config_missing_diff_viewer_layout_uses_unified_default() {
 }
 
 #[test]
-fn app_config_diff_review_viewer_deserializes_amf() {
+fn app_config_diff_review_viewer_deserializes_aiw() {
+    let config: AppConfig = serde_json::from_str(r#"{"diff_review_viewer":"aiw"}"#).unwrap();
+    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
+}
+
+/// FORK: a `config.json` copied from AMF says `"amf"` here.
+#[test]
+fn app_config_diff_review_viewer_legacy_amf_maps_to_aiw() {
     let config: AppConfig = serde_json::from_str(r#"{"diff_review_viewer":"amf"}"#).unwrap();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Amf);
+    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
 }
 
 #[test]
-fn app_config_diff_review_viewer_nvim_maps_to_amf() {
+fn app_config_diff_review_viewer_nvim_maps_to_aiw() {
     // The legacy vimdiff viewer was retired; old configs still load.
     let config: AppConfig = serde_json::from_str(r#"{"diff_review_viewer":"nvim"}"#).unwrap();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Amf);
+    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
 }
 
 #[test]
 fn app_config_diff_review_viewer_accepts_custom_alias() {
     let config: AppConfig = serde_json::from_str(r#"{"diff_review_viewer":"custom"}"#).unwrap();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Amf);
+    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
 }
 
 #[test]
 fn app_config_diff_review_viewer_accepts_legacy_alias() {
     let config: AppConfig = serde_json::from_str(r#"{"diff_review_viewer":"legacy"}"#).unwrap();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Amf);
+    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
 }
 
 #[test]
@@ -425,9 +432,39 @@ fn default_project_preferred_agent_comes_from_config() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.config.projects.default_preferred_agent = Some(AgentKind::Opencode);
+    app.config.projects.default_preferred_agent = Some(AgentKind::Pi);
 
-    assert_eq!(app.default_project_preferred_agent(), AgentKind::Opencode);
+    assert_eq!(app.default_project_preferred_agent(), AgentKind::Pi);
+}
+
+/// FORK: a `config.json` from the OpenCode era still loads: the old
+/// `opencode_theme` key is ignored, OpenCode preferences fall back to the
+/// default agent, and `allowed_agents` drops OpenCode.
+#[test]
+fn legacy_opencode_config_json_still_loads() {
+    let config: AppConfig = serde_json::from_str(
+        r#"{
+            "opencode_theme": "catppuccin-frappe",
+            "projects": {"default_preferred_agent": "opencode"},
+            "extension": {
+                "allowed_agents": ["opencode", "codex"],
+                "feature_presets": [{"name": "oc", "agent": "opencode"}]
+            }
+        }"#,
+    )
+    .expect("legacy config must load");
+    assert_eq!(
+        config.projects.default_preferred_agent,
+        Some(AgentKind::default())
+    );
+    assert_eq!(
+        config.extension.allowed_agents,
+        Some(vec![AgentKind::Codex])
+    );
+    assert_eq!(
+        config.extension.feature_presets[0].agent,
+        AgentKind::default()
+    );
 }
 
 // ── ContextSettings dialog ─────────────────────────────────
@@ -872,7 +909,7 @@ fn bare_uppercase_a_opens_harness_setup_from_dashboard() {
 
 // ---------------------------------------------------------------------------
 // Editable headless prompts: registry resolution + interpolation
-// (`crate::prompts`). Kept here per AMF_PLAN.md; deeper cases live in
+// (`crate::prompts`). Kept here per AIW_PLAN.md; deeper cases live in
 // `src/prompts/resolve.rs`.
 // ---------------------------------------------------------------------------
 
@@ -918,7 +955,7 @@ fn resolve_prompt_renders_an_unknown_token_literally() {
 
 #[test]
 fn resolve_headless_template_applies_a_global_db_override_and_falls_back_otherwise() {
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use crate::db::prompt_overrides::OverrideScope;
     use crate::prompts::PromptId;
 
@@ -929,7 +966,7 @@ fn resolve_headless_template_applies_a_global_db_override_and_falls_back_otherwi
         Box::new(MockWorktreeOps::new()),
     );
     let db_file = NamedTempFile::new().unwrap();
-    app.db = Some(AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(AiwDb::open(db_file.path()).unwrap());
 
     let repo = app.store.projects[0].repo.clone();
     let workdir = app.store.projects[0].features[0].workdir.clone();
@@ -978,7 +1015,7 @@ fn resolve_headless_template_applies_a_global_db_override_and_falls_back_otherwi
 
 #[test]
 fn prompt_override_manager_saves_to_each_scope_and_survives_reopen() {
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use crate::prompts::{PromptId, PromptSource};
 
     let repo = tempfile::TempDir::new().unwrap();
@@ -989,14 +1026,14 @@ fn prompt_override_manager_saves_to_each_scope_and_survives_reopen() {
         Box::new(MockWorktreeOps::new()),
     );
     let db_file = NamedTempFile::new().unwrap();
-    app.db = Some(AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(AiwDb::open(db_file.path()).unwrap());
     app.selection = Selection::Feature(0, 0);
 
     // Save a distinct override at each of the three scopes.
     let cases = [
         (
             PromptId::SessionSummary,
-            "This project (amf.json)",
+            "This project (aiw.json)",
             "PROJECT one-liner {{recent_lines}}",
             PromptSource::Project,
         ),
@@ -1107,7 +1144,7 @@ fn precall_edit_opens_the_manager_focused_and_returns_to_the_notice() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.db = Some(crate::db::AmfDb::open(NamedTempFile::new().unwrap().path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(NamedTempFile::new().unwrap().path()).unwrap());
     app.selection = Selection::Feature(0, 0);
 
     app.mode = AppMode::PromptPrecall(Box::new(PendingPrecall {
@@ -1168,13 +1205,13 @@ fn plan_interview_mcp_parses_from_the_global_config() {
     assert_eq!(mcp.allowed_tools, ["mcp__claude_ai_Asana__get_task"]);
 
     let with_file: AppConfig = serde_json::from_str(
-        r#"{"plan_interview_mcp": {"config": "~/.config/amf/mcp.json",
+        r#"{"plan_interview_mcp": {"config": "~/.config/ai_workstation/mcp.json",
             "allowed_tools": ["mcp__asana__get_task"]}}"#,
     )
     .unwrap();
     assert_eq!(
         with_file.plan_interview_mcp.unwrap().config.as_deref(),
-        Some("~/.config/amf/mcp.json")
+        Some("~/.config/ai_workstation/mcp.json")
     );
     assert!(AppConfig::default().plan_interview_mcp.is_none());
 }
@@ -1236,8 +1273,8 @@ fn debug_log_entry(second: i64, message: &str) -> crate::debug::LogEntry {
 fn desktop_debug_log_merges_external_history_and_pending_without_writing() {
     let mut app = context_settings_test_app();
     let file = NamedTempFile::new().unwrap();
-    app.db = Some(crate::db::AmfDb::open(file.path()).unwrap());
-    let external = crate::db::AmfDb::open(file.path()).unwrap();
+    app.db = Some(crate::db::AiwDb::open(file.path()).unwrap());
+    let external = crate::db::AiwDb::open(file.path()).unwrap();
     external
         .append_log_entry(&debug_log_entry(20, "external"))
         .unwrap();
@@ -1273,7 +1310,7 @@ fn desktop_debug_log_bounds_merged_history_and_preserves_pending_queue() {
     let mut app = context_settings_test_app();
     app.debug_log = crate::debug::DebugLog::new(2);
     let file = NamedTempFile::new().unwrap();
-    let db = crate::db::AmfDb::open(file.path()).unwrap();
+    let db = crate::db::AiwDb::open(file.path()).unwrap();
     for second in [10, 20, 30] {
         db.append_log_entry(&debug_log_entry(second, "persisted"))
             .unwrap();
@@ -1310,7 +1347,7 @@ fn desktop_debug_log_without_database_returns_memory_and_serializes_levels() {
 fn desktop_debug_log_database_failure_is_reported_instead_of_cached_history() {
     let mut app = context_settings_test_app();
     let file = NamedTempFile::new().unwrap();
-    app.db = Some(crate::db::AmfDb::open(file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(file.path()).unwrap());
     let external = rusqlite::Connection::open(file.path()).unwrap();
     external.execute("DROP TABLE debug_log", []).unwrap();
     app.debug_log

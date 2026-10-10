@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inject a combined-batch fix-cost fixture into a scratch AMF DB.
+"""Inject a combined-batch fix-cost fixture into a scratch AIW DB.
 
 Usage: seed-batch-cost.py <db_path> <pr_number> <head_sha>
 
@@ -58,9 +58,9 @@ review = {
     "pr": {
         "number": pr_number,
         "head_sha": head_sha,
-        "url": f"https://github.com/eldridgerdev/agent-mainframe/pull/{pr_number}",
-        "owner": "eldridgerdev",
-        "repo": "agent-mainframe",
+        "url": f"https://github.com/example-org/ai-workstation/pull/{pr_number}",
+        "owner": "example-org",
+        "repo": "ai-workstation",
         "head_ref": "pr-triage-cost-to-fix",
     },
     "comments": [comment, sibling_comment],

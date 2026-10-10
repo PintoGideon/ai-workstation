@@ -9,7 +9,7 @@
 #
 # Needs a seeded project + feature, and asks a real question, so the
 # harness must be authenticated:
-#   ./amf-capture.sh --scenario scenarios/learning-mode-keep-todo.txt \
+#   ./aiw-capture.sh --scenario scenarios/learning-mode-keep-todo.txt \
 #       --seed <project.json> --seed-feature <feature.json> \
 #       --geometry 140x44
 

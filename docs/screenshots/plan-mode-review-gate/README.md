@@ -1,8 +1,8 @@
 # Plan-mode synthesis review gate
 
-Captured with the `/amf-screenshot` workflow from an isolated AMF instance
+Captured with the `/aiw-screenshot` workflow from an isolated AIW instance
 against a throwaway repository. The fixture exercises the real plan-mode UI
-without reading or modifying user projects, the normal AMF database, or any
+without reading or modifying user projects, the normal AIW database, or any
 agent session.
 
 ## 1. Rendered plan review

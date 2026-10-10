@@ -21,21 +21,21 @@ import urllib.request
 out = pathlib.Path(sys.argv[1]).resolve()
 out.mkdir(parents=True, exist_ok=True)
 workspace = pathlib.Path(__file__).resolve().parents[3]
-with tempfile.TemporaryDirectory(prefix="amf-gui-pr-triage-") as temporary:
+with tempfile.TemporaryDirectory(prefix="aiw-gui-pr-triage-") as temporary:
     scratch = pathlib.Path(temporary)
     with socket.socket() as inspector_socket:
         inspector_socket.bind(("127.0.0.1", 0))
         inspector_address = f"127.0.0.1:{inspector_socket.getsockname()[1]}"
-    project_pr_proof = os.environ.get("AMF_GUI_PROJECT_PR_PROOF") == "1"
-    frontend_port = int(os.environ.get("AMF_GUI_CAPTURE_PORT", "1420"))
-    fix_submit_proof = os.environ.get("AMF_GUI_PR_FIX_SUBMIT_PROOF") == "1"
-    fix_draft_proof = os.environ.get("AMF_GUI_PR_FIX_DRAFT_PROOF") == "1"
+    project_pr_proof = os.environ.get("AIW_GUI_PROJECT_PR_PROOF") == "1"
+    frontend_port = int(os.environ.get("AIW_GUI_CAPTURE_PORT", "1420"))
+    fix_submit_proof = os.environ.get("AIW_GUI_PR_FIX_SUBMIT_PROOF") == "1"
+    fix_draft_proof = os.environ.get("AIW_GUI_PR_FIX_DRAFT_PROOF") == "1"
     fix_draft_proof = fix_draft_proof or fix_submit_proof
     config = scratch / "config"
     state = scratch / "state"
     repo = scratch / "demo-api"
-    (config / "amf").mkdir(parents=True)
-    (state / "amf").mkdir(parents=True)
+    (config / "ai_workstation").mkdir(parents=True)
+    (state / "ai_workstation").mkdir(parents=True)
     repo.mkdir()
     env = os.environ.copy()
     env.update(
@@ -53,7 +53,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-pr-triage-") as temporary:
     # CLI fixtures are private to this capture. Never call a paid harness.
     fixture_bin = scratch / "bin"
     fixture_bin.mkdir()
-    for harness in ["claude", "codex", "opencode", "pi"]:
+    for harness in ["claude", "codex", "pi"]:
         destination = fixture_bin / harness
         shutil.copyfile(workspace / "scripts/dev/screenshot/fixtures/gui-pr-triage-harness.py", destination)
         destination.chmod(0o755)
@@ -65,15 +65,15 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-pr-triage-") as temporary:
     for name in ["calls.jsonl", "writes.jsonl"]:
         (gh_state / name).write_text("")
     (gh_state / "head.txt").write_text("c0ffee" + "0" * 34 + "\n")
-    env["AMF_GUI_GH_STATE"] = str(gh_state)
+    env["AIW_GUI_GH_STATE"] = str(gh_state)
     env["PATH"] = str(fixture_bin) + os.pathsep + env["PATH"]
-    env["AMF_GUI_AI_CALLS"] = str(scratch / "ai-calls.jsonl")
-    pathlib.Path(env["AMF_GUI_AI_CALLS"]).write_text("")
-    env["AMF_TMUX_SOCKET"] = str(scratch / "private-tmux.sock")
-    env["AMF_GUI_FIX_PROMPTS"] = str(out / "submitted-fix.txt")
-    env["AMF_GUI_REPLY_BIN"] = str(workspace / "target/debug/amf")
+    env["AIW_GUI_AI_CALLS"] = str(scratch / "ai-calls.jsonl")
+    pathlib.Path(env["AIW_GUI_AI_CALLS"]).write_text("")
+    env["AIW_TMUX_SOCKET"] = str(scratch / "private-tmux.sock")
+    env["AIW_GUI_FIX_PROMPTS"] = str(out / "submitted-fix.txt")
+    env["AIW_GUI_REPLY_BIN"] = str(workspace / "target/debug/aiw")
     if fix_submit_proof:
-        pathlib.Path(env["AMF_GUI_FIX_PROMPTS"]).unlink(missing_ok=True)
+        pathlib.Path(env["AIW_GUI_FIX_PROMPTS"]).unlink(missing_ok=True)
     # Claude discovery prefers HOME's native versions over PATH. Mount an
     # empty directory over them only inside this GUI's namespace, preserving
     # HOME and leaving the installed binaries untouched.
@@ -81,7 +81,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-pr-triage-") as temporary:
     empty_versions.mkdir()
     gui_pid_path = scratch / "gui.pid"
     command = ["/bin/sh", "-c", 'echo "$$" > "$1"; exec "$2"', "gui-capture",
-               str(gui_pid_path), str(workspace / "target/debug/amf-gui")]
+               str(gui_pid_path), str(workspace / "target/debug/aiw-gui")]
     versions = pathlib.Path.home() / ".local/share/claude/versions"
     if versions.exists():
         if not shutil.which("bwrap"):
@@ -94,9 +94,9 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-pr-triage-") as temporary:
     git_env = env | {
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "AMF demo",
+        "GIT_AUTHOR_NAME": "AIW demo",
         "GIT_AUTHOR_EMAIL": "demo@example.com",
-        "GIT_COMMITTER_NAME": "AMF demo",
+        "GIT_COMMITTER_NAME": "AIW demo",
         "GIT_COMMITTER_EMAIL": "demo@example.com",
     }
 
@@ -144,7 +144,7 @@ export function formatTotal(total: number): string {
     )
     (repo / "receipt.bin").write_bytes(b"\0receipt\0image")
     git("add", "receipt.bin")
-    (repo / ".git/amf-gui-pr-triage-fixture").write_text("offline fixture")
+    (repo / ".git/aiw-gui-pr-triage-fixture").write_text("offline fixture")
     # Do not accidentally capture a different Vite server on the pinned port.
     try:
         with socket.create_connection(("localhost", frontend_port), timeout=1):
@@ -182,7 +182,7 @@ export function formatTotal(total: number): string {
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
-        dbpath = config / "amf/amf.db"
+        dbpath = config / "ai_workstation/aiw.db"
         for _ in range(60):
             if gui.poll() is not None:
                 raise RuntimeError(
@@ -216,7 +216,7 @@ export function formatTotal(total: number): string {
                         "Round invoice totals",
                         "round-invoice-totals",
                         str(repo),
-                        "amf-gui-shot-unused",
+                        "aiw-gui-shot-unused",
                         "running" if fix_submit_proof else "stopped",
                         stamp,
                         stamp,
@@ -234,7 +234,7 @@ export function formatTotal(total: number): string {
                 ((int(version[0]) if version else 0) + 1,),
             )
         if fix_submit_proof:
-            subprocess.run(["tmux", "-S", env["AMF_TMUX_SOCKET"], "new-session", "-d", "-s", "amf-gui-shot-unused", "-n", "codex-1", f"/usr/bin/python3 {workspace}/scripts/dev/screenshot/fixtures/gui-pr-fix-agent.py"], env=env, check=True)
+            subprocess.run(["tmux", "-S", env["AIW_TMUX_SOCKET"], "new-session", "-d", "-s", "aiw-gui-shot-unused", "-n", "codex-1", f"/usr/bin/python3 {workspace}/scripts/dev/screenshot/fixtures/gui-pr-fix-agent.py"], env=env, check=True)
             time.sleep(0.4)
         subprocess.run(
             [
@@ -262,11 +262,11 @@ export function formatTotal(total: number): string {
                 db.execute("SELECT count(*) FROM feature_sessions").fetchone()[0] == (2 if fix_draft_proof else 0)
             )
         assert (gh_state / "writes.jsonl").read_text() == "", "The capture attempted a GitHub write"
-        shutil.copyfile(env["AMF_GUI_AI_CALLS"], out / "fixture-calls.jsonl")
+        shutil.copyfile(env["AIW_GUI_AI_CALLS"], out / "fixture-calls.jsonl")
         shutil.copyfile(gh_state / "calls.jsonl", out / "gh-calls.jsonl")
     finally:
         if fix_submit_proof:
-            subprocess.run(["tmux", "-S", env["AMF_TMUX_SOCKET"], "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["tmux", "-S", env["AIW_TMUX_SOCKET"], "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for child in [gui, vite]:
             if child and child.poll() is None:
                 os.killpg(child.pid, signal.SIGTERM)

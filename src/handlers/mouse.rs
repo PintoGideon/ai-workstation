@@ -14,18 +14,12 @@ const DEBUG_LOG_MOUSE_SCROLL_LINES: usize = 3;
 const MARKDOWN_MOUSE_SCROLL_LINES: usize = 3;
 const HELP_MOUSE_SCROLL_LINES: usize = 3;
 const PLAN_INTERVIEW_MOUSE_SCROLL_LINES: usize = 3;
-const PAIRING_SETUP_MOUSE_SCROLL_LINES: i32 = 3;
-
-/// The pairing dialog's setup walkthrough is on screen (`s`), which scrolls.
-fn pairing_setup_open(app: &App) -> bool {
-    matches!(
-        &app.mode,
-        AppMode::RemotePairing(state)
-            if matches!(state.view, crate::app::PairingDialogView::Setup { .. })
-    )
-}
 
 pub fn handle_mouse(app: &mut App, mouse: MouseEvent, visible_rows: u16) -> Result<()> {
+    // FORK: split view handles its own clicks (focus a tile).
+    if matches!(app.mode, crate::app::AppMode::SplitView(_)) {
+        return super::fork_split::handle_split_mouse(app, mouse);
+    }
     if app.review_questions().is_some_and(|q| q.open) {
         if let Some(q) = app.review_questions_mut() {
             match mouse.kind {
@@ -118,10 +112,6 @@ fn handle_scroll_up(app: &mut App, visible_rows: u16) {
             .saturating_sub(MARKDOWN_MOUSE_SCROLL_LINES);
         return;
     }
-    if pairing_setup_open(app) {
-        app.scroll_pairing_setup(-PAIRING_SETUP_MOUSE_SCROLL_LINES);
-        return;
-    }
     if let AppMode::Help(state) = &mut app.mode {
         state.scroll_offset = state.scroll_offset.saturating_sub(HELP_MOUSE_SCROLL_LINES);
         return;
@@ -167,10 +157,6 @@ fn handle_scroll_down(app: &mut App, visible_rows: u16) {
         state.scroll_offset = state
             .scroll_offset
             .saturating_add(MARKDOWN_MOUSE_SCROLL_LINES);
-        return;
-    }
-    if pairing_setup_open(app) {
-        app.scroll_pairing_setup(PAIRING_SETUP_MOUSE_SCROLL_LINES);
         return;
     }
     if let AppMode::Help(state) = &mut app.mode {
@@ -301,18 +287,18 @@ fn handle_click(
 
     let (attention_counts, unexplained_pending) = app.attention_badge_counts();
     if row == 1 {
-        let cwd = std::env::current_dir()
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_default();
+        let cwd = crate::ui::header::cwd_label(); // FORK: cached cwd
         // The header owns the top three rows at full width; ask it where the
         // badge landed rather than re-deriving the title's layout here.
         let header_area = Rect::new(0, 0, app.viewport_cols, 3);
         if let Some(badge) = crate::ui::header::badge_hit_columns(
             header_area,
-            &cwd,
+            cwd,
             env!("CARGO_PKG_VERSION"),
             attention_counts,
             unexplained_pending,
+            // FORK: G11 pills take header columns too.
+            crate::ui::header::header_pills(app, attention_counts, unexplained_pending),
         ) && badge.contains(&col)
         {
             app.mode = AppMode::NotificationPicker(0, None);
@@ -330,8 +316,6 @@ fn handle_click(
             | AppMode::PlanInterviewAttachDoc(_)
             | AppMode::CommandPicker(_)
             | AppMode::Searching(_)
-            | AppMode::OpencodeSessionPicker(_)
-            | AppMode::ConfirmingOpencodeSession { .. }
             | AppMode::ClaudeSessionPicker(_)
             | AppMode::ConfirmingClaudeSession { .. }
             | AppMode::CodexSessionPicker(_)
@@ -662,35 +646,6 @@ mod tests {
         state.phase = phase;
         app.mode = AppMode::PlanInterview(state);
         app
-    }
-
-    #[test]
-    fn the_wheel_scrolls_the_pairing_setup_view() {
-        let mut app = test_app();
-        app.open_pairing_dialog_for_test("127.0.0.1:47800".parse().unwrap());
-        app.open_pairing_setup_view();
-        let setup = |app: &App| match &app.mode {
-            AppMode::RemotePairing(state) => match &state.view {
-                crate::app::PairingDialogView::Setup { scroll, .. } => *scroll,
-                _ => panic!("expected the setup view"),
-            },
-            _ => panic!("expected the pairing dialog"),
-        };
-        // What a draw on a short terminal would have measured.
-        if let AppMode::RemotePairing(state) = &app.mode
-            && let crate::app::PairingDialogView::Setup { max_scroll, .. } = &state.view
-        {
-            max_scroll.set(10);
-        }
-
-        scroll(&mut app, MouseEventKind::ScrollDown);
-        assert_eq!(setup(&app), 3);
-        for _ in 0..10 {
-            scroll(&mut app, MouseEventKind::ScrollDown);
-        }
-        assert_eq!(setup(&app), 10, "stops at the end");
-        scroll(&mut app, MouseEventKind::ScrollUp);
-        assert_eq!(setup(&app), 7);
     }
 
     fn scroll(app: &mut App, kind: MouseEventKind) {

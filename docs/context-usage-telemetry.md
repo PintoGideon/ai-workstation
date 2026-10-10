@@ -1,5 +1,8 @@
 # Context usage telemetry by agent harness
 
+> **AIW note:** OpenCode support was removed from AI Workstation; the OpenCode
+> sections below are kept as the original investigation record only.
+
 Investigation date: 2026-08-23. The runtime formats below were checked
 against Claude Code 2.1.241, Codex CLI 0.148.0, OpenCode 1.17.9, the
 current Pi source and documentation, and representative local session
@@ -11,7 +14,7 @@ unknown fields.
 
 - **Direct**: the harness or its model provider reports the value or
   lifecycle event explicitly.
-- **Derived**: AMF must calculate the value from reported fields, append
+- **Derived**: AIW must calculate the value from reported fields, append
   an estimate for unreported messages, or map a model ID to a catalog.
 - **Unavailable**: the artifact has no usable field. A different runtime
   output may still make the value available.
@@ -21,18 +24,18 @@ usage. Repeated model calls resend much of the same context, so summing
 turn usage can exceed the model window many times without describing the
 tokens currently occupying it.
 
-## Existing AMF records
+## Existing AIW records
 
-AMF's `SessionTokenTracker` currently supports Claude, Codex, and
+AIW's `SessionTokenTracker` currently supports Claude, Codex, and
 OpenCode, but not Pi. It refreshes cached usage entries no more often than
 every 30 seconds even though session status sync is scheduled every five
 seconds.
 
-| Harness | Existing source | What AMF records | Suitability for current context |
+| Harness | Existing source | What AIW records | Suitability for current context |
 | --- | --- | --- | --- |
 | Claude Code | `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl` plus subagent transcripts | Sums every deduplicated assistant response's `input_tokens`, `output_tokens`, `cache_read_input_tokens`, and `cache_creation_input_tokens`. | Cumulative billing usage only. The latest response is useful, but the existing aggregate is not. |
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl`, located through `~/.codex/state_5.sqlite` when possible | Keeps `total_token_usage` (or accumulates `last_token_usage` when totals are absent). | `total_token_usage` is cumulative. The existing parser discards the live `last_token_usage` and `model_context_window` fields needed here. |
-| OpenCode | Legacy `~/.local/share/opencode/storage/{session,message,part}` JSON | Sums every `step-finish` part's input, output, reasoning, cache-read, and cache-write tokens. | Cumulative billing usage only. OpenCode 1.17.9 uses `~/.local/share/opencode/opencode.db`; AMF's existing token reader does not read that SQLite store. |
+| OpenCode | Legacy `~/.local/share/opencode/storage/{session,message,part}` JSON | Sums every `step-finish` part's input, output, reasoning, cache-read, and cache-write tokens. | Cumulative billing usage only. OpenCode 1.17.9 uses `~/.local/share/opencode/opencode.db`; AIW's existing token reader does not read that SQLite store. |
 | Pi | None | `provider_for_session_kind()` returns no provider for `SessionKind::Pi`. | Unavailable until a Pi collector is added. |
 
 This feature therefore needs a context-specific sample path. It must not
@@ -45,9 +48,9 @@ Details and fallback rules follow it.
 
 | Harness | Input tokens | Cached tokens | Context limit | Conversation identity | Compaction / summary | Fresh session |
 | --- | --- | --- | --- | --- | --- | --- |
-| Claude Code | **Direct**: status-line `context_window.current_usage.input_tokens`; also latest transcript assistant `message.usage.input_tokens` | **Direct**: `cache_read_input_tokens` and `cache_creation_input_tokens` | **Direct**: status-line `context_window.context_window_size`; **derived** only if AMF falls back to a model catalog | **Direct**: `session_id` in status-line, hook, and transcript data | **Direct**: `PreCompact`, then `SessionStart.source == "compact"`; current usage becomes null until the next response | **Direct**: `SessionStart.source == "startup"` or `"clear"`; changed `session_id` is additional evidence |
+| Claude Code | **Direct**: status-line `context_window.current_usage.input_tokens`; also latest transcript assistant `message.usage.input_tokens` | **Direct**: `cache_read_input_tokens` and `cache_creation_input_tokens` | **Direct**: status-line `context_window.context_window_size`; **derived** only if AIW falls back to a model catalog | **Direct**: `session_id` in status-line, hook, and transcript data | **Direct**: `PreCompact`, then `SessionStart.source == "compact"`; current usage becomes null until the next response | **Direct**: `SessionStart.source == "startup"` or `"clear"`; changed `session_id` is additional evidence |
 | Codex | **Direct**: rollout `event_msg/token_count.info.last_token_usage.input_tokens` | **Direct**: `cached_input_tokens` and `cache_write_input_tokens` (cached input is a subset of input) | **Direct**: `token_count.info.model_context_window` | **Direct**: rollout `session_meta.payload.id` / `session_id`; also the thread ID in `state_5.sqlite` | **Direct**: rollout `type == "compacted"` and `event_msg.payload.type == "context_compacted"` | **Direct**: a new rollout `session_meta` with a new thread ID |
-| OpenCode | **Direct**: latest successful, non-summary assistant `tokens.input` or `step-finish.tokens.input` | **Direct**: `tokens.cache.read` and `tokens.cache.write` | **Direct at runtime**: selected `Provider.Model.limit.context`; **derived** when AMF resolves stored provider/model IDs through a catalog; **unavailable** if that lookup fails or returns zero | **Direct**: `session.id` / SQLite `session.id` | **Direct**: v1 compaction user part plus a completed assistant with `summary: true`; v2 uses durable compaction-started/ended events | **Direct**: a newly created `session.id`; `parent_id` distinguishes forks |
+| OpenCode | **Direct**: latest successful, non-summary assistant `tokens.input` or `step-finish.tokens.input` | **Direct**: `tokens.cache.read` and `tokens.cache.write` | **Direct at runtime**: selected `Provider.Model.limit.context`; **derived** when AIW resolves stored provider/model IDs through a catalog; **unavailable** if that lookup fails or returns zero | **Direct**: `session.id` / SQLite `session.id` | **Direct**: v1 compaction user part plus a completed assistant with `summary: true`; v2 uses durable compaction-started/ended events | **Direct**: a newly created `session.id`; `parent_id` distinguishes forks |
 | Pi | **Direct**: assistant-message `usage.input` | **Direct**: `usage.cacheRead` and `usage.cacheWrite` | **Direct at runtime**: active model `contextWindow`, also returned as `get_session_stats.contextUsage.contextWindow`; **derived** when resolving the persisted provider/model through Pi's model registry | **Direct**: session header `id` | **Direct**: JSONL entry `type == "compaction"` with `tokensBefore`; `session_compact` is the live extension event | **Direct**: a new JSONL session header ID; `parentSession` identifies a fork/clone |
 
 ## Collector conclusions
@@ -68,9 +71,9 @@ Claude Code's status-line command receives the best direct snapshot:
   telemetry.
 
 The latest assistant transcript record exposes the same input components,
-so AMF can derive the numerator when no status-line sidecar is available.
+so AIW can derive the numerator when no status-line sidecar is available.
 The transcript does not expose the effective context-window size, making a
-model/config lookup an estimated fallback. The existing cumulative AMF
+model/config lookup an estimated fallback. The existing cumulative AIW
 totals must never be used for the numerator.
 
 Claude's hook lifecycle provides reliable reset evidence. `PreCompact`
@@ -139,7 +142,7 @@ both formats. New sessions have new session IDs; a parent ID indicates a
 fork rather than continued occupancy.
 
 OpenCode moved from the legacy JSON storage tree to
-`~/.local/share/opencode/opencode.db`. Supporting only AMF's current JSON
+`~/.local/share/opencode/opencode.db`. Supporting only AIW's current JSON
 reader would silently miss current releases, so the collector must support
 SQLite and retain legacy JSON compatibility.
 
@@ -171,7 +174,7 @@ estimates tokens for trailing messages. Consequently:
 - after compaction, tokens and percent are null until a valid
   post-compaction assistant response exists.
 
-AMF launches Pi in interactive rather than RPC mode, so it cannot send
+AIW launches Pi in interactive rather than RPC mode, so it cannot send
 `get_session_stats` to the existing pane. A file collector can reproduce
 Pi's documented calculation from JSONL and the model registry; a local Pi
 extension sidecar could expose the normalized runtime value without

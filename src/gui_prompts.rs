@@ -249,7 +249,7 @@ pub fn resolve(gui: &mut GuiHandle, request: ResolvePrompt) -> GuiResult<String>
 mod tests {
     use super::*;
     use crate::app::{App, AppMode};
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use crate::gui_contract::GuiErrorKind;
     use crate::project::{AgentKind, Feature, Project, ProjectStore, SessionKind, VibeMode};
     use crate::prompt_library::PromptTemplate;
@@ -278,7 +278,6 @@ mod tests {
         let session_id = feature.add_session(SessionKind::Claude).id.clone();
         for kind in [
             SessionKind::Codex,
-            SessionKind::Opencode,
             SessionKind::Pi,
             SessionKind::Terminal,
             SessionKind::Nvim,
@@ -297,7 +296,7 @@ mod tests {
         project.features.push(feature);
         let mut store = ProjectStore::empty();
         store.projects.push(project);
-        let db = AmfDb::open(&dir.path().join("amf.db")).unwrap();
+        let db = AiwDb::open(&dir.path().join("aiw.db")).unwrap();
         db.save_store(&store).unwrap();
         let (_, version) = db.load_store_versioned().unwrap();
         let mut app = App::new_for_test(
@@ -346,13 +345,12 @@ mod tests {
         let (dir, mut gui, scope, _) = fixture();
         insert_user(&mut gui, "user");
         std::fs::write(
-            dir.path().join("repo/amf.json"),
+            dir.path().join("repo/aiw.json"),
             r#"{"prompt_templates":[{"name":"Same","body":"project"}]}"#,
         )
         .unwrap();
-        std::fs::create_dir(dir.path().join("worktree/.amf")).unwrap();
         std::fs::write(
-            dir.path().join("worktree/.amf/config.json"),
+            dir.path().join("worktree/amf.json"),
             r#"{"prompt_templates":[{"name":"Same","body":"worktree"}]}"#,
         )
         .unwrap();
@@ -386,7 +384,7 @@ mod tests {
     #[test]
     fn anonymous_config_identity_is_stable_but_authored_changes_and_removal_are_refused() {
         let (dir, mut gui, scope, target) = fixture();
-        let path = dir.path().join("worktree/amf.json");
+        let path = dir.path().join("worktree/aiw.json");
         std::fs::write(
             &path,
             r#"{"prompt_templates":[{"name":"Config","body":"hello"}]}"#,
@@ -414,7 +412,7 @@ mod tests {
     fn keys_survive_unrelated_library_edits_and_searches_but_duplicates_stay_distinct() {
         let (dir, mut gui, scope, target) = fixture();
         std::fs::write(
-            dir.path().join("worktree/amf.json"),
+            dir.path().join("worktree/aiw.json"),
             r#"{"prompt_templates":[{"name":"Twin","body":"same"},{"name":"Twin","body":"same"}]}"#,
         )
         .unwrap();
@@ -462,7 +460,7 @@ mod tests {
     #[test]
     fn resolves_defaults_explicit_multiline_and_inline_choices_without_changing_mode_or_sending() {
         let (dir, mut gui, scope, target) = fixture();
-        std::fs::write(dir.path().join("worktree/amf.json"), r#"{"prompt_templates":[{"name":"Fields","body":"{{ name }} {{name}} {{notes}} {{env: dev|prod}} {{rust|go}}", "placeholders":[{"key":"name","label":"Your name","kind":"text","default":"Ada","required":true},{"key":"notes","kind":"multi_line","default":"one\ntwo"},{"key":"absent","kind":"text","default":"unused"}]}]}"#).unwrap();
+        std::fs::write(dir.path().join("worktree/aiw.json"), r#"{"prompt_templates":[{"name":"Fields","body":"{{ name }} {{name}} {{notes}} {{env: dev|prod}} {{rust|go}}", "placeholders":[{"key":"name","label":"Your name","kind":"text","default":"Ada","required":true},{"key":"notes","kind":"multi_line","default":"one\ntwo"},{"key":"absent","kind":"text","default":"unused"}]}]}"#).unwrap();
         let view = load(&mut gui, &scope, "").unwrap();
         let entry = &view.entries[0];
         assert_eq!(entry.slots.len(), 4);
@@ -530,7 +528,7 @@ mod tests {
         let (dir, mut gui, scope, target) = fixture();
         let mut template = insert_user(&mut gui, "old");
         let before = load(&mut gui, &scope, "").unwrap();
-        let external = AmfDb::open(&dir.path().join("amf.db")).unwrap();
+        let external = AiwDb::open(&dir.path().join("aiw.db")).unwrap();
         template.body = "new".into();
         external.update_prompt_template(&template).unwrap();
         assert_eq!(load(&mut gui, &scope, "").unwrap().entries[0].body, "new");
@@ -547,14 +545,15 @@ mod tests {
     }
 
     #[test]
-    fn targets_all_four_allowed_agents_including_stopped_sessions_and_rechecks_restrictions() {
+    fn targets_every_allowed_agent_including_stopped_sessions_and_rechecks_restrictions() {
         let (dir, mut gui, scope, target) = fixture();
         insert_user(&mut gui, "hello");
         let view = load(&mut gui, &scope, "").unwrap();
-        assert_eq!(view.targets.len(), 4);
+        // Claude, Codex and Pi sessions; terminals and editors are not targets.
+        assert_eq!(view.targets.len(), 3);
         assert!(view.targets.iter().all(|target| target.stopped));
         std::fs::write(
-            dir.path().join("repo/amf.json"),
+            dir.path().join("repo/aiw.json"),
             r#"{"allowed_agents":["codex"]}"#,
         )
         .unwrap();
@@ -572,7 +571,7 @@ mod tests {
         let (dir, mut gui, scope, target) = fixture();
         insert_user(&mut gui, "hello");
         let view = load(&mut gui, &scope, "").unwrap();
-        let external = AmfDb::open(&dir.path().join("amf.db")).unwrap();
+        let external = AiwDb::open(&dir.path().join("aiw.db")).unwrap();
         let mut store = external.load_store().unwrap();
         store.projects[0].features[0]
             .sessions

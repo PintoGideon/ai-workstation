@@ -1,4 +1,4 @@
-# quick-plan-mode: visual proof of the Quick Plan feature (AMF_PLAN.md).
+# quick-plan-mode: visual proof of the Quick Plan feature (AIW_PLAN.md).
 #
 # Shows, in order:
 #   1. 'Q' on an existing feature opening the Quick Plan interview — the
@@ -10,8 +10,8 @@
 #
 # Requires --seed quick-plan-seed-project.json and --seed-feature
 # quick-plan-seed-feature.json (both committed alongside this scenario).
-# Every `--seed`/`--seed-feature` used for a local `amf-capture.sh` run of
-# this scenario MUST also be passed to `amf-publish-screenshots`/
+# Every `--seed`/`--seed-feature` used for a local `aiw-capture.sh` run of
+# this scenario MUST also be passed to `aiw-publish-screenshots`/
 # `publish-pages.sh` — the remote capture workflow starts from a blank
 # scratch instance too. Forgetting this once (missing --seed/--seed-feature
 # on the publish call) is exactly what previously made every 'j'/'Q'/typed

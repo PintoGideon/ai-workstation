@@ -36,10 +36,10 @@ pub fn tmux_session_name(project_name: &str, feature_name: &str) -> String {
     let feature = slugify_component(feature_name);
 
     match (project.is_empty(), feature.is_empty()) {
-        (false, false) => format!("amf-{project}-{feature}"),
-        (false, true) => format!("amf-{project}"),
-        (true, false) => format!("amf-{feature}"),
-        (true, true) => "amf-feature".to_string(),
+        (false, false) => format!("aiw-{project}-{feature}"),
+        (false, true) => format!("aiw-{project}"),
+        (true, false) => format!("aiw-{feature}"),
+        (true, true) => "aiw-feature".to_string(),
     }
 }
 
@@ -77,22 +77,26 @@ impl std::fmt::Display for ProjectStatus {
 #[serde(rename_all = "lowercase")]
 pub enum SessionKind {
     Claude,
-    Opencode,
     Codex,
     Pi,
+    Gemini, // FORK: Gemini CLI agent
+    Cursor, // FORK: Cursor agent CLI
     Terminal,
     Nvim,
     Vscode,
     Custom,
-    /// A per-project TODO list. Native AMF UI, not tmux-backed; at most one
+    /// A per-project TODO list. Native AIW UI, not tmux-backed; at most one
     /// per project. See `docs/backlog/feature-todos-plan.md`.
     Todos,
 }
 
 impl SessionKind {
-    /// Whether this window hosts one of AMF's built-in agent harnesses.
+    /// Whether this window hosts one of AIW's built-in agent harnesses.
     pub fn is_agent_harness(&self) -> bool {
-        matches!(self, Self::Claude | Self::Opencode | Self::Codex | Self::Pi)
+        matches!(
+            self,
+            Self::Claude | Self::Codex | Self::Pi | Self::Gemini | Self::Cursor // FORK: Gemini/Cursor
+        )
     }
 
     /// Whether opening this session attaches to a tmux pane. `Todos` is a
@@ -105,32 +109,39 @@ impl SessionKind {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentKind {
+    /// FORK: OpenCode support was removed; a stored `"opencode"` agent
+    /// (feature agent, project preference, automation request) loads as the
+    /// default agent instead of failing the whole config.
     #[default]
+    #[serde(alias = "opencode")]
     Claude,
-    Opencode,
     Codex,
     Pi,
+    Gemini, // FORK: Gemini CLI agent
+    Cursor, // FORK: Cursor agent CLI
 }
 
 impl AgentKind {
     pub fn display_name(&self) -> &str {
         match self {
             AgentKind::Claude => "Claude",
-            AgentKind::Opencode => "Opencode",
             AgentKind::Codex => "Codex",
             AgentKind::Pi => "Pi",
+            AgentKind::Gemini => "Gemini", // FORK
+            AgentKind::Cursor => "Cursor", // FORK
         }
     }
 
     /// The lowercase, machine-stable name — matches this enum's serde
     /// representation. Used as a key/token wherever a harness has to be
-    /// written to storage (prompt-override rows and `amf.json` entries).
+    /// written to storage (prompt-override rows and `aiw.json` entries).
     pub fn slug(&self) -> &'static str {
         match self {
             AgentKind::Claude => "claude",
-            AgentKind::Opencode => "opencode",
             AgentKind::Codex => "codex",
             AgentKind::Pi => "pi",
+            AgentKind::Gemini => "gemini", // FORK
+            AgentKind::Cursor => "cursor", // FORK
         }
     }
 
@@ -139,18 +150,20 @@ impl AgentKind {
     pub fn from_slug(token: &str) -> Option<AgentKind> {
         match token {
             "claude" => Some(AgentKind::Claude),
-            "opencode" => Some(AgentKind::Opencode),
             "codex" => Some(AgentKind::Codex),
             "pi" => Some(AgentKind::Pi),
+            "gemini" => Some(AgentKind::Gemini), // FORK
+            "cursor" => Some(AgentKind::Cursor), // FORK
             _ => None,
         }
     }
 
-    pub const ALL: [AgentKind; 4] = [
+    pub const ALL: [AgentKind; 5] = [
         AgentKind::Claude,
-        AgentKind::Opencode,
         AgentKind::Codex,
         AgentKind::Pi,
+        AgentKind::Gemini, // FORK: Gemini CLI
+        AgentKind::Cursor, // FORK: Cursor agent
     ];
 
     pub fn allowed_list(configured: Option<&[AgentKind]>) -> Vec<AgentKind> {
@@ -166,6 +179,82 @@ impl AgentKind {
     pub fn index_in(agents: &[AgentKind], target: &AgentKind) -> usize {
         agents.iter().position(|agent| agent == target).unwrap_or(0)
     }
+}
+
+/// FORK: the serde name OpenCode was stored under before AIW removed it.
+pub(crate) const LEGACY_OPENCODE_AGENT: &str = "opencode";
+
+/// FORK: rewrite a JSON project store written while OpenCode was supported so
+/// it loads without it — the same rules the SQLite store applies
+/// (`db::store::load`): OpenCode sessions are dropped, a feature whose agent
+/// was OpenCode falls back to its project's preferred agent (or the default
+/// agent), and OpenCode leaves the available-harness list.
+fn strip_legacy_opencode(raw: &mut serde_json::Value) {
+    use serde_json::Value;
+    let is_opencode = |value: &Value| value.as_str() == Some(LEGACY_OPENCODE_AGENT);
+    let default_agent = Value::String(AgentKind::default().slug().to_string());
+    if let Some(harnesses) = raw
+        .get_mut("available_harnesses")
+        .and_then(Value::as_array_mut)
+    {
+        harnesses.retain(|harness| !is_opencode(harness));
+    }
+    let Some(projects) = raw.get_mut("projects").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for project in projects {
+        if project.get("preferred_agent").is_some_and(is_opencode) {
+            project["preferred_agent"] = default_agent.clone();
+        }
+        let project_agent = project
+            .get("preferred_agent")
+            .cloned()
+            .unwrap_or_else(|| default_agent.clone());
+        let Some(features) = project.get_mut("features").and_then(Value::as_array_mut) else {
+            continue;
+        };
+        for feature in features {
+            if feature.get("agent").is_some_and(is_opencode) {
+                feature["agent"] = project_agent.clone();
+            }
+            if let Some(sessions) = feature.get_mut("sessions").and_then(Value::as_array_mut) {
+                sessions.retain(|session| !session.get("kind").is_some_and(is_opencode));
+            }
+        }
+    }
+}
+
+/// Deserialize an `allowed_agents` list from `aiw.json` / `config.json`,
+/// dropping the removed OpenCode harness instead of letting the
+/// `AgentKind` alias turn it into an unintended Claude permission. A list
+/// that only named OpenCode becomes "no restriction" (`None`), the same as
+/// an empty list.
+pub(crate) fn deserialize_allowed_agents<'de, D>(
+    deserializer: D,
+) -> Result<Option<Vec<AgentKind>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw: Option<Vec<String>> = Option::deserialize(deserializer)?;
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let had_entries = !raw.is_empty();
+    let mut agents = Vec::new();
+    for name in raw {
+        if name == LEGACY_OPENCODE_AGENT {
+            continue;
+        }
+        let agent = AgentKind::from_slug(&name).ok_or_else(|| {
+            serde::de::Error::unknown_variant(&name, &["claude", "codex", "pi", "gemini", "cursor"])
+        })?;
+        agents.push(agent);
+    }
+    Ok(if had_entries && agents.is_empty() {
+        None
+    } else {
+        Some(agents)
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -397,7 +486,7 @@ pub struct Feature {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nickname: Option<String>,
     /// User-selected plan file for this feature. The effective-plan resolver
-    /// may prefer the worktree's conventional `AMF_PLAN.md` over this value.
+    /// may prefer the worktree's conventional `AIW_PLAN.md` over this value.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_plan_path: Option<PathBuf>,
     /// Set only on a **companion triage feature**: the isolated worktree PR
@@ -637,7 +726,7 @@ impl Feature {
         enable_chrome: bool,
         remote_control: bool,
     ) -> Self {
-        let tmux_session = format!("amf-{}", name);
+        let tmux_session = format!("aiw-{}", name);
         Self::new_with_tmux_session(
             name,
             branch,
@@ -741,15 +830,14 @@ impl Feature {
         let count = self.sessions.iter().filter(|s| s.kind == *kind).count();
         match kind {
             SessionKind::Claude => format!("Claude {}", count + 1),
-            SessionKind::Opencode => {
-                format!("Opencode {}", count + 1)
-            }
             SessionKind::Codex => {
                 format!("Codex {}", count + 1)
             }
             SessionKind::Pi => {
                 format!("Pi {}", count + 1)
             }
+            SessionKind::Gemini => format!("Gemini {}", count + 1), // FORK
+            SessionKind::Cursor => format!("Cursor {}", count + 1), // FORK
             SessionKind::Terminal => {
                 format!("Terminal {}", count + 1)
             }
@@ -771,9 +859,10 @@ impl Feature {
     pub fn next_window_name(&self, kind: &SessionKind) -> String {
         let prefix = match kind {
             SessionKind::Claude => "claude",
-            SessionKind::Opencode => "opencode",
             SessionKind::Codex => "codex",
             SessionKind::Pi => "pi",
+            SessionKind::Gemini => "gemini", // FORK
+            SessionKind::Cursor => "cursor", // FORK
             SessionKind::Terminal => "terminal",
             SessionKind::Nvim => "nvim",
             SessionKind::Vscode => "vscode",
@@ -921,7 +1010,7 @@ pub struct ProjectStore {
 
 impl ProjectStore {
     /// A store with nothing in it, at the current version — what a reader gets
-    /// when there is no database to read (`amf doctor` on a fresh machine).
+    /// when there is no database to read (`aiw doctor` on a fresh machine).
     pub fn empty() -> Self {
         Self {
             version: CURRENT_PROJECT_STORE_VERSION,
@@ -1111,8 +1200,9 @@ impl ProjectStore {
         let data = fs::read_to_string(path)
             .with_context(|| format!("Failed to read {}", path.display()))?;
 
-        let raw: serde_json::Value = serde_json::from_str(&data)
+        let mut raw: serde_json::Value = serde_json::from_str(&data)
             .with_context(|| format!("Failed to parse {}", path.display()))?;
+        strip_legacy_opencode(&mut raw); // FORK: OpenCode support removed
 
         let version = raw.get("version").and_then(|v| v.as_u64()).unwrap_or(0);
 
@@ -1383,7 +1473,11 @@ impl ProjectStore {
 
     pub fn remove_project(&mut self, name: &str) -> Option<Project> {
         if let Some(idx) = self.projects.iter().position(|p| p.name == name) {
-            Some(self.projects.remove(idx))
+            let project = self.projects.remove(idx);
+            for feature in &project.features {
+                crate::fork::ports::release(&feature.id); // FORK: free port blocks
+            }
+            Some(project)
         } else {
             None
         }
@@ -1434,7 +1528,9 @@ impl ProjectStore {
         if let Some(project) = self.find_project_mut(project_name)
             && let Some(idx) = project.features.iter().position(|f| f.name == feature_name)
         {
-            return Some(project.features.remove(idx));
+            let feature = project.features.remove(idx);
+            crate::fork::ports::release(&feature.id); // FORK: free the port block
+            return Some(feature);
         }
         None
     }
@@ -1450,20 +1546,20 @@ impl ProjectStore {
     }
 }
 
-/// Resolve the AMF config directory, honoring `XDG_CONFIG_HOME` (via
+/// Resolve the AIW config directory, honoring `XDG_CONFIG_HOME` (via
 /// `dirs::config_dir()`) while falling back to the legacy hardcoded
-/// `~/.config/amf` path for installs that already have data there.
+/// `~/.config/ai_workstation` path for installs that already have data there.
 ///
 /// Falling back rather than migrating means an existing install keeps
-/// working unchanged after an `amf` upgrade, even on platforms where
+/// working unchanged after an `aiw` upgrade, even on platforms where
 /// `dirs::config_dir()` differs from `~/.config` (e.g. macOS); only
 /// fresh installs (or users who set `XDG_CONFIG_HOME` before ever
-/// running `amf`) land in the XDG-correct location.
-pub fn amf_config_dir() -> PathBuf {
+/// running `aiw`) land in the XDG-correct location.
+pub fn aiw_config_dir() -> PathBuf {
     #[cfg(test)]
-    return test_sandbox_root().join(".config").join("amf");
+    return test_sandbox_root().join(".config").join("ai_workstation");
     #[cfg(not(test))]
-    amf_config_dir_with(dirs::config_dir(), dirs::home_dir())
+    aiw_config_dir_with(dirs::config_dir(), dirs::home_dir())
 }
 
 /// Per-process stand-in for the user's home directory, used by the path
@@ -1471,8 +1567,8 @@ pub fn amf_config_dir() -> PathBuf {
 ///
 /// This exists because `ensure_notify_scripts` writes executable hook scripts
 /// *unconditionally* — that is its job. Without isolation the suite overwrites
-/// the developer's live `~/.amf/hooks/` and `~/.config/amf/`, and a hook script
-/// newer than the `amf` binary on `$PATH` will break every running Claude Code
+/// the developer's live `~/.config/ai_workstation/hooks/` and `~/.config/ai_workstation/`, and a hook script
+/// newer than the `aiw` binary on `$PATH` will break every running Claude Code
 /// session on the machine until it is repaired by hand. That is not
 /// hypothetical: it happened, and it locked a session out of every tool.
 ///
@@ -1481,44 +1577,86 @@ pub fn amf_config_dir() -> PathBuf {
 /// test threads. A `OnceLock` needs no ordering guarantee — the first resolver
 /// call in the process wins and every later one agrees.
 #[cfg(test)]
-fn test_sandbox_root() -> &'static PathBuf {
+pub(crate) fn test_sandbox_root() -> &'static PathBuf {
     static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
     ROOT.get_or_init(|| {
-        let root = std::env::temp_dir().join(format!("amf-test-home-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("aiw-test-home-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&root);
         root
     })
 }
 
-/// Directory for generated Claude hook executables.
+/// Directory for generated Claude hook executables:
+/// `~/.config/ai_workstation/hooks`.
 ///
-/// Keep this independent from the platform config directory because macOS
-/// resolves that directory under `~/Library/Application Support`, while some
-/// Claude versions still route command hooks through a shell even when they
-/// use exec-form arguments.
-pub fn amf_claude_hooks_dir() -> PathBuf {
-    // The `.amf/hooks` shape is load-bearing even under test: it is the
-    // structural invariant `is_amf_claude_hook_command` uses to recognise a
-    // script as AMF-managed.
+/// FORK: AMF kept these in `~/.amf/hooks`. AIW keeps them inside its config
+/// folder, but always under `~/.config` rather than the platform config
+/// directory, because macOS resolves that under `~/Library/Application
+/// Support` and some Claude versions still route command hooks through a
+/// shell even when they use exec-form arguments (a space in the path breaks).
+pub fn aiw_claude_hooks_dir() -> PathBuf {
+    // The `ai_workstation/hooks` shape is load-bearing even under test: it is
+    // the structural invariant `is_aiw_claude_hook_command` uses to recognise
+    // a script as AIW-managed.
     #[cfg(test)]
-    return test_sandbox_root().join(".amf").join("hooks");
+    return test_sandbox_root()
+        .join(".config")
+        .join(AIW_DIR_NAME)
+        .join("hooks");
     #[cfg(not(test))]
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".amf")
+        .join(".config")
+        .join(AIW_DIR_NAME)
         .join("hooks")
 }
 
-fn amf_config_dir_with(xdg_config_dir: Option<PathBuf>, home_dir: Option<PathBuf>) -> PathBuf {
+/// FORK: whether `name` is a feature session AIW manages on its tmux
+/// server. New features are named `aiw-…`; features migrated from AMF keep
+/// their stored `amf-…` names (renaming would orphan their saved state), and
+/// get recreated under that name on AIW's socket when restarted.
+pub fn is_managed_tmux_session(name: &str) -> bool {
+    name.starts_with("aiw-") || name.starts_with("amf-")
+}
+
+/// FORK: the folder name AIW uses under the config root and the state root.
+pub const AIW_DIR_NAME: &str = "ai_workstation";
+
+/// FORK: the folder name upstream AMF uses under the same roots. Read only
+/// by the first-run migration (`crate::fork::migrate`) and the legacy-path
+/// recognisers; AIW never writes there.
+pub const LEGACY_AMF_DIR_NAME: &str = "amf";
+
+/// FORK: where an AMF install on this machine keeps its config and
+/// database — resolved exactly as AMF resolves it, so the first-run
+/// migration finds it. Never written to.
+pub fn legacy_amf_config_dir() -> PathBuf {
+    #[cfg(test)]
+    return test_sandbox_root()
+        .join(".config")
+        .join(LEGACY_AMF_DIR_NAME);
+    #[cfg(not(test))]
+    config_dir_named(dirs::config_dir(), dirs::home_dir(), LEGACY_AMF_DIR_NAME)
+}
+
+fn aiw_config_dir_with(xdg_config_dir: Option<PathBuf>, home_dir: Option<PathBuf>) -> PathBuf {
+    config_dir_named(xdg_config_dir, home_dir, AIW_DIR_NAME)
+}
+
+fn config_dir_named(
+    xdg_config_dir: Option<PathBuf>,
+    home_dir: Option<PathBuf>,
+    name: &str,
+) -> PathBuf {
     let legacy = home_dir
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
-        .join("amf");
+        .join(name);
 
     let Some(xdg_config_dir) = xdg_config_dir else {
         return legacy;
     };
-    let xdg = xdg_config_dir.join("amf");
+    let xdg = xdg_config_dir.join(name);
 
     if xdg != legacy && legacy.exists() && !xdg.exists() {
         return legacy;
@@ -1528,11 +1666,11 @@ fn amf_config_dir_with(xdg_config_dir: Option<PathBuf>, home_dir: Option<PathBuf
 
 #[allow(dead_code)] // exercised only by unit tests
 pub fn global_store_path() -> PathBuf {
-    amf_config_dir().join("projects.json")
+    aiw_config_dir().join("projects.json")
 }
 
 pub fn global_db_path() -> PathBuf {
-    amf_config_dir().join("amf.db")
+    aiw_config_dir().join("aiw.db")
 }
 
 pub fn db_path() -> PathBuf {
@@ -1549,7 +1687,7 @@ mod tests {
     /// The suite writes real executable hook scripts through
     /// `ensure_notify_scripts`. If these resolvers ever point back at the
     /// developer's actual home directory, running `cargo test` silently
-    /// rewrites their live hooks — and a script newer than the `amf` binary on
+    /// rewrites their live hooks — and a script newer than the `aiw` binary on
     /// `$PATH` breaks every running Claude Code session on the machine.
     #[test]
     fn path_resolvers_are_sandboxed_away_from_the_real_home() {
@@ -1560,7 +1698,7 @@ mod tests {
             !sandbox.starts_with(&home),
             "test sandbox {sandbox:?} must not live under the real home {home:?}"
         );
-        for dir in [super::amf_claude_hooks_dir(), super::amf_config_dir()] {
+        for dir in [super::aiw_claude_hooks_dir(), super::aiw_config_dir()] {
             assert!(
                 dir.starts_with(sandbox),
                 "{dir:?} must resolve inside the test sandbox {sandbox:?}"
@@ -1571,9 +1709,12 @@ mod tests {
             );
         }
 
-        // The `.amf/hooks` shape is what `is_amf_claude_hook_command` matches
-        // on, so the sandbox has to preserve it rather than use a flat path.
-        assert!(super::amf_claude_hooks_dir().ends_with(".amf/hooks"));
+        // The `ai_workstation/hooks` shape is what `is_aiw_claude_hook_command`
+        // matches on, so the sandbox has to preserve it rather than use a flat
+        // path. The legacy AMF folder resolves inside the sandbox too.
+        assert!(super::aiw_claude_hooks_dir().ends_with(".config/ai_workstation/hooks"));
+        assert!(super::legacy_amf_config_dir().starts_with(sandbox));
+        assert!(crate::ipc::state_dir().starts_with(sandbox));
     }
 
     /// Feature JSON written before the companion-triage link existed still
@@ -1586,7 +1727,7 @@ mod tests {
             "branch": "my-feat",
             "workdir": "/tmp/wd",
             "is_worktree": false,
-            "tmux_session": "amf-my-feat",
+            "tmux_session": "aiw-my-feat",
             "status": "stopped",
             "created_at": "2026-01-01T00:00:00Z",
             "last_accessed": "2026-01-01T00:00:00Z",
@@ -1720,7 +1861,7 @@ mod tests {
             branch: "test-branch".to_string(),
             workdir: PathBuf::from("/tmp/test"),
             is_worktree: false,
-            tmux_session: "amf-test".to_string(),
+            tmux_session: "aiw-test".to_string(),
             sessions: vec![],
             collapsed: true,
             mode: VibeMode::default(),
@@ -1769,7 +1910,7 @@ mod tests {
                     branch: "branch-a".to_string(),
                     workdir: PathBuf::from("/repo/alpha/.worktrees/a"),
                     is_worktree: true,
-                    tmux_session: "amf-a".to_string(),
+                    tmux_session: "aiw-a".to_string(),
                     sessions: vec![FeatureSession {
                         id: "session-1".to_string(),
                         kind: SessionKind::Claude,
@@ -1835,7 +1976,7 @@ mod tests {
                         branch: "branch-b".to_string(),
                         workdir: PathBuf::from("/repo/alpha/.worktrees/b"),
                         is_worktree: false,
-                        tmux_session: "amf-b".to_string(),
+                        tmux_session: "aiw-b".to_string(),
                         sessions: vec![
                             FeatureSession {
                                 id: "session-1".to_string(),
@@ -1898,7 +2039,7 @@ mod tests {
                         branch: "branch-c".to_string(),
                         workdir: PathBuf::from("/repo/alpha/.worktrees/c"),
                         is_worktree: true,
-                        tmux_session: "amf-c".to_string(),
+                        tmux_session: "aiw-c".to_string(),
                         sessions: vec![],
                         collapsed: true,
                         mode: VibeMode::SuperVibe,
@@ -1968,7 +2109,7 @@ mod tests {
             .find(|feature| feature.id == "feature-1")
             .unwrap();
         assert_eq!(merged_feature.name, "feature-one-renamed");
-        assert_eq!(merged_feature.tmux_session, "amf-b");
+        assert_eq!(merged_feature.tmux_session, "aiw-b");
         assert_eq!(merged_feature.mode, VibeMode::Vibe);
         assert!(merged_feature.review);
         assert!(merged_feature.pending_worktree_script);
@@ -2033,6 +2174,83 @@ mod tests {
 
         let loaded = ProjectStore::load(tmp.path()).unwrap();
         assert_eq!(loaded.projects[0].preferred_agent, AgentKind::Claude);
+    }
+
+    /// FORK: a JSON store from the OpenCode era loads without OpenCode.
+    #[test]
+    fn projectstore_loads_legacy_opencode_store() {
+        let mut feature = Feature::new(
+            "legacy".into(),
+            "legacy".into(),
+            "/home/user/my-project".into(),
+            false,
+            VibeMode::Vibe,
+            false,
+            false,
+            AgentKind::Claude,
+            false,
+            false,
+        );
+        let keep = feature.add_session(SessionKind::Claude).id.clone();
+        feature.add_session(SessionKind::Codex);
+        let mut project = Project::new(
+            "my-project".into(),
+            "/home/user/my-project".into(),
+            true,
+            AgentKind::Codex,
+        );
+        project.features.push(feature);
+        let store = ProjectStore {
+            version: CURRENT_PROJECT_STORE_VERSION,
+            projects: vec![
+                project,
+                Project::new("oc".into(), "/home/user/oc".into(), true, AgentKind::Claude),
+            ],
+            session_bookmarks: vec![],
+            available_harnesses: vec![AgentKind::Claude],
+            prompt_templates: Vec::new(),
+            extra: HashMap::new(),
+        };
+        let mut raw = serde_json::to_value(&store).unwrap();
+        raw["available_harnesses"] = serde_json::json!(["opencode", "codex"]);
+        raw["projects"][0]["features"][0]["agent"] = "opencode".into();
+        raw["projects"][0]["features"][0]["sessions"][1]["kind"] = "opencode".into();
+        raw["projects"][1]["preferred_agent"] = "opencode".into();
+        let tmp = NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), raw.to_string()).unwrap();
+
+        let loaded = ProjectStore::load(tmp.path()).expect("legacy store must load");
+        let feature = &loaded.projects[0].features[0];
+        assert_eq!(feature.agent, AgentKind::Codex);
+        let ids: Vec<&str> = feature.sessions.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, vec![keep.as_str()]);
+        assert_eq!(loaded.projects[1].preferred_agent, AgentKind::default());
+        assert_eq!(loaded.available_harnesses, vec![AgentKind::Codex]);
+    }
+
+    /// FORK: `allowed_agents` lists drop OpenCode instead of turning it into
+    /// a Claude permission; a list that only named OpenCode means no limit.
+    #[test]
+    fn allowed_agents_drop_legacy_opencode() {
+        #[derive(Deserialize)]
+        struct Holder {
+            #[serde(default, deserialize_with = "deserialize_allowed_agents")]
+            allowed_agents: Option<Vec<AgentKind>>,
+        }
+        let parse = |json: &str| serde_json::from_str::<Holder>(json).unwrap().allowed_agents;
+        assert_eq!(
+            parse(r#"{"allowed_agents":["opencode","codex"]}"#),
+            Some(vec![AgentKind::Codex])
+        );
+        assert_eq!(parse(r#"{"allowed_agents":["opencode"]}"#), None);
+        assert_eq!(parse(r#"{"allowed_agents":[]}"#), Some(vec![]));
+        assert_eq!(parse(r#"{}"#), None);
+        assert!(serde_json::from_str::<Holder>(r#"{"allowed_agents":["nope"]}"#).is_err());
+        // A single stored agent (feature, preset, preference) reads as the default.
+        assert_eq!(
+            serde_json::from_str::<AgentKind>(r#""opencode""#).unwrap(),
+            AgentKind::default()
+        );
     }
 
     #[test]
@@ -2119,7 +2337,7 @@ mod tests {
                     "workdir": "/home/user/my-repo",
                     "branch": "main",
                     "is_worktree": false,
-                    "tmux_session": "amf-my-feature",
+                    "tmux_session": "aiw-my-feature",
                     "claude_session_id": null,
                     "status": "stopped",
                     "created_at": "2024-01-01T00:00:00Z",
@@ -2172,7 +2390,7 @@ mod tests {
                             "branch": "feat/my-feature",
                             "workdir": "/home/user/my-repo/.worktrees/my-feature",
                             "is_worktree": true,
-                            "tmux_session": "amf-my-feature",
+                            "tmux_session": "aiw-my-feature",
                             "claude_session_id": "sess-123",
                             "status": "idle",
                             "created_at": "2024-06-01T12:00:00Z",
@@ -2231,7 +2449,7 @@ mod tests {
                             "branch": "feat/my-feature",
                             "workdir": "/home/user/my-repo/.worktrees/my-feature",
                             "is_worktree": true,
-                            "tmux_session": "amf-my-feature",
+                            "tmux_session": "aiw-my-feature",
                             "sessions": [],
                             "collapsed": true,
                             "mode": "review",
@@ -2437,7 +2655,7 @@ mod tests {
                 "branch": "legacy-review",
                 "workdir": "/tmp/test",
                 "is_worktree": false,
-                "tmux_session": "amf-legacy-review",
+                "tmux_session": "aiw-legacy-review",
                 "mode": "review",
                 "status": "stopped",
                 "created_at": "2024-01-01T00:00:00Z",
@@ -2455,22 +2673,22 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let xdg = tempfile::tempdir().unwrap();
 
-        let resolved = amf_config_dir_with(
+        let resolved = aiw_config_dir_with(
             Some(xdg.path().to_path_buf()),
             Some(home.path().to_path_buf()),
         );
 
-        assert_eq!(resolved, xdg.path().join("amf"));
+        assert_eq!(resolved, xdg.path().join("ai_workstation"));
     }
 
     #[test]
     fn config_dir_falls_back_to_legacy_path_when_only_legacy_exists() {
         let home = tempfile::tempdir().unwrap();
         let xdg = tempfile::tempdir().unwrap();
-        let legacy = home.path().join(".config").join("amf");
+        let legacy = home.path().join(".config").join("ai_workstation");
         fs::create_dir_all(&legacy).unwrap();
 
-        let resolved = amf_config_dir_with(
+        let resolved = aiw_config_dir_with(
             Some(xdg.path().to_path_buf()),
             Some(home.path().to_path_buf()),
         );
@@ -2482,23 +2700,23 @@ mod tests {
     fn config_dir_prefers_xdg_path_when_both_exist() {
         let home = tempfile::tempdir().unwrap();
         let xdg = tempfile::tempdir().unwrap();
-        fs::create_dir_all(home.path().join(".config").join("amf")).unwrap();
-        fs::create_dir_all(xdg.path().join("amf")).unwrap();
+        fs::create_dir_all(home.path().join(".config").join("ai_workstation")).unwrap();
+        fs::create_dir_all(xdg.path().join("ai_workstation")).unwrap();
 
-        let resolved = amf_config_dir_with(
+        let resolved = aiw_config_dir_with(
             Some(xdg.path().to_path_buf()),
             Some(home.path().to_path_buf()),
         );
 
-        assert_eq!(resolved, xdg.path().join("amf"));
+        assert_eq!(resolved, xdg.path().join("ai_workstation"));
     }
 
     #[test]
     fn config_dir_falls_back_to_legacy_home_config_when_no_xdg_dir_available() {
         let home = tempfile::tempdir().unwrap();
 
-        let resolved = amf_config_dir_with(None, Some(home.path().to_path_buf()));
+        let resolved = aiw_config_dir_with(None, Some(home.path().to_path_buf()));
 
-        assert_eq!(resolved, home.path().join(".config").join("amf"));
+        assert_eq!(resolved, home.path().join(".config").join("ai_workstation"));
     }
 }

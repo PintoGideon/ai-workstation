@@ -4,10 +4,10 @@ final-review-feedback.md
 final-review-progress.json
 final-review-snapshot.json
 latest-prompt.txt
-skills/amf-*/
-!skills/amf-screenshot/
-!skills/amf-screenshot/**
+skills/aiw-*/
+!skills/aiw-screenshot/
+!skills/aiw-screenshot/**
 final-review-feedback-archive.md
 review-notes-archive.md
 plan.md
-amf-hook-state.json
+aiw-hook-state.json

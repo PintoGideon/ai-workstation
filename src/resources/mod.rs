@@ -1,4 +1,4 @@
-//! Host resource probes backing AMF's soft agent limits: how much memory is
+//! Host resource probes backing AIW's soft agent limits: how much memory is
 //! actually available before another harness is started, and how many
 //! harnesses are already running.
 //!

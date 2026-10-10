@@ -109,10 +109,10 @@ def fill(label, value):
 def tauri(command, args=None):
     """Runs a Tauri command from the page and returns its JSON result."""
     evaluate(
-        f"window.__amfShot=undefined;window.__TAURI_INTERNALS__.invoke({json.dumps(command)},{json.dumps(args or {})}).then(v=>window.__amfShot={{ok:v}},e=>window.__amfShot={{err:e}})"
+        f"window.__aiwShot=undefined;window.__TAURI_INTERNALS__.invoke({json.dumps(command)},{json.dumps(args or {})}).then(v=>window.__aiwShot={{ok:v}},e=>window.__aiwShot={{err:e}})"
     )
-    wait("window.__amfShot!==undefined")
-    result = evaluate("window.__amfShot")
+    wait("window.__aiwShot!==undefined")
+    result = evaluate("window.__aiwShot")
     assert "err" not in result, result
     return result["ok"]
 

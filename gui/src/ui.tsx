@@ -182,7 +182,7 @@ export function Modal({
   );
 }
 
-/** Confirmation for AMF's resource gate ("needs_approval" responses). */
+/** Confirmation for AIW's resource gate ("needs_approval" responses). */
 export function ApprovalDialog({
   label,
   title,

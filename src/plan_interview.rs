@@ -20,8 +20,6 @@ pub const CRITIQUE_PROMPT_VERSION: u32 = 1;
 pub const DIRECTED_REVISION_PROMPT_VERSION: u32 = 1;
 pub const INVESTIGATION_PROMPT_VERSION: u32 = 1;
 pub const INVESTIGATION_MERGE_PROMPT_VERSION: u32 = 2;
-pub const QUICK_INTERVIEWER_PROMPT_VERSION: u32 = 1;
-pub const QUICK_SYNTHESIS_PROMPT_VERSION: u32 = 1;
 pub const MAX_AI_QUESTIONS_PER_ROUND: usize = 5;
 pub const MAX_AI_ROUNDS: usize = 2;
 /// Quick Plan spends at most one adaptive round before it must decide an
@@ -51,7 +49,7 @@ const DIRECTORY_CONTEXT_MAX_CHARS: usize = 8_000;
 /// bounded while still covering "the spec, the ticket, and my notes".
 pub const MAX_ATTACHED_DOCS: usize = 4;
 
-/// Largest reference document AMF will stage or point a headless run at. A
+/// Largest reference document AIW will stage or point a headless run at. A
 /// file over this is rejected at attach time rather than silently blowing the
 /// interviewer's context window on a single read.
 pub const ATTACHED_DOC_MAX_BYTES: u64 = 512 * 1024;
@@ -60,7 +58,7 @@ pub const ATTACHED_DOC_MAX_BYTES: u64 = 512 * 1024;
 /// is text. A reference doc the interviewer cannot read as text is no use.
 const ATTACHED_DOC_SNIFF_BYTES: usize = 8_192;
 
-/// Subdirectory of a workdir's generated `.amf/` tree under which reference
+/// Subdirectory of a workdir's generated `.aiw/` tree under which reference
 /// documents from outside the workdir are copied so a CWD-scoped read-only
 /// harness can reach them. Each pass gets its own child directory of this one
 /// (see [`prepare_attached_docs`]); the whole tree is cleared on every
@@ -86,14 +84,14 @@ pub const CRITIQUE_TOOL_ACCESS_NOTE_NONE: &str = "Answer from the supplied input
 /// interviewer read those documents and the surrounding codebase.
 pub const TOOL_ACCESS_NOTE_ATTACHED: &str = "You are running in the feature workdir with read-only repository tools. Read every attached\n  reference document listed in the input, and inspect the codebase only where it makes a question\n  or plan detail materially more specific. Do not modify files, run commands with side effects, or\n  access the network.";
 
-/// Whether an attached reference document is a verbatim copy AMF staged into
+/// Whether an attached reference document is a verbatim copy AIW staged into
 /// the workdir (`true`) or a file that already lived under it (`false`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AttachedDocOrigin {
     /// The path is workdir-relative and points at the user's own file.
     InPlace,
-    /// The path is a copy under `.amf/interview-docs/`; the original lives
+    /// The path is a copy under `.aiw/interview-docs/`; the original lives
     /// elsewhere on disk.
     Staged,
 }
@@ -561,7 +559,7 @@ pub fn gather_repository_context(workdir: &Path) -> RepositoryContext {
 /// read-only headless pass, and return the list to name in the prompt.
 ///
 /// A document already inside `workdir` is referenced where it lies. One from
-/// outside is copied into a per-pass subdirectory of `.amf/interview-docs/` so
+/// outside is copied into a per-pass subdirectory of `.aiw/interview-docs/` so
 /// a CWD-scoped read-only harness can open it. A document that has since moved
 /// or become unreadable is dropped from the result (and returned in the second
 /// tuple field, by its original path) rather than failing the pass.
@@ -585,7 +583,7 @@ pub fn prepare_attached_docs(
         std::process::id(),
         STAGING_RUN_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     );
-    let mut amf_ignored = false;
+    let mut aiw_ignored = false;
     let mut staged_seq = 0usize;
     for source in docs {
         let Ok(canonical) = fs::canonicalize(source) else {
@@ -604,13 +602,13 @@ pub fn prepare_attached_docs(
             });
             continue;
         }
-        // About to copy a file from outside the tree into `.amf/`. Make sure the
+        // About to copy a file from outside the tree into `.aiw/`. Make sure the
         // repository ignores that directory first, so an agent's `git add -A` in
         // a project whose `.gitignore` lacks the entry cannot commit a private
         // reference doc that outlives the interview.
-        if !amf_ignored {
-            ensure_amf_ignored(&canonical_workdir);
-            amf_ignored = true;
+        if !aiw_ignored {
+            ensure_aiw_ignored(&canonical_workdir);
+            aiw_ignored = true;
         }
         staged_seq += 1;
         let base = canonical
@@ -619,7 +617,7 @@ pub fn prepare_attached_docs(
             .unwrap_or_else(|| "document".into());
         let file_name = format!("{staged_seq:02}-{base}");
         let staged_dir =
-            crate::extension::generated_amf_subdir(&canonical_workdir, INTERVIEW_DOCS_SUBDIR)
+            crate::extension::generated_aiw_subdir(&canonical_workdir, INTERVIEW_DOCS_SUBDIR)
                 .join(&run_dir);
         if fs::create_dir_all(&staged_dir)
             .and_then(|()| fs::copy(&canonical, staged_dir.join(&file_name)).map(|_| ()))
@@ -631,7 +629,7 @@ pub fn prepare_attached_docs(
         }
         prepared.push(AttachedDoc {
             source: canonical,
-            rel_path: format!(".amf/{INTERVIEW_DOCS_SUBDIR}/{run_dir}/{file_name}"),
+            rel_path: format!(".aiw/{INTERVIEW_DOCS_SUBDIR}/{run_dir}/{file_name}"),
             origin: AttachedDocOrigin::Staged,
         });
     }
@@ -639,24 +637,24 @@ pub fn prepare_attached_docs(
 }
 
 /// Remove every pass's staged reference-document copies for `workdir`.
-/// Best-effort: the directory is generated scratch under `.amf/` and safe to
+/// Best-effort: the directory is generated scratch under `.aiw/` and safe to
 /// delete whenever no interview pass is running.
 pub fn clear_staged_interview_docs(workdir: &Path) {
-    let _ = fs::remove_dir_all(workdir.join(".amf").join(INTERVIEW_DOCS_SUBDIR));
+    let _ = fs::remove_dir_all(workdir.join(".aiw").join(INTERVIEW_DOCS_SUBDIR));
 }
 
-/// Best-effort: make sure `workdir`'s repository ignores `.amf/` before an
+/// Best-effort: make sure `workdir`'s repository ignores `.aiw/` before an
 /// external reference document is copied into it. The pattern goes to
 /// `.git/info/exclude` (per-repo, untracked) rather than the tracked
 /// `.gitignore`, and nothing happens when the directory is already ignored or
 /// `workdir` is not a Git work tree.
-fn ensure_amf_ignored(workdir: &Path) {
+fn ensure_aiw_ignored(workdir: &Path) {
     use std::process::{Command, Stdio};
 
     let already_ignored = Command::new("git")
         .arg("-C")
         .arg(workdir)
-        .args(["check-ignore", "-q", ".amf/"])
+        .args(["check-ignore", "-q", ".aiw/"])
         .stderr(Stdio::null())
         .status()
         .map(|status| status.success())
@@ -687,14 +685,14 @@ fn ensure_amf_ignored(workdir: &Path) {
     let mut contents = fs::read_to_string(&exclude_path).unwrap_or_default();
     if contents
         .lines()
-        .any(|line| matches!(line.trim(), ".amf" | ".amf/"))
+        .any(|line| matches!(line.trim(), ".aiw" | ".aiw/"))
     {
         return;
     }
     if !contents.is_empty() && !contents.ends_with('\n') {
         contents.push('\n');
     }
-    contents.push_str(".amf/\n");
+    contents.push_str(".aiw/\n");
     if let Some(parent) = exclude_path.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -703,7 +701,7 @@ fn ensure_amf_ignored(workdir: &Path) {
 
 /// One reference document as it appears in the interview input JSON: the path
 /// the interviewer should read (workdir-relative) and whether it is the user's
-/// own file or an AMF-staged copy of an external one.
+/// own file or an AIW-staged copy of an external one.
 #[derive(Serialize)]
 struct AttachedDocInput<'a> {
     path: &'a str,
@@ -832,7 +830,7 @@ fn bounded_model_input(value: &str) -> Cow<'_, str> {
 /// Serialize a plan-interview prompt's structured input to the pretty JSON the
 /// model sees, carried in the single `{{interview_input}}` token. Kept a whole
 /// blob (rather than one token per field) so an override edits the tuned prose
-/// while AMF still owns the data section's shape — a deliberate exception to
+/// while AIW still owns the data section's shape — a deliberate exception to
 /// the granular-token style the other prompts use.
 fn input_json<T: Serialize>(value: &T) -> String {
     serde_json::to_string_pretty(value)
@@ -1773,20 +1771,6 @@ pub struct PlanQuestion {
 }
 
 impl PlanQuestion {
-    /// Whether `answer` is something this question can still hold.
-    ///
-    /// Free text always is. A select answer has to be one of the options as
-    /// currently configured: a stored answer is matched back by question id, and
-    /// a project's `plan_questions` config can rewrite a question's options
-    /// between runs, so the value behind an id may name a choice this question no
-    /// longer offers.
-    pub fn accepts_answer(&self, answer: &str) -> bool {
-        match &self.kind {
-            PlanQuestionKind::FreeText => true,
-            PlanQuestionKind::Select(options) => options.iter().any(|option| option == answer),
-        }
-    }
-
     fn builtin(id: &str, text: &str) -> Self {
         Self {
             id: id.to_string(),
@@ -2076,7 +2060,7 @@ mod tests {
     fn interview_keys_cannot_collide_across_their_three_sources() {
         let feature_id = "0d0f6b5a-1c2d-4e3f-8a9b-0c1d2e3f4a5b";
         let todo_key = todo_interview_key(feature_id);
-        let pending_key = pending_interview_key("amf", "todo-plan");
+        let pending_key = pending_interview_key("aiw", "todo-plan");
 
         // A TODO whose id happens to equal a feature id still keys apart from
         // the on-demand interview for that feature, which keys on the bare id.
@@ -2195,7 +2179,7 @@ mod tests {
         }];
         let context = RepositoryContext {
             top_level_entries: vec!["src/".into()],
-            readme_head: Some("An AMF project".into()),
+            readme_head: Some("An AIW project".into()),
             claude_md: None,
         };
 
@@ -2219,7 +2203,7 @@ mod tests {
         assert!(prompt.contains("\"answer\": \"Native TUI\""));
         assert!(prompt.contains("\"top_level_entries\": ["));
         assert!(prompt.contains("\"src/\""));
-        assert!(prompt.contains("\"readme_head\": \"An AMF project\""));
+        assert!(prompt.contains("\"readme_head\": \"An AIW project\""));
     }
 
     #[test]
@@ -2249,7 +2233,7 @@ mod tests {
         ];
         let context = RepositoryContext {
             top_level_entries: vec!["src/".into()],
-            readme_head: Some("An AMF project".into()),
+            readme_head: Some("An AIW project".into()),
             claude_md: None,
         };
 
@@ -2269,7 +2253,7 @@ mod tests {
         assert!(prompt.contains("\"prompt_version\": 1"));
         assert!(prompt.contains("\"feature_name\": \"guided-plans\""));
         assert!(prompt.contains("\"answer\": \"Native TUI\""));
-        assert!(prompt.contains("\"readme_head\": \"An AMF project\""));
+        assert!(prompt.contains("\"readme_head\": \"An AIW project\""));
         // Skipped and blank-answer questions carry no decision, so they are
         // omitted entirely rather than sent as nulls the model has to reason
         // about.
@@ -2536,7 +2520,7 @@ mod tests {
         assert!(
             staged
                 .rel_path
-                .starts_with(&format!(".amf/{INTERVIEW_DOCS_SUBDIR}/"))
+                .starts_with(&format!(".aiw/{INTERVIEW_DOCS_SUBDIR}/"))
         );
         let staged_abs = workdir.path().join(&staged.rel_path);
         assert_eq!(std::fs::read_to_string(&staged_abs).unwrap(), "external");
@@ -2577,7 +2561,7 @@ mod tests {
     }
 
     #[test]
-    fn prepare_attached_docs_excludes_amf_when_the_repo_does_not_already_ignore_it() {
+    fn prepare_attached_docs_excludes_aiw_when_the_repo_does_not_already_ignore_it() {
         use std::process::{Command, Stdio};
 
         let workdir = TempDir::new().unwrap();
@@ -2603,18 +2587,18 @@ mod tests {
         assert!(dropped.is_empty());
         assert_eq!(prepared.len(), 1);
 
-        // `.amf/` is now ignored, so an agent's `git add -A` cannot pick up the
+        // `.aiw/` is now ignored, so an agent's `git add -A` cannot pick up the
         // staged copy of the private doc.
         let exclude_path = workdir.path().join(".git").join("info").join("exclude");
         let exclude = std::fs::read_to_string(&exclude_path).unwrap();
         assert!(
-            exclude.lines().any(|line| line.trim() == ".amf/"),
-            "exclude missing the .amf/ entry: {exclude:?}"
+            exclude.lines().any(|line| line.trim() == ".aiw/"),
+            "exclude missing the .aiw/ entry: {exclude:?}"
         );
         let ignored = Command::new("git")
             .arg("-C")
             .arg(workdir.path())
-            .args(["check-ignore", "-q", ".amf/interview-docs"])
+            .args(["check-ignore", "-q", ".aiw/interview-docs"])
             .stderr(Stdio::null())
             .status()
             .unwrap();
@@ -2631,10 +2615,10 @@ mod tests {
         assert_eq!(
             exclude2
                 .lines()
-                .filter(|line| line.trim() == ".amf/")
+                .filter(|line| line.trim() == ".aiw/")
                 .count(),
             1,
-            "duplicate .amf/ entry written: {exclude2:?}"
+            "duplicate .aiw/ entry written: {exclude2:?}"
         );
     }
 

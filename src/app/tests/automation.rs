@@ -86,9 +86,9 @@ fn create_feature_automation_dry_run_returns_plan_without_mutating_store() {
     assert_eq!(response.branch, "feature-1");
     assert_eq!(
         response.workdir,
-        repo.join(".worktrees").join("automation-project-feature-1")
+        crate::fork::worktree_paths::new_worktree_path(&repo, "automation-project-feature-1") // FORK
     );
-    assert_eq!(response.tmux_session, "amf-automation-project-feature-1");
+    assert_eq!(response.tmux_session, "aiw-automation-project-feature-1");
     assert!(response.is_worktree);
     assert!(!response.started);
     assert!(app.store.projects[0].features.is_empty());
@@ -285,7 +285,7 @@ fn create_feature_automation_creates_and_starts_feature() {
     assert_eq!(app.store.projects[0].features[0].branch, "feature-1");
     assert_eq!(
         app.store.projects[0].features[0].tmux_session,
-        "amf-automation-project-feature-1"
+        "aiw-automation-project-feature-1"
     );
     assert!(app.store.projects[0].features[0].is_worktree);
     assert!(app.store.projects[0].features[0].review);
@@ -338,7 +338,7 @@ fn batch_feature_automation_dry_run_returns_plan_without_mutating_store() {
     assert_eq!(response.features[0].branch, "plan-1");
     assert_eq!(
         response.features[0].workdir,
-        repo.join(".worktrees").join("plan-batch-plan-1")
+        crate::fork::worktree_paths::new_worktree_path(&repo, "plan-batch-plan-1") // FORK
     );
     assert!(app.store.projects.is_empty());
 }

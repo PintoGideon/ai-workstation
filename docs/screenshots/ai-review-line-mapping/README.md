@@ -1,6 +1,6 @@
 # AI Review line mapping
 
-Captured from an isolated AMF instance with three representative cached
+Captured from an isolated AIW instance with three representative cached
 findings. A stubbed read-only `gh` resolved fixture PR #473; no AI agent ran and
 nothing was written to GitHub.
 
@@ -26,5 +26,5 @@ showing a line number that may point at unrelated code.
 ![AI Review finding downgraded to a file-level location](003-unmapped-file-only.png)
 
 All frames were captured at 120×40 with the isolated
-`scripts/dev/screenshot/amf-capture.sh` harness. Their text captures were
+`scripts/dev/screenshot/aiw-capture.sh` harness. Their text captures were
 asserted before the PNGs were visually inspected for color and clipping.

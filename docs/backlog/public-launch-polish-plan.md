@@ -10,7 +10,7 @@
 
 ## Why / problem
 
-AMF is about to be advertised publicly. A polish audit (2026-07-01,
+AIW is about to be advertised publicly. A polish audit (2026-07-01,
 v0.29.0) found the fundamentals healthy — 813 passing tests, clean
 build, thorough CHANGELOG — but a handful of gaps that would hurt first
 impressions: no license, README drift against shipped features, clippy
@@ -115,7 +115,7 @@ All found by driving the TUI with a fresh HOME.
 - [x] Empty-state line `No projects yet. Press N to create one.` is
       flush against the left border — added the leading pad space
       every other row has.
-- [x] `amf --help`: added a description for `-V, --version` and
+- [x] `aiw --help`: added a description for `-V, --version` and
       fleshed out the top-level about text.
 - [x] Reviewed the three `(experimental)` toggles in the feature
       wizard (Review, Plan, Steering). Graduated Review and Plan —
@@ -127,22 +127,22 @@ All found by driving the TUI with a fresh HOME.
 
 ## Phase 6 — Nice-to-have before/shortly after launch
 
-- [x] Respect `XDG_CONFIG_HOME` in `amf_config_dir()`
+- [x] Respect `XDG_CONFIG_HOME` in `aiw_config_dir()`
       (`src/project.rs:1208`) instead of hardcoding
-      `~/.config/amf` — now resolves via `dirs::config_dir()`, but
-      falls back to the legacy `~/.config/amf` path when that already
+      `~/.config/ai_workstation` — now resolves via `dirs::config_dir()`, but
+      falls back to the legacy `~/.config/ai_workstation` path when that already
       has data and the XDG-resolved directory doesn't, so existing
       installs (including macOS, where `dirs::config_dir()` differs
       from `~/.config`) keep working unchanged after an upgrade.
-      Follow-up: Claude hook cleanup now also recognizes older AMF
-      helper paths under any `.config/amf` root, so hooks written while
+      Follow-up: Claude hook cleanup now also recognizes older AIW
+      helper paths under any `.config/ai_workstation` root, so hooks written while
       `HOME` / `XDG_CONFIG_HOME` was temporarily redirected are removed
       instead of leaving deleted `/tmp/claude-*` scripts in
       `.claude/settings.local.json`.
-      Follow-up: AMF-launched agent panes now export `AMF_ACTIVE=1`,
+      Follow-up: AIW-launched agent panes now export `AIW_ACTIVE=1`,
       and the local Claude/Codex hooks plus Opencode plugins exit when
-      that marker is absent. This keeps AMF-managed hooks from blocking
-      standalone harness runs in an AMF-prepared worktree.
+      that marker is absent. This keeps AIW-managed hooks from blocking
+      standalone harness runs in an AIW-prepared worktree.
 - [x] Decide whether `docs/backlog/` (including the bug backlog)
       should ship in the public repo as-is; it's honest, but review it
       for anything you don't want public. Decided: ship as-is — the
@@ -152,10 +152,10 @@ All found by driving the TUI with a fresh HOME.
       release/packaging tooling) from scripts users are expected to
       run, or document what each is for. Moved `release.sh`,
       `package-release-bundle.sh`, `package-no-tmux-test-bundle.sh`,
-      `run-no-tmux-docker.sh`, `generate-amf-themes.{sh,js}`,
-      `test-thinking.sh`, and `scripts/amf/` (PR helper scripts) into
+      `run-no-tmux-docker.sh`, `generate-aiw-themes.{sh,js}`,
+      `test-thinking.sh`, and `scripts/aiw/` (PR helper scripts) into
       `scripts/dev/`; updated the CI release workflow, docker-no-tmux
-      docs, and the `amf:pr-*` skill commands to match. Left the 10
+      docs, and the `aiw:pr-*` skill commands to match. Left the 10
       `include_str!`-embedded hook scripts (notify, thinking, tool,
       codex, session-status) at `scripts/` root since they're compiled
       into the binary, not run by contributors — added a README to

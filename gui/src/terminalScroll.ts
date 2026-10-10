@@ -34,7 +34,7 @@ export type ScrollKeyAction = "pageUp" | "pageDown" | "top" | "latest";
  * The scroll action a key press means, or `null` for a key that belongs to
  * the program. From the live view only the Shift-modified keys scroll -- the
  * terminal convention -- so PageUp, Home, End and Esc still reach programs
- * that use them (Neovim, OpenCode, an agent's Esc-to-interrupt). While the
+ * that use them (Neovim, an agent's Esc-to-interrupt). While the
  * user is reading earlier output those keys scroll instead, and Esc returns
  * to live output rather than interrupting the agent.
  */

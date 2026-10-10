@@ -178,9 +178,9 @@ def textarea_value():
 
 
 repo = pathlib.Path(sys.argv[4])
-calls_path = pathlib.Path(os.environ["AMF_GUI_AI_CALLS"])
-db_path = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "amf/amf.db"
-amf_json = repo / "amf.json"
+calls_path = pathlib.Path(os.environ["AIW_GUI_AI_CALLS"])
+db_path = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "ai_workstation/aiw.db"
+aiw_json = repo / "aiw.json"
 
 
 def calls():
@@ -193,7 +193,7 @@ def overrides():
 
 
 def external_write(prompt_id, scope, key, harness, template):
-    """Stand-in for the TUI or another AMF window writing the shared database."""
+    """Stand-in for the TUI or another AIW window writing the shared database."""
     with sqlite3.connect(db_path) as db:
         db.execute(
             "INSERT INTO prompt_overrides(prompt_id,scope,scope_key,harness,template,created_at,updated_at) VALUES(?,?,?,?,?,datetime('now'),datetime('now'))",
@@ -202,15 +202,15 @@ def external_write(prompt_id, scope, key, harness, template):
 
 
 # The project's committed config carries one shared override; the user's
-# machine-wide (global) layer carries a Codex-only one. Keep amf.json out of
+# machine-wide (global) layer carries a Codex-only one. Keep aiw.json out of
 # the reviewed diff.
 with (repo / ".git/info/exclude").open("a") as exclusions:
-    exclusions.write("\namf.json\n")
+    exclusions.write("\naiw.json\n")
 project_config = {
     "allowed_agents": ["claude", "codex"],
     "prompt_overrides": {"session.summary": {"template": "PROJECT: one line about {{recent_lines}} ({{max_chars}} chars max)"}},
 }
-amf_json.write_text(json.dumps(project_config, indent=2) + "\n")
+aiw_json.write_text(json.dumps(project_config, indent=2) + "\n")
 external_write("session.summary", "global", None, "codex", "GLOBAL Codex summary of {{recent_lines}}")
 draft = "Summarize this {{harness_name}} session for the team.\nLead with failures.\nRecent output:\n{{recent_lines}}"
 
@@ -224,7 +224,7 @@ try:
     wait('document.querySelectorAll(".library-item").length===25')
     ready()
     open_prompt("Session summary")
-    capture("001-overrides-list-and-layers.png", "The manager lists every registry prompt with the layer in effect; Session summary shows its placeholders, effective project template and the stored global Codex override.", ["Prompt overrides", "Session summary", "Project (amf.json) · all harnesses", "Global · Codex", "{{recent_lines}}", "PROJECT: one line about", "Context: Invoice API / Round invoice totals"], 'document.querySelectorAll(".library-item").length===25')
+    capture("001-overrides-list-and-layers.png", "The manager lists every registry prompt with the layer in effect; Session summary shows its placeholders, effective project template and the stored global Codex override.", ["Prompt overrides", "Session summary", "Project (aiw.json) · all harnesses", "Global · Codex", "{{recent_lines}}", "PROJECT: one line about", "Context: Invoice API / Round invoice totals"], 'document.querySelectorAll(".library-item").length===25')
 
     click("New override…")
     wait('!!document.querySelector(".overrides-textarea")')
@@ -239,7 +239,7 @@ try:
 
     external_write("session.summary", "feature", str(repo), None, "TUI feature summary {{recent_lines}}")
     wait('Array.from(document.querySelectorAll("button")).some(b=>b.textContent.trim()==="Reload current version")')
-    capture("004-external-change-requires-reload.png", "Another AMF process saved an override for this prompt. Saving is blocked until the user reloads; the draft text stays.", ["changed outside this window", "Reload current version", "your text is kept"], 'Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="Save override").disabled', allow_alert=True)
+    capture("004-external-change-requires-reload.png", "Another AIW process saved an override for this prompt. Saving is blocked until the user reloads; the draft text stays.", ["changed outside this window", "Reload current version", "your text is kept"], 'Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="Save override").disabled', allow_alert=True)
     assert textarea_value() == draft
 
     click("Reload current version")
@@ -248,7 +248,7 @@ try:
     click("Save override")
     wait('document.body.innerText.includes("Saved the Feature · all harnesses override")')
     ready()
-    capture("005-saved-feature-override.png", "After reloading, the save replaces the externally written feature override and becomes the effective template; project and global layers remain stored.", ["Saved the Feature · all harnesses override for session.summary", "Feature · all harnesses", "in effect", "Lead with failures.", "Project (amf.json) · all harnesses", "Global · Codex"])
+    capture("005-saved-feature-override.png", "After reloading, the save replaces the externally written feature override and becomes the effective template; project and global layers remain stored.", ["Saved the Feature · all harnesses override for session.summary", "Feature · all harnesses", "in effect", "Lead with failures.", "Project (aiw.json) · all harnesses", "Global · Codex"])
     assert ("session.summary", "feature", str(repo), None, draft) in overrides(), overrides()
 
     click_label("Clear Global · Codex")
@@ -258,14 +258,14 @@ try:
     click("Clear override")
     wait('document.body.innerText.includes("Cleared the Global · Codex override")')
     ready()
-    capture("007-override-cleared.png", "Only the confirmed global Codex row is removed; the feature and project overrides stay in place.", ["Cleared the Global · Codex override for session.summary", "Feature · all harnesses", "Project (amf.json) · all harnesses"], '!Array.from(document.querySelectorAll("button")).some(b=>b.getAttribute("aria-label")==="Clear Global · Codex")')
+    capture("007-override-cleared.png", "Only the confirmed global Codex row is removed; the feature and project overrides stay in place.", ["Cleared the Global · Codex override for session.summary", "Feature · all harnesses", "Project (aiw.json) · all harnesses"], '!Array.from(document.querySelectorAll("button")).some(b=>b.getAttribute("aria-label")==="Clear Global · Codex")')
     assert not any(row[1] == "global" for row in overrides()), overrides()
 
-    amf_json.write_text("{ \"prompt_overrides\": ")
+    aiw_json.write_text("{ \"prompt_overrides\": ")
     wait('document.body.innerText.includes("Project overrides are ignored.")')
-    capture("008-broken-amf-json-reported.png", "A malformed amf.json is reported, its project overrides are shown as not applying, and project saves are refused rather than overwriting the file.", ["Project overrides are ignored.", "is not valid JSON", "fix it first"], 'document.querySelector(".library-item[aria-pressed=true] .badge").textContent.includes("Feature")', allow_alert=True)
-    assert amf_json.read_text() == "{ \"prompt_overrides\": "
-    amf_json.write_text(json.dumps(project_config, indent=2) + "\n")
+    capture("008-broken-aiw-json-reported.png", "A malformed aiw.json is reported, its project overrides are shown as not applying, and project saves are refused rather than overwriting the file.", ["Project overrides are ignored.", "is not valid JSON", "fix it first"], 'document.querySelector(".library-item[aria-pressed=true] .badge").textContent.includes("Feature")', allow_alert=True)
+    assert aiw_json.read_text() == "{ \"prompt_overrides\": "
+    aiw_json.write_text(json.dumps(project_config, indent=2) + "\n")
     wait('!document.body.innerText.includes("Project overrides are ignored.")')
     click("Done")
     wait('!document.querySelector("[aria-label=\'Prompt overrides\']")')

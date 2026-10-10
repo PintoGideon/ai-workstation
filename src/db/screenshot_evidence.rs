@@ -1,9 +1,9 @@
-use super::AmfDb;
+use super::AiwDb;
 use crate::screenshot_evidence::EvidenceOwner;
 use anyhow::{Result, ensure};
 use rusqlite::{OptionalExtension, params};
 
-impl AmfDb {
+impl AiwDb {
     pub(crate) fn evidence_scopes(
         &self,
         include_retired: bool,
@@ -78,12 +78,12 @@ mod tests {
             is_worktree: false,
             created_at: chrono::Utc::now(),
         };
-        let db = AmfDb::open(&path).unwrap();
+        let db = AiwDb::open(&path).unwrap();
         db.register_evidence(owner.clone()).unwrap();
         db.save_store(&crate::project::ProjectStore::empty())
             .unwrap();
         drop(db);
-        let db = AmfDb::open(&path).unwrap();
+        let db = AiwDb::open(&path).unwrap();
         assert_eq!(db.evidence_scopes(false).unwrap()[0].0, owner);
         db.retire_evidence("scope").unwrap();
         assert!(!db.evidence_scope_active("scope").unwrap());

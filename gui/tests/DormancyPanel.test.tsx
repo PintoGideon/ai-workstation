@@ -15,7 +15,7 @@ function row(id: string, name: string, idle: number, unattended: number, extra: 
     project_name: "Billing", workdir: `/work/${id}`, is_worktree: true, editor_alive: false,
     idle_secs: idle, unattended_secs: unattended, ...extra,
     observation: {
-      target: { project_id: "project", feature_id: id }, feature_name: name, tmux_session: `amf-${id}`,
+      target: { project_id: "project", feature_id: id }, feature_name: name, tmux_session: `aiw-${id}`,
       last_activity: "2026-10-05T08:00:00Z", last_accessed: "2026-10-03T12:00:00Z",
     },
   };
@@ -60,8 +60,8 @@ it("explains why each feature is listed and stops nothing until the user confirm
   fireEvent.click(button("Stop selected (2)"));
   const confirm = within(screen.getByRole("alertdialog", { name: "Confirm stopping dormant features" }));
   expect(confirm.getByText("Retry webhooks")).toBeTruthy();
-  expect(confirm.getByText("(amf-docs)")).toBeTruthy();
-  expect(confirm.getByText(/Editor windows AMF opened for these features are closed too/)).toBeTruthy();
+  expect(confirm.getByText("(aiw-docs)")).toBeTruthy();
+  expect(confirm.getByText(/Editor windows AIW opened for these features are closed too/)).toBeTruthy();
   expect(confirm.getByText(/sharing its VS Code instance with other windows is left running/)).toBeTruthy();
   expect(confirm.getByText(/Each one is checked again first/)).toBeTruthy();
   fireEvent.click(button("Back"));
@@ -89,19 +89,19 @@ it("sends the listed observations exactly once and reports every outcome with th
   release([
     { target: retry.observation.target, feature_name: "Retry webhooks", outcome: "stopped", editors: {
       killed: [{ name: "VS Code", processes: 3 }],
-      skipped: [{ name: "VS Code", reason: "AMF did not open this window", deliberate: true },
+      skipped: [{ name: "VS Code", reason: "AIW did not open this window", deliberate: true },
         { name: "Neovide", reason: "already closed", deliberate: false }],
       pending: ["VS Code"], summary: "closed 1 editor (3 processes)" } },
     { target: docs.observation.target, feature_name: "Docs refresh", outcome: "refused", reason: "opened",
-      message: "It was opened in AMF after the list was loaded" },
+      message: "It was opened in AIW after the list was loaded" },
   ]);
   const results = within(await screen.findByRole("region", { name: "Stop results" }));
   expect(results.getByText("stopped")).toBeTruthy();
   expect(results.getByText("Closed VS Code (3 processes ended)")).toBeTruthy();
-  expect(results.getByText("Left VS Code running: AMF did not open this window")).toBeTruthy();
+  expect(results.getByText("Left VS Code running: AIW did not open this window")).toBeTruthy();
   expect(results.getByText("Neovide had already closed")).toBeTruthy();
-  expect(results.getByText(/VS Code is still opening; AMF closes it once it can identify the window/)).toBeTruthy();
-  expect(results.getByText("not stopped: It was opened in AMF after the list was loaded")).toBeTruthy();
+  expect(results.getByText(/VS Code is still opening; AIW closes it once it can identify the window/)).toBeTruthy();
+  expect(results.getByText("not stopped: It was opened in AIW after the list was loaded")).toBeTruthy();
   expect(stopCalls()).toHaveLength(1);
 });
 

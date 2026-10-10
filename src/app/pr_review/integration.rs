@@ -90,7 +90,7 @@ impl App {
             Some(true) => {}
             Some(false) => {
                 self.message =
-                    Some("AMF follow-up replies cannot be sent back as fixes".to_string());
+                    Some("AIW follow-up replies cannot be sent back as fixes".to_string());
                 return;
             }
             None => {
@@ -121,7 +121,7 @@ impl App {
             return;
         };
         if !comment.is_actionable() {
-            self.message = Some("AMF follow-up replies cannot be sent back as fixes".to_string());
+            self.message = Some("AIW follow-up replies cannot be sent back as fixes".to_string());
             return;
         }
         let request = ReplyDraftRequest::new(comment.id, &state.review.pr.head_sha);
@@ -158,7 +158,7 @@ impl App {
         };
         if valid == 0 {
             self.message = Some(
-                "Marked comments are all resolved or AMF follow-up replies — nothing to batch"
+                "Marked comments are all resolved or AIW follow-up replies — nothing to batch"
                     .into(),
             );
             return;
@@ -228,7 +228,7 @@ impl App {
         };
         let Some((prompt, ids, requests)) = built else {
             self.message = Some(
-                "Marked comments are all resolved or AMF follow-up replies — nothing to batch"
+                "Marked comments are all resolved or AIW follow-up replies — nothing to batch"
                     .into(),
             );
             return;
@@ -585,16 +585,16 @@ impl App {
     /// `FixConfirmState::batch`): the batch injects one numbered prompt and marks
     /// every included comment `Fixing`, then clears the marked set.
     pub fn pr_review_inject_fix(&mut self) -> Result<()> {
-        let selected_is_amf_followup = matches!(
+        let selected_is_aiw_followup = matches!(
             &self.mode,
             AppMode::PrReview(state)
                 if state.fix_confirm.is_none()
                     && state
                         .selected_comment()
-                        .is_some_and(PrComment::is_amf_followup_reply)
+                        .is_some_and(PrComment::is_aiw_followup_reply)
         );
-        if selected_is_amf_followup {
-            self.message = Some("AMF follow-up replies cannot be sent back as fixes".into());
+        if selected_is_aiw_followup {
+            self.message = Some("AIW follow-up replies cannot be sent back as fixes".into());
             return Ok(());
         }
 
@@ -1022,9 +1022,8 @@ impl App {
     /// Whether the dedicated PR-triage session exists and is actively
     /// thinking or running a tool. Returns `None` for the existing-live target
     /// so callers never label that session's activity as dedicated. Claude and
-    /// Codex activity is keyed by the AMF feature-session ID supplied by
-    /// hooks/plugins; OpenCode and Pi reuse their existing sidebar and
-    /// marker-based activity signals.
+    /// Codex activity is keyed by the AIW feature-session ID supplied by
+    /// hooks; Pi reuses its existing marker-based activity signals.
     pub(crate) fn pr_review_dedicated_session_working(&self) -> Option<bool> {
         let AppMode::PrReview(state) = &self.mode else {
             return None;
@@ -1061,20 +1060,6 @@ impl App {
     pub(super) fn review_session_working(&self, feature: &Feature, si: usize) -> Option<bool> {
         let session = &feature.sessions[si];
         Some(match session.kind {
-            SessionKind::Opencode => self
-                .opencode_sidebar_cache
-                .get(&feature.tmux_session)
-                .filter(|sidebar| {
-                    session
-                        .token_usage_source
-                        .as_ref()
-                        .filter(|source| {
-                            source.provider == crate::token_tracking::TokenUsageProvider::Opencode
-                        })
-                        .is_none_or(|source| source.id == sidebar.session_id)
-                })
-                .and_then(crate::app::sync::opencode_sidebar_thinking_state)
-                .unwrap_or(false),
             SessionKind::Pi => Self::is_session_marked_thinking(&feature.tmux_session),
             _ => {
                 self.ipc_thinking_feature_sessions.contains(&session.id)

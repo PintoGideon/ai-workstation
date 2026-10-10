@@ -18,16 +18,8 @@ pub enum BrowseScope {
 
 #[allow(dead_code)]
 impl BrowseScope {
-    /// Short header label.
-    pub fn label(self) -> &'static str {
-        match self {
-            BrowseScope::RepoTree => "Repo tree",
-            BrowseScope::BranchChanges => "Branch changes",
-        }
-    }
-
     /// Spelled-out description — the header says what the scope *is* rather
-    /// than relying on the user knowing AMF's vocabulary.
+    /// than relying on the user knowing AIW's vocabulary.
     pub fn description(self) -> &'static str {
         match self {
             BrowseScope::RepoTree => "all files in this project",
@@ -348,7 +340,7 @@ impl LearningRunMode {
         }
     }
 
-    /// What the mode does, in the user's terms rather than AMF's.
+    /// What the mode does, in the user's terms rather than AIW's.
     pub fn description(self) -> &'static str {
         match self {
             LearningRunMode::NoTools => "this file only",
@@ -794,14 +786,6 @@ impl LearningViewState {
         self.qa.iter().filter(|q| q.status.is_in_flight()).count()
     }
 
-    /// The path a question would anchor to, `None` for the project anchor.
-    pub fn anchor_path(&self) -> Option<&str> {
-        match self.anchor {
-            LearningAnchor::Project => None,
-            _ => self.content_path.as_deref(),
-        }
-    }
-
     /// The currently selected file-list entry.
     pub fn selected_entry(&self) -> Option<&LearningListEntry> {
         self.entries.get(self.selected_entry)
@@ -822,11 +806,6 @@ impl LearningViewState {
     /// scope has none.
     pub fn hunk_selection_available(&self) -> bool {
         self.scope == BrowseScope::BranchChanges && self.selected_diff_file().is_some()
-    }
-
-    /// The Q&A row under the history cursor.
-    pub fn selected_qa(&self) -> Option<&LearningQa> {
-        self.qa.get(self.selected_qa)
     }
 
     /// Drop the confirmation banner and whatever row it was raised on.

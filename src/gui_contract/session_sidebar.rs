@@ -14,17 +14,17 @@
 //! | Section / field | Source in the GUI process |
 //! | --- | --- |
 //! | Status tokens, cost | The shared session-status collector (`sync_session_status_background`) |
-//! | Status model | The background sidebar load (Claude transcript, OpenCode storage, Codex config) and Codex rollout metadata |
-//! | Status activity | Waiting requests read from the hooks' notification files; thinking from the shared marker files / OpenCode storage |
+//! | Status model | The background sidebar load (Claude transcript, Codex config) and Codex rollout metadata |
+//! | Status activity | Waiting requests read from the hooks' notification files; thinking from the shared marker files |
 //! | Usage 5h/7d | The shared `UsageManager` (Claude OAuth usage endpoint, Codex rollout files), refreshed while a session sidebar is open |
 //! | Context | The shared context collectors, via the session-status collector |
 //! | Plan | The background sidebar load (`plan_sidebar_display_text`) |
 //! | Issue | The persisted feature |
 //! | PR Triage | The shared open-PR sweep and persisted merged/closed state; review-session activity only where shared sources report it |
-//! | Work | Notification files (input, diff review), OpenCode storage, thinking markers |
-//! | Summary | The persisted feature summary and OpenCode storage |
+//! | Work | Notification files (input, diff review), thinking markers |
+//! | Summary | The persisted feature summary |
 //! | Prompt | The background sidebar load and Codex rollout metadata |
-//! | Todos | Claude task files and OpenCode storage |
+//! | Todos | Claude task files |
 //! | Active TODO | The shared TODO database |
 //!
 //! Never shown, because only the TUI process that owns the IPC socket knows
@@ -251,8 +251,8 @@ impl GuiHandle {
     }
 
     /// Bring this process's sidebar caches up to date for `target`'s
-    /// feature: the background sidebar load (prompt, model, plan, OpenCode
-    /// storage), Codex rollout metadata and the active-TODO cache. Never
+    /// feature: the background sidebar load (prompt, model, plan), Codex
+    /// rollout metadata and the active-TODO cache. Never
     /// blocks on the loads; results land on a later poll.
     pub fn refresh_session_sidebar_sources(&mut self, target: &SessionTarget) -> GuiResult<()> {
         self.refresh_store()?;
@@ -290,7 +290,7 @@ impl GuiHandle {
         let plan = crate::app::plan::resolve_effective_plan(feature).ok_or_else(|| {
             GuiError::not_found(
                 "This feature has no current plan. Choose one from the TUI (leader n) \
-                 or add AMF_PLAN.md to its worktree",
+                 or add AIW_PLAN.md to its worktree",
             )
         })?;
         let mut bytes = Vec::new();
@@ -567,7 +567,6 @@ fn todo_line(title: &str, line: &str) -> SidebarLine {
 mod tests {
     use super::*;
     use crate::app::App;
-    use crate::app::opencode_storage::OpencodeSidebarData;
     use crate::context_tracking::{
         ContextBand, ContextPercentage, ContextResetMetadata, SessionContextSnapshot,
         SessionContextState,
@@ -616,7 +615,7 @@ mod tests {
             false,
         );
         feature.id = "feat-1".into();
-        feature.tmux_session = format!("amf-session-sidebar-{}", std::process::id());
+        feature.tmux_session = format!("aiw-session-sidebar-{}", std::process::id());
         feature.status = ProjectStatus::Idle;
         feature.sessions = sessions;
         feature
@@ -695,9 +694,9 @@ mod tests {
     #[test]
     fn a_claude_sidebar_carries_every_section_in_the_tui_order() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("AMF_PLAN.md"), "# Plan\n").unwrap();
+        std::fs::write(dir.path().join("AIW_PLAN.md"), "# Plan\n").unwrap();
         let tmp_db = tempfile::NamedTempFile::new().unwrap();
-        let db = crate::db::AmfDb::open(tmp_db.path()).unwrap();
+        let db = crate::db::AiwDb::open(tmp_db.path()).unwrap();
         let list = db
             .create_todo_list(
                 &TodoScope::Project {
@@ -737,7 +736,7 @@ mod tests {
             .insert("claude".into(), context(85, ContextBand::Critical));
         app.context_hint_states.sync_all(&app.context_states);
         app.sidebar_effective_plan_cache
-            .insert(tmux_session.clone(), "Current: AMF_PLAN.md".into());
+            .insert(tmux_session.clone(), "Current: AIW_PLAN.md".into());
         app.sidebar_model_cache
             .insert(tmux_session.clone(), "Model: claude-opus".into());
         app.latest_prompt_cache.insert(
@@ -875,85 +874,6 @@ mod tests {
     }
 
     #[test]
-    fn opencode_puts_its_summary_last_and_reads_todos_from_its_storage() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut feat = feature(
-            dir.path(),
-            AgentKind::Opencode,
-            vec![session("oc", SessionKind::Opencode)],
-        );
-        feat.summary = Some("Summarised".into());
-        let tmux_session = feat.tmux_session.clone();
-        let mut gui = gui_with(feat, dir.path(), true);
-        gui.app.opencode_sidebar_cache.insert(
-            tmux_session,
-            OpencodeSidebarData {
-                session_id: "ses_1".into(),
-                status: Some("busy".into()),
-                last_tool: Some("edit".into()),
-                todo_count: Some(7),
-                todo_preview: vec!["Write tests".into(), "Wire the panel".into()],
-                ..Default::default()
-            },
-        );
-
-        let view = gui.session_sidebar(&target("oc")).unwrap();
-
-        assert_eq!(view.title, "Opencode Sidebar");
-        assert_eq!(kinds(&view).last(), Some(&SidebarSectionKind::Summary));
-        let todos = &section(&view, SidebarSectionKind::Todos).lines;
-        assert_eq!(
-            todos,
-            &vec![
-                SidebarLine::Item {
-                    state: TodoItemState::Pending,
-                    text: "Write tests".into()
-                },
-                SidebarLine::Item {
-                    state: TodoItemState::Pending,
-                    text: "Wire the panel".into()
-                },
-                SidebarLine::More {
-                    text: "+5 more".into()
-                },
-            ]
-        );
-        assert_eq!(
-            fields(section(&view, SidebarSectionKind::Work)),
-            vec![field("State", "busy"), field("Tool", "edit")]
-        );
-    }
-
-    #[test]
-    fn a_tab_reads_thinking_from_its_own_harness_not_the_features() {
-        // An OpenCode tab in a Claude feature: thinking comes from OpenCode
-        // storage, which the Claude marker file would never reflect.
-        let dir = tempfile::tempdir().unwrap();
-        let feat = feature(
-            dir.path(),
-            AgentKind::Claude,
-            vec![session("oc", SessionKind::Opencode)],
-        );
-        let tmux_session = feat.tmux_session.clone();
-        let mut gui = gui_with(feat, dir.path(), true);
-        gui.app.opencode_sidebar_cache.insert(
-            tmux_session,
-            OpencodeSidebarData {
-                session_id: "ses_1".into(),
-                status: Some("busy".into()),
-                ..Default::default()
-            },
-        );
-
-        let view = gui.session_sidebar(&target("oc")).unwrap();
-
-        assert!(
-            fields(section(&view, SidebarSectionKind::Status))
-                .contains(&field("Activity", "Thinking"))
-        );
-    }
-
-    #[test]
     fn claude_todo_lines_parse_into_progress_and_items() {
         assert_eq!(
             todo_line("Todos", "█████░░░ 3/5"),
@@ -1052,7 +972,7 @@ mod tests {
     fn completing_the_active_todo_refuses_a_stale_id_and_then_reports_completed() {
         let dir = tempfile::tempdir().unwrap();
         let tmp_db = tempfile::NamedTempFile::new().unwrap();
-        let db = crate::db::AmfDb::open(tmp_db.path()).unwrap();
+        let db = crate::db::AiwDb::open(tmp_db.path()).unwrap();
         let list = db
             .create_todo_list(
                 &TodoScope::Project {
@@ -1144,19 +1064,19 @@ mod tests {
         let missing = gui.session_sidebar_plan(&target("codex")).unwrap_err();
         assert_eq!(missing.kind, super::super::GuiErrorKind::NotFound);
 
-        std::fs::write(dir.path().join("AMF_PLAN.md"), "# Plan\n\n- [ ] step").unwrap();
+        std::fs::write(dir.path().join("AIW_PLAN.md"), "# Plan\n\n- [ ] step").unwrap();
         let plan = gui.session_sidebar_plan(&target("codex")).unwrap();
-        assert_eq!(plan.path, "AMF_PLAN.md");
+        assert_eq!(plan.path, "AIW_PLAN.md");
         assert_eq!(plan.markdown, "# Plan\n\n- [ ] step");
         assert!(!plan.truncated);
 
         let oversized = "a".repeat(PLAN_VIEW_MAX_BYTES - 1) + "é and more";
-        std::fs::write(dir.path().join("AMF_PLAN.md"), &oversized).unwrap();
+        std::fs::write(dir.path().join("AIW_PLAN.md"), &oversized).unwrap();
         let plan = gui.session_sidebar_plan(&target("codex")).unwrap();
         assert!(plan.truncated);
         assert_eq!(plan.markdown, "a".repeat(PLAN_VIEW_MAX_BYTES - 1));
         assert_eq!(
-            std::fs::read_to_string(dir.path().join("AMF_PLAN.md")).unwrap(),
+            std::fs::read_to_string(dir.path().join("AIW_PLAN.md")).unwrap(),
             oversized
         );
     }
@@ -1237,7 +1157,7 @@ mod tests {
     #[test]
     fn refreshing_sources_loads_the_plan_line_off_the_calling_thread() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("AMF_PLAN.md"), "# Plan\n").unwrap();
+        std::fs::write(dir.path().join("AIW_PLAN.md"), "# Plan\n").unwrap();
         let feat = feature(
             dir.path(),
             AgentKind::Claude,
@@ -1251,7 +1171,7 @@ mod tests {
                 .unwrap();
             let view = gui.session_sidebar(&target("claude")).unwrap();
             let plan = section(&view, SidebarSectionKind::Plan).clone();
-            if matches!(&plan.lines[0], SidebarLine::Field { value, .. } if value == "AMF_PLAN.md")
+            if matches!(&plan.lines[0], SidebarLine::Field { value, .. } if value == "AIW_PLAN.md")
                 || std::time::Instant::now() > deadline
             {
                 break plan;
@@ -1259,7 +1179,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(20));
         };
 
-        assert_eq!(fields(&plan), vec![field("Current", "AMF_PLAN.md")]);
+        assert_eq!(fields(&plan), vec![field("Current", "AIW_PLAN.md")]);
         assert_eq!(plan.actions, vec![SidebarAction::OpenPlan]);
     }
 }

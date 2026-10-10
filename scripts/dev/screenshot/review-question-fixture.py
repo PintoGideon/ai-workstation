@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Offline screenshot fixture and command shims for reviewer questions.
 
-Installed as codex/gh/git by amf-capture.sh, this supplies deterministic model
+Installed as codex/gh/git by aiw-capture.sh, this supplies deterministic model
 text and PR metadata. All git fetches stay inside the throwaway repository.
 """
 import json
@@ -21,7 +21,7 @@ def git(*args, cwd=None):
 
 
 def metadata():
-    return json.loads((Path.cwd() / ".git/amf-screenshot.json").read_text())
+    return json.loads((Path.cwd() / ".git/aiw-screenshot.json").read_text())
 
 
 def codex():
@@ -113,7 +113,7 @@ def wait_for(session, needle):
     raise SystemExit("Timed out waiting for screenshot UI state: " + needle)
 
 
-def seed(root, amf, session):
+def seed(root, aiw, session):
     root = Path(root)
     repo = root / "repository"
     repo.mkdir()
@@ -122,7 +122,7 @@ def seed(root, amf, session):
     git("config", "user.name", "Screenshot fixture", cwd=repo)
     git("config", "user.email", "screenshot@example.invalid", cwd=repo)
     (repo / ".gitignore").write_text(
-        ".agents/\n.claude/\n.codex/\n.amf/\namf.json\nAGENTS.md\nCLAUDE.md\nCLAUDE.local.md\nAMF_PLAN.md\n")
+        ".agents/\n.claude/\n.codex/\n.aiw/\naiw.json\nAGENTS.md\nCLAUDE.md\nCLAUDE.local.md\nAIW_PLAN.md\n")
     (repo / "src/helpers.rs").write_text(
         "pub fn normalized_name(name: &str) -> String {\n    name.trim().to_ascii_lowercase()\n}\n")
     (repo / "src/caller.rs").write_text(
@@ -140,14 +140,14 @@ def seed(root, amf, session):
     git("clone", "-q", "--bare", str(repo), str(remote))
     git("--git-dir", str(remote), "update-ref", "refs/pull/42/head", head)
     git("remote", "add", "origin", REPOSITORY + ".git", cwd=repo)
-    (repo / ".git/amf-screenshot.json").write_text(json.dumps(dict(base=base, head=head, remote=str(remote))))
+    (repo / ".git/aiw-screenshot.json").write_text(json.dumps(dict(base=base, head=head, remote=str(remote))))
     enable_codex(session)
     for action, data in [
         ("create-project", dict(path=str(repo), project_name="review-demo", preferred_agent="codex")),
         ("create-feature", dict(project_name="review-demo", branch="review-helper", agent="codex", mode="vibe",
                                 use_worktree=False, create_terminal=True)),
     ]:
-        subprocess.run([amf, "automation", action], input=json.dumps(data), text=True, check=True)
+        subprocess.run([aiw, "automation", action], input=json.dumps(data), text=True, check=True)
     finding = dict(path="src/caller.rs", line=2, side="New", body="Could this reuse the existing normalization helper?",
                    diff_hunk=git("diff", base, head, "--", "src/caller.rs", cwd=repo))
     (root / "ai-review.json").write_text(json.dumps(dict(

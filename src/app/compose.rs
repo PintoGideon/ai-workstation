@@ -328,10 +328,24 @@ impl App {
     /// Whether typing in this agent view should open the compose box
     /// instead of forwarding keystrokes to tmux.
     pub fn compose_intercept_active(&self, view: &ViewState) -> bool {
-        view.session_kind.is_agent_harness()
-            && !self
-                .compose_direct_targets
-                .contains(&compose_target_key(&view.session, &view.window))
+        // FORK: `compose_direct_targets` holds the sessions toggled away from
+        // the configured default (`config.compose_box`), so with the default
+        // off a session uses the compose box only after `Ctrl+Space e`.
+        let toggled = self
+            .compose_direct_targets
+            .contains(&compose_target_key(&view.session, &view.window));
+        view.session_kind.is_agent_harness() && (self.config.compose_box != toggled)
+    }
+
+    /// FORK: make typing in `target` go straight to the agent, whichever
+    /// default `config.compose_box` sets (the set records sessions toggled
+    /// away from that default).
+    pub(crate) fn set_compose_direct(&mut self, target: String) {
+        if self.config.compose_box {
+            self.compose_direct_targets.insert(target);
+        } else {
+            self.compose_direct_targets.remove(&target);
+        }
     }
 
     /// Toggle compose interception for the currently viewed session.
@@ -351,11 +365,18 @@ impl App {
         }
 
         let key = compose_target_key(&session, &window);
-        if self.compose_direct_targets.remove(&key) {
-            self.push_toast_success("Composer on — typing opens the compose box");
+        if !self.compose_direct_targets.remove(&key) {
+            self.compose_direct_targets.insert(key.clone());
+        }
+        // FORK: report the resulting state, whichever default is configured.
+        if self.config.compose_box != self.compose_direct_targets.contains(&key) {
+            self.push_toast_success(
+                "Composer on — typing opens the compose box (leader+e to turn off)",
+            );
         } else {
-            self.compose_direct_targets.insert(key);
-            self.push_toast_warning("Composer off — leader+e to re-enable");
+            self.push_toast_success(
+                "Typing goes straight to the agent (leader+e for the compose box)",
+            );
         }
     }
 
@@ -455,7 +476,7 @@ impl App {
             _ => return,
         };
         self.cancel_compose();
-        self.compose_direct_targets.insert(target);
+        self.set_compose_direct(target); // FORK: respects config.compose_box
         self.push_toast_warning("Composer off — leader+e to re-enable");
     }
 
@@ -515,7 +536,7 @@ impl App {
         // harness to read it back through PowerShell can take several
         // seconds. Keep the composer on screen while that work runs so its
         // existing `[Pasting...]` indicator remains visible instead of
-        // making AMF look frozen.
+        // making AIW look frozen.
         let parts = split_compose_parts(&text, &state.images);
         let has_image_part = parts
             .iter()
@@ -607,7 +628,7 @@ impl App {
             self.tmux.send_key_name(&session, &window, "Enter")?;
 
             if interactive {
-                self.compose_direct_targets.insert(key.clone());
+                self.set_compose_direct(key.clone()); // FORK: respects config.compose_box
                 self.push_toast_warning("Composer off — leader+e to re-enable");
             } else {
                 self.push_toast_success(format!("Sent {text}"));

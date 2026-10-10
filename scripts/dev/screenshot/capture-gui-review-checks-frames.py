@@ -174,19 +174,19 @@ def save(label):
 repo = pathlib.Path(sys.argv[4])
 claude = repo / ".claude"
 claude.mkdir()
-check_dir = repo / ".amf"
+check_dir = repo / ".aiw"
 check_dir.mkdir()
 with (repo / ".git/info/exclude").open("a") as exclusions:
-    exclusions.write("\n.claude/\n.amf/\n")
-command = "bash .amf/review-check.sh"
+    exclusions.write("\n.claude/\n.aiw/\n")
+command = "bash .aiw/review-check.sh"
 (check_dir / "config.json").write_text(json.dumps({"final_review_check_command": command}))
 mode_path = check_dir / "check-mode"
 mode_path.write_text("fail")
 runs_path = check_dir / "check-runs.log"
 (check_dir / "review-check.sh").write_text('''#!/usr/bin/env bash
 set -eu
-echo started >> .amf/check-runs.log
-case "$(cat .amf/check-mode)" in
+echo started >> .aiw/check-runs.log
+case "$(cat .aiw/check-mode)" in
   fail)
     echo 'Invoice checks: 3 passed, 1 failed'
     echo 'FAIL negative totals: expected -21.64, received -21.63' >&2
@@ -197,10 +197,10 @@ case "$(cat .amf/check-mode)" in
     exit 0 ;;
   slow)
     sleep 30 &
-    echo $! > .amf/check-descendant
+    echo $! > .aiw/check-descendant
     wait ;;
   gated)
-    while [ ! -e .amf/check-release ]; do sleep 0.05; done
+    while [ ! -e .aiw/check-release ]; do sleep 0.05; done
     echo 'Invoice checks: 4 passed, 0 failed' ;;
 esac
 ''')

@@ -3,7 +3,7 @@ set -u -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-WORKFLOW="amf-screenshot-artifact.yml"
+WORKFLOW="aiw-screenshot-artifact.yml"
 GEOMETRY="120x40"
 REF=""
 PR_NUMBER=""
@@ -31,7 +31,7 @@ Options:
   --geometry <WxH>       Capture geometry (default: $GEOMETRY)
   --seed <file>          Repository-relative automation seed payload
   --seed-feature <file>  Repository-relative feature seed payload
-  --config <file>        Repository-relative AMF config JSON
+  --config <file>        Repository-relative AIW config JSON
   --gif                  Also assemble an animated GIF
   --out-dir <dir>        Download artifact here (default: temporary directory)
   --strict               Return nonzero when dispatch, capture, download, or
@@ -159,8 +159,8 @@ if [[ "$status" != "completed" || "$conclusion" != "success" ]]; then
     warn_or_exit "screenshot workflow did not succeed (status=$status conclusion=$conclusion): $run_url"
 fi
 
-artifact_name="amf-screenshot-pr-${PR_NUMBER}-${run_id}"
-artifact_json="$(mktemp "${TMPDIR:-/tmp}/amf-artifact.XXXXXX.json")"
+artifact_name="aiw-screenshot-pr-${PR_NUMBER}-${run_id}"
+artifact_json="$(mktemp "${TMPDIR:-/tmp}/aiw-artifact.XXXXXX.json")"
 trap 'rm -f "$artifact_json"' EXIT
 if ! gh api "repos/$REPO/actions/runs/$run_id/artifacts?per_page=100" >"$artifact_json" 2>/dev/null; then
     warn_or_exit "workflow succeeded but artifact metadata could not be read: $run_url"
@@ -179,7 +179,7 @@ PY
 
 artifact_url="https://github.com/$REPO/actions/runs/$run_id/artifacts/$artifact_id"
 if [[ -z "$OUT_DIR" ]]; then
-    OUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/amf-screenshot-artifact.XXXXXX")"
+    OUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/aiw-screenshot-artifact.XXXXXX")"
 else
     mkdir -p "$OUT_DIR" || warn_or_exit "could not create --out-dir '$OUT_DIR'"
     out_abs="$(cd "$OUT_DIR" && pwd -P)"
@@ -199,18 +199,18 @@ from pathlib import Path
 
 out, url, pr, ref, expires = sys.argv[1:]
 Path(out).write_text(
-    "<!-- amf:screenshots:start -->\n"
+    "<!-- aiw:screenshots:start -->\n"
     f"### Visual proof\n\n"
-    f"[Download the AMF screenshot artifact (PR #{pr}, `{ref}`)]({url})\n\n"
+    f"[Download the AIW screenshot artifact (PR #{pr}, `{ref}`)]({url})\n\n"
     f"The artifact includes a self-contained `gallery.html`, rendered PNG/GIF "
     f"files, text assertions, and capture metadata. It expires on `{expires}`.\n"
-    "<!-- amf:screenshots:end -->\n",
+    "<!-- aiw:screenshots:end -->\n",
     encoding="utf-8",
 )
 PY
 
-body_file="$(mktemp "${TMPDIR:-/tmp}/amf-pr-body.XXXXXX")"
-updated_body="$(mktemp "${TMPDIR:-/tmp}/amf-pr-body-updated.XXXXXX")"
+body_file="$(mktemp "${TMPDIR:-/tmp}/aiw-pr-body.XXXXXX")"
+updated_body="$(mktemp "${TMPDIR:-/tmp}/aiw-pr-body-updated.XXXXXX")"
 trap 'rm -f "$artifact_json" "$body_file" "$updated_body"' EXIT
 if ! gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq .body >"$body_file" 2>/dev/null; then
     warn_or_exit "artifact is ready, but the existing PR body could not be read: $artifact_url"

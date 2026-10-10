@@ -1,38 +1,38 @@
 //! Building the IPC payload a hook script sends to the dashboard.
 //!
 //! Hook scripts used to do this themselves with `jq`: read a few fields out of
-//! the harness's JSON on stdin, then reserialize a new object with AMF's
+//! the harness's JSON on stdin, then reserialize a new object with AIW's
 //! session metadata spliced in. That made `jq` a hard runtime dependency of
 //! every hook — an undeclared one that failed *silently*, because each script
 //! discards jq's stderr and exits 0, so a missing binary was indistinguishable
 //! from "the agent had nothing to report".
 //!
 //! It was also redundant: the script piped its freshly-built JSON into
-//! `amf notify`, which handed it to the dashboard, which parsed it again. The
+//! `aiw notify`, which handed it to the dashboard, which parsed it again. The
 //! parsing now happens once, here, and the scripts pass their stdin through
 //! untouched.
 //!
-//! The metadata AMF used to splice in with `--arg` comes from the environment,
-//! and `amf notify` runs as a child of the hook script, so it inherits the same
+//! The metadata AIW used to splice in with `--arg` comes from the environment,
+//! and `aiw notify` runs as a child of the hook script, so it inherits the same
 //! variables the script was reading. Nothing needs to be passed along the pipe.
 
 use serde_json::{Map, Value};
 
-/// The environment AMF exports into an agent session. Captured as a struct
+/// The environment AIW exports into an agent session. Captured as a struct
 /// rather than read inline so tests can build one without touching the real
 /// process environment.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HookEnv {
     /// Tmux session name. Also the dashboard's key for a feature, which is why
     /// it takes precedence over the harness's own session id.
-    pub amf_session: Option<String>,
-    pub amf_feature_session_id: Option<String>,
-    pub amf_tmux_session: Option<String>,
-    pub amf_tmux_window: Option<String>,
+    pub aiw_session: Option<String>,
+    pub aiw_feature_session_id: Option<String>,
+    pub aiw_tmux_session: Option<String>,
+    pub aiw_tmux_window: Option<String>,
 }
 
 impl HookEnv {
-    /// Read the AMF session variables from the process environment. An empty
+    /// Read the AIW session variables from the process environment. An empty
     /// variable is treated as unset — a hook script that expands `${FOO:-}`
     /// into an exported-but-empty value should not produce an empty field.
     pub fn from_process_env() -> Self {
@@ -40,10 +40,10 @@ impl HookEnv {
             std::env::var(name).ok().filter(|value| !value.is_empty())
         }
         Self {
-            amf_session: var("AMF_SESSION"),
-            amf_feature_session_id: var("AMF_FEATURE_SESSION_ID"),
-            amf_tmux_session: var("AMF_TMUX_SESSION"),
-            amf_tmux_window: var("AMF_TMUX_WINDOW"),
+            aiw_session: var("AIW_SESSION"),
+            aiw_feature_session_id: var("AIW_FEATURE_SESSION_ID"),
+            aiw_tmux_session: var("AIW_TMUX_SESSION"),
+            aiw_tmux_window: var("AIW_TMUX_WINDOW"),
         }
     }
 }
@@ -56,7 +56,7 @@ pub struct NotifyOptions {
     /// forwards its raw JSON, which carries no `type` and must not gain one.
     pub event_type: Option<String>,
     pub source: Option<String>,
-    /// Sets `amf_event_kind`, the attention layer's reason-for-stopping.
+    /// Sets `aiw_event_kind`, the attention layer's reason-for-stopping.
     pub event_kind: Option<String>,
     /// Fields that must be present and non-empty in the finished payload, or
     /// nothing is sent. Replaces the scripts' `[ -z "$X" ] && exit 0` guards.
@@ -94,7 +94,9 @@ pub fn build_payload(stdin: &str, env: &HookEnv, options: &NotifyOptions) -> Opt
 
     // The harness's own session id, kept under a distinct key so it survives
     // `session_id` being replaced by the tmux session below.
-    let provider_session_id = string_field(&payload, "session_id");
+    // FORK: Cursor names its id `conversation_id` (Gemini uses `session_id`).
+    let provider_session_id =
+        string_field(&payload, "session_id").or_else(|| string_field(&payload, "conversation_id"));
     if let Some(ref provider) = provider_session_id {
         payload.insert(
             "provider_session_id".to_string(),
@@ -103,7 +105,7 @@ pub fn build_payload(stdin: &str, env: &HookEnv, options: &NotifyOptions) -> Opt
     }
 
     // The dashboard keys features by tmux session, so that wins when present;
-    // the harness's id is the fallback for a hook running outside AMF's env.
+    // the harness's id is the fallback for a hook running outside AIW's env.
     //
     // An explicit `--field session_id=…` outranks both. It is applied further
     // down like any other field, but it has to be consulted *here* too or a
@@ -117,7 +119,7 @@ pub fn build_payload(stdin: &str, env: &HookEnv, options: &NotifyOptions) -> Opt
         .map(|(_, value)| value.clone())
         .filter(|value| !value.is_empty());
     let session_id = explicit_session_id
-        .or_else(|| env.amf_session.clone())
+        .or_else(|| env.aiw_session.clone())
         .or(provider_session_id);
     match session_id {
         Some(id) => {
@@ -146,22 +148,22 @@ pub fn build_payload(stdin: &str, env: &HookEnv, options: &NotifyOptions) -> Opt
         payload.insert("source".to_string(), Value::String(source.clone()));
     }
     if let Some(ref kind) = options.event_kind {
-        payload.insert("amf_event_kind".to_string(), Value::String(kind.clone()));
+        payload.insert("aiw_event_kind".to_string(), Value::String(kind.clone()));
     }
 
-    if let Some(ref value) = env.amf_feature_session_id {
+    if let Some(ref value) = env.aiw_feature_session_id {
         payload.insert(
-            "amf_feature_session_id".to_string(),
+            "aiw_feature_session_id".to_string(),
             Value::String(value.clone()),
         );
     }
-    // Falls back to AMF_SESSION, matching what the scripts' `${A:-${B:-}}`
+    // Falls back to AIW_SESSION, matching what the scripts' `${A:-${B:-}}`
     // expansions did.
-    if let Some(value) = env.amf_tmux_session.clone().or(env.amf_session.clone()) {
-        payload.insert("amf_tmux_session".to_string(), Value::String(value));
+    if let Some(value) = env.aiw_tmux_session.clone().or(env.aiw_session.clone()) {
+        payload.insert("aiw_tmux_session".to_string(), Value::String(value));
     }
-    if let Some(ref value) = env.amf_tmux_window {
-        payload.insert("amf_tmux_window".to_string(), Value::String(value.clone()));
+    if let Some(ref value) = env.aiw_tmux_window {
+        payload.insert("aiw_tmux_window".to_string(), Value::String(value.clone()));
     }
 
     // Claude nests TodoWrite/Task details under `tool_input`; the dashboard
@@ -359,10 +361,10 @@ mod tests {
 
     fn env() -> HookEnv {
         HookEnv {
-            amf_session: Some("amf-my-feat".to_string()),
-            amf_feature_session_id: Some("fs-1".to_string()),
-            amf_tmux_session: Some("amf-my-feat".to_string()),
-            amf_tmux_window: Some("claude".to_string()),
+            aiw_session: Some("aiw-my-feat".to_string()),
+            aiw_feature_session_id: Some("fs-1".to_string()),
+            aiw_tmux_session: Some("aiw-my-feat".to_string()),
+            aiw_tmux_window: Some("claude".to_string()),
         }
     }
 
@@ -386,7 +388,7 @@ mod tests {
         .unwrap();
 
         // The dashboard keys features by tmux session...
-        assert_eq!(payload["session_id"], "amf-my-feat");
+        assert_eq!(payload["session_id"], "aiw-my-feat");
         // ...but the harness's own id is still needed to match transcripts.
         assert_eq!(payload["provider_session_id"], "uuid-from-claude");
         assert_eq!(payload["type"], "thinking-start");
@@ -394,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    fn harness_session_id_is_used_when_amf_session_is_absent() {
+    fn harness_session_id_is_used_when_aiw_session_is_absent() {
         let bare = HookEnv::default();
         let payload = build_payload(
             r#"{"session_id":"uuid-from-claude","cwd":"/repo"}"#,
@@ -404,7 +406,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(payload["session_id"], "uuid-from-claude");
-        assert!(payload.get("amf_tmux_session").is_none());
+        assert!(payload.get("aiw_tmux_session").is_none());
     }
 
     #[test]
@@ -417,22 +419,22 @@ mod tests {
     fn session_metadata_comes_from_the_environment() {
         let payload = build(r#"{"session_id":"u1","cwd":"/repo"}"#, &opts("clear")).unwrap();
 
-        assert_eq!(payload["amf_feature_session_id"], "fs-1");
-        assert_eq!(payload["amf_tmux_session"], "amf-my-feat");
-        assert_eq!(payload["amf_tmux_window"], "claude");
+        assert_eq!(payload["aiw_feature_session_id"], "fs-1");
+        assert_eq!(payload["aiw_tmux_session"], "aiw-my-feat");
+        assert_eq!(payload["aiw_tmux_window"], "claude");
     }
 
     #[test]
-    fn tmux_session_falls_back_to_amf_session() {
+    fn tmux_session_falls_back_to_aiw_session() {
         let env = HookEnv {
-            amf_session: Some("amf-my-feat".to_string()),
-            amf_tmux_session: None,
+            aiw_session: Some("aiw-my-feat".to_string()),
+            aiw_tmux_session: None,
             ..HookEnv::default()
         };
         let payload =
             build_payload(r#"{"session_id":"u1","cwd":"/repo"}"#, &env, &opts("clear")).unwrap();
 
-        assert_eq!(payload["amf_tmux_session"], "amf-my-feat");
+        assert_eq!(payload["aiw_tmux_session"], "aiw-my-feat");
     }
 
     #[test]
@@ -522,7 +524,7 @@ mod tests {
 
         assert_eq!(payload["type"], "attention");
         assert_eq!(payload["source"], "attention-hook");
-        assert_eq!(payload["amf_event_kind"], "completed");
+        assert_eq!(payload["aiw_event_kind"], "completed");
     }
 
     #[test]
@@ -532,7 +534,7 @@ mod tests {
         // feature.
         let payload = build("not json at all", &opts("thinking-stop")).unwrap();
 
-        assert_eq!(payload["session_id"], "amf-my-feat");
+        assert_eq!(payload["session_id"], "aiw-my-feat");
         assert_eq!(payload["type"], "thinking-stop");
         assert!(payload.get("provider_session_id").is_none());
     }
@@ -540,7 +542,7 @@ mod tests {
     #[test]
     fn empty_stdin_still_reports_the_session() {
         let payload = build("", &opts("thinking-stop")).unwrap();
-        assert_eq!(payload["session_id"], "amf-my-feat");
+        assert_eq!(payload["session_id"], "aiw-my-feat");
     }
 
     #[test]
@@ -596,7 +598,7 @@ mod tests {
     }
 
     #[test]
-    fn reject_is_read_from_the_flat_reply_amf_actually_sends() {
+    fn reject_is_read_from_the_flat_reply_aiw_actually_sends() {
         // `handlers::diff_review` sends this shape. The previous code looked
         // under a `response` key that nothing ever writes, so a rejected Codex
         // change was never reverted.
@@ -623,20 +625,20 @@ mod tests {
     #[test]
     fn explicit_session_id_field_satisfies_the_identity_guard() {
         // The diff-review plugin supplies the provider's id itself and carries
-        // the AMF session alongside; without AMF_SESSION set this must still
+        // the AIW session alongside; without AIW_SESSION set this must still
         // build rather than trip the "no identity" guard.
         let options = NotifyOptions {
             event_type: Some("diff-review".to_string()),
             fields: vec![
                 ("session_id".to_string(), "provider-uuid".to_string()),
-                ("amf_session".to_string(), "amf-feat".to_string()),
+                ("aiw_session".to_string(), "aiw-feat".to_string()),
             ],
             ..Default::default()
         };
         let payload = build_payload("", &HookEnv::default(), &options).unwrap();
 
         assert_eq!(payload["session_id"], "provider-uuid");
-        assert_eq!(payload["amf_session"], "amf-feat");
+        assert_eq!(payload["aiw_session"], "aiw-feat");
     }
 
     #[test]
@@ -669,13 +671,13 @@ mod tests {
     #[test]
     fn empty_environment_variables_count_as_unset() {
         let env = HookEnv {
-            amf_session: Some("amf-my-feat".to_string()),
-            amf_tmux_window: None,
+            aiw_session: Some("aiw-my-feat".to_string()),
+            aiw_tmux_window: None,
             ..HookEnv::default()
         };
         let payload = build_payload(r#"{"session_id":"u1"}"#, &env, &opts("clear")).unwrap();
 
-        // An exported-but-empty AMF_TMUX_WINDOW must not become `""`.
-        assert!(payload.get("amf_tmux_window").is_none());
+        // An exported-but-empty AIW_TMUX_WINDOW must not become `""`.
+        assert!(payload.get("aiw_tmux_window").is_none());
     }
 }

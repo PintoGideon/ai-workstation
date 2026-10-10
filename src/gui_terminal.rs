@@ -1,4 +1,4 @@
-//! GUI terminal transport (`AMF_PLAN.md` Task 6). Reuses the TUI's
+//! GUI terminal transport (`AIW_PLAN.md` Task 6). Reuses the TUI's
 //! persistent tmux control-mode client
 //! (`TmuxManager::spawn_control_mode_view_client`) rather than a new
 //! PTY-attach path, per Task 2's resolved decision.
@@ -30,7 +30,7 @@
 //!
 //! The one case where a gesture does reach the program is a full-screen
 //! (alternate-screen) program that has itself asked for mouse reporting --
-//! OpenCode, Neovim. tmux keeps no history for it, and the program scrolls
+//! Neovim. tmux keeps no history for it, and the program scrolls
 //! its own view, so [`TerminalHandle::scroll_program`] forwards a mouse
 //! *wheel report* exactly as a native terminal would -- never a keystroke,
 //! and only after re-reading the pane's modes, so a program that has since
@@ -477,7 +477,7 @@ mod tests {
     /// The parent owns cleanup even when the child panics or times out. Do not
     /// retry assertions: only fixture-server startup below is retried.
     fn in_isolated_process() -> bool {
-        const CHILD_TEST: &str = "AMF_GUI_TERMINAL_CHILD_TEST";
+        const CHILD_TEST: &str = "AIW_GUI_TERMINAL_CHILD_TEST";
         let thread = std::thread::current();
         let name = thread.name().expect("test thread must have a name");
         if std::env::var(CHILD_TEST).as_deref() == Ok(name) {
@@ -531,7 +531,7 @@ mod tests {
     }
 
     fn unique_session_name(label: &str) -> String {
-        format!("amf-gui-terminal-test-{label}-{}", uuid::Uuid::new_v4())
+        format!("aiw-gui-terminal-test-{label}-{}", uuid::Uuid::new_v4())
     }
 
     struct TestSession {
@@ -541,7 +541,7 @@ mod tests {
     impl TestSession {
         fn spawn(label: &str) -> Self {
             assert_eq!(
-                std::env::var("AMF_GUI_TERMINAL_CHILD_TEST").ok().as_deref(),
+                std::env::var("AIW_GUI_TERMINAL_CHILD_TEST").ok().as_deref(),
                 std::thread::current().name(),
                 "live terminal fixtures must run in an isolated child"
             );
@@ -558,7 +558,7 @@ mod tests {
                         "new-session",
                         "-d",
                         "-s",
-                        "__amf-terminal-fixture-keeper",
+                        "__aiw-terminal-fixture-keeper",
                         "exec sleep 120",
                     ])
                     .output()
@@ -580,7 +580,7 @@ mod tests {
                     "-k",
                     "-t",
                     &format!("{}:main", session.name),
-                    "exec env PS1='__AMF_TEST_SHELL_READY__ ' /bin/sh -i",
+                    "exec env PS1='__AIW_TEST_SHELL_READY__ ' /bin/sh -i",
                 ])
                 .output()
                 .expect("failed to start fixture shell");
@@ -588,7 +588,7 @@ mod tests {
             wait_for(Duration::from_secs(10), || {
                 TmuxManager::capture_pane(&session.name, "main")
                     .ok()
-                    .filter(|content| content.contains("__AMF_TEST_SHELL_READY__"))
+                    .filter(|content| content.contains("__AIW_TEST_SHELL_READY__"))
             })
             .expect("fixture shell did not become ready");
             session
@@ -632,11 +632,11 @@ mod tests {
             return;
         }
         let session = TestSession::spawn("initial-content");
-        TmuxManager::send_literal(&session.name, "main", "echo hello-amf-gui\r").unwrap();
+        TmuxManager::send_literal(&session.name, "main", "echo hello-aiw-gui\r").unwrap();
         wait_for(Duration::from_secs(2), || {
             TmuxManager::capture_pane(&session.name, "main")
                 .ok()
-                .filter(|content| content.contains("hello-amf-gui"))
+                .filter(|content| content.contains("hello-aiw-gui"))
         })
         .expect("shell never echoed the command");
 
@@ -659,7 +659,7 @@ mod tests {
 
         assert!(!initial.alternate_screen && !initial.mouse_reporting);
         assert!(
-            initial.replay.contains("hello-amf-gui"),
+            initial.replay.contains("hello-aiw-gui"),
             "initial replay text should contain the pane's existing content: {initial:?}"
         );
     }

@@ -26,7 +26,7 @@ export interface PrPicker {
   loading: boolean;
 }
 
-export interface PrThreadReply { id: number; author: string; body: string; via_amf: boolean }
+export interface PrThreadReply { id: number; author: string; body: string; via_aiw: boolean }
 
 export interface PrInvestigation {
   status: "running" | "complete" | "failed" | "dismissed";

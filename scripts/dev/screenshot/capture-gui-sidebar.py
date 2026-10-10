@@ -36,7 +36,7 @@ def encode(path):
     return "".join(c if c.isalnum() and c.isascii() else "-" for c in str(path))
 
 
-with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
+with tempfile.TemporaryDirectory(prefix="aiw-gui-sidebar-") as temporary:
     scratch = pathlib.Path(temporary)
     with socket.socket() as inspector_socket:
         inspector_socket.bind(("127.0.0.1", 0))
@@ -45,7 +45,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
     config = scratch / "config"
     state = scratch / "state"
     fixture_bin = scratch / "bin"
-    for directory in [home, config / "amf/notifications", state / "amf", fixture_bin]:
+    for directory in [home, config / "ai_workstation/notifications", state / "ai_workstation", fixture_bin]:
         directory.mkdir(parents=True)
     shutil.copyfile(workspace / "scripts/dev/screenshot/fixtures/gui-sidebar-gh.py", fixture_bin / "gh")
     (fixture_bin / "gh").chmod(0o755)
@@ -60,16 +60,16 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
         XDG_CACHE_HOME=str(home / ".cache"),
         GDK_BACKEND="x11",
         WEBKIT_INSPECTOR_HTTP_SERVER=inspector_address,
-        AMF_TMUX_SOCKET=str(scratch / "sidebar-tmux.sock"),
-        AMF_GUI_GH_CALLS=str(gh_calls),
+        AIW_TMUX_SOCKET=str(scratch / "sidebar-tmux.sock"),
+        AIW_GUI_GH_CALLS=str(gh_calls),
         PATH=str(fixture_bin) + os.pathsep + os.environ["PATH"],
     )
     git_env = env | {
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "AMF demo",
+        "GIT_AUTHOR_NAME": "AIW demo",
         "GIT_AUTHOR_EMAIL": "demo@example.com",
-        "GIT_COMMITTER_NAME": "AMF demo",
+        "GIT_COMMITTER_NAME": "AIW demo",
         "GIT_COMMITTER_EMAIL": "demo@example.com",
     }
 
@@ -92,7 +92,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
     # `gh` fixture ever answers for it.
     git(repo, "remote", "add", "origin", "https://github.com/acme/invoice-api.git")
     git(repo, "checkout", "-b", "release-prep")
-    (repo / "amf.json").write_text(json.dumps({"custom_sessions": [
+    (repo / "aiw.json").write_text(json.dumps({"custom_sessions": [
         {"name": "Dev server", "icon": "S", "icon_nerd": "nf-md-server", "command": "true"},
     ]}))
     worktree = {}
@@ -115,21 +115,21 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
             }},
         }
         (transcripts / f"{conversation}.jsonl").write_text(json.dumps(line) + "\n")
-    custom_status = worktree["round-totals"] / ".amf/session-status"
+    custom_status = worktree["round-totals"] / ".aiw/session-status"
     custom_status.mkdir(parents=True)
     (custom_status / "s-dev.txt").write_text("listening on :5173\n")
 
-    tmux = ["tmux", "-S", env["AMF_TMUX_SOCKET"]]
+    tmux = ["tmux", "-S", env["AIW_TMUX_SOCKET"]]
     sessions = {
-        "amf-sidebar-round-totals": ["claude", "claude-2", "shell", "dev-server"],
-        "amf-sidebar-fix-rounding-bug": ["claude"],
-        "amf-sidebar-supervised-edit": ["claude"],
+        "aiw-sidebar-round-totals": ["claude", "claude-2", "shell", "dev-server"],
+        "aiw-sidebar-fix-rounding-bug": ["claude"],
+        "aiw-sidebar-supervised-edit": ["claude"],
     }
     idle = "printf 'Offline fixture window: no agent runs here.\\n'; exec sleep 100000"
 
     # The hooks' thinking marker for round-totals, kept fresh the way a busy
     # agent's tool calls keep it fresh.
-    marker = pathlib.Path("/tmp/amf-thinking/amf-sidebar-round-totals")
+    marker = pathlib.Path("/tmp/aiw-thinking/aiw-sidebar-round-totals")
     stop_marker = threading.Event()
 
     def keep_thinking():
@@ -165,9 +165,9 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
                 time.sleep(0.25)
         else:
             raise RuntimeError("The isolated frontend did not become ready")
-        gui = subprocess.Popen([str(workspace / "target/debug/amf-gui")], cwd=scratch, env=env,
+        gui = subprocess.Popen([str(workspace / "target/debug/aiw-gui")], cwd=scratch, env=env,
                                stdout=gui_log, stderr=subprocess.STDOUT, start_new_session=True)
-        dbpath = config / "amf/amf.db"
+        dbpath = config / "ai_workstation/aiw.db"
         for _ in range(60):
             if gui.poll() is not None:
                 raise RuntimeError(f"The isolated GUI exited ({gui.returncode}):\n" + (out / "gui.log").read_text())
@@ -189,15 +189,15 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
 
         # Pending requests on disk: an input request in the feature's own
         # directory, and a supervised-edit review in the global directory
-        # matched by AMF session.
+        # matched by AIW session.
         local = worktree["fix-rounding-bug"] / ".claude/notifications"
         local.mkdir(parents=True)
         (local / "input.json").write_text(json.dumps({
             "type": "input-request", "message": "Agent finished and is waiting for input",
             "cwd": str(worktree["fix-rounding-bug"]),
         }))
-        (config / "amf/notifications/edit.json").write_text(json.dumps({
-            "type": "diff-review", "amf_session": "amf-sidebar-supervised-edit",
+        (config / "ai_workstation/notifications/edit.json").write_text(json.dumps({
+            "type": "diff-review", "aiw_session": "aiw-sidebar-supervised-edit",
             "cwd": str(worktree["supervised-edit"]), "message": "Review edit to invoice.ts",
         }))
 
@@ -207,18 +207,18 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
             # id, project, name, branch, workdir, is_worktree, tmux, mode, review, plan,
             # status, summary, summary_at, nickname, collapsed, created, ready, issue
             ("f-round", "p-invoice", "round-totals", "round-totals", worktree["round-totals"], 1,
-             "amf-sidebar-round-totals", "vibeless", 1, 1, "idle", None, None, "Round totals", 0, ago(minutes=5), 0, None),
+             "aiw-sidebar-round-totals", "vibeless", 1, 1, "idle", None, None, "Round totals", 0, ago(minutes=5), 0, None),
             ("f-fix", "p-invoice", "fix-rounding-bug", "fix-rounding-bug", worktree["fix-rounding-bug"], 1,
-             "amf-sidebar-fix-rounding-bug", "vibe", 0, 0, "idle", "Investigating rounding for negative totals",
+             "aiw-sidebar-fix-rounding-bug", "vibe", 0, 0, "idle", "Investigating rounding for negative totals",
              ago(minutes=20), None, 1, ago(hours=3), 0, issue),
             ("f-release", "p-invoice", "release-prep", "release-prep", repo, 0,
-             "amf-sidebar-release-prep", "supervibe", 0, 0, "stopped", None, None, None, 1, ago(days=2), 1, None),
+             "aiw-sidebar-release-prep", "supervibe", 0, 0, "stopped", None, None, None, 1, ago(days=2), 1, None),
             ("f-closed", "p-invoice", "closed-experiment", "closed-experiment", worktree["closed-experiment"], 1,
-             "amf-sidebar-closed-experiment", "vibeless", 0, 0, "stopped", None, None, None, 1, ago(days=9), 0, None),
+             "aiw-sidebar-closed-experiment", "vibeless", 0, 0, "stopped", None, None, None, 1, ago(days=9), 0, None),
             ("f-edit", "p-invoice", "supervised-edit", "supervised-edit", worktree["supervised-edit"], 1,
-             "amf-sidebar-supervised-edit", "vibeless", 0, 0, "idle", None, None, None, 1, ago(minutes=40), 0, None),
+             "aiw-sidebar-supervised-edit", "vibeless", 0, 0, "idle", None, None, None, 1, ago(minutes=40), 0, None),
             ("f-landing", "p-docs", "landing-copy", "landing-copy", docs, 0,
-             "amf-sidebar-landing-copy", "vibe", 0, 0, "stopped", None, None, None, 1, ago(days=1), 0, None),
+             "aiw-sidebar-landing-copy", "vibe", 0, 0, "stopped", None, None, None, 1, ago(days=1), 0, None),
         ]
         sessions_rows = [
             # id, feature, kind, label, window, claude id, stopped
@@ -263,10 +263,10 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
                        ((int(version[0]) if version else 0) + 1,))
 
         subprocess.run(
-            ["/usr/bin/python3", os.environ.get("AMF_GUI_CAPTURE_FRAMES",
+            ["/usr/bin/python3", os.environ.get("AIW_GUI_CAPTURE_FRAMES",
                                                 str(workspace / "scripts/dev/screenshot/capture-gui-sidebar-frames.py")),
              str(out), str(gui.pid), inspector_address, str(dbpath)],
-            # The driver is not AMF: it keeps the real HOME, where the capture
+            # The driver is not AIW: it keeps the real HOME, where the capture
             # helpers' Python modules may be installed per user.
             env=os.environ.copy(), check=True,
         )
@@ -276,7 +276,7 @@ with tempfile.TemporaryDirectory(prefix="amf-gui-sidebar-") as temporary:
         assert all(not part.startswith("query=mutation") for call in calls for part in call), calls
         # Reading notifications never consumes them.
         assert (local / "input.json").exists()
-        assert (config / "amf/notifications/edit.json").exists()
+        assert (config / "ai_workstation/notifications/edit.json").exists()
         print(f"PASS: {len(calls)} offline read-only gh call(s); notification files untouched", flush=True)
     finally:
         stop_marker.set()

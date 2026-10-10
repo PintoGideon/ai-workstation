@@ -1,6 +1,6 @@
 use super::support::store_with_feature;
 use crate::app::App;
-use crate::db::AmfDb;
+use crate::db::AiwDb;
 use crate::gui_contract::GuiHandle;
 use crate::gui_screenshots::{self, EvidenceSelection};
 use crate::project::{ProjectStatus, SessionKind};
@@ -17,7 +17,7 @@ fn app(dir: &std::path::Path) -> App {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.db = Some(AmfDb::open(&dir.join("db")).unwrap());
+    app.db = Some(AiwDb::open(&dir.join("db")).unwrap());
     app
 }
 
@@ -174,7 +174,7 @@ fn successful_and_failed_foreground_deletion_have_different_evidence_lifetimes()
         app.mode = AppMode::DeletingFeatureInProgress(DeletingFeatureState {
             project_name: "my-project".into(),
             feature_name: "my-feat".into(),
-            tmux_session: "amf-my-feat".into(),
+            tmux_session: "aiw-my-feat".into(),
             is_worktree: true,
             repo: dir.path().to_path_buf(),
             workdir: dir.path().to_path_buf(),

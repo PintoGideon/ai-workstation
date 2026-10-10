@@ -125,7 +125,7 @@ fn draw(frame: &mut Frame, view: AdviceView<'_>, theme: &Theme) {
         ),
         AdviceScope::ExpertPlanReview => (
             "Draft plan → Expert review",
-            "Advice only for the reviewer. Return to AMF's Expert picker to choose model and effort.",
+            "Advice only for the reviewer. Return to AIW's Expert picker to choose model and effort.",
         ),
         AdviceScope::InitialLaunch => (
             "Plan → implementation",

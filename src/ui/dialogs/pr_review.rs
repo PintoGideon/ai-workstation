@@ -725,7 +725,7 @@ pub fn draw_pr_review_list(frame: &mut Frame, state: &PrReviewListState, theme: 
                     Line::from(""),
                     Line::from(Span::styled("  Loading open pull requests…", text)),
                     Line::from(Span::styled(
-                        "  You can keep using AMF; Esc closes this, r restarts the load.",
+                        "  You can keep using AIW; Esc closes this, r restarts the load.",
                         muted,
                     )),
                 ]),
@@ -951,10 +951,10 @@ pub fn draw_pr_review(
     };
     let key_hints: Vec<String> = if state
         .selected_comment()
-        .is_some_and(PrComment::is_amf_followup_reply)
+        .is_some_and(PrComment::is_aiw_followup_reply)
     {
         [
-            "AMF follow-up · context only",
+            "AIW follow-up · context only",
             "j/k move",
             "^d/^u scroll",
             resolved_hint,
@@ -1357,7 +1357,7 @@ fn draw_reply_dialog(
     let attribution = if agent_drafted {
         crate::app::pr_review::AI_ATTRIBUTION_FOOTER
     } else {
-        crate::app::pr_review::AMF_ATTRIBUTION_FOOTER
+        crate::app::pr_review::AIW_ATTRIBUTION_FOOTER
     };
     let mut disclosure = Vec::new();
     if agent_drafted && let Some(metadata) = &reply.generation_metadata {
@@ -2351,7 +2351,7 @@ fn draw_reply_kind_pick(frame: &mut Frame, pick: &ReplyKindPickState, theme: &Th
 /// "Mark" picker (`m`): three rows — Done (local), Skip (local), Resolve on
 /// GitHub — reflecting the selected comment's current state. The GitHub row
 /// is deliberately styled apart from the two local ones (a distinct color)
-/// since it's the only one of the three that writes anywhere outside AMF.
+/// since it's the only one of the three that writes anywhere outside AIW.
 fn draw_mark_pick(
     frame: &mut Frame,
     pick: &MarkPickState,
@@ -2532,7 +2532,7 @@ fn comment_list_line<'a>(
     theme: &Theme,
     width: usize,
 ) -> Line<'a> {
-    let amf_authored = c.is_amf_authored();
+    let aiw_authored = c.is_aiw_authored();
     let context_only = !c.is_actionable();
     let marker = if c.is_resolved { "✓" } else { " " };
     // A leading `●` flags comments marked (space) for the `F` batch fix.
@@ -2560,7 +2560,7 @@ fn comment_list_line<'a>(
     let triage_span = format!("[{}] ", c.triage.marker());
     let marker_span = format!("{marker} ");
     let author_span = format!("@{}  ", c.author);
-    let attribution_span = if amf_authored { "[via AMF] " } else { "" };
+    let attribution_span = if aiw_authored { "[via AIW] " } else { "" };
 
     // Everything before the location is fixed-width; give the rest to the
     // location and left-ellipsize so the tail (filename:line) survives.
@@ -2709,13 +2709,13 @@ fn draw_comment_detail(
         ),
         chip(kind_label(&c.kind), theme.text_muted.to_color()),
     ]));
-    if c.is_amf_authored()
+    if c.is_aiw_authored()
         && let Some(line) = lines.last_mut()
     {
         let label = if c.is_actionable() {
-            "via AMF"
+            "via AIW"
         } else {
-            "via AMF · context only"
+            "via AIW · context only"
         };
         line.spans.push(chip(label, theme.text_muted.to_color()));
     }
@@ -2778,7 +2778,7 @@ fn draw_comment_detail(
         }
     }
 
-    // Replies already posted to this thread — however they got there. AMF's
+    // Replies already posted to this thread — however they got there. AIW's
     // own `R`/`n` flow marks the comment `Done`/`Skipped` locally, but a reply
     // posted some other way (a headless agent shelling out to `gh` directly)
     // leaves no local triage record at all — the reply is just another fetched
@@ -2794,8 +2794,8 @@ fn draw_comment_detail(
                 format!("↳ @{}", reply.author),
                 Style::default().fg(theme.secondary.to_color()),
             )];
-            if reply.is_amf_authored() {
-                spans.push(chip("via AMF", theme.text_muted.to_color()));
+            if reply.is_aiw_authored() {
+                spans.push(chip("via AIW", theme.text_muted.to_color()));
             }
             if reply.outdated {
                 spans.push(chip("outdated", theme.warning.to_color()));
@@ -3680,8 +3680,8 @@ mod tests {
             ai_summary: None,
         };
         let paths = crate::app::review_memory::ReviewMemoryPaths {
-            project: std::path::PathBuf::from("/repo/.amf/review-memory.md"),
-            global: std::path::PathBuf::from("/home/u/.config/amf/review-memory.md"),
+            project: std::path::PathBuf::from("/repo/.aiw/review-memory.md"),
+            global: std::path::PathBuf::from("/home/u/.config/ai_workstation/review-memory.md"),
         };
         let theme = Theme::default();
         let backend = TestBackend::new(100, 30);
@@ -3710,7 +3710,7 @@ mod tests {
     fn memory_add_dialog_names_the_project_doc_by_default() {
         let rendered = render_memory_add(crate::app::review_memory::MemoryScope::Project);
         assert!(rendered.contains("Add to project memory"));
-        assert!(rendered.contains("/repo/.amf/review-memory.md"));
+        assert!(rendered.contains("/repo/.aiw/review-memory.md"));
         assert!(rendered.contains("[g] project/global"));
     }
 
@@ -3718,9 +3718,9 @@ mod tests {
     fn memory_add_dialog_names_the_global_doc_under_global_scope() {
         let rendered = render_memory_add(crate::app::review_memory::MemoryScope::Global);
         assert!(rendered.contains("Add to global memory"));
-        assert!(rendered.contains("/home/u/.config/amf/review-memory.md"));
+        assert!(rendered.contains("/home/u/.config/ai_workstation/review-memory.md"));
         assert!(
-            !rendered.contains("/repo/.amf/review-memory.md"),
+            !rendered.contains("/repo/.aiw/review-memory.md"),
             "the project path shouldn't linger once the scope is global"
         );
     }
@@ -3730,9 +3730,9 @@ mod tests {
 
         let pick = crate::app::BootstrapPickState { selected: 0, scope };
         let path = match scope {
-            crate::app::review_memory::MemoryScope::Project => "/repo/.amf/review-memory.md",
+            crate::app::review_memory::MemoryScope::Project => "/repo/.aiw/review-memory.md",
             crate::app::review_memory::MemoryScope::Global => {
-                "/home/u/.config/amf/review-memory.md"
+                "/h/.config/ai_workstation/review-memory.md"
             }
         };
         let theme = Theme::default();
@@ -3754,16 +3754,16 @@ mod tests {
     fn bootstrap_pick_names_the_destination_doc_for_each_scope() {
         let project = render_bootstrap_pick(crate::app::review_memory::MemoryScope::Project);
         assert!(project.contains("project doc"));
-        assert!(project.contains("/repo/.amf/review-memory.md"));
+        assert!(project.contains("/repo/.aiw/review-memory.md"));
         assert!(project.contains("[g] project/global"));
 
         let global = render_bootstrap_pick(crate::app::review_memory::MemoryScope::Global);
         assert!(global.contains("global doc"));
-        assert!(global.contains("/home/u/.config/amf/review-memory.md"));
+        assert!(global.contains("/h/.config/ai_workstation/review-memory.md"));
     }
 
     #[test]
-    fn reply_dialog_discloses_the_posted_via_amf_footer() {
+    fn reply_dialog_discloses_the_posted_via_aiw_footer() {
         use ratatui::{Terminal, backend::TestBackend};
 
         let reply = crate::app::ReplyState {
@@ -3789,7 +3789,7 @@ mod tests {
             .map(|cell| cell.symbol())
             .collect();
 
-        assert!(rendered.contains("posted via AMF"));
+        assert!(rendered.contains("posted via AIW"));
     }
 
     #[test]
@@ -3827,12 +3827,12 @@ mod tests {
             .map(|cell| cell.symbol())
             .collect();
 
-        assert!(rendered.contains("drafted by AI via AMF"));
+        assert!(rendered.contains("drafted by AI via AIW"));
         assert!(rendered.contains("AI generation: harness Codex"));
         assert!(rendered.contains("model gpt-5.5"));
         assert!(rendered.contains("estimated tokens ~1.5k"));
         assert!(rendered.contains("Fix cost (est.): $0.04"));
-        assert!(!rendered.contains("posted via AMF"));
+        assert!(!rendered.contains("posted via AIW"));
     }
 
     /// The disclosure previews what will be posted, so it has to be readable in
@@ -3848,7 +3848,7 @@ mod tests {
             editor: crate::editor::TextEditor::new("Fixed the guard.".to_string()),
             agent_drafted: true,
             generation_metadata: Some(crate::app::pr_review::ReplyGenerationMetadata {
-                harness: Some("Opencode".to_string()),
+                harness: Some("Pi".to_string()),
                 model: Some("anthropic/claude-opus-4-5-20251101".to_string()),
                 estimated_tokens: Some(1_500),
                 estimated_cost: Some("$0.04".to_string()),
@@ -3875,12 +3875,12 @@ mod tests {
 
         // None of the three lines fits on one row at this width, so finding
         // each one's tail proves it wrapped rather than being clipped.
-        assert!(has("AI generation: harness Opencode · model"));
+        assert!(has("AI generation: harness Pi · model"));
         assert!(has("anthropic/claude-opus-4-5-20251101"));
         assert!(has("estimated tokens ~1.5k · Fix cost"));
         assert!(has("(est.): $0.04"));
         assert!(has("will post with a \"— drafted by AI via"));
-        assert!(has("AMF\" footer"));
+        assert!(has("AIW\" footer"));
         // The reply body and the key hints keep their rows.
         assert!(has("Fixed the guard."));
         assert!(has("[⏎] post"));
@@ -4079,18 +4079,18 @@ mod tests {
     }
 
     #[test]
-    fn comment_list_collates_amf_reply_and_labels_standalone_finding() {
+    fn comment_list_collates_aiw_reply_and_labels_standalone_finding() {
         let mut root = pr_comment_of_kind(1, CommentKind::Inline);
         root.author = "reviewer".into();
 
-        let mut amf_reply = pr_comment_of_kind(2, CommentKind::Inline);
-        amf_reply.author = "amf-reply".into();
-        amf_reply.in_reply_to = Some(1);
-        amf_reply.body = "Done.\n\n— posted via AMF".into();
+        let mut aiw_reply = pr_comment_of_kind(2, CommentKind::Inline);
+        aiw_reply.author = "aiw-reply".into();
+        aiw_reply.in_reply_to = Some(1);
+        aiw_reply.body = "Done.\n\n— posted via AIW".into();
 
         let mut ai_finding = pr_comment_of_kind(3, CommentKind::Inline);
         ai_finding.author = "ai-review".into();
-        ai_finding.body = "Finding.\n\n— AI review via AMF".into();
+        ai_finding.body = "Finding.\n\n— AI review via AIW".into();
 
         let mut human_reply = pr_comment_of_kind(4, CommentKind::Inline);
         human_reply.author = "human-reply".into();
@@ -4098,15 +4098,15 @@ mod tests {
         human_reply.body = "Please also add a test.".into();
 
         let state = pr_review_state_with_comments(
-            vec![root, amf_reply, ai_finding, human_reply],
+            vec![root, aiw_reply, ai_finding, human_reply],
             crate::app::pr_review::PrSortMode::FetchOrder,
         );
         let rendered = render_comment_list(&state);
 
         assert!(rendered.contains("@reviewer"));
-        assert!(!rendered.contains("@amf-reply"));
+        assert!(!rendered.contains("@aiw-reply"));
         assert!(rendered.contains("@ai-review"));
-        assert!(rendered.contains("[via AMF]"));
+        assert!(rendered.contains("[via AIW]"));
         assert!(rendered.contains("@human-reply"));
     }
 
@@ -4354,23 +4354,23 @@ mod tests {
     }
 
     #[test]
-    fn detail_pane_surfaces_a_reply_posted_via_amf() {
+    fn detail_pane_surfaces_a_reply_posted_via_aiw() {
         let root = pr_comment_of_kind(1, CommentKind::Inline);
         let mut reply = pr_comment_of_kind(2, CommentKind::Inline);
-        reply.author = "amf-user".into();
+        reply.author = "aiw-user".into();
         reply.in_reply_to = Some(1);
-        reply.body = "Done in `abc123`.\n\n— posted via AMF".into();
+        reply.body = "Done in `abc123`.\n\n— posted via AIW".into();
         reply.snippet = "Done in `abc123`.".into();
         let all = vec![root.clone(), reply];
 
         let rendered = render_comment_detail(&root, &all);
-        assert!(rendered.contains("↳ @amf-user"));
-        assert!(rendered.contains("via AMF"));
+        assert!(rendered.contains("↳ @aiw-user"));
+        assert!(rendered.contains("via AIW"));
         assert!(rendered.contains("Done in `abc123`."));
     }
 
     #[test]
-    fn detail_pane_surfaces_a_reply_posted_outside_amf_without_the_via_amf_chip() {
+    fn detail_pane_surfaces_a_reply_posted_outside_aiw_without_the_via_aiw_chip() {
         let root = pr_comment_of_kind(1, CommentKind::Inline);
         let mut reply = pr_comment_of_kind(2, CommentKind::Inline);
         reply.author = "headless-agent".into();
@@ -4381,16 +4381,16 @@ mod tests {
 
         let rendered = render_comment_detail(&root, &all);
         assert!(rendered.contains("↳ @headless-agent"));
-        assert!(!rendered.contains("via AMF"));
+        assert!(!rendered.contains("via AIW"));
     }
 
     #[test]
-    fn detail_pane_marks_top_level_amf_comment_as_actionable_attribution() {
+    fn detail_pane_marks_top_level_aiw_comment_as_actionable_attribution() {
         let mut finding = pr_comment_of_kind(1, CommentKind::Inline);
-        finding.body = "Finding.\n\n— AI review via AMF".into();
+        finding.body = "Finding.\n\n— AI review via AIW".into();
 
         let rendered = render_comment_detail(&finding, std::slice::from_ref(&finding));
-        assert!(rendered.contains("via AMF"));
+        assert!(rendered.contains("via AIW"));
         assert!(!rendered.contains("context only"));
     }
 

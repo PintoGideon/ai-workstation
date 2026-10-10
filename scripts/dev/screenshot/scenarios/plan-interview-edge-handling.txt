@@ -1,7 +1,7 @@
 # plan-interview-edge-handling: demonstrates the Epic 6 empty/edge paths.
 #
 # Requires --seed with a create-project payload whose repository has
-# `.amf/config.json` containing `{"skip_builtin_questions": true}` and no
+# `.aiw/config.json` containing `{"skip_builtin_questions": true}` and no
 # `plan_questions`. The scenario takes the zero-token raw-plan choice rather
 # than launching a headless model.
 

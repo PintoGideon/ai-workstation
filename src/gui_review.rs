@@ -1671,7 +1671,7 @@ mod tests {
             )
             .is_err()
         );
-        let db = crate::db::AmfDb::open(&dir.path().join("amf.db")).unwrap();
+        let db = crate::db::AiwDb::open(&dir.path().join("aiw.db")).unwrap();
         let mut store = db.load_store().unwrap();
         store.projects[0].features.clear();
         db.save_store(&store).unwrap();
@@ -1920,7 +1920,7 @@ mod tests {
     }
 
     #[test]
-    fn applying_also_invalidates_approvals_of_files_changed_outside_amf() {
+    fn applying_also_invalidates_approvals_of_files_changed_outside_aiw() {
         let (dir, mut gui, target) = fixture();
         std::fs::write(dir.path().join("repo/old.txt"), "other change\n").unwrap();
         let initial = begin(&mut gui, target).unwrap();
@@ -2115,7 +2115,7 @@ mod tests {
         let other = dir.path().join("other");
         std::fs::create_dir(&other).unwrap();
         std::fs::write(other.join("code.txt"), "other checkout\n").unwrap();
-        let db = crate::db::AmfDb::open(&dir.path().join("amf.db")).unwrap();
+        let db = crate::db::AiwDb::open(&dir.path().join("aiw.db")).unwrap();
         let mut store = db.load_store().unwrap();
         store.projects[0].features[0].workdir = other.clone();
         db.save_store(&store).unwrap();
@@ -3006,7 +3006,7 @@ mod tests {
         assert!(view.save_error.is_some());
         assert!(!gui.app_for_workflow().defer_review_progress_persist);
         // The feature disappears too: Pause can no longer succeed at all.
-        let db = crate::db::AmfDb::open(&dir.path().join("amf.db")).unwrap();
+        let db = crate::db::AiwDb::open(&dir.path().join("aiw.db")).unwrap();
         let mut store = db.load_store().unwrap();
         store.projects[0].features.clear();
         db.save_store(&store).unwrap();
@@ -3138,7 +3138,7 @@ mod tests {
         );
         gui.app_for_workflow().store.projects[0].is_git = true;
         let view = begin(&mut gui, target).unwrap();
-        let db = crate::db::AmfDb::open(&dir.path().join("amf.db")).unwrap();
+        let db = crate::db::AiwDb::open(&dir.path().join("aiw.db")).unwrap();
         let mut store = db.load_store().unwrap();
         store.projects[0].features.clear();
         db.save_store(&store).unwrap();

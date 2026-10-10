@@ -1,4 +1,4 @@
-//! SQLite persistence for prompts AMF computed to seed a session but could
+//! SQLite persistence for prompts AIW computed to seed a session but could
 //! not deliver because the launch that would have carried them failed.
 //!
 //! Deliberately generic: any launch primitive that seeds a composer can call
@@ -84,12 +84,12 @@ pub fn delete_for_workdir(conn: &Connection, workdir: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use tempfile::NamedTempFile;
 
-    fn open_temp_db() -> (NamedTempFile, AmfDb) {
+    fn open_temp_db() -> (NamedTempFile, AiwDb) {
         let tmp = NamedTempFile::new().unwrap();
-        let db = AmfDb::open(tmp.path()).unwrap();
+        let db = AiwDb::open(tmp.path()).unwrap();
         (tmp, db)
     }
 

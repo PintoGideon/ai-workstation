@@ -7,12 +7,14 @@ IDEAS.md
 .claude/settings.json
 .codex/
 
-# AMF / opencode runtime-generated artifacts — never part of a branch's
+# AIW runtime-generated artifacts — never part of a branch's
 # real changes. Nothing in here is hand-authored: project config lives in
-# the tracked `amf.json` at the repo root, so this ignore has no
+# the tracked `aiw.json` at the repo root, so this ignore has no
 # exceptions and needs no `git add -f`.
-.amf/
+.aiw/
 tui.json
+# Upstream AMF's equivalents (old checkouts and worktrees shared with AMF).
+.amf/
 
 # .claude/ runtime files are also ignored via .claude/.gitignore; listed
 # here too so fresh checkouts/worktrees ignore them before that file exists.
@@ -22,8 +24,10 @@ tui.json
 .claude/final-review-progress.json
 .claude/final-review-snapshot.json
 .claude/latest-prompt.txt
+.claude/aiw-hook-state.json
 .claude/amf-hook-state.json
 .claude/notifications/
+.claude/skills/aiw-*/
 .claude/skills/amf-*/
 
 CLAUDE.local.md
@@ -39,9 +43,10 @@ docker/*
 !docker/no-tmux/**
 .dockerignore
 docs/docker-screenshots.md
+AIW_PLAN.md
 AMF_PLAN.md
 
-# GUI shell (Tauri + frontend) build/dependency output — see AMF_PLAN.md's
+# GUI shell (Tauri + frontend) build/dependency output — see AIW_PLAN.md's
 # package-layout decision. `/target` above already covers gui/src-tauri's
 # Cargo output since it's a workspace member.
 gui/node_modules/

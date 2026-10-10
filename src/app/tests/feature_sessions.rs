@@ -32,14 +32,6 @@ fn store_with_stopped_agent_session(kind: SessionKind, resume_id: Option<&str>) 
                 });
             }
         }
-        SessionKind::Opencode => {
-            if let Some(id) = resume_id {
-                session.set_token_usage_source_exact(TokenUsageSource {
-                    provider: TokenUsageProvider::Opencode,
-                    id: id.to_string(),
-                });
-            }
-        }
         _ => {}
     }
     store
@@ -689,11 +681,11 @@ fn create_feature_branch_enter_allows_same_name_in_different_project() {
 fn feature_tmux_session_names_are_scoped_by_project() {
     assert_eq!(
         tmux_session_name("Project One", "main"),
-        "amf-project-one-main"
+        "aiw-project-one-main"
     );
     assert_eq!(
         tmux_session_name("Project Two", "main"),
-        "amf-project-two-main"
+        "aiw-project-two-main"
     );
 }
 
@@ -718,7 +710,7 @@ fn duplicate_legacy_tmux_name_is_reassigned_without_changing_session_identity() 
     app.disambiguate_feature_tmux_session(0, 1).unwrap();
 
     let features = &app.store.projects[0].features;
-    assert_eq!(features[0].tmux_session, "amf-my-feat");
+    assert_eq!(features[0].tmux_session, "aiw-my-feat");
     assert_ne!(features[1].tmux_session, features[0].tmux_session);
     assert_eq!(features[0].sessions[0].id, first_id);
     assert_eq!(features[1].sessions[0].id, second_id);
@@ -748,8 +740,8 @@ fn duplicate_legacy_tmux_name_does_not_rename_the_genuinely_running_feature() {
     app.disambiguate_feature_tmux_session(0, 0).unwrap();
 
     let features = &app.store.projects[0].features;
-    assert_eq!(features[0].tmux_session, "amf-my-feat");
-    assert_eq!(features[1].tmux_session, "amf-my-feat");
+    assert_eq!(features[0].tmux_session, "aiw-my-feat");
+    assert_eq!(features[1].tmux_session, "aiw-my-feat");
 }
 
 #[test]
@@ -792,7 +784,7 @@ fn create_feature_disallowed_agent_sets_error() {
     let store = store_with_repo(repo.path().to_path_buf(), ProjectStatus::Stopped);
     let mut app = app_in_creating_feature_mode(store, "my-project", "other-feat", false);
     if let AppMode::CreatingFeature(state) = &mut app.mode {
-        state.agent = AgentKind::Opencode;
+        state.agent = AgentKind::Pi;
         state.agent_index = 1;
     }
 
@@ -958,7 +950,7 @@ fn startup_prompt_overlay_test(agent: AgentKind, expected_window: &'static str) 
     let repo = TempDir::new().unwrap();
     let workdir = repo.path().join(".worktrees").join("coached");
     std::fs::create_dir_all(&workdir).unwrap();
-    let expected_session = "amf-my-project-coached";
+    let expected_session = "aiw-my-project-coached";
     let mode = if agent == AgentKind::Codex {
         VibeMode::Vibe
     } else {
@@ -1011,16 +1003,11 @@ fn startup_prompt_overlay_test(agent: AgentKind, expected_window: &'static str) 
                 .times(1)
                 .returning(|_, _, _, _, _| Ok(()));
         }
-        AgentKind::Opencode => {
-            tmux.expect_launch_opencode()
-                .times(1)
-                .returning(|_, _, _| Ok(()));
-        }
         AgentKind::Codex => {
             tmux.expect_launch_codex()
                 .times(1)
                 .withf(|session, window, feature_session_id, resume, extra_args| {
-                    session == "amf-my-project-coached"
+                    session == "aiw-my-project-coached"
                         && window == "codex"
                         && !feature_session_id.is_empty()
                         && resume.is_none()
@@ -1030,6 +1017,12 @@ fn startup_prompt_overlay_test(agent: AgentKind, expected_window: &'static str) 
         }
         AgentKind::Pi => {
             tmux.expect_launch_pi().times(1).returning(|_, _, _| Ok(()));
+        }
+        // FORK
+        AgentKind::Gemini | AgentKind::Cursor => {
+            tmux.expect_launch_program()
+                .times(1)
+                .returning(|_, _, _, _, _| Ok(()));
         }
     }
     tmux.expect_select_window()
@@ -1116,11 +1109,6 @@ fn finish_feature_launch_opens_startup_prompt_for_claude() {
 }
 
 #[test]
-fn finish_feature_launch_opens_startup_prompt_for_opencode() {
-    startup_prompt_overlay_test(AgentKind::Opencode, "opencode");
-}
-
-#[test]
 fn finish_feature_launch_opens_startup_prompt_for_codex() {
     startup_prompt_overlay_test(AgentKind::Codex, "codex");
 }
@@ -1138,7 +1126,7 @@ fn restore_claude_session_resizes_window_before_launch_when_viewport_known() {
         branch: "restore-me".to_string(),
         workdir: workdir.clone(),
         is_worktree: true,
-        tmux_session: "amf-restore-me".to_string(),
+        tmux_session: "aiw-restore-me".to_string(),
         sessions: vec![],
         collapsed: false,
         mode: VibeMode::default(),
@@ -1183,7 +1171,7 @@ fn restore_claude_session_resizes_window_before_launch_when_viewport_known() {
 
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists()
-        .withf(|session| session == "amf-restore-me")
+        .withf(|session| session == "aiw-restore-me")
         .times(3)
         .return_const(false);
     tmux.expect_create_session_with_window()
@@ -1198,7 +1186,7 @@ fn restore_claude_session_resizes_window_before_launch_when_viewport_known() {
     tmux.expect_resize_pane()
         .times(1)
         .withf(|session, window, cols, rows| {
-            session == "amf-restore-me" && window == "claude" && *cols == 120 && *rows == 40
+            session == "aiw-restore-me" && window == "claude" && *cols == 120 && *rows == 40
         })
         .returning(move |_, window, _, _| {
             if window == "claude" {
@@ -1211,7 +1199,7 @@ fn restore_claude_session_resizes_window_before_launch_when_viewport_known() {
         .withf(
             move |session, window, feature_session_id, resume_id, extra_args| {
                 resized_for_launch.load(Ordering::SeqCst)
-                    && session == "amf-restore-me"
+                    && session == "aiw-restore-me"
                     && window == "claude"
                     && !feature_session_id.is_empty()
                     && resume_id.as_deref() == Some("claude-session-123")
@@ -1221,7 +1209,7 @@ fn restore_claude_session_resizes_window_before_launch_when_viewport_known() {
         .returning(|_, _, _, _, _| Ok(()));
     tmux.expect_select_window()
         .times(1)
-        .withf(|session, window| session == "amf-restore-me" && window == "claude")
+        .withf(|session, window| session == "aiw-restore-me" && window == "claude")
         .returning(|_, _| Ok(()));
 
     let tmp = NamedTempFile::new().unwrap();
@@ -1266,7 +1254,7 @@ fn restore_claude_session_only_affects_the_targeted_session() {
         branch: "restore-me".to_string(),
         workdir: workdir.clone(),
         is_worktree: true,
-        tmux_session: "amf-restore-me".to_string(),
+        tmux_session: "aiw-restore-me".to_string(),
         sessions: vec![],
         collapsed: false,
         mode: VibeMode::default(),
@@ -1378,12 +1366,12 @@ fn enter_view_from_feature_selects_pi_harness_and_shows_startup_mask() {
 
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists()
-        .withf(|session| session == "amf-my-feat")
+        .withf(|session| session == "aiw-my-feat")
         .times(1)
         .return_const(false);
     tmux.expect_create_session_with_window()
         .withf(|session, window, workdir| {
-            session == "amf-my-feat"
+            session == "aiw-my-feat"
                 && window == "pi"
                 && workdir == std::path::Path::new("/tmp/test-workdir")
         })
@@ -1391,7 +1379,7 @@ fn enter_view_from_feature_selects_pi_harness_and_shows_startup_mask() {
         .returning(|_, _, _| Ok(()));
     tmux.expect_set_session_env()
         .withf(|session, key, value| {
-            session == "amf-my-feat" && key == "AMF_SESSION" && value == "amf-my-feat"
+            session == "aiw-my-feat" && key == "AIW_SESSION" && value == "aiw-my-feat"
         })
         .times(1)
         .returning(|_, _, _| Ok(()));
@@ -1400,12 +1388,12 @@ fn enter_view_from_feature_selects_pi_harness_and_shows_startup_mask() {
         .returning(|_, _, _| Ok(()));
     tmux.expect_launch_pi()
         .withf(|session, window, feature_session_id| {
-            session == "amf-my-feat" && window == "pi" && !feature_session_id.is_empty()
+            session == "aiw-my-feat" && window == "pi" && !feature_session_id.is_empty()
         })
         .times(1)
         .returning(|_, _, _| Ok(()));
     tmux.expect_select_window()
-        .withf(|session, window| session == "amf-my-feat" && window == "pi")
+        .withf(|session, window| session == "aiw-my-feat" && window == "pi")
         .times(1)
         .returning(|_, _| Ok(()));
 
@@ -1454,7 +1442,7 @@ fn finish_feature_launch_vibeless_injects_custom_diff_review_hook_on_worktree_cr
     let tmp = NamedTempFile::new().unwrap();
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
     app.store_path = tmp.path().to_path_buf();
-    app.config.diff_review_viewer = DiffReviewViewer::Amf;
+    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
 
     app.finish_feature_launch(PreparedFeatureLaunch {
         model_selection: None,
@@ -1493,143 +1481,6 @@ fn finish_feature_launch_vibeless_injects_custom_diff_review_hook_on_worktree_cr
     assert!(
         settings.contains("\"matcher\": \"Edit|Write\""),
         "expected vibeless PreToolUse matcher to be limited to Edit|Write, got: {settings}"
-    );
-}
-
-#[test]
-fn finish_feature_launch_vibeless_copies_opencode_change_tracker_plugin() {
-    let repo = TempDir::new().unwrap();
-    let workdir = repo.path().join(".worktrees").join("diffy-opencode");
-    std::fs::create_dir_all(&workdir).unwrap();
-
-    let store = store_with_repo(repo.path().to_path_buf(), ProjectStatus::Stopped);
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists().times(1).return_const(false);
-    tmux.expect_create_session_with_window()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_set_session_env()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_create_window()
-        .times(0)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_launch_opencode()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_select_window()
-        .times(1)
-        .returning(|_, _| Ok(()));
-
-    let tmp = NamedTempFile::new().unwrap();
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.store_path = tmp.path().to_path_buf();
-
-    app.finish_feature_launch(PreparedFeatureLaunch {
-        model_selection: None,
-        project_name: "my-project".to_string(),
-        feature_name: None,
-        branch: "diffy-opencode".to_string(),
-        workdir: workdir.clone(),
-        is_worktree: true,
-        mode: VibeMode::Vibeless,
-        review: false,
-        plan_mode: false,
-        quick_plan: false,
-        agent: AgentKind::Opencode,
-        create_terminal: false,
-        session_name: "Opencode 1".to_string(),
-        enable_chrome: false,
-        remote_control: false,
-        steering_enabled: false,
-        hook_succeeded: None,
-        startup_prompt: None,
-        todo_origin: None,
-        issue_source: None,
-    })
-    .unwrap();
-
-    let plugin_dir = workdir.join(".opencode").join("plugins");
-    let change_tracker = plugin_dir.join("change-tracker.js");
-    assert!(
-        change_tracker.exists(),
-        "expected vibeless Opencode launch to install change-tracker.js in {}, available files: {:?}",
-        plugin_dir.display(),
-        std::fs::read_dir(&plugin_dir)
-            .map(|entries| {
-                entries
-                    .flatten()
-                    .map(|entry| entry.file_name().to_string_lossy().into_owned())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default()
-    );
-    let installed = std::fs::read_to_string(change_tracker).unwrap();
-    assert!(
-        installed.contains("original_file")
-            && installed.contains("proposed_file")
-            && installed.contains("buildReviewFiles"),
-        "expected installed change-tracker.js to be the structured diff-review version, got: {installed}"
-    );
-    assert!(
-        installed.contains("amf_feature_session_id")
-            && installed.contains("provider_session_id")
-            && installed.contains("AMF_FEATURE_SESSION_ID")
-            && installed.contains("AMF_ACTIVE"),
-        "expected installed change-tracker.js to include session identity metadata, got: {installed}"
-    );
-}
-
-#[test]
-fn refresh_opencode_plugins_overwrites_stale_change_tracker_plugin() {
-    let repo = TempDir::new().unwrap();
-    let workdir = repo.path().join(".worktrees").join("diffy-opencode");
-    let plugin_dir = workdir.join(".opencode").join("plugins");
-    std::fs::create_dir_all(&plugin_dir).unwrap();
-    std::fs::write(plugin_dir.join("change-tracker.js"), "stale plugin").unwrap();
-
-    // Remove the version stamp so refresh_opencode_plugins_for_store
-    // doesn't short-circuit even if another test already marked hooks current.
-    let stamp = crate::project::amf_config_dir().join("last_hook_refresh_version");
-    let _ = std::fs::remove_file(&stamp);
-
-    crate::app::setup::ensure_notify_scripts();
-
-    let mut store = store_with_repo(repo.path().to_path_buf(), ProjectStatus::Stopped);
-    let feature = &mut store.projects[0].features[0];
-    feature.workdir = workdir.clone();
-    feature.is_worktree = true;
-    feature.agent = AgentKind::Opencode;
-    feature.mode = VibeMode::Vibeless;
-
-    let refreshed = crate::app::setup::refresh_opencode_plugins_for_store(&store);
-    assert_eq!(refreshed, 1);
-
-    let installed = std::fs::read_to_string(plugin_dir.join("change-tracker.js")).unwrap();
-    assert!(
-        installed.contains("original_file")
-            && installed.contains("proposed_file")
-            && installed.contains("buildReviewFiles"),
-        "expected stale change-tracker.js to be replaced with the structured diff-review version, got: {installed}"
-    );
-
-    let sidebar_plugin = std::fs::read_to_string(plugin_dir.join("sidebar-state.js")).unwrap();
-    assert!(
-        sidebar_plugin.contains("SidebarStatePlugin")
-            && sidebar_plugin.contains("opencode-sidebar")
-            && sidebar_plugin.contains("state.liveSummary = null")
-            && sidebar_plugin.contains("role !== \"assistant\"")
-            && sidebar_plugin.contains("pruneSidebarFiles")
-            && sidebar_plugin.contains("SIDEBAR_MAX_FILES")
-            && sidebar_plugin.contains("normalizePrompt(payload?.message?.summary?.content)")
-            && sidebar_plugin.contains("function eventPayload(event)")
-            && sidebar_plugin.contains("amf_feature_session_id")
-            && sidebar_plugin.contains("provider_session_id")
-            && sidebar_plugin.contains("event: async ({ event })")
-            && sidebar_plugin.contains("switch (event?.type)")
-            && sidebar_plugin.contains("case \"todo.updated\"")
-            && sidebar_plugin.contains("case \"message.updated\""),
-        "expected sidebar-state.js to be installed, got: {sidebar_plugin}"
     );
 }
 
@@ -1700,7 +1551,7 @@ fn start_create_feature_uses_project_preferred_agent_when_allowed() {
     match &app.mode {
         AppMode::CreatingFeature(state) => {
             assert_eq!(state.agent, AgentKind::Codex);
-            assert_eq!(state.agent_index, 2);
+            assert_eq!(state.agent_index, 1);
             assert!(!state.steering_enabled);
         }
         _ => panic!("expected CreatingFeature mode"),
@@ -1864,7 +1715,7 @@ fn open_session_picker_selects_project_preferred_agent_by_default() {
         branch: "my-feat".to_string(),
         workdir: repo.path().to_path_buf(),
         is_worktree: false,
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         sessions: vec![],
         collapsed: false,
         mode: VibeMode::default(),
@@ -1953,13 +1804,13 @@ fn create_feature_session_name_enter_creates_and_starts_feature() {
     let repo = TempDir::new().unwrap();
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists()
-        .withf(|session| session == "amf-automation-project-feature-1")
+        .withf(|session| session == "aiw-automation-project-feature-1")
         .times(1)
         .return_const(false);
     let expected_repo = repo.path().to_path_buf();
     tmux.expect_create_session_with_window()
         .withf(move |session, window, workdir| {
-            session == "amf-automation-project-feature-1"
+            session == "aiw-automation-project-feature-1"
                 && window == "claude"
                 && workdir == expected_repo.as_path()
         })
@@ -1974,7 +1825,7 @@ fn create_feature_session_name_enter_creates_and_starts_feature() {
     tmux.expect_launch_claude()
         .withf(
             |session, window, feature_session_id, resume_id, extra_args| {
-                session == "amf-automation-project-feature-1"
+                session == "aiw-automation-project-feature-1"
                     && window == "claude"
                     && !feature_session_id.is_empty()
                     && resume_id.is_none()
@@ -1985,7 +1836,7 @@ fn create_feature_session_name_enter_creates_and_starts_feature() {
         .returning(|_, _, _, _, _| Ok(()));
     tmux.expect_select_window()
         .withf(|session, window| {
-            session == "amf-automation-project-feature-1" && window == "claude"
+            session == "aiw-automation-project-feature-1" && window == "claude"
         })
         .times(1)
         .returning(|_, _| Ok(()));
@@ -2227,7 +2078,7 @@ fn adding_session_starts_stopped_feature() {
         .times(1)
         .returning(|_, _| Ok(()));
     tmux.expect_create_window()
-        .withf(|session, window, _| session == "amf-my-feat" && window == "terminal")
+        .withf(|session, window, _| session == "aiw-my-feat" && window == "terminal")
         .times(1)
         .returning(|_, _, _| Ok(()));
 
@@ -2259,7 +2110,7 @@ fn starting_stopped_feature_limits_saved_agent_autostart() {
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists().times(1).return_const(false);
     tmux.expect_create_session_with_window()
-        .withf(|session, window, _| session == "amf-my-feat" && window == "claude")
+        .withf(|session, window, _| session == "aiw-my-feat" && window == "claude")
         .times(1)
         .returning(|_, _, _| Ok(()));
     tmux.expect_set_session_env()
@@ -2267,17 +2118,17 @@ fn starting_stopped_feature_limits_saved_agent_autostart() {
         .returning(|_, _, _| Ok(()));
     tmux.expect_create_window()
         .withf(|session, window, _| {
-            session == "amf-my-feat" && matches!(window, "claude-2" | "codex")
+            session == "aiw-my-feat" && matches!(window, "claude-2" | "codex")
         })
         .times(2)
         .returning(|_, _, _| Ok(()));
     tmux.expect_launch_claude()
-        .withf(|session, window, _, _, _| session == "amf-my-feat" && window == "claude")
+        .withf(|session, window, _, _, _| session == "aiw-my-feat" && window == "claude")
         .times(1)
         .returning(|_, _, _, _, _| Ok(()));
     tmux.expect_launch_codex().times(0);
     tmux.expect_select_window()
-        .withf(|session, window| session == "amf-my-feat" && window == "claude")
+        .withf(|session, window| session == "aiw-my-feat" && window == "claude")
         .times(1)
         .returning(|_, _| Ok(()));
 
@@ -2372,7 +2223,7 @@ fn reload_extension_config_uses_project_repo_for_worktree_feature() {
         branch: "my-feat".to_string(),
         workdir,
         is_worktree: true,
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         sessions: vec![],
         collapsed: false,
         mode: VibeMode::default(),
@@ -2435,7 +2286,7 @@ fn stop_feature_transitions_idle_to_stopped() {
 
     let mut tmux = MockTmuxOps::new();
     tmux.expect_kill_session()
-        .withf(|s| s == "amf-my-feat")
+        .withf(|s| s == "aiw-my-feat")
         .times(1)
         .returning(|_| Ok(()));
 
@@ -2443,31 +2294,9 @@ fn stop_feature_transitions_idle_to_stopped() {
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
     app.store_path = tmp.path().to_path_buf();
     app.selection = Selection::Feature(0, 0);
-    app.pending_sidebar_loads.insert("amf-my-feat".to_string());
+    app.pending_sidebar_loads.insert("aiw-my-feat".to_string());
     app.latest_prompt_cache
-        .insert("amf-my-feat".to_string(), prompt_entry("cached prompt"));
-    app.opencode_sidebar_cache.insert(
-        "amf-my-feat".to_string(),
-        crate::app::opencode_storage::OpencodeSidebarData {
-            session_id: "ses-1".to_string(),
-            title: Some("cached".to_string()),
-            latest_prompt: None,
-            status: None,
-            last_tool: None,
-            todo_count: None,
-            todo_preview: Vec::new(),
-            pending_permission: None,
-            last_error: None,
-            lsp_summary: None,
-            live_summary: None,
-            model: None,
-            provider: None,
-            reasoning_tokens: None,
-            additions: None,
-            deletions: None,
-            files: None,
-        },
-    );
+        .insert("aiw-my-feat".to_string(), prompt_entry("cached prompt"));
 
     app.stop_feature().unwrap();
 
@@ -2480,9 +2309,8 @@ fn stop_feature_transitions_idle_to_stopped() {
         "got: {:?}",
         app.message
     );
-    assert!(app.latest_prompt_for_session("amf-my-feat").is_none());
-    assert!(!app.opencode_sidebar_cache.contains_key("amf-my-feat"));
-    assert!(!app.pending_sidebar_loads.contains("amf-my-feat"));
+    assert!(app.latest_prompt_for_session("aiw-my-feat").is_none());
+    assert!(!app.pending_sidebar_loads.contains("aiw-my-feat"));
 }
 
 // ── stop_session (issue #634: `x` on a session must stop, not delete) ──
@@ -2491,7 +2319,7 @@ fn stop_feature_transitions_idle_to_stopped() {
 fn stop_session_on_a_feature_s_only_session_delegates_to_stop_feature() {
     let mut tmux = MockTmuxOps::new();
     tmux.expect_kill_session()
-        .withf(|s| s == "amf-my-feat")
+        .withf(|s| s == "aiw-my-feat")
         .times(1)
         .returning(|_| Ok(()));
 
@@ -2519,7 +2347,7 @@ fn stop_session_kills_only_that_window_and_keeps_the_record() {
         .withf(|_, w| w == "Claude-1")
         .returning(|_, _| true);
     tmux.expect_kill_window()
-        .withf(|s, w| s == "amf-my-feat" && w == "Claude-1")
+        .withf(|s, w| s == "aiw-my-feat" && w == "Claude-1")
         .times(1)
         .returning(|_, _| Ok(()));
 
@@ -2586,11 +2414,11 @@ fn restart_stopped_session_window_recreates_a_dead_window() {
         .withf(|_, w| w == "Claude-2")
         .returning(|_, _| false);
     tmux.expect_create_window()
-        .withf(|s, w, _| s == "amf-my-feat" && w == "Claude-2")
+        .withf(|s, w, _| s == "aiw-my-feat" && w == "Claude-2")
         .times(1)
         .returning(|_, _, _| Ok(()));
     tmux.expect_launch_claude()
-        .withf(|s, w, _, resume, _| s == "amf-my-feat" && w == "Claude-2" && resume.is_none())
+        .withf(|s, w, _, resume, _| s == "aiw-my-feat" && w == "Claude-2" && resume.is_none())
         .times(1)
         .returning(|_, _, _, _, _| Ok(()));
 
@@ -2624,12 +2452,12 @@ fn restart_stopped_session_window_resumes_the_claude_session() {
         .withf(|_, w| w == "Claude-2")
         .returning(|_, _| false);
     tmux.expect_create_window()
-        .withf(|s, w, _| s == "amf-my-feat" && w == "Claude-2")
+        .withf(|s, w, _| s == "aiw-my-feat" && w == "Claude-2")
         .times(1)
         .returning(|_, _, _| Ok(()));
     tmux.expect_launch_claude()
         .withf(|s, w, _, resume, _| {
-            s == "amf-my-feat" && w == "Claude-2" && resume.as_deref() == Some("prior-session-id")
+            s == "aiw-my-feat" && w == "Claude-2" && resume.as_deref() == Some("prior-session-id")
         })
         .times(1)
         .returning(|_, _, _, _, _| Ok(()));
@@ -2948,7 +2776,7 @@ fn feature_start_with_every_session_stopped_starts_them_all() {
 fn stopping_the_last_running_session_stops_the_feature_without_flagging_it() {
     let mut tmux = MockTmuxOps::new();
     tmux.expect_kill_session()
-        .withf(|s| s == "amf-my-feat")
+        .withf(|s| s == "aiw-my-feat")
         .times(1)
         .returning(|_| Ok(()));
     tmux.expect_kill_window().times(0);
@@ -3093,34 +2921,12 @@ fn complete_deleting_feature_clears_sidebar_caches() {
     );
     app.store_path = tmp.path().to_path_buf();
     app.latest_prompt_cache
-        .insert("amf-my-feat".to_string(), prompt_entry("cached prompt"));
-    app.opencode_sidebar_cache.insert(
-        "amf-my-feat".to_string(),
-        crate::app::opencode_storage::OpencodeSidebarData {
-            session_id: "ses-1".to_string(),
-            title: Some("cached".to_string()),
-            latest_prompt: None,
-            status: None,
-            last_tool: None,
-            todo_count: None,
-            todo_preview: Vec::new(),
-            pending_permission: None,
-            last_error: None,
-            lsp_summary: None,
-            live_summary: None,
-            model: None,
-            provider: None,
-            reasoning_tokens: None,
-            additions: None,
-            deletions: None,
-            files: None,
-        },
-    );
-    app.pending_sidebar_loads.insert("amf-my-feat".to_string());
+        .insert("aiw-my-feat".to_string(), prompt_entry("cached prompt"));
+    app.pending_sidebar_loads.insert("aiw-my-feat".to_string());
     app.mode = AppMode::DeletingFeatureInProgress(DeletingFeatureState {
         project_name: "my-project".to_string(),
         feature_name: "my-feat".to_string(),
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         is_worktree: false,
         repo: repo.path().to_path_buf(),
         workdir: repo.path().to_path_buf(),
@@ -3133,9 +2939,8 @@ fn complete_deleting_feature_clears_sidebar_caches() {
 
     app.complete_deleting_feature().unwrap();
 
-    assert!(app.latest_prompt_for_session("amf-my-feat").is_none());
-    assert!(!app.opencode_sidebar_cache.contains_key("amf-my-feat"));
-    assert!(!app.pending_sidebar_loads.contains("amf-my-feat"));
+    assert!(app.latest_prompt_for_session("aiw-my-feat").is_none());
+    assert!(!app.pending_sidebar_loads.contains("aiw-my-feat"));
 }
 
 #[test]
@@ -3160,7 +2965,7 @@ fn complete_deleting_feature_clears_terminal_pr_association() {
         Box::new(MockWorktreeOps::new()),
     );
     app.store_path = store_file.path().to_path_buf();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     app.db
         .as_ref()
         .unwrap()
@@ -3181,7 +2986,7 @@ fn complete_deleting_feature_clears_terminal_pr_association() {
     app.mode = AppMode::DeletingFeatureInProgress(DeletingFeatureState {
         project_name: "my-project".to_string(),
         feature_name: "my-feat".to_string(),
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         is_worktree: true,
         repo: repo.path().to_path_buf(),
         workdir: repo.path().join(".worktrees/my-feat"),
@@ -3228,7 +3033,7 @@ fn completed_background_deletion_clears_terminal_pr_association() {
         Box::new(MockWorktreeOps::new()),
     );
     app.store_path = store_file.path().to_path_buf();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     app.db
         .as_ref()
         .unwrap()
@@ -3240,7 +3045,7 @@ fn completed_background_deletion_clears_terminal_pr_association() {
         BackgroundDeletion {
             project_name: "my-project".to_string(),
             feature_name: "my-feat".to_string(),
-            tmux_session: "amf-my-feat".to_string(),
+            tmux_session: "aiw-my-feat".to_string(),
             is_worktree: true,
             repo: repo.path().to_path_buf(),
             workdir: repo.path().join(".worktrees/my-feat"),
@@ -3283,7 +3088,7 @@ fn delete_project_clears_terminal_pr_associations_for_all_features() {
     tmux.expect_kill_session().returning(|_| Ok(()));
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
     app.store_path = store_file.path().to_path_buf();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     app.db
         .as_ref()
         .unwrap()
@@ -3331,7 +3136,7 @@ fn complete_deleting_feature_deletes_unsent_prompts_for_its_workdir() {
         Box::new(MockWorktreeOps::new()),
     );
     app.store_path = store_file.path().to_path_buf();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     app.db
         .as_ref()
         .unwrap()
@@ -3341,7 +3146,7 @@ fn complete_deleting_feature_deletes_unsent_prompts_for_its_workdir() {
     app.mode = AppMode::DeletingFeatureInProgress(DeletingFeatureState {
         project_name: "my-project".to_string(),
         feature_name: "my-feat".to_string(),
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         is_worktree: true,
         repo: repo.path().to_path_buf(),
         workdir: workdir.clone(),
@@ -3376,7 +3181,7 @@ fn delete_project_deletes_unsent_prompts_for_every_features_workdir() {
     tmux.expect_kill_session().returning(|_| Ok(()));
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
     app.store_path = store_file.path().to_path_buf();
-    app.db = Some(crate::db::AmfDb::open(db_file.path()).unwrap());
+    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
     app.db
         .as_ref()
         .unwrap()
@@ -3421,7 +3226,7 @@ fn store_with_single_claude_session() -> ProjectStore {
         branch: "my-feat".to_string(),
         workdir: PathBuf::from("/tmp/test-workdir"),
         is_worktree: false,
-        tmux_session: "amf-my-feat".to_string(),
+        tmux_session: "aiw-my-feat".to_string(),
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
@@ -3490,6 +3295,7 @@ fn jump_to_bookmark_opens_composer_for_agent_session() {
     tmux.expect_session_exists().times(1).returning(|_| true);
 
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
+    app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
     app.selection = Selection::Session(0, 0, 0);
     let tmp = NamedTempFile::new().unwrap();
     app.store_path = tmp.path().to_path_buf();
@@ -3501,7 +3307,7 @@ fn jump_to_bookmark_opens_composer_for_agent_session() {
     assert!(matches!(app.selection, Selection::Session(0, 0, 0)));
     match &app.mode {
         AppMode::Compose(state) => {
-            assert_eq!(state.view.session, "amf-my-feat");
+            assert_eq!(state.view.session, "aiw-my-feat");
             assert_eq!(state.view.window, "claude");
             assert!(state.editor.text().is_empty());
         }
@@ -3516,9 +3322,10 @@ fn jump_to_bookmark_keeps_direct_agent_session_in_view() {
     tmux.expect_session_exists().times(1).returning(|_| true);
 
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
+    app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
     app.selection = Selection::Session(0, 0, 0);
     app.compose_direct_targets
-        .insert("amf-my-feat:claude".to_string());
+        .insert("aiw-my-feat:claude".to_string());
     let tmp = NamedTempFile::new().unwrap();
     app.store_path = tmp.path().to_path_buf();
     app.bookmark_current_session().unwrap();

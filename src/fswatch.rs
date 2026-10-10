@@ -1,10 +1,10 @@
 //! Single filesystem-watcher worker (architecture item 2 of the
 //! performance plan).
 //!
-//! One `notify` (inotify) watcher observes the filesystem state AMF
+//! One `notify` (inotify) watcher observes the filesystem state AIW
 //! previously discovered by periodic scanning:
 //!
-//! - `/tmp/amf-thinking` — thinking marker files
+//! - `/tmp/aiw-thinking` — thinking marker files
 //! - `~/.codex/sessions` — codex transcripts (usage stats)
 //! - `~/.claude/projects` — claude transcripts (usage stats)
 //! - per-feature `.claude` / `.codex` dirs — `latest-prompt.txt`
@@ -88,10 +88,10 @@ impl FsWatcher {
     pub fn start(wakeup_fd: Arc<OwnedFd>) -> notify::Result<Self> {
         let flags = Arc::new(FsWatchFlags::default());
 
-        let thinking_root = PathBuf::from("/tmp/amf-thinking");
+        let thinking_root = PathBuf::from("/tmp/aiw-thinking");
         let codex_root = dirs::home_dir().map(|home| home.join(".codex").join("sessions"));
         let claude_root = dirs::home_dir().map(|home| home.join(".claude").join("projects"));
-        let notification_root = crate::project::amf_config_dir().join("notifications");
+        let notification_root = crate::project::aiw_config_dir().join("notifications");
 
         let handler_flags = flags.clone();
         let handler_thinking_root = thinking_root.clone();
@@ -103,7 +103,7 @@ impl FsWatcher {
             let Ok(event) = result else {
                 return;
             };
-            // Access events fire whenever AMF itself reads these files;
+            // Access events fire whenever AIW itself reads these files;
             // only content changes matter.
             if matches!(event.kind, EventKind::Access(_)) {
                 return;
@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn notification_paths_are_classified() {
-        let global = PathBuf::from("/home/u/.config/amf/notifications");
+        let global = PathBuf::from("/home/u/.config/ai_workstation/notifications");
 
         // File in the global notifications dir.
         assert!(is_notification_path(&global.join("abc.json"), &global));

@@ -1,6 +1,6 @@
 //! Supervised edits in the desktop GUI: Vibeless mode's per-edit approval.
 //!
-//! A Vibeless agent's hook holds each file write until AMF answers it (see
+//! A Vibeless agent's hook holds each file write until AIW answers it (see
 //! `app::supervised_edits`). The TUI receives those requests over its IPC
 //! socket, or reads the hook's file fallback. The GUI owns no IPC socket --
 //! binding it would take requests away from a running TUI -- so it answers
@@ -19,7 +19,7 @@ use sha2::{Digest, Sha256};
 
 use crate::app::supervised_edits::{
     EditReviewClaim, EditReviewDecision, EditReviewReply, edit_review_response,
-    load_edit_review_diff, opencode_edit_is_waiting,
+    load_edit_review_diff,
 };
 use crate::app::{App, PendingInput};
 use crate::gui_contract::{FeatureTarget, GuiError, GuiHandle, GuiResult};
@@ -37,8 +37,8 @@ pub struct DecisionEffects {
     pub approve: String,
     pub reject: String,
     pub cancel: String,
-    /// Whether rejection feedback reaches the agent. OpenCode's tracker
-    /// blocks the write but does not forward the text.
+    /// Whether rejection feedback reaches the agent. Codex's watcher
+    /// reverts the write but does not forward the text.
     pub feedback_reaches_agent: bool,
 }
 
@@ -50,7 +50,7 @@ pub struct SupervisedEditView {
     /// Changes whenever the request or its captured file copies change.
     pub revision: String,
     /// The hook protocol: `diff-review` (Claude) or `change-reason`
-    /// (OpenCode).
+    /// (Codex's watcher).
     pub kind: String,
     pub path: String,
     pub tool: String,
@@ -156,12 +156,8 @@ fn effects(kind: &str) -> DecisionEffects {
     if kind == "change-reason" {
         DecisionEffects {
             approve: "The agent writes this change and records its stated reason.".into(),
-            reject: "The agent does not write this change. OpenCode is told the change was \
-                     rejected; your feedback is not forwarded."
-                .into(),
-            cancel: "OpenCode treats cancel as a skip: the agent writes this change without \
-                     recording a reason."
-                .into(),
+            reject: "The change is reverted; your feedback is not forwarded.".into(),
+            cancel: "Cancel is treated as a skip: the change is kept.".into(),
             feedback_reaches_agent: false,
         }
     } else {
@@ -204,10 +200,13 @@ fn project_view(input: &PendingInput, context: usize) -> SupervisedEditView {
     let answered = proceed_signal.is_some_and(Path::exists);
     let unavailable = match (proceed_signal, non_empty(input.response_file.as_deref())) {
         (None, _) | (_, None) => {
-            Some("This request has no reply path; answer it from the AMF TUI.".to_string())
+            Some("This request has no reply path; answer it from the AIW TUI.".to_string())
         }
-        _ if !answered && input.notification_type == "change-reason" && !opencode_edit_is_waiting(input) => {
-            Some("The agent is no longer waiting for this edit (or this legacy request has no waiting owner).".to_string())
+        // FORK: only OpenCode's tracker held a per-request lease the GUI
+        // could check; with OpenCode removed, a `change-reason` request
+        // (Codex's watcher) is answered from the TUI that owns the IPC socket.
+        _ if !answered && input.notification_type == "change-reason" => {
+            Some("This request can only be answered from the AIW TUI.".to_string())
         }
         (Some(signal), Some(_))
             if !answered && signal.parent().is_some_and(|dir| !dir.exists()) =>
@@ -328,7 +327,7 @@ pub fn pending_counts(gui: &mut GuiHandle) -> GuiResult<Vec<PendingEditCount>> {
         .filter(|input| app.is_structured_edit_review(&input.notification_type))
         .filter(|input| {
             non_empty(input.proceed_signal.as_deref()).is_some_and(|signal| !signal.exists())
-                && (input.notification_type != "change-reason" || opencode_edit_is_waiting(input))
+                && input.notification_type != "change-reason"
         })
         .map(|input| {
             let at = std::fs::metadata(&input.file_path)
@@ -480,7 +479,7 @@ mod tests {
         proceed: PathBuf,
     }
 
-    /// Writes what `custom-diff-review.sh` writes when no AMF socket answers:
+    /// Writes what `custom-diff-review.sh` writes when no AIW socket answers:
     /// captured copies in its temp dir and a notification in the feature's
     /// `.claude/notifications/`.
     fn claude_hook(repo: &Path, scratch: &Path, change: &str, proposed: &str) -> Hook {
@@ -689,104 +688,35 @@ mod tests {
     }
 
     #[test]
-    fn opencode_requires_a_live_owner_for_this_request() {
+    fn change_reason_requests_are_left_to_the_tui() {
+        // FORK: without OpenCode's per-request lease the GUI cannot prove a
+        // `change-reason` writer is still waiting, so it never answers one.
         let (dir, mut gui, target) = fixture();
         let repo = dir.path().join("repo");
-        let hook = claude_hook(&repo, dir.path(), "owned", &proposed(&repo));
+        let hook = claude_hook(&repo, dir.path(), "404", &proposed(&repo));
         let mut notification: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&hook.notification).unwrap()).unwrap();
         notification["type"] = "change-reason".into();
         std::fs::write(&hook.notification, notification.to_string()).unwrap();
-        let lease = hook.dir.join("waiter.json");
-        let mut child = crate::resources::test_support::TestChild::new(
-            std::process::Command::new("sleep")
-                .arg("60")
-                .spawn()
-                .unwrap(),
-        );
-        let owner =
-            serde_json::json!({"pid": child.id(), "session_id": "sess", "change_id": "owned"});
-        std::fs::write(&lease, owner.to_string()).unwrap();
-        let live = load(&mut gui, target.clone(), DiffContext::Standard)
+
+        let edit = load(&mut gui, target.clone(), DiffContext::Standard)
             .unwrap()
             .edits
             .remove(0);
-        assert!(live.unavailable.is_none());
-        assert_eq!(pending_counts(&mut gui).unwrap()[0].count, 1);
-
-        // A marker for another write does not establish ownership.
-        let mut wrong = owner.clone();
-        wrong["change_id"] = "another-write".into();
-        std::fs::write(&lease, wrong.to_string()).unwrap();
-        assert!(
-            respond(
-                &mut gui,
-                target.clone(),
-                &live.id,
-                &live.revision,
-                SupervisedEditDecision::Approve
-            )
-            .is_err()
+        assert_eq!(
+            edit.unavailable.as_deref(),
+            Some("This request can only be answered from the AIW TUI.")
         );
-        assert!(!hook.proceed.exists());
-
-        // An alive process with an expired lease is not still polling.
-        std::fs::write(&lease, owner.to_string()).unwrap();
-        std::fs::File::open(&lease)
-            .unwrap()
-            .set_times(
-                std::fs::FileTimes::new().set_modified(
-                    std::time::SystemTime::now() - std::time::Duration::from_secs(10),
-                ),
-            )
-            .unwrap();
         assert!(pending_counts(&mut gui).unwrap().is_empty());
-        assert!(
-            respond(
-                &mut gui,
-                target.clone(),
-                &live.id,
-                &live.revision,
-                SupervisedEditDecision::Approve
-            )
-            .is_err()
-        );
-
-        // Killing OpenCode leaves its files but must make its request unanswerable.
-        std::fs::write(&lease, owner.to_string()).unwrap();
-        child.kill().unwrap();
-        child.wait().unwrap();
-        assert!(hook.dir.exists());
-        assert!(pending_counts(&mut gui).unwrap().is_empty());
-        let gone = load(&mut gui, target.clone(), DiffContext::Standard)
-            .unwrap()
-            .edits
-            .remove(0);
-        assert!(gone.unavailable.is_some());
-        assert!(
-            respond(
-                &mut gui,
-                target.clone(),
-                &gone.id,
-                &gone.revision,
-                SupervisedEditDecision::Approve
-            )
-            .is_err()
-        );
-        assert!(!hook.proceed.exists());
-
-        // Old notifications with persistent, session-wide paths fail closed.
-        std::fs::remove_file(lease).unwrap();
-        assert!(
-            respond(
-                &mut gui,
-                target,
-                &live.id,
-                &live.revision,
-                SupervisedEditDecision::Approve
-            )
-            .is_err()
-        );
+        let err = respond(
+            &mut gui,
+            target,
+            &edit.id,
+            &edit.revision,
+            SupervisedEditDecision::Approve,
+        )
+        .unwrap_err();
+        assert_eq!(err.kind, GuiErrorKind::Conflict);
         assert!(!hook.proceed.exists());
     }
 
@@ -795,19 +725,10 @@ mod tests {
         let (dir, mut gui, target) = fixture();
         let repo = dir.path().join("repo");
         let hook = claude_hook(&repo, dir.path(), "303", &proposed(&repo));
-        // OpenCode's tracker uses `change-reason` and states its reason.
+        // A hook that states its reason gets it back on approval.
         let mut notification: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&hook.notification).unwrap()).unwrap();
-        notification["type"] = "change-reason".into();
         notification["reason"] = "Spell out the number".into();
-        std::fs::write(
-            hook.dir.join("waiter.json"),
-            serde_json::json!({
-                "pid": std::process::id(), "session_id": "sess", "change_id": "303"
-            })
-            .to_string(),
-        )
-        .unwrap();
         std::fs::write(&hook.notification, notification.to_string()).unwrap();
 
         let edit = load(&mut gui, target.clone(), DiffContext::Standard)
@@ -815,7 +736,7 @@ mod tests {
             .edits
             .remove(0);
         assert_eq!(edit.agent_reason.as_deref(), Some("Spell out the number"));
-        assert!(!edit.effects.feedback_reaches_agent);
+        assert!(edit.effects.feedback_reaches_agent);
         respond(
             &mut gui,
             target.clone(),

@@ -1,5 +1,6 @@
 //! Scoped model advice and the final pre-launch validation.
 mod discovery;
+mod local_ws; // FORK(no-cloud): replaces the tungstenite dependency
 mod session_control;
 #[cfg(test)]
 mod tests;
@@ -245,8 +246,9 @@ fn session_agent(kind: &SessionKind) -> Option<AgentKind> {
     match kind {
         SessionKind::Claude => Some(AgentKind::Claude),
         SessionKind::Codex => Some(AgentKind::Codex),
-        SessionKind::Opencode => Some(AgentKind::Opencode),
         SessionKind::Pi => Some(AgentKind::Pi),
+        SessionKind::Gemini => Some(AgentKind::Gemini), // FORK
+        SessionKind::Cursor => Some(AgentKind::Cursor), // FORK
         _ => None,
     }
 }

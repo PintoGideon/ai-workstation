@@ -80,10 +80,10 @@ fn plan_mode_instructions_use_claude_local_and_per_workdir_plan() {
 
     let instructions = std::fs::read_to_string(workdir.path().join("CLAUDE.local.md")).unwrap();
     assert!(instructions.starts_with("# Existing\n"));
-    assert!(instructions.contains("`AMF_PLAN.md`"));
+    assert!(instructions.contains("`AIW_PLAN.md`"));
     assert_eq!(
         instructions
-            .matches("<!-- AMF:plan-instructions:begin -->")
+            .matches("<!-- AIW:plan-instructions:begin -->")
             .count(),
         1,
         "instruction injection should be idempotent"
@@ -94,7 +94,7 @@ fn plan_mode_instructions_use_claude_local_and_per_workdir_plan() {
             .lines()
             .any(|line| line == "CLAUDE.local.md")
     );
-    assert!(!workdir.path().join("AMF_PLAN.md").exists());
+    assert!(!workdir.path().join("AIW_PLAN.md").exists());
 
     ensure_plan_mode_instructions(workdir.path(), &AgentKind::Claude, false);
     assert_eq!(
@@ -109,10 +109,10 @@ fn plan_mode_instructions_refresh_legacy_managed_block() {
     std::fs::write(
         workdir.path().join("CLAUDE.local.md"),
         "# Existing\n\n\
-         <!-- AMF:plan-instructions:begin -->\n\n\
+         <!-- AIW:plan-instructions:begin -->\n\n\
          ## Plan Mode\n\n\
          Read `.claude/plan.md` before implementation.\n\n\
-         <!-- AMF:plan-instructions:end -->\n",
+         <!-- AIW:plan-instructions:end -->\n",
     )
     .unwrap();
 
@@ -122,10 +122,10 @@ fn plan_mode_instructions_refresh_legacy_managed_block() {
     let instructions = std::fs::read_to_string(workdir.path().join("CLAUDE.local.md")).unwrap();
     assert!(instructions.starts_with("# Existing\n"));
     assert!(!instructions.contains("`.claude/plan.md`"));
-    assert!(instructions.contains("`AMF_PLAN.md`"));
+    assert!(instructions.contains("`AIW_PLAN.md`"));
     assert_eq!(
         instructions
-            .matches("<!-- AMF:plan-instructions:begin -->")
+            .matches("<!-- AIW:plan-instructions:begin -->")
             .count(),
         1,
         "managed instruction replacement should be idempotent"
@@ -138,9 +138,9 @@ fn review_mode_instructions_refresh_managed_block_and_ignore_archives() {
     std::fs::write(
         workdir.path().join("CLAUDE.local.md"),
         "# Existing\n\n\
-         <!-- AMF:review-instructions:begin -->\n\n\
+         <!-- AIW:review-instructions:begin -->\n\n\
          stale managed text\n\n\
-         <!-- AMF:review-instructions:end -->\n",
+         <!-- AIW:review-instructions:end -->\n",
     )
     .unwrap();
 
@@ -157,7 +157,7 @@ fn review_mode_instructions_refresh_managed_block_and_ignore_archives() {
     );
     assert_eq!(
         instructions
-            .matches("<!-- AMF:review-instructions:begin -->")
+            .matches("<!-- AIW:review-instructions:begin -->")
             .count(),
         1,
         "managed instruction replacement should be idempotent"
@@ -171,13 +171,13 @@ fn review_mode_instructions_refresh_managed_block_and_ignore_archives() {
 
 #[test]
 fn plan_mode_instructions_use_agents_for_non_claude_harnesses() {
-    for agent in [AgentKind::Codex, AgentKind::Opencode, AgentKind::Pi] {
+    for agent in [AgentKind::Codex, AgentKind::Pi] {
         let workdir = tempfile::TempDir::new().unwrap();
 
         ensure_plan_mode_instructions(workdir.path(), &agent, true);
 
         let instructions = std::fs::read_to_string(workdir.path().join("AGENTS.md")).unwrap();
-        assert!(instructions.contains("`AMF_PLAN.md`"));
+        assert!(instructions.contains("`AIW_PLAN.md`"));
         assert!(!workdir.path().join("CLAUDE.local.md").exists());
         let ignore = std::fs::read_to_string(workdir.path().join(".gitignore")).unwrap();
         assert!(ignore.lines().any(|line| line == "AGENTS.md"));
@@ -186,9 +186,43 @@ fn plan_mode_instructions_use_agents_for_non_claude_harnesses() {
         assert!(!workdir.path().join("AGENTS.md").exists());
         assert!(
             !workdir.path().join(".gitignore").exists(),
-            "AMF-owned AGENTS.md ignore entry should be cleaned up"
+            "AIW-owned AGENTS.md ignore entry should be cleaned up"
         );
     }
+}
+
+/// FORK: a checkout set up by upstream AMF carries its own marker blocks;
+/// AIW replaces them instead of adding a second Plan/Review Mode section.
+#[test]
+fn upstream_instruction_blocks_are_replaced_not_duplicated() {
+    let workdir = tempfile::TempDir::new().unwrap();
+    std::fs::write(
+        workdir.path().join("AGENTS.md"),
+        "# User instructions\n\n<!-- AMF:plan-instructions:begin -->\n\n## Plan Mode\n\nold\n\n<!-- AMF:plan-instructions:end -->\n",
+    )
+    .unwrap();
+    std::fs::write(
+        workdir.path().join("CLAUDE.local.md"),
+        "<!-- AMF:review-instructions:begin -->\n\n## Review Mode\n\nold\n\n<!-- AMF:review-instructions:end -->\n",
+    )
+    .unwrap();
+
+    ensure_plan_mode_instructions(workdir.path(), &AgentKind::Codex, true);
+    ensure_review_claude_md(workdir.path(), true);
+
+    let agents = std::fs::read_to_string(workdir.path().join("AGENTS.md")).unwrap();
+    assert!(agents.starts_with("# User instructions"));
+    assert_eq!(agents.matches("## Plan Mode").count(), 1, "{agents}");
+    assert!(!agents.contains("AMF:plan-instructions"), "{agents}");
+    assert!(agents.contains("`AIW_PLAN.md`"));
+    let review = std::fs::read_to_string(workdir.path().join("CLAUDE.local.md")).unwrap();
+    assert_eq!(review.matches("## Review Mode").count(), 1, "{review}");
+    assert!(!review.contains("AMF:review-instructions"), "{review}");
+
+    // Turning plan mode off leaves only the user's own text.
+    ensure_plan_mode_instructions(workdir.path(), &AgentKind::Codex, false);
+    let agents = std::fs::read_to_string(workdir.path().join("AGENTS.md")).unwrap();
+    assert_eq!(agents, "# User instructions\n");
 }
 
 #[test]
@@ -284,31 +318,9 @@ fn start_worktree_hook_clears_sidebar_state_for_reused_feature() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.pending_sidebar_loads.insert("amf-my-feat".to_string());
+    app.pending_sidebar_loads.insert("aiw-my-feat".to_string());
     app.latest_prompt_cache
-        .insert("amf-my-feat".to_string(), prompt_entry("cached prompt"));
-    app.opencode_sidebar_cache.insert(
-        "amf-my-feat".to_string(),
-        crate::app::opencode_storage::OpencodeSidebarData {
-            session_id: "ses-1".to_string(),
-            title: Some("cached".to_string()),
-            latest_prompt: None,
-            status: None,
-            last_tool: None,
-            todo_count: None,
-            todo_preview: Vec::new(),
-            pending_permission: None,
-            last_error: None,
-            lsp_summary: None,
-            live_summary: None,
-            model: None,
-            provider: None,
-            reasoning_tokens: None,
-            additions: None,
-            deletions: None,
-            files: None,
-        },
-    );
+        .insert("aiw-my-feat".to_string(), prompt_entry("cached prompt"));
 
     app.start_worktree_hook(
         "true",
@@ -332,9 +344,8 @@ fn start_worktree_hook_clears_sidebar_state_for_reused_feature() {
         None,
     );
 
-    assert!(app.latest_prompt_for_session("amf-my-feat").is_none());
-    assert!(!app.opencode_sidebar_cache.contains_key("amf-my-feat"));
-    assert!(!app.pending_sidebar_loads.contains("amf-my-feat"));
+    assert!(app.latest_prompt_for_session("aiw-my-feat").is_none());
+    assert!(!app.pending_sidebar_loads.contains("aiw-my-feat"));
     assert!(app.store.projects[0].features[0].pending_worktree_script);
     assert_eq!(
         app.store.projects[0].features[0].status,
@@ -406,33 +417,33 @@ fn complete_running_hook_clears_pending_state_and_starts_feature() {
     let workdir_path = workdir.path().to_path_buf();
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists()
-        .withf(|session| session == "amf-new-feature")
+        .withf(|session| session == "aiw-new-feature")
         .times(1)
         .return_const(false);
     let expected_workdir = workdir_path.clone();
     tmux.expect_create_session_with_window()
         .withf(move |session, window, workdir| {
-            session == "amf-new-feature" && window == "claude" && workdir == expected_workdir
+            session == "aiw-new-feature" && window == "claude" && workdir == expected_workdir
         })
         .times(1)
         .returning(|_, _, _| Ok(()));
     tmux.expect_set_session_env()
         .withf(|session, key, value| {
-            session == "amf-new-feature" && key == "AMF_SESSION" && value == "amf-new-feature"
+            session == "aiw-new-feature" && key == "AIW_SESSION" && value == "aiw-new-feature"
         })
         .times(1)
         .returning(|_, _, _| Ok(()));
     let expected_workdir = workdir_path.clone();
     tmux.expect_create_window()
         .withf(move |session, window, workdir| {
-            session == "amf-new-feature" && window == "terminal" && workdir == expected_workdir
+            session == "aiw-new-feature" && window == "terminal" && workdir == expected_workdir
         })
         .times(0)
         .returning(|_, _, _| Ok(()));
     tmux.expect_launch_claude()
         .withf(
             |session, window, feature_session_id, resume_id, extra_args| {
-                session == "amf-new-feature"
+                session == "aiw-new-feature"
                     && window == "claude"
                     && !feature_session_id.is_empty()
                     && resume_id.is_none()
@@ -442,7 +453,7 @@ fn complete_running_hook_clears_pending_state_and_starts_feature() {
         .times(1)
         .returning(|_, _, _, _, _| Ok(()));
     tmux.expect_select_window()
-        .withf(|session, window| session == "amf-new-feature" && window == "claude")
+        .withf(|session, window| session == "aiw-new-feature" && window == "claude")
         .times(1)
         .returning(|_, _| Ok(()));
 
@@ -589,7 +600,7 @@ fn notification_hook_is_removed() {
     let workdir = TempDir::new().unwrap();
     // Pre-populate with the legacy Notification hook.
     let claude_dir = workdir.path().join(".claude");
-    let notify_cmd = crate::project::amf_config_dir()
+    let notify_cmd = crate::project::aiw_config_dir()
         .join("notify.sh")
         .to_string_lossy()
         .into_owned();
@@ -712,24 +723,24 @@ fn claude_hooks_preserve_existing_user_hooks() {
     );
     assert!(
         cmds.iter().any(|cmd| cmd.contains("thinking-stop.sh")),
-        "AMF Stop command should still be injected"
+        "AIW Stop command should still be injected"
     );
 }
 
 #[test]
 fn claude_hook_commands_are_shell_quoted_for_paths_with_spaces() {
-    let path = PathBuf::from("/Users/me/Library/Application Support/amf/save-prompt.sh");
+    let path = PathBuf::from("/Users/me/Library/Application Support/ai_workstation/save-prompt.sh");
     let command = crate::app::setup::claude_hook_command(&path);
 
     assert_eq!(
         command,
-        "'/Users/me/Library/Application Support/amf/save-prompt.sh'"
+        "'/Users/me/Library/Application Support/ai_workstation/save-prompt.sh'"
     );
 }
 
 #[test]
 fn claude_exec_hooks_pass_paths_with_spaces_without_shell_quoting() {
-    let path = PathBuf::from("/Users/me/Library/Application Support/amf/tool-stop.sh");
+    let path = PathBuf::from("/Users/me/Library/Application Support/ai_workstation/tool-stop.sh");
     let hook = crate::app::setup::claude_exec_hook(&path);
 
     assert_eq!(hook["command"].as_str(), path.to_str());
@@ -742,7 +753,7 @@ fn generated_claude_hooks_use_the_space_free_runtime_directory() {
     call_ensure_hooks(&workdir, VibeMode::Vibe);
     let settings = read_settings(&workdir);
     let commands = hook_commands_for(&settings, "PostToolUse");
-    let expected = crate::project::amf_claude_hooks_dir().join("tool-stop.sh");
+    let expected = crate::project::aiw_claude_hooks_dir().join("tool-stop.sh");
 
     assert_eq!(commands, vec![expected.to_string_lossy()]);
     assert_eq!(
@@ -754,7 +765,7 @@ fn generated_claude_hooks_use_the_space_free_runtime_directory() {
             .parent()
             .and_then(|path| path.parent())
             .and_then(|path| path.file_name()),
-        Some(std::ffi::OsStr::new(".amf"))
+        Some(std::ffi::OsStr::new("ai_workstation"))
     );
 }
 
@@ -774,7 +785,7 @@ fn worktree_hook_setup_repairs_inherited_root_repo_hooks() {
               "hooks": [
                 {
                   "type": "command",
-                  "command": "/Users/me/Library/Application Support/amf/tool-stop.sh"
+                  "command": "/Users/me/Library/Application Support/ai_workstation/tool-stop.sh"
                 },
                 {
                   "type": "command",
@@ -794,7 +805,7 @@ fn worktree_hook_setup_repairs_inherited_root_repo_hooks() {
               "matcher": "legacy-root-hook",
               "hooks": [{
                 "type": "command",
-                "command": "'/Users/me/Library/Application Support/amf/thinking-stop.sh'"
+                "command": "'/Users/me/Library/Application Support/ai_workstation/thinking-stop.sh'"
               }]
             }]
           }
@@ -818,7 +829,7 @@ fn worktree_hook_setup_repairs_inherited_root_repo_hooks() {
         &std::fs::read_to_string(root_claude_dir.join("settings.json")).unwrap(),
     )
     .unwrap();
-    let runtime_dir = crate::project::amf_claude_hooks_dir();
+    let runtime_dir = crate::project::aiw_claude_hooks_dir();
 
     assert_eq!(
         root_local["hooks"]["PostToolUse"][0]["matcher"].as_str(),
@@ -864,7 +875,7 @@ fn cleanup_recognizes_quoted_managed_claude_hooks() {
     let workdir = TempDir::new().unwrap();
     let claude_dir = workdir.path().join(".claude");
     std::fs::create_dir_all(&claude_dir).unwrap();
-    let managed = crate::project::amf_config_dir().join("save-prompt.sh");
+    let managed = crate::project::aiw_config_dir().join("save-prompt.sh");
     let quoted = crate::app::setup::claude_hook_command(&managed);
     std::fs::write(
         claude_dir.join("settings.local.json"),
@@ -910,7 +921,7 @@ fn cleanup_recognizes_unquoted_macos_managed_claude_hooks() {
               "matcher": "",
               "hooks": [{
                 "type": "command",
-                "command": "/Users/me/Library/Application Support/amf/thinking-stop.sh"
+                "command": "/Users/me/Library/Application Support/ai_workstation/thinking-stop.sh"
               }]
             }]
           }
@@ -924,8 +935,8 @@ fn cleanup_recognizes_unquoted_macos_managed_claude_hooks() {
     let cmds = hook_commands_for(&s, "Stop");
     assert!(
         cmds.iter()
-            .all(|cmd| !cmd.starts_with("/Users/me/Library/Application Support/amf/")),
-        "unquoted macOS AMF hooks should be removed, got: {cmds:?}"
+            .all(|cmd| !cmd.starts_with("/Users/me/Library/Application Support/ai_workstation/")),
+        "unquoted macOS AIW hooks should be removed, got: {cmds:?}"
     );
     assert_eq!(
         cmds.iter()
@@ -938,11 +949,11 @@ fn cleanup_recognizes_unquoted_macos_managed_claude_hooks() {
 
 #[test]
 fn cleanup_recognizes_quoted_temp_xdg_config_managed_claude_hooks() {
-    // Regression test: the screenshot dev tool runs AMF with XDG_CONFIG_HOME
-    // pointed at an isolated temp dir (e.g. /tmp/amf-shots/<ts>/config), so
-    // AMF's own quoted hook commands land under `.../config/amf/<script>`
+    // Regression test: the screenshot dev tool runs AIW with XDG_CONFIG_HOME
+    // pointed at an isolated temp dir (e.g. /tmp/aiw-shots/<ts>/config), so
+    // AIW's own quoted hook commands land under `.../config/ai_workstation/<script>`
     // with no leading dot on `config`. These must still be recognized as
-    // AMF-managed and replaced rather than accumulating forever.
+    // AIW-managed and replaced rather than accumulating forever.
     let workdir = TempDir::new().unwrap();
     let claude_dir = workdir.path().join(".claude");
     std::fs::create_dir_all(&claude_dir).unwrap();
@@ -954,7 +965,7 @@ fn cleanup_recognizes_quoted_temp_xdg_config_managed_claude_hooks() {
               "matcher": "",
               "hooks": [{
                 "type": "command",
-                "command": "'/tmp/amf-shots/20260719-124607-366569/config/amf/thinking-stop.sh'"
+                "command": "'/tmp/aiw-shots/20260719-124607-366569/config/ai_workstation/thinking-stop.sh'"
               }]
             }]
           }
@@ -967,8 +978,8 @@ fn cleanup_recognizes_quoted_temp_xdg_config_managed_claude_hooks() {
     let s = read_settings(&workdir);
     let cmds = hook_commands_for(&s, "Stop");
     assert!(
-        cmds.iter().all(|cmd| !cmd.contains("/tmp/amf-shots/")),
-        "stale temp-XDG-config AMF hooks should be removed, got: {cmds:?}"
+        cmds.iter().all(|cmd| !cmd.contains("/tmp/aiw-shots/")),
+        "stale temp-XDG-config AIW hooks should be removed, got: {cmds:?}"
     );
     assert_eq!(
         cmds.iter()
@@ -979,12 +990,54 @@ fn cleanup_recognizes_quoted_temp_xdg_config_managed_claude_hooks() {
     );
 }
 
+/// FORK: a worktree set up by upstream AMF carries hooks pointing at
+/// `~/.amf/hooks/…` and `<config root>/amf/…`. Restarting the feature in AIW
+/// must replace them with AIW's own hooks, not run both sets.
+#[test]
+fn upstream_amf_hooks_are_replaced_by_aiw_hooks() {
+    let workdir = TempDir::new().unwrap();
+    let claude_dir = workdir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("settings.local.json"),
+        r#"{
+          "hooks": {
+            "Stop": [{
+              "matcher": "",
+              "hooks": [
+                {"type": "command", "command": "/home/me/.amf/hooks/thinking-stop.sh"},
+                {"type": "command", "command": "'/home/me/.config/amf/thinking-stop.sh'"}
+              ]
+            }]
+          }
+        }"#,
+    )
+    .unwrap();
+
+    call_ensure_hooks(&workdir, VibeMode::Vibe);
+
+    let s = read_settings(&workdir);
+    let cmds = hook_commands_for(&s, "Stop");
+    assert!(
+        cmds.iter()
+            .all(|cmd| !cmd.contains("/.amf/hooks/") && !cmd.contains("/.config/amf/")),
+        "AMF hooks should be replaced, got: {cmds:?}"
+    );
+    assert_eq!(
+        cmds.iter()
+            .filter(|cmd| cmd.ends_with("/ai_workstation/hooks/thinking-stop.sh"))
+            .count(),
+        1,
+        "exactly one AIW thinking-stop hook: {cmds:?}"
+    );
+}
+
 #[test]
 fn cleanup_recognizes_arbitrary_xdg_config_home_managed_claude_hooks() {
     // Regression test: XDG_CONFIG_HOME is not required to end in `config` —
     // per the XDG spec it can point anywhere (e.g. XDG_CONFIG_HOME=/tmp/foo
-    // resolves the AMF config dir to /tmp/foo/amf). Any such custom root
-    // must still be recognized as AMF-managed, not just roots whose final
+    // resolves the AIW config dir to /tmp/foo/ai_workstation). Any such custom root
+    // must still be recognized as AIW-managed, not just roots whose final
     // component happens to be literally `config`.
     let workdir = TempDir::new().unwrap();
     let claude_dir = workdir.path().join(".claude");
@@ -997,7 +1050,7 @@ fn cleanup_recognizes_arbitrary_xdg_config_home_managed_claude_hooks() {
               "matcher": "",
               "hooks": [{
                 "type": "command",
-                "command": "'/tmp/foo/amf/thinking-stop.sh'"
+                "command": "'/tmp/foo/ai_workstation/thinking-stop.sh'"
               }]
             }]
           }
@@ -1010,7 +1063,8 @@ fn cleanup_recognizes_arbitrary_xdg_config_home_managed_claude_hooks() {
     let s = read_settings(&workdir);
     let cmds = hook_commands_for(&s, "Stop");
     assert!(
-        cmds.iter().all(|cmd| !cmd.contains("/tmp/foo/amf/")),
+        cmds.iter()
+            .all(|cmd| !cmd.contains("/tmp/foo/ai_workstation/")),
         "stale hooks from an arbitrary custom XDG_CONFIG_HOME should be removed, got: {cmds:?}"
     );
     assert_eq!(
@@ -1036,7 +1090,7 @@ fn repair_unquoted_claude_hooks_refreshes_stale_stored_features() {
               "matcher": "",
               "hooks": [{
                 "type": "command",
-                "command": "/Users/me/Library/Application Support/amf/thinking-stop.sh"
+                "command": "/Users/me/Library/Application Support/ai_workstation/thinking-stop.sh"
               }]
             }]
           }
@@ -1083,7 +1137,7 @@ fn repair_unquoted_claude_hooks_refreshes_stale_stored_features() {
     let cmds = hook_commands_for(&s, "Stop");
     assert!(
         cmds.iter()
-            .all(|cmd| !cmd.starts_with("/Users/me/Library/Application Support/amf/")),
+            .all(|cmd| !cmd.starts_with("/Users/me/Library/Application Support/ai_workstation/")),
         "stale unquoted hook should be repaired, got: {cmds:?}"
     );
     assert!(hook_uses_exec_form(&s, "Stop", "thinking-stop.sh"));
@@ -1103,7 +1157,7 @@ fn repair_unquoted_claude_hooks_refreshes_legacy_settings_json() {
               "matcher": "",
               "hooks": [{
                 "type": "command",
-                "command": "/Users/me/Library/Application Support/amf/tool-stop.sh"
+                "command": "/Users/me/Library/Application Support/ai_workstation/tool-stop.sh"
               }]
             }]
           }
@@ -1148,7 +1202,7 @@ fn repair_unquoted_claude_hooks_refreshes_legacy_settings_json() {
     assert_eq!(repaired, 1);
     assert!(
         !claude_dir.join("settings.json").exists(),
-        "legacy settings.json should be removed once its stale AMF hook is cleaned"
+        "legacy settings.json should be removed once its stale AIW hook is cleaned"
     );
     let s = read_settings(&workdir);
     assert!(hook_uses_exec_form(&s, "PostToolUse", "tool-stop.sh"));
@@ -1249,7 +1303,7 @@ fn inherited_diff_review_script_exits_for_a_different_git_root() {
         .arg(script)
         .arg(owning_repo.path())
         .current_dir(active_repo.path())
-        .env("AMF_ACTIVE", "1")
+        .env("AIW_ACTIVE", "1")
         .output()
         .unwrap();
 
@@ -1260,12 +1314,12 @@ fn inherited_diff_review_script_exits_for_a_different_git_root() {
     );
 }
 
-/// Every hook script that runs `amf notify` must fall back to `amf` on `PATH`
-/// when `$AMF_BIN` can't be run -- unset, empty, pointing at nothing (a
-/// deleted worktree), or not executable -- and use `$AMF_BIN` when it can.
+/// Every hook script that runs `aiw notify` must fall back to `aiw` on `PATH`
+/// when `$AIW_BIN` can't be run -- unset, empty, pointing at nothing (a
+/// deleted worktree), or not executable -- and use `$AIW_BIN` when it can.
 #[cfg(unix)]
 #[test]
-fn hook_scripts_fall_back_to_amf_on_path_when_amf_bin_is_unusable() {
+fn hook_scripts_fall_back_to_aiw_on_path_when_aiw_bin_is_unusable() {
     use std::os::unix::fs::PermissionsExt;
 
     let dir = TempDir::new().unwrap();
@@ -1273,20 +1327,20 @@ fn hook_scripts_fall_back_to_amf_on_path_when_amf_bin_is_unusable() {
     let write_recorder = |path: &std::path::Path, mode: u32| {
         std::fs::write(
             path,
-            "#!/bin/sh\nprintf '%s\\n' \"$0\" >> \"$AMF_TEST_LOG\"\n",
+            "#!/bin/sh\nprintf '%s\\n' \"$0\" >> \"$AIW_TEST_LOG\"\n",
         )
         .unwrap();
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
     };
     let path_dir = dir.path().join("bin");
     std::fs::create_dir(&path_dir).unwrap();
-    let path_amf = path_dir.join("amf");
-    write_recorder(&path_amf, 0o755);
-    let session_amf = dir.path().join("session-amf");
-    write_recorder(&session_amf, 0o755);
-    let not_executable = dir.path().join("not-executable-amf");
+    let path_aiw = path_dir.join("aiw");
+    write_recorder(&path_aiw, 0o755);
+    let session_aiw = dir.path().join("session-aiw");
+    write_recorder(&session_aiw, 0o755);
+    let not_executable = dir.path().join("not-executable-aiw");
     write_recorder(&not_executable, 0o644);
-    let missing = dir.path().join("deleted-worktree/amf");
+    let missing = dir.path().join("deleted-worktree/aiw");
 
     let path_env = format!(
         "{}:{}",
@@ -1294,11 +1348,11 @@ fn hook_scripts_fall_back_to_amf_on_path_when_amf_bin_is_unusable() {
         std::env::var("PATH").unwrap_or_default()
     );
     let cases: [(&str, Option<&std::path::Path>, &std::path::Path); 5] = [
-        ("unset", None, &path_amf),
-        ("empty", Some(std::path::Path::new("")), &path_amf),
-        ("missing", Some(&missing), &path_amf),
-        ("not executable", Some(&not_executable), &path_amf),
-        ("usable", Some(&session_amf), &session_amf),
+        ("unset", None, &path_aiw),
+        ("empty", Some(std::path::Path::new("")), &path_aiw),
+        ("missing", Some(&missing), &path_aiw),
+        ("not executable", Some(&not_executable), &path_aiw),
+        ("usable", Some(&session_aiw), &session_aiw),
     ];
     let scripts = [
         "attention.sh",
@@ -1313,18 +1367,18 @@ fn hook_scripts_fall_back_to_amf_on_path_when_amf_bin_is_unusable() {
     let scripts_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts");
 
     for script in scripts {
-        for (label, amf_bin, expected) in &cases {
+        for (label, aiw_bin, expected) in &cases {
             let _ = std::fs::remove_file(&log);
             let mut command = std::process::Command::new("bash");
             command
                 .arg(scripts_dir.join(script))
-                .env("AMF_ACTIVE", "1")
-                .env("AMF_TEST_LOG", &log)
+                .env("AIW_ACTIVE", "1")
+                .env("AIW_TEST_LOG", &log)
                 .env("PATH", &path_env)
                 .stdin(std::process::Stdio::null());
-            match amf_bin {
-                Some(value) => command.env("AMF_BIN", value),
-                None => command.env_remove("AMF_BIN"),
+            match aiw_bin {
+                Some(value) => command.env("AIW_BIN", value),
+                None => command.env_remove("AIW_BIN"),
             };
             let output = command.output().unwrap();
             assert!(output.status.success(), "{script} ({label}) must exit 0");
@@ -1332,7 +1386,7 @@ fn hook_scripts_fall_back_to_amf_on_path_when_amf_bin_is_unusable() {
             assert_eq!(
                 calls.lines().collect::<Vec<_>>(),
                 vec![expected.to_str().unwrap()],
-                "{script} with AMF_BIN {label} ran the wrong amf"
+                "{script} with AIW_BIN {label} ran the wrong aiw"
             );
         }
     }
@@ -1374,7 +1428,7 @@ fn vibe_mode_strips_edit_write_permissions_left_from_vibeless() {
     )
     .unwrap();
     std::fs::write(
-        claude_dir.join("amf-hook-state.json"),
+        claude_dir.join("aiw-hook-state.json"),
         r#"{"permissions_added":["Edit","Write"]}"#,
     )
     .unwrap();
@@ -1416,7 +1470,7 @@ fn ensure_hooks_is_idempotent() {
 }
 
 #[test]
-fn ensure_hooks_removes_stale_temp_home_amf_hooks() {
+fn ensure_hooks_removes_stale_temp_home_aiw_hooks() {
     let workdir = TempDir::new().unwrap();
     let claude_dir = workdir.path().join(".claude");
     std::fs::create_dir_all(&claude_dir).unwrap();
@@ -1429,7 +1483,7 @@ fn ensure_hooks_removes_stale_temp_home_amf_hooks() {
                 "matcher": "",
                 "hooks": [{
                   "type": "command",
-                  "command": "/tmp/claude-1000/worktree/scratchpad/amf_verify_home/.config/amf/tool-stop.sh"
+                  "command": "/tmp/claude-1000/worktree/scratchpad/aiw_verify_home/.config/ai_workstation/tool-stop.sh"
                 }]
               },
               {
@@ -1444,7 +1498,7 @@ fn ensure_hooks_removes_stale_temp_home_amf_hooks() {
               "matcher": "",
               "hooks": [{
                 "type": "command",
-                "command": "/tmp/claude-1000/worktree/scratchpad/amf_verify_home/.config/amf/thinking-start.sh"
+                "command": "/tmp/claude-1000/worktree/scratchpad/aiw_verify_home/.config/ai_workstation/thinking-start.sh"
               }]
             }]
           }
@@ -1460,19 +1514,19 @@ fn ensure_hooks_removes_stale_temp_home_amf_hooks() {
         post_cmds
             .iter()
             .all(|cmd| !cmd.contains("/tmp/claude-1000/")),
-        "stale temp-home AMF hooks should be removed, got: {post_cmds:?}"
+        "stale temp-home AIW hooks should be removed, got: {post_cmds:?}"
     );
     assert!(
         post_cmds.iter().any(|cmd| cmd == "/tmp/user/tool-stop.sh"),
-        "user hook with same basename outside .config/amf should be preserved"
+        "user hook with same basename outside .config/ai_workstation should be preserved"
     );
     assert_eq!(
         post_cmds
             .iter()
-            .filter(|cmd| cmd.ends_with("/.amf/hooks/tool-stop.sh"))
+            .filter(|cmd| cmd.ends_with("/ai_workstation/hooks/tool-stop.sh"))
             .count(),
         1,
-        "only the current AMF PostToolUse hook should remain"
+        "only the current AIW PostToolUse hook should remain"
     );
 }
 
@@ -1485,25 +1539,25 @@ fn codex_hooks_are_injected_for_repo_root_and_worktrees() {
         workdir
             .path()
             .join(".codex")
-            .join("amf-codex-notify.sh")
+            .join("aiw-codex-notify.sh")
             .exists(),
         "repo-root codex feature should get local notify hook script"
     );
     let codex_notify =
-        std::fs::read_to_string(workdir.path().join(".codex").join("amf-codex-notify.sh")).unwrap();
+        std::fs::read_to_string(workdir.path().join(".codex").join("aiw-codex-notify.sh")).unwrap();
     // The script no longer assembles the payload itself — it forwards Codex's
-    // JSON and lets `amf notify` merge in the session identity from the
+    // JSON and lets `aiw notify` merge in the session identity from the
     // environment it inherits. Preserving `provider_session_id` /
-    // `amf_feature_session_id` is therefore covered by `hook_payload`'s unit
-    // tests; what stays this script's job is being AMF-gated, passing the
+    // `aiw_feature_session_id` is therefore covered by `hook_payload`'s unit
+    // tests; what stays this script's job is being AIW-gated, passing the
     // payload through, and reporting the turn as completed.
     assert!(
-        codex_notify.contains("AMF_ACTIVE"),
-        "Codex notify hook should stay gated on AMF_ACTIVE, got: {codex_notify}"
+        codex_notify.contains("AIW_ACTIVE"),
+        "Codex notify hook should stay gated on AIW_ACTIVE, got: {codex_notify}"
     );
     assert!(
-        codex_notify.contains("notify") && codex_notify.contains("AMF_BIN"),
-        "Codex notify hook should deliver through `amf notify`, got: {codex_notify}"
+        codex_notify.contains("notify") && codex_notify.contains("AIW_BIN"),
+        "Codex notify hook should deliver through `aiw notify`, got: {codex_notify}"
     );
     assert!(
         codex_notify.contains("--event-kind completed"),
@@ -1516,9 +1570,9 @@ fn codex_hooks_are_injected_for_repo_root_and_worktrees() {
     assert!(
         !workdir
             .path()
-            .join(".agents/skills/amf-screenshot")
+            .join(".agents/skills/aiw-screenshot")
             .exists(),
-        "AMF should not inject its repository-specific screenshot skill into managed projects"
+        "AIW should not inject its repository-specific screenshot skill into managed projects"
     );
 
     let second = TempDir::new().unwrap();
@@ -1527,7 +1581,7 @@ fn codex_hooks_are_injected_for_repo_root_and_worktrees() {
         second
             .path()
             .join(".codex")
-            .join("amf-codex-notify.sh")
+            .join("aiw-codex-notify.sh")
             .exists(),
         "worktree codex feature should get local notify hook script"
     );
@@ -1542,7 +1596,6 @@ fn screenshot_skill_is_not_injected_into_managed_workspaces() {
     for (agent, skills_root) in [
         (AgentKind::Claude, ".claude"),
         (AgentKind::Codex, ".agents"),
-        (AgentKind::Opencode, ".opencode"),
     ] {
         let workdir = TempDir::new().unwrap();
         call_ensure_hooks_for(&workdir, VibeMode::Vibe, agent.clone(), true);
@@ -1550,9 +1603,9 @@ fn screenshot_skill_is_not_injected_into_managed_workspaces() {
             !workdir
                 .path()
                 .join(skills_root)
-                .join("skills/amf-screenshot")
+                .join("skills/aiw-screenshot")
                 .exists(),
-            "AMF should not inject its repository-specific screenshot skill for {agent:?}"
+            "AIW should not inject its repository-specific screenshot skill for {agent:?}"
         );
     }
 }
@@ -1566,7 +1619,7 @@ fn codex_hook_only_writes_helper_script() {
         workdir
             .path()
             .join(".codex")
-            .join("amf-codex-notify.sh")
+            .join("aiw-codex-notify.sh")
             .exists(),
         "Codex setup should still write the helper script"
     );
@@ -1577,7 +1630,7 @@ fn codex_hook_only_writes_helper_script() {
 }
 
 #[test]
-fn cleanup_claude_hooks_removes_amf_artifacts() {
+fn cleanup_claude_hooks_removes_aiw_artifacts() {
     let workdir = TempDir::new().unwrap();
     call_ensure_hooks_for(&workdir, VibeMode::Vibeless, AgentKind::Claude, true);
 
@@ -1590,7 +1643,7 @@ fn cleanup_claude_hooks_removes_amf_artifacts() {
     let settings_path = claude_dir.join("settings.local.json");
     assert!(
         !settings_path.exists(),
-        "cleanup should remove settings.local.json when only AMF hooks were present"
+        "cleanup should remove settings.local.json when only AIW hooks were present"
     );
     assert!(
         !claude_dir.join("notifications").exists(),
@@ -1635,7 +1688,7 @@ fn cleanup_codex_hooks_removes_helper_script() {
     std::fs::create_dir_all(&codex_dir).unwrap();
     let screenshot_skill = workdir
         .path()
-        .join(".agents/skills/amf-screenshot/SKILL.md");
+        .join(".agents/skills/aiw-screenshot/SKILL.md");
     std::fs::create_dir_all(screenshot_skill.parent().unwrap()).unwrap();
     std::fs::write(&screenshot_skill, "repo-local screenshot skill").unwrap();
 
@@ -1643,8 +1696,8 @@ fn cleanup_codex_hooks_removes_helper_script() {
     cleanup_agent_injected_files(workdir.path(), &AgentKind::Codex);
 
     assert!(
-        !codex_dir.join("amf-codex-notify.sh").exists(),
-        "cleanup should remove AMF Codex hook script"
+        !codex_dir.join("aiw-codex-notify.sh").exists(),
+        "cleanup should remove AIW Codex hook script"
     );
     assert!(
         !codex_dir.join("config.toml").exists(),
@@ -1653,41 +1706,6 @@ fn cleanup_codex_hooks_removes_helper_script() {
     assert!(
         screenshot_skill.exists(),
         "cleanup should preserve a repository-local screenshot skill"
-    );
-}
-
-#[test]
-fn cleanup_opencode_hooks_removes_sidebar_state_artifacts() {
-    let workdir = TempDir::new().unwrap();
-    let plugin_dir = workdir.path().join(".opencode").join("plugins");
-    let theme_dir = workdir.path().join(".opencode").join("themes");
-    let sidebar_dir = workdir.path().join(".amf").join("opencode-sidebar");
-
-    std::fs::create_dir_all(&plugin_dir).unwrap();
-    std::fs::create_dir_all(&theme_dir).unwrap();
-    std::fs::create_dir_all(&sidebar_dir).unwrap();
-    std::fs::write(plugin_dir.join("sidebar-state.js"), "plugin").unwrap();
-    std::fs::write(plugin_dir.join("change-tracker.js"), "plugin").unwrap();
-    std::fs::write(theme_dir.join("amf.json"), "{}").unwrap();
-    std::fs::write(sidebar_dir.join("ses-1.json"), "{\"session_id\":\"ses-1\"}").unwrap();
-
-    cleanup_agent_injected_files(workdir.path(), &AgentKind::Opencode);
-
-    assert!(
-        !plugin_dir.join("sidebar-state.js").exists(),
-        "cleanup should remove the Opencode sidebar plugin"
-    );
-    assert!(
-        !plugin_dir.join("change-tracker.js").exists(),
-        "cleanup should remove the Opencode diff-review plugin"
-    );
-    assert!(
-        !theme_dir.join("amf.json").exists(),
-        "cleanup should remove injected Opencode themes"
-    );
-    assert!(
-        !sidebar_dir.exists(),
-        "cleanup should remove Opencode sidebar state files"
     );
 }
 
@@ -1752,7 +1770,7 @@ fn apply_session_config_switches_agent_and_rewrites_agent_sessions() {
     store.projects[0].features[0].mode = VibeMode::Vibe;
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists()
-        .withf(|session| session == "amf-my-feat")
+        .withf(|session| session == "aiw-my-feat")
         .times(1)
         .return_const(false);
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
@@ -1792,7 +1810,7 @@ fn apply_session_config_switches_agent_and_rewrites_agent_sessions() {
         workdir
             .path()
             .join(".codex")
-            .join("amf-codex-notify.sh")
+            .join("aiw-codex-notify.sh")
             .exists(),
         "Codex notify script should be injected after switching"
     );
@@ -1833,7 +1851,7 @@ fn apply_project_agent_config_updates_preferred_agent_only() {
         state.selected_agent = state
             .allowed_agents
             .iter()
-            .position(|agent| *agent == AgentKind::Opencode)
+            .position(|agent| *agent == AgentKind::Pi)
             .unwrap();
     } else {
         panic!("project config dialog should be open");
@@ -1841,7 +1859,7 @@ fn apply_project_agent_config_updates_preferred_agent_only() {
 
     app.apply_session_config().unwrap();
 
-    assert_eq!(app.store.projects[0].preferred_agent, AgentKind::Opencode);
+    assert_eq!(app.store.projects[0].preferred_agent, AgentKind::Pi);
     assert!(
         app.store.projects[0].features.is_empty(),
         "changing project preference should not create or mutate features"

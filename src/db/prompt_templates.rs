@@ -2,9 +2,9 @@
 //!
 //! Unlike most domain data, this table lives *outside* the `ProjectStore`
 //! full-replace save path in `db::store::do_save`. Prompt templates are
-//! global, not scoped to a project or feature, and it is normal to run AMF
+//! global, not scoped to a project or feature, and it is normal to run AIW
 //! as several concurrent processes — one per checkout — all pointed at the
-//! same `~/.config/amf/amf.db`. Each process holds its own in-memory
+//! same `~/.config/ai_workstation/aiw.db`. Each process holds its own in-memory
 //! `ProjectStore` snapshot; a generic `App::save()` fires often (status
 //! sync, feature start/stop, session changes) and previously rewrote the
 //! *entire* `prompt_templates` table from that snapshot every time. Any
@@ -136,13 +136,13 @@ pub fn delete(conn: &Connection, id: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use crate::prompt_library::PlaceholderKind;
     use tempfile::NamedTempFile;
 
-    fn open_temp_db() -> (NamedTempFile, AmfDb) {
+    fn open_temp_db() -> (NamedTempFile, AiwDb) {
         let tmp = NamedTempFile::new().unwrap();
-        let db = AmfDb::open(tmp.path()).unwrap();
+        let db = AiwDb::open(tmp.path()).unwrap();
         (tmp, db)
     }
 

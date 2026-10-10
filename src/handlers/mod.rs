@@ -10,6 +10,7 @@ pub(crate) mod diff_review;
 mod dormant;
 mod feature_creation;
 mod fork;
+mod fork_split; // FORK: split view
 mod handoff;
 mod harness;
 mod hooks;
@@ -26,7 +27,6 @@ mod pr_review;
 mod precall;
 mod prompt_library;
 mod prompt_overrides;
-mod remote_pairing;
 mod review_destination;
 mod review_questions;
 mod search;
@@ -77,9 +77,8 @@ pub use picker::{
     handle_bookmark_picker_key, handle_claude_session_confirm_key,
     handle_claude_session_picker_key, handle_codex_session_confirm_key,
     handle_codex_session_picker_key, handle_command_picker_key, handle_markdown_file_picker_key,
-    handle_new_session_name_key, handle_notification_picker_key,
-    handle_opencode_session_confirm_key, handle_opencode_session_picker_key,
-    handle_session_picker_key, handle_session_switcher_key, handle_syntax_language_picker_key,
+    handle_new_session_name_key, handle_notification_picker_key, handle_session_picker_key,
+    handle_session_switcher_key, handle_syntax_language_picker_key,
 };
 pub use plan_interview::handle_plan_interview_key;
 pub use plan_interview_attach::handle_plan_interview_attach_doc_key;
@@ -94,7 +93,6 @@ pub use prompt_library::{
     handle_placeholder_fill_key, handle_prompt_editor_key, handle_prompt_library_key,
 };
 pub use prompt_overrides::handle_prompt_overrides_key;
-pub use remote_pairing::handle_remote_pairing_key;
 pub use review_destination::{
     handle_review_destination_pick_key, handle_review_feature_setup_key,
     handle_review_integrate_key,
@@ -140,6 +138,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::ConfirmResourceStart(_) => handle_resource_confirm_key(app, key.code),
         AppMode::Dormant(_) => handle_dormant_key(app, key),
         AppMode::Viewing(_) => handle_view_key(app, key, visible_rows),
+        AppMode::SplitView(_) => fork_split::handle_split_key(app, key), // FORK: split view
         AppMode::Help(_) => handle_help_key(app, key),
         AppMode::SteeringPrompt(_) => handle_steering_prompt_key(app, key),
         AppMode::Compose(_) => handle_compose_key(app, key),
@@ -153,10 +152,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::MarkdownFilePicker(_) => handle_markdown_file_picker_key(app, key),
         AppMode::Searching(_) => handle_search_key(app, key.code),
         AppMode::NamingNewSession(_) => handle_new_session_name_key(app, key.code),
-        AppMode::OpencodeSessionPicker(_) => handle_opencode_session_picker_key(app, key.code),
-        AppMode::ConfirmingOpencodeSession { .. } => {
-            handle_opencode_session_confirm_key(app, key.code)
-        }
         AppMode::ClaudeSessionPicker(_) => handle_claude_session_picker_key(app, key.code),
         AppMode::ConfirmingClaudeSession { .. } => handle_claude_session_confirm_key(app, key.code),
         AppMode::CodexSessionPicker(_) => handle_codex_session_picker_key(app, key.code),
@@ -190,6 +185,8 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::RunningHook(_) => handle_running_hook_key(app, key.code),
         AppMode::DeletingFeatureInProgress(_) => handle_deleting_feature_key(app, key.code),
         AppMode::HookPrompt(_) => handle_hook_prompt_key(app, key.code),
+        // FORK: repo hook approval dialog.
+        AppMode::ApprovingRepoHook(_) => crate::fork::hook_approval::handle_key(app, key.code),
         AppMode::LatestPrompt(_) => handle_latest_prompt_key(app, key.code),
         AppMode::PromptLibrary(_) => handle_prompt_library_key(app, key.code),
         AppMode::PromptOverrides(_) => handle_prompt_overrides_key(app, key, visible_rows),
@@ -213,6 +210,5 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::ReviewHarnessPick(_) => handle_review_harness_pick_key(app, key.code),
         AppMode::ReviewIntegrate(_) => handle_review_integrate_key(app, key.code),
         AppMode::ContextSettings(_) => handle_context_settings_key(app, key),
-        AppMode::RemotePairing(_) => handle_remote_pairing_key(app, key),
     }
 }

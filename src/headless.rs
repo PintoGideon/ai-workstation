@@ -160,9 +160,9 @@ pub const fn default_prompt_budget_tokens(harness: &AgentKind) -> usize {
         AgentKind::Claude => 128_000,
         // Comparable large context through `codex exec`.
         AgentKind::Codex => 128_000,
-        // Model-dependent and frequently smaller — stay further back.
-        AgentKind::Opencode => 96_000,
         AgentKind::Pi => 96_000,
+        // FORK: no headless support yet; value unused.
+        AgentKind::Gemini | AgentKind::Cursor => 96_000,
     }
 }
 
@@ -190,7 +190,7 @@ pub fn will_overflow_with_budget(prompt: &str, budget_tokens: usize) -> bool {
 // fails with a typed [`PromptTooLong`] instead of a generic error string so
 // `crate::review_batch` can halve that batch and retry rather than
 // abandoning coverage. Any failure the classifier does not recognize stays a
-// plain `anyhow` error — see AMF_PLAN.md's risk note on unverified CLI
+// plain `anyhow` error — see AIW_PLAN.md's risk note on unverified CLI
 // phrasings.
 // ---------------------------------------------------------------------------
 
@@ -238,8 +238,8 @@ pub fn as_prompt_too_long(err: &anyhow::Error) -> Option<&PromptTooLong> {
 /// Best-effort detection of a "prompt exceeds the context window" failure in a
 /// harness's error text (stderr on non-zero exit, or a structured event
 /// error). Matches the phrasings each CLI/provider is known to emit:
-/// Anthropic/Claude Code, OpenAI/Codex, and the assorted providers OpenCode
-/// and Pi route to. An unrecognized phrasing falls through and surfaces as an
+/// Anthropic/Claude Code, OpenAI/Codex, and the assorted providers Pi
+/// routes to. An unrecognized phrasing falls through and surfaces as an
 /// ordinary failure until it is verified against that CLI.
 pub fn is_prompt_too_long_message(text: &str) -> bool {
     let lowered = text.to_ascii_lowercase();
@@ -251,7 +251,7 @@ pub fn is_prompt_too_long_message(text: &str) -> bool {
         "maximum context length",
         "context_length_exceeded",
         "reduce the length of the messages",
-        // Generic provider phrasings (OpenCode model routing, Pi)
+        // Generic provider phrasings (Pi model routing)
         "context length exceeded",
         "context window exceeded",
         "exceeds the context window",
@@ -276,23 +276,9 @@ struct HeadlessCommand {
     /// Args that must stay last (e.g. Codex's trailing `-` stdin marker). An
     /// optional `--model <name>` is inserted between `args` and `trailing`.
     trailing: Vec<&'static str>,
-    /// Extra env vars for the spawned process (e.g. Opencode's
-    /// `OPENCODE_PERMISSION` deny-all override for restricted runs).
+    /// Extra env vars for the spawned process.
     envs: Vec<(&'static str, &'static str)>,
 }
-
-/// Deny-all permission override for Opencode's restricted headless runs.
-/// Traced the installed binary's config loader: `OPENCODE_PERMISSION` is
-/// merged into the resolved permission set *after* project/global
-/// `opencode.json`, so unlike a config-defined agent this can't be
-/// re-loosened by repo-controlled config.
-const OPENCODE_RESTRICTED_PERMISSION: &str = r#"{"*":"deny"}"#;
-
-/// Read-only tool policy for user-directed plan revisions. The wildcard keeps
-/// every unlisted tool (including edit, bash, web, and subagents) denied while
-/// the four repository-inspection tools are explicitly enabled.
-const OPENCODE_READ_ONLY_PERMISSION: &str =
-    r#"{"*":"deny","read":"allow","glob":"allow","grep":"allow","list":"allow"}"#;
 
 /// Long flags `command_for(Codex)` relies on. Older Codex releases reject
 /// some of these with an argument-parse error, so headless availability must
@@ -348,10 +334,6 @@ const CLAUDE_PROGRESS_REQUIRED_FLAGS: [ProgressFlag; 2] = [
         value: None,
     },
 ];
-const OPENCODE_PROGRESS_REQUIRED_FLAGS: [ProgressFlag; 1] = [ProgressFlag {
-    flag: "--format",
-    value: Some("json"),
-}];
 const PI_PROGRESS_REQUIRED_FLAGS: [ProgressFlag; 1] = [ProgressFlag {
     flag: "--mode",
     value: Some("json"),
@@ -362,17 +344,9 @@ impl HeadlessRunner {
         match harness {
             AgentKind::Claude => crate::claude::ClaudeLauncher::check_available(),
             AgentKind::Codex => check_codex_headless_available(),
-            AgentKind::Opencode => {
-                let output = Command::new("opencode")
-                    .arg("--version")
-                    .output()
-                    .context("opencode CLI not found - is Opencode installed?")?;
-                if !output.status.success() {
-                    anyhow::bail!("opencode CLI returned an error");
-                }
-                Ok(())
-            }
             AgentKind::Pi => crate::pi::PiLauncher::check_available(),
+            // FORK: Gemini/Cursor are interactive-only in ACC for now.
+            AgentKind::Gemini | AgentKind::Cursor => Err(headless_unsupported(harness)),
         }
     }
 
@@ -389,15 +363,10 @@ impl HeadlessRunner {
                 "Claude",
             ),
             AgentKind::Codex => Ok(()),
-            AgentKind::Opencode => check_progress_flags(
-                "opencode",
-                &["run", "--help"],
-                &OPENCODE_PROGRESS_REQUIRED_FLAGS,
-                "Opencode",
-            ),
             AgentKind::Pi => {
                 check_progress_flags("pi", &["--help"], &PI_PROGRESS_REQUIRED_FLAGS, "Pi")
             }
+            AgentKind::Gemini | AgentKind::Cursor => Err(headless_unsupported(harness)), // FORK
         }
     }
 
@@ -406,7 +375,7 @@ impl HeadlessRunner {
     /// Triage's AI review — can pick a model independent of whatever the
     /// feature's interactive session runs.
     ///
-    /// `restricted`, when true, forces Claude, Opencode, and Pi into a no-tools
+    /// `restricted`, when true, forces Claude and Pi into a no-tools
     /// invocation that repo-controlled config (settings files, hooks,
     /// plugins, MCP servers) cannot loosen — for callers whose prompt
     /// carries all the context it needs and expects a plain text answer, not
@@ -523,7 +492,7 @@ impl HeadlessRunner {
     }
 
     /// The **strictly read-only** entry the PR-triage "Investigate" flow uses
-    /// (`AMF_PLAN.md`). A named seam over [`read_only_command_for`] so the
+    /// (`AIW_PLAN.md`). A named seam over [`read_only_command_for`] so the
     /// read-only contract is greppable and cannot be swapped for a
     /// tool-enabled path ([`Self::run`] / [`Self::run_with_progress`]) in a
     /// later refactor without it being obvious. The command it builds cannot
@@ -715,7 +684,8 @@ fn help_advertises_flag(help: &str, flag: &str) -> bool {
 /// on whether its headless contract is trusted for interviews.
 fn supports_headless_interview(harness: &AgentKind) -> bool {
     match harness {
-        AgentKind::Claude | AgentKind::Codex | AgentKind::Opencode | AgentKind::Pi => true,
+        AgentKind::Claude | AgentKind::Codex | AgentKind::Pi => true,
+        AgentKind::Gemini | AgentKind::Cursor => false, // FORK: no headless contract yet
     }
 }
 
@@ -724,7 +694,7 @@ fn interview_candidates(preferred: &AgentKind) -> Vec<AgentKind> {
     if supports_headless_interview(preferred) {
         candidates.push(preferred.clone());
     }
-    for fallback in [AgentKind::Claude, AgentKind::Codex, AgentKind::Opencode] {
+    for fallback in [AgentKind::Claude, AgentKind::Codex] {
         if !candidates.contains(&fallback) {
             candidates.push(fallback);
         }
@@ -775,16 +745,15 @@ pub enum ReasoningLevel {
 impl ReasoningLevel {
     /// The levels a harness's headless CLI accepts, weakest first. Verified
     /// against `claude --help` (`--effort`: low, medium, high, xhigh, max),
-    /// the Codex config key `model_reasoning_effort`, and `opencode run
-    /// --help` (`--variant`: "e.g., high, max, minimal"). Pi has no verified
+    /// and the Codex config key `model_reasoning_effort`. Pi has no verified
     /// flag, so it offers none.
     pub fn supported_for(harness: &AgentKind) -> &'static [ReasoningLevel] {
         use ReasoningLevel::*;
         match harness {
             AgentKind::Claude => &[Low, Medium, High, XHigh, Max],
             AgentKind::Codex => &[Low, Medium, High, XHigh],
-            AgentKind::Opencode => &[Minimal, High, Max],
             AgentKind::Pi => &[],
+            AgentKind::Gemini | AgentKind::Cursor => &[], // FORK
         }
     }
 
@@ -837,15 +806,16 @@ pub fn reasoning_args(harness: &AgentKind, level: ReasoningLevel) -> Vec<String>
             "-c".to_string(),
             format!("model_reasoning_effort=\"{slug}\""),
         ],
-        AgentKind::Opencode => vec!["--variant".to_string(), slug.to_string()],
         AgentKind::Pi => Vec::new(),
+        AgentKind::Gemini | AgentKind::Cursor => Vec::new(), // FORK
     }
 }
 
 /// Harnesses whose headless CLI accepts `--model <name>`.
 fn supports_model_flag(harness: &AgentKind) -> bool {
     match harness {
-        AgentKind::Claude | AgentKind::Codex | AgentKind::Opencode | AgentKind::Pi => true,
+        AgentKind::Claude | AgentKind::Codex | AgentKind::Pi => true,
+        AgentKind::Gemini | AgentKind::Cursor => false, // FORK
     }
 }
 
@@ -898,6 +868,10 @@ fn run_cancellable_command(
     cancelled: &std::sync::atomic::AtomicBool,
     timeout: std::time::Duration,
 ) -> Result<String> {
+    // FORK: Gemini/Cursor have no headless contract yet.
+    if crate::fork::extra_agents::is_extra(harness) {
+        return Err(headless_unsupported(harness));
+    }
     use std::os::unix::process::CommandExt;
     use std::sync::atomic::Ordering;
     anyhow::ensure!(!cancelled.load(Ordering::Relaxed), "Question cancelled");
@@ -1025,6 +999,10 @@ fn run_command_with_args(
     prompt: &str,
     sel: ModelSel<'_>,
 ) -> Result<String> {
+    // FORK: Gemini/Cursor have no headless contract yet.
+    if crate::fork::extra_agents::is_extra(harness) {
+        return Err(headless_unsupported(harness));
+    }
     // Held for the whole run so the concurrency gate sees headless work.
     // Taken here rather than at each call site: every path out of this
     // function — spawn failure, `?`, cancellation, panic — releases it.
@@ -1103,6 +1081,10 @@ fn run_jsonl_command(
     sel: ModelSel<'_>,
     on_progress: impl Fn(HeadlessProgress) + Send + 'static,
 ) -> Result<String> {
+    // FORK: Gemini/Cursor have no headless contract yet.
+    if crate::fork::extra_agents::is_extra(harness) {
+        return Err(headless_unsupported(harness));
+    }
     // See `run_command`: one lease per in-flight headless run, released on
     // every exit path including cancellation.
     let _lease = crate::resources::limits::HeadlessLease::acquire();
@@ -1249,8 +1231,8 @@ fn assemble_jsonl_args(
                 "--json".to_string(),
             );
         }
-        AgentKind::Opencode => args.extend(["--format".to_string(), "json".to_string()]),
         AgentKind::Pi => args.extend(["--mode".to_string(), "json".to_string()]),
+        AgentKind::Gemini | AgentKind::Cursor => {} // FORK: rejected before spawning
     }
     args
 }
@@ -1264,8 +1246,8 @@ fn apply_jsonl_event(
     match harness {
         AgentKind::Claude => apply_claude_json_event(event, output, on_progress),
         AgentKind::Codex => apply_codex_json_event(event, output, on_progress),
-        AgentKind::Opencode => apply_opencode_json_event(event, output, on_progress),
         AgentKind::Pi => apply_pi_json_event(event, output, on_progress),
+        AgentKind::Gemini | AgentKind::Cursor => {} // FORK: rejected before spawning
     }
 }
 
@@ -1404,53 +1386,6 @@ fn apply_claude_json_event(
             on_progress(HeadlessProgress::Activity(
                 "Completed the Claude review".to_string(),
             ));
-        }
-        _ => {}
-    }
-}
-
-fn apply_opencode_json_event(
-    event: &serde_json::Value,
-    output: &mut JsonlOutput,
-    on_progress: &impl Fn(HeadlessProgress),
-) {
-    match event.get("type").and_then(serde_json::Value::as_str) {
-        Some("step_start") => on_progress(HeadlessProgress::Activity(
-            "Opencode started a review step".to_string(),
-        )),
-        Some("tool_use") => on_progress(HeadlessProgress::Activity(
-            "Completed a repository check".to_string(),
-        )),
-        Some("reasoning") => on_progress(HeadlessProgress::Activity(
-            "Completed a reasoning step".to_string(),
-        )),
-        Some("text") => {
-            // Opencode's `run --format json` emits `text` as incremental
-            // chunks of the response rather than one final full-text part,
-            // so each chunk is appended, not treated as a full replacement.
-            if let Some(text) = event
-                .get("part")
-                .and_then(|part| part.get("text"))
-                .and_then(serde_json::Value::as_str)
-            {
-                match &mut output.final_message {
-                    Some(message) => message.push_str(text),
-                    None => output.final_message = Some(text.to_string()),
-                }
-            }
-            on_progress(HeadlessProgress::Activity(
-                "Drafted the review response".to_string(),
-            ));
-        }
-        Some("step_finish") => {
-            let usage = event.get("part").and_then(|part| part.get("tokens"));
-            emit_usage_from(usage, true, output, on_progress);
-            on_progress(HeadlessProgress::Activity(
-                "Completed an Opencode review step".to_string(),
-            ));
-        }
-        Some("error") => {
-            output.event_error = json_error_message(event.get("error"));
         }
         _ => {}
     }
@@ -1598,19 +1533,23 @@ fn add_optional(current: Option<u64>, incoming: Option<u64>) -> Option<u64> {
     }
 }
 
-fn json_error_message(error: Option<&serde_json::Value>) -> Option<String> {
-    let error = error?;
-    error
-        .get("data")
-        .and_then(|data| data.get("message"))
-        .or_else(|| error.get("message"))
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string)
-        .or_else(|| error.as_str().map(str::to_string))
+// FORK: Gemini/Cursor are interactive-only in ACC for now.
+fn headless_unsupported(harness: &AgentKind) -> anyhow::Error {
+    anyhow::anyhow!(
+        "{} has no headless mode in AIW yet; pick Claude, Codex or Pi for this",
+        harness.display_name()
+    )
 }
 
 fn command_for(harness: &AgentKind, restricted: bool) -> HeadlessCommand {
     match harness {
+        // FORK: never spawned — every runner rejects these harnesses first.
+        AgentKind::Gemini | AgentKind::Cursor => HeadlessCommand {
+            binary: harness.slug().to_string(),
+            args: vec![],
+            trailing: vec![],
+            envs: vec![],
+        },
         AgentKind::Claude => {
             let mut args = vec!["-p", "--output-format", "text"];
             if restricted {
@@ -1644,23 +1583,6 @@ fn command_for(harness: &AgentKind, restricted: bool) -> HeadlessCommand {
             trailing: vec!["-"],
             envs: vec![],
         },
-        AgentKind::Opencode => {
-            let mut args = vec!["run"];
-            let mut envs = vec![];
-            if restricted {
-                // --pure drops external plugins; OPENCODE_PERMISSION is a
-                // deny-all override applied after project/global
-                // opencode.json (see OPENCODE_RESTRICTED_PERMISSION's doc).
-                args.push("--pure");
-                envs.push(("OPENCODE_PERMISSION", OPENCODE_RESTRICTED_PERMISSION));
-            }
-            HeadlessCommand {
-                binary: "opencode".into(),
-                args,
-                trailing: vec![],
-                envs,
-            }
-        }
         AgentKind::Pi => {
             let mut args = vec!["-p", "--no-session"];
             if restricted {
@@ -1719,26 +1641,19 @@ fn headless_command_is_read_only(harness: &AgentKind, cmd: &HeadlessCommand) -> 
         }
         // Codex's headless command is an ephemeral read-only sandbox.
         AgentKind::Codex => value_after("--sandbox") == Some("read-only"),
-        AgentKind::Opencode => {
-            cmd.args.contains(&"--pure")
-                && cmd.envs.iter().any(|(k, v)| {
-                    *k == "OPENCODE_PERMISSION"
-                        && (*v == OPENCODE_READ_ONLY_PERMISSION
-                            || *v == OPENCODE_RESTRICTED_PERMISSION)
-                })
-        }
         AgentKind::Pi => {
             (cmd.args.contains(&"--no-tools")
                 || value_after("--tools")
                     .is_some_and(|t| read_only_tools(t, &["read", "grep", "find", "ls"])))
                 && cmd.args.contains(&"--no-approve")
         }
+        AgentKind::Gemini | AgentKind::Cursor => false, // FORK
     }
 }
 
 /// MCP tools a read-only Claude pass may call, as written in the **global**
-/// AMF config (`plan_interview_mcp`). Never read from a repository's
-/// `amf.json`: an MCP config names programs to execute, which is exactly
+/// AIW config (`plan_interview_mcp`). Never read from a repository's
+/// `aiw.json`: an MCP config names programs to execute, which is exactly
 /// what the headless isolation flags exist to keep a repository from
 /// supplying.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1904,6 +1819,7 @@ fn claude_mcp_args_are_read_only(args: &[String]) -> bool {
 
 fn read_only_command_for(harness: &AgentKind) -> Result<HeadlessCommand> {
     match harness {
+        AgentKind::Gemini | AgentKind::Cursor => Err(headless_unsupported(harness)), // FORK
         AgentKind::Claude => Ok(HeadlessCommand {
             binary: crate::claude::ClaudeLauncher::resolve_binary(),
             args: vec![
@@ -1923,12 +1839,6 @@ fn read_only_command_for(harness: &AgentKind) -> Result<HeadlessCommand> {
         // Codex's ordinary headless command is already an ephemeral read-only
         // sandbox, so the same command is the investigation contract.
         AgentKind::Codex => Ok(command_for(harness, false)),
-        AgentKind::Opencode => Ok(HeadlessCommand {
-            binary: "opencode".into(),
-            args: vec!["run", "--pure"],
-            trailing: vec![],
-            envs: vec![("OPENCODE_PERMISSION", OPENCODE_READ_ONLY_PERMISSION)],
-        }),
         AgentKind::Pi => Ok(HeadlessCommand {
             binary: "pi".into(),
             args: vec![
@@ -1953,20 +1863,32 @@ mod tests {
     use super::*;
     use crate::resources::limits::{in_flight_headless_runs, lock_lease_tests, wait_for_in_flight};
 
+    // FORK: Gemini/Cursor are refused before anything is spawned.
+    #[test]
+    fn gemini_and_cursor_are_not_headless_harnesses() {
+        for harness in [AgentKind::Gemini, AgentKind::Cursor] {
+            assert!(HeadlessRunner::check_available(&harness).is_err());
+            assert!(!supports_headless_interview(&harness));
+            assert!(read_only_command_for(&harness).is_err());
+            let err = HeadlessRunner::run(&harness, Path::new("/nonexistent"), "hi", None, true)
+                .unwrap_err();
+            assert!(err.to_string().contains("no headless mode"), "{err}");
+        }
+    }
+
     #[test]
     fn review_question_commands_keep_each_harness_read_only_and_pipe_the_prompt() {
         use std::os::unix::fs::PermissionsExt;
         let _guard = lock_lease_tests();
         let dir = tempfile::TempDir::new().unwrap();
         let executable = dir.path().join("mock-harness");
-        std::fs::write(&executable, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args\nprintf '%s' \"$OPENCODE_PERMISSION\" > permission\ncat > prompt\nprintf 'mock answer'\n").unwrap();
+        std::fs::write(
+            &executable,
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > args\ncat > prompt\nprintf 'mock answer'\n",
+        )
+        .unwrap();
         std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
-        for harness in [
-            AgentKind::Claude,
-            AgentKind::Codex,
-            AgentKind::Opencode,
-            AgentKind::Pi,
-        ] {
+        for harness in [AgentKind::Claude, AgentKind::Codex, AgentKind::Pi] {
             let mut spec = read_only_command_for(&harness).unwrap();
             assert!(headless_command_is_read_only(&harness, &spec));
             spec.binary = executable.to_str().unwrap().into();
@@ -1995,17 +1917,11 @@ mod tests {
                     assert!(args.contains("--sandbox\nread-only"));
                     assert!(args.contains("--ephemeral"));
                 }
-                AgentKind::Opencode => {
-                    assert!(args.contains("--pure"));
-                    assert_eq!(
-                        std::fs::read_to_string(dir.path().join("permission")).unwrap(),
-                        OPENCODE_READ_ONLY_PERMISSION
-                    );
-                }
                 AgentKind::Pi => {
                     assert!(args.contains("read,grep,find,ls"));
                     assert!(args.contains("--no-extensions"));
                 }
+                AgentKind::Gemini | AgentKind::Cursor => unreachable!(), // FORK
             }
         }
     }
@@ -2065,7 +1981,7 @@ mod tests {
     fn review_question_launch_exit_and_empty_output_failures_are_actionable() {
         let _guard = lock_lease_tests();
         for (binary, args, expected) in [
-            ("amf-no-question-harness", vec![], "Could not launch"),
+            ("aiw-no-question-harness", vec![], "Could not launch"),
             (
                 "sh",
                 vec!["-c", "cat >/dev/null; echo failure >&2; exit 1"],
@@ -2104,7 +2020,7 @@ mod tests {
         // the assertion below.
         let base = wait_for_in_flight(0);
         let spec = HeadlessCommand {
-            binary: "amf-no-such-headless-binary".into(),
+            binary: "aiw-no-such-headless-binary".into(),
             args: vec!["-p"],
             trailing: vec![],
             envs: vec![],
@@ -2251,15 +2167,6 @@ mod tests {
             }
         );
         assert_eq!(
-            command_for(&AgentKind::Opencode, false),
-            HeadlessCommand {
-                binary: "opencode".into(),
-                args: vec!["run"],
-                trailing: vec![],
-                envs: vec![],
-            }
-        );
-        assert_eq!(
             command_for(&AgentKind::Pi, false),
             HeadlessCommand {
                 binary: "pi".into(),
@@ -2280,13 +2187,6 @@ mod tests {
             .position(|arg| *arg == "--tools")
             .expect("--tools flag present");
         assert_eq!(claude.args[tools_idx + 1], "");
-
-        let opencode = command_for(&AgentKind::Opencode, true);
-        assert!(opencode.args.contains(&"--pure"));
-        assert_eq!(
-            opencode.envs,
-            [("OPENCODE_PERMISSION", OPENCODE_RESTRICTED_PERMISSION)]
-        );
 
         // Codex is already sandboxed unconditionally; restricted is a no-op.
         assert_eq!(
@@ -2327,13 +2227,6 @@ mod tests {
             .unwrap();
         assert_eq!(codex.args[sandbox_idx + 1], "read-only");
 
-        let opencode = read_only_command_for(&AgentKind::Opencode).unwrap();
-        assert!(opencode.args.contains(&"--pure"));
-        assert_eq!(
-            opencode.envs,
-            [("OPENCODE_PERMISSION", OPENCODE_READ_ONLY_PERMISSION)]
-        );
-
         let pi = read_only_command_for(&AgentKind::Pi).unwrap();
         let tools_idx = pi.args.iter().position(|arg| *arg == "--tools").unwrap();
         assert_eq!(pi.args[tools_idx + 1], "read,grep,find,ls");
@@ -2351,12 +2244,7 @@ mod tests {
     /// vacuous — a tool-enabled command fails it.
     #[test]
     fn investigation_headless_command_is_read_only_for_every_harness() {
-        for harness in [
-            AgentKind::Claude,
-            AgentKind::Codex,
-            AgentKind::Opencode,
-            AgentKind::Pi,
-        ] {
+        for harness in [AgentKind::Claude, AgentKind::Codex, AgentKind::Pi] {
             let spec = read_only_command_for(&harness).unwrap();
             assert!(
                 headless_command_is_read_only(&harness, &spec),
@@ -2421,7 +2309,7 @@ mod tests {
         // provider's stderr must win over that secondary pipe error.
         let prompt = "x".repeat(1_000_000);
         let error = run_command(
-            &AgentKind::Opencode,
+            &AgentKind::Pi,
             &spec,
             Path::new("/tmp"),
             &prompt,
@@ -2429,7 +2317,7 @@ mod tests {
         )
         .unwrap_err()
         .to_string();
-        assert!(error.contains("Opencode headless command failed"));
+        assert!(error.contains("Pi headless command failed"));
         assert!(error.contains("quota exhausted"));
     }
 
@@ -2465,7 +2353,6 @@ mod tests {
     fn model_flag_is_appended_for_supported_harnesses_only() {
         assert!(supports_model_flag(&AgentKind::Claude));
         assert!(supports_model_flag(&AgentKind::Codex));
-        assert!(supports_model_flag(&AgentKind::Opencode));
         assert!(supports_model_flag(&AgentKind::Pi));
     }
 
@@ -2479,10 +2366,6 @@ mod tests {
         assert_eq!(
             reasoning_args(&AgentKind::Codex, High),
             ["-c", "model_reasoning_effort=\"high\""]
-        );
-        assert_eq!(
-            reasoning_args(&AgentKind::Opencode, Max),
-            ["--variant", "max"]
         );
     }
 
@@ -2593,14 +2476,6 @@ mod tests {
         );
         assert_eq!(
             assemble_jsonl_args(
-                &AgentKind::Opencode,
-                &command_for(&AgentKind::Opencode, false),
-                ModelSel::default()
-            ),
-            ["run", "--format", "json"]
-        );
-        assert_eq!(
-            assemble_jsonl_args(
                 &AgentKind::Pi,
                 &command_for(&AgentKind::Pi, false),
                 ModelSel::default()
@@ -2681,22 +2556,22 @@ mod tests {
 
     #[test]
     fn progress_flag_probe_requires_value_near_its_flag_not_anywhere_in_help() {
-        // An older CLI whose --format only supports plain text, but which
-        // happens to mention "json" elsewhere, far from --format's own
+        // An older CLI whose --mode only supports plain text, but which
+        // happens to mention "json" elsewhere, far from --mode's own
         // definition (a config file example, an unrelated flag), must not
-        // be mistaken for one that supports `--format json`.
+        // be mistaken for one that supports `--mode json`.
         let filler = "x".repeat(300);
         let stale_help = format!(
-            "Options:\n  --format <FORMAT>  text or markdown\n{filler}\n  \
+            "Options:\n  --mode <MODE>  text or markdown\n{filler}\n  \
              --config <PATH>  e.g. settings.json"
         );
         assert_eq!(
-            missing_progress_flags(&stale_help, &OPENCODE_PROGRESS_REQUIRED_FLAGS),
-            ["--format"]
+            missing_progress_flags(&stale_help, &PI_PROGRESS_REQUIRED_FLAGS),
+            ["--mode"]
         );
 
-        let current_help = "Options:\n  --format <FORMAT>  [possible values: text, json]";
-        assert!(missing_progress_flags(current_help, &OPENCODE_PROGRESS_REQUIRED_FLAGS).is_empty());
+        let current_help = "Options:\n  --mode <MODE>  [possible values: text, json]";
+        assert!(missing_progress_flags(current_help, &PI_PROGRESS_REQUIRED_FLAGS).is_empty());
     }
 
     #[test]
@@ -2845,53 +2720,6 @@ mod tests {
     }
 
     #[test]
-    fn opencode_events_capture_final_text_and_accumulate_step_usage() {
-        let progress = std::cell::RefCell::new(Vec::new());
-        let mut output = JsonlOutput::default();
-        for event in [
-            serde_json::json!({
-                "type": "tool_use",
-                "part": {"tool": "bash", "state": {"output": "private output"}}
-            }),
-            serde_json::json!({
-                "type": "step_finish",
-                "part": {"tokens": {"input": 100, "output": 10}}
-            }),
-            serde_json::json!({
-                "type": "step_finish",
-                "part": {"tokens": {"input": 50, "output": 5}}
-            }),
-            serde_json::json!({
-                "type": "text",
-                "part": {"text": "### src/main.rs:9\n"}
-            }),
-            serde_json::json!({
-                "type": "text",
-                "part": {"text": "Finding"}
-            }),
-        ] {
-            apply_opencode_json_event(&event, &mut output, &|event| {
-                progress.borrow_mut().push(event)
-            });
-        }
-
-        assert_eq!(
-            output.final_message.as_deref(),
-            Some("### src/main.rs:9\nFinding")
-        );
-        assert!(
-            progress
-                .borrow()
-                .contains(&HeadlessProgress::Usage(HeadlessUsage {
-                    input_tokens: Some(150),
-                    output_tokens: Some(15),
-                    ..Default::default()
-                }))
-        );
-        assert!(!format!("{:?}", progress.borrow()).contains("private output"));
-    }
-
-    #[test]
     fn pi_events_capture_assistant_text_usage_and_redact_tool_details() {
         let progress = std::cell::RefCell::new(Vec::new());
         let mut output = JsonlOutput::default();
@@ -2959,12 +2787,12 @@ mod tests {
     #[test]
     fn interview_candidates_prefer_the_feature_harness_then_stable_fallbacks() {
         assert_eq!(
-            interview_candidates(&AgentKind::Opencode),
-            [AgentKind::Opencode, AgentKind::Claude, AgentKind::Codex]
+            interview_candidates(&AgentKind::Codex),
+            [AgentKind::Codex, AgentKind::Claude]
         );
         assert_eq!(
-            interview_candidates(&AgentKind::Codex),
-            [AgentKind::Codex, AgentKind::Claude, AgentKind::Opencode]
+            interview_candidates(&AgentKind::Gemini),
+            [AgentKind::Claude, AgentKind::Codex]
         );
     }
 
@@ -2972,12 +2800,7 @@ mod tests {
     fn interview_candidates_prefer_verified_pi_headless_mode() {
         assert_eq!(
             interview_candidates(&AgentKind::Pi),
-            [
-                AgentKind::Pi,
-                AgentKind::Claude,
-                AgentKind::Codex,
-                AgentKind::Opencode
-            ]
+            [AgentKind::Pi, AgentKind::Claude, AgentKind::Codex]
         );
     }
 
@@ -3000,10 +2823,9 @@ mod tests {
 
     #[test]
     fn interview_harness_selection_falls_back_or_returns_static_only() {
-        let selected = select_interview_harness_with(&AgentKind::Codex, |harness| {
-            harness == &AgentKind::Opencode
-        });
-        assert_eq!(selected, Some(AgentKind::Opencode));
+        let selected =
+            select_interview_harness_with(&AgentKind::Pi, |harness| harness == &AgentKind::Codex);
+        assert_eq!(selected, Some(AgentKind::Codex));
 
         let selected = select_interview_harness_with(&AgentKind::Claude, |_| false);
         assert_eq!(selected, None);
@@ -3074,7 +2896,7 @@ mod tests {
         assert!(is_prompt_too_long_message(
             "Error code: 400 - {'error': {'code': 'context_length_exceeded'}}"
         ));
-        // Providers OpenCode routes to
+        // Providers Pi routes to
         assert!(is_prompt_too_long_message(
             "input is too long for requested model"
         ));
@@ -3192,19 +3014,21 @@ mod tests {
 
     #[test]
     fn mcp_config_expands_a_home_relative_path() {
-        let err = mcp_config("~/amf-test-no-such-mcp.json", &["mcp__a__b"])
+        let err = mcp_config("~/aiw-test-no-such-mcp.json", &["mcp__a__b"])
             .validate()
             .unwrap_err();
         let home = dirs::home_dir().unwrap();
         assert!(
-            err.contains(&home.join("amf-test-no-such-mcp.json").display().to_string()),
+            err.contains(&home.join("aiw-test-no-such-mcp.json").display().to_string()),
             "{err}"
         );
     }
 
     fn sample_mcp() -> HeadlessMcp {
         HeadlessMcp {
-            config: Some(std::path::PathBuf::from("/home/me/.config/amf/mcp.json")),
+            config: Some(std::path::PathBuf::from(
+                "/home/me/.config/ai_workstation/mcp.json",
+            )),
             allowed_tools: vec![
                 "mcp__claude_ai_Asana__get_task".into(),
                 "mcp__asana__asana_get_stories_for_task".into(),
@@ -3220,7 +3044,10 @@ mod tests {
             let i = args.iter().position(|a| a == flag).unwrap();
             args[i + 1].clone()
         };
-        assert_eq!(value_after("--mcp-config"), "/home/me/.config/amf/mcp.json");
+        assert_eq!(
+            value_after("--mcp-config"),
+            "/home/me/.config/ai_workstation/mcp.json"
+        );
         assert_eq!(
             value_after("--allowedTools"),
             "mcp__claude_ai_Asana__get_task,mcp__asana__asana_get_stories_for_task"

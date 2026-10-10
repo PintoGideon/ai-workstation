@@ -73,7 +73,7 @@ impl App {
         // dashboard, so pretending would be worse than refusing.
         if self.db.is_none() {
             self.learning_error(
-                "AMF can't reach its database, so there's no TODO list to add to. Your questions and answers still work.",
+                "AIW can't reach its database, so there's no TODO list to add to. Your questions and answers still work.",
             );
             return;
         }
@@ -578,7 +578,7 @@ impl App {
         if let Err(e) = self.enter_view_without_auto_compose() {
             self.log_error("learning", format!("couldn't open the new session: {e}"));
             self.push_toast_error(format!(
-                "The session started, but AMF couldn't open it: {e}"
+                "The session started, but AIW couldn't open it: {e}"
             ));
             return Some(session_id);
         }
@@ -691,10 +691,10 @@ pub fn learning_session_label(qa: &LearningQa) -> String {
 pub fn escalation_seed(qa: &LearningQa, drift: Option<LearningAnchorDrift>) -> String {
     let mut seed = String::from(match qa.intent {
         LearningQaIntent::Explain => {
-            "I've been reading this code in AMF's Learning Mode and want to keep going with you.\n"
+            "I've been reading this code in AIW's Learning Mode and want to keep going with you.\n"
         }
         LearningQaIntent::Action => {
-            "I've been reading this code in AMF's Learning Mode, and there's a change I'd like made.\n"
+            "I've been reading this code in AIW's Learning Mode, and there's a change I'd like made.\n"
         }
     });
     seed.push_str(&format!("\nWhere I was reading: {}\n", anchor_locator(qa)));

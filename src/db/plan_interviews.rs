@@ -1,7 +1,7 @@
 //! SQLite persistence for plan-mode discovery interviews.
 //!
 //! A feature keeps at most one **draft** (an interview in progress, saved as
-//! answers are given so abandoning the mode or restarting AMF does not lose
+//! answers are given so abandoning the mode or restarting AIW does not lose
 //! them) and at most one **final** transcript (the Q&A behind the plan the user
 //! accepted). They are separate rows so re-running the interview on a feature
 //! that already has an accepted plan can save progress without destroying the
@@ -393,13 +393,13 @@ pub fn delete_for_feature(conn: &Connection, feature_id: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use crate::plan_interview::{PlanQuestionKind, QuestionSource};
     use tempfile::NamedTempFile;
 
-    fn open_temp_db() -> (NamedTempFile, AmfDb) {
+    fn open_temp_db() -> (NamedTempFile, AiwDb) {
         let tmp = NamedTempFile::new().unwrap();
-        let db = AmfDb::open(tmp.path()).unwrap();
+        let db = AiwDb::open(tmp.path()).unwrap();
         (tmp, db)
     }
 

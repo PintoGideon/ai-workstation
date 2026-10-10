@@ -121,7 +121,7 @@ export default function NewSessionDialog({
 
       {(options.custom.length > 0 || options.config_warning) && (
         <fieldset className="custom-session-options">
-          <legend>Configured sessions <span className="muted">(amf.json)</span></legend>
+          <legend>Configured sessions <span className="muted">(aiw.json)</span></legend>
           {options.config_warning && (
             <div className="callout callout-warning" role="status">
               <Icon name="alert" size={14} />
@@ -158,7 +158,7 @@ export default function NewSessionDialog({
 
       {builtin?.kind === "vscode" && (
         <p className="muted new-session-note">
-          Opens this worktree in a new VS Code window. AMF tracks the window and closes it when the
+          Opens this worktree in a new VS Code window. AIW tracks the window and closes it when the
           feature stops when editor cleanup is enabled and the window can still be safely identified.
         </p>
       )}

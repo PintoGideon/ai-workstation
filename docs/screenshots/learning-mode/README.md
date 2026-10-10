@@ -1,7 +1,7 @@
 # Learning Mode, end to end
 
-Captured from an isolated, throwaway AMF instance
-(`scripts/dev/screenshot/amf-capture.sh`, scenario
+Captured from an isolated, throwaway AIW instance
+(`scripts/dev/screenshot/aiw-capture.sh`, scenario
 `scripts/dev/screenshot/scenarios/learning-mode.txt`) at `160x44`, against a
 scratch `taskline` repo seeded with a `README.md`, `CLAUDE.md`, `Cargo.toml`
 and `src/main.rs` so the pinned **Start here** group has real files to find.
@@ -39,7 +39,7 @@ written against the same assumptions as the bug.
   `Tag::Paragraph` around it, so the first inline event had nowhere to land.
   Task-list checkboxes (always first in their item) and footnote bodies
   opening with inline code went the same way. The block is now opened at that
-  single point. The fix is shared with every markdown surface in AMF.
+  single point. The fix is shared with every markdown surface in AIW.
 - **The answer pane stated its status twice** — "answered by Claude · … ·
   answered" — and said "answered by" of a row that had not answered. The
   status now rides the opening verb alone: `Claude is answering`,

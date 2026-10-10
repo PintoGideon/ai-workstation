@@ -1,6 +1,6 @@
 /// A small, curated set of Nerd Font icons useful for custom sessions.
 ///
-/// AMF stores the glyph itself in config so rendering does not depend on a
+/// AIW stores the glyph itself in config so rendering does not depend on a
 /// shell helper or Nerd Fonts' CSS-style icon names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CustomSessionIcon {

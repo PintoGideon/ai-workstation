@@ -18,27 +18,26 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
-use crate::app::{ACTIVE_PR_SYNC_INTERVAL, App, load_config};
+use crate::app::{App, load_config};
 use crate::tmux::TmuxManager;
 
-// `cli` is no longer the crate root (it moved here from `main.rs` so `amf`
+// `cli` is no longer the crate root (it moved here from `main.rs` so `aiw`
 // and the GUI shell can share one library), so every sibling module that
 // used to be reachable as a bare name at crate-root scope needs bringing
 // into scope explicitly rather than editing every call site below.
 use crate::{
     app, automation, db, debug, handlers, hook_payload, ipc, perf, project, resources, tmux, ui,
-    upgrade,
 };
 
 #[derive(Parser, Debug)]
-#[command(name = "amf")]
+#[command(name = "aiw")] // FORK: AI Workstation
 #[command(version, disable_version_flag = true)]
 #[command(
     about = "Run many AI coding agents in parallel",
     long_about = "\
-Agent Mainframe (amf) is a terminal UI for running and managing multiple \
+AI Workstation (aiw) is a terminal UI for running and managing multiple \
 concurrent AI coding agent sessions, each in its own tmux session and git \
-worktree. Run `amf` with no arguments to launch the dashboard."
+worktree. Run `aiw` with no arguments to launch the dashboard."
 )]
 struct Cli {
     /// Print version information
@@ -51,23 +50,57 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Upgrade amf to the latest release
-    Upgrade,
-    /// Report on what AMF is putting on this machine. Read-only: it never
+    // FORK(no-cloud): no `upgrade` subcommand — AIW never downloads itself;
+    // update by pulling and rebuilding the fork.
+    // FORK: `aiw grid` (DESIGN.md §4.2).
+    /// Show a feature's agents (or the first agent of each feature in a
+    /// project) as live tiled tmux panes in this terminal. Click a pane to
+    /// focus it; Alt+q or closing the terminal ends the grid and leaves
+    /// nothing behind.
+    Grid {
+        /// Feature name (`project/feature` when ambiguous) or project name.
+        name: String,
+        /// Print what would be shown and exit.
+        #[arg(long)]
+        list: bool,
+        /// Include terminals and other non-agent sessions.
+        #[arg(long)]
+        all: bool,
+        /// Treat NAME as a project name even if a feature has that name.
+        #[arg(long, short = 'p')]
+        project: bool,
+    },
+    /// Report on what AIW is putting on this machine. Read-only: it never
     /// stops a session, kills a process, or writes to the database.
     Doctor {
         /// Emit a structured JSON document instead of the readable report.
         #[arg(long)]
         json: bool,
     },
-    /// Run machine-friendly automation actions against a running AMF instance
+    // FORK: G6 fonts report. Read-only, no network.
+    /// Show the detected terminal, colour depth and icon settings, and print
+    /// a font config snippet (JetBrains Mono / Geist Mono / Iosevka / Fira
+    /// Code + Symbols Nerd Font) for Ghostty, iTerm2, WezTerm, Kitty or
+    /// Alacritty. Instructions only: nothing is downloaded or changed.
+    Fonts {
+        /// Print snippets for all five terminals, not just the detected one.
+        #[arg(long)]
+        all: bool,
+        /// Font to recommend: jetbrains (default), geist, iosevka or fira.
+        #[arg(long)]
+        font: Option<String>,
+        /// Snippet for this terminal: ghostty, iterm2, wezterm, kitty, alacritty.
+        #[arg(long)]
+        terminal: Option<String>,
+    },
+    /// Run machine-friendly automation actions against a running AIW instance
     Automation {
         #[command(subcommand)]
         command: AutomationCommands,
     },
-    /// Send a notification to the running AMF instance via the
+    /// Send a notification to the running AIW instance via the
     /// IPC socket. Reads the harness's raw hook JSON from stdin and merges in
-    /// AMF's session metadata from the environment. Used by hook scripts,
+    /// AIW's session metadata from the environment. Used by hook scripts,
     /// which is why it does the JSON work they would otherwise need `jq` for.
     #[command(hide = true)]
     Notify {
@@ -105,7 +138,7 @@ enum Commands {
     /// Build a hook payload and print it instead of sending it, for scripts
     /// that need the JSON as a file — the diff-review plugin both pipes it to
     /// `notify-wait` and drops it in `.claude/notifications/` as the fallback
-    /// AMF polls when the socket reply never arrives.
+    /// AIW polls when the socket reply never arrives.
     #[command(name = "hook-payload", hide = true)]
     HookPayload {
         #[command(flatten)]
@@ -122,7 +155,7 @@ enum Commands {
         #[arg(required = true)]
         paths: Vec<String>,
     },
-    /// Return an agent-written PR review reply draft to the running AMF
+    /// Return an agent-written PR review reply draft to the running AIW
     /// instance. Reads the reply body from stdin.
     #[command(name = "reply-draft", hide = true)]
     ReplyDraft {
@@ -133,7 +166,7 @@ enum Commands {
         #[arg(long)]
         request_id: String,
     },
-    /// Write a custom session status into the AMF database.
+    /// Write a custom session status into the AIW database.
     /// Used by hook scripts for custom sessions.
     #[command(name = "set-status", hide = true)]
     SetStatus {
@@ -156,7 +189,7 @@ struct PayloadArgs {
     /// Payload `source`, for diagnostics.
     #[arg(long)]
     source: Option<String>,
-    /// Payload `amf_event_kind` — the attention layer's reason-for-stopping.
+    /// Payload `aiw_event_kind` — the attention layer's reason-for-stopping.
     #[arg(long = "event-kind")]
     event_kind: Option<String>,
     /// Send nothing unless this field is present and non-empty. Repeatable.
@@ -222,8 +255,8 @@ const CREATE_PROJECT_SCHEMA: &str = "\
 Request JSON (all fields optional unless marked required):
   {
     \"path\":            string  (required) existing directory to register
-    \"project_name\":    string  (required) AMF-visible name; must not exist yet
-    \"preferred_agent\": \"claude\" | \"codex\" | \"opencode\" | \"pi\" | null
+    \"project_name\":    string  (required) AIW-visible name; must not exist yet
+    \"preferred_agent\": \"claude\" | \"codex\" | \"pi\" | \"gemini\" | \"cursor\" | null
     \"dry_run\":         bool    default false; validate only
   }
 
@@ -236,9 +269,9 @@ See docs/automation/README.md for responses.";
 const CREATE_FEATURE_SCHEMA: &str = "\
 Request JSON (all fields optional unless marked required):
   {
-    \"project_name\":    string  (required) existing AMF project
+    \"project_name\":    string  (required) existing AIW project
     \"branch\":          string  (required) branch / feature name
-    \"agent\":           \"claude\" | \"codex\" | \"opencode\" | \"pi\"   default \"claude\"
+    \"agent\":           \"claude\" | \"codex\" | \"pi\" | \"gemini\" | \"cursor\"   default \"claude\"
     \"mode\":            \"vibeless\" | \"vibe\" | \"supervibe\"       default \"vibeless\"
     \"review\":          bool    default false
     \"plan_mode\":       bool    default false
@@ -259,10 +292,10 @@ const CREATE_BATCH_FEATURES_SCHEMA: &str = "\
 Request JSON (all fields optional unless marked required):
   {
     \"workspace_path\":  string  (required) path inside a git repository
-    \"project_name\":    string  (required) new AMF project; must not exist yet
+    \"project_name\":    string  (required) new AIW project; must not exist yet
     \"feature_count\":   integer default 3
     \"feature_prefix\":  string  default \"feature\"
-    \"agent\":           \"claude\" | \"codex\" | \"opencode\" | \"pi\"   default \"claude\"
+    \"agent\":           \"claude\" | \"codex\" | \"pi\" | \"gemini\" | \"cursor\"   default \"claude\"
     \"mode\":            \"vibeless\" | \"vibe\" | \"supervibe\"       default \"vibeless\"
     \"review\":          bool    default false
     \"enable_chrome\":   bool    default false
@@ -280,7 +313,7 @@ See docs/automation/README.md for responses.";
 // subcommand names (`create-project`, `create-feature`, …) from the variants.
 #[allow(clippy::enum_variant_names)]
 enum AutomationCommands {
-    /// Create a single AMF project from JSON input
+    /// Create a single AIW project from JSON input
     #[command(after_help = CREATE_PROJECT_SCHEMA)]
     CreateProject {
         /// Read request JSON from a file. Omit or pass `-` to read stdin.
@@ -289,11 +322,11 @@ enum AutomationCommands {
         /// Override the JSON payload and perform validation only.
         #[arg(long, default_value_t = false)]
         dry_run: bool,
-        /// Timeout in milliseconds while waiting for AMF to reply.
+        /// Timeout in milliseconds while waiting for AIW to reply.
         #[arg(long, default_value_t = 120000)]
         timeout_ms: u64,
     },
-    /// Create a single feature/worktree inside an existing AMF project from JSON input
+    /// Create a single feature/worktree inside an existing AIW project from JSON input
     #[command(after_help = CREATE_FEATURE_SCHEMA)]
     CreateFeature {
         /// Read request JSON from a file. Omit or pass `-` to read stdin.
@@ -302,7 +335,7 @@ enum AutomationCommands {
         /// Override the JSON payload and perform validation only.
         #[arg(long, default_value_t = false)]
         dry_run: bool,
-        /// Timeout in milliseconds while waiting for AMF to reply.
+        /// Timeout in milliseconds while waiting for AIW to reply.
         #[arg(long, default_value_t = 120000)]
         timeout_ms: u64,
     },
@@ -315,7 +348,7 @@ enum AutomationCommands {
         /// Override the JSON payload and perform validation only.
         #[arg(long, default_value_t = false)]
         dry_run: bool,
-        /// Timeout in milliseconds while waiting for AMF to reply.
+        /// Timeout in milliseconds while waiting for AIW to reply.
         #[arg(long, default_value_t = 120000)]
         timeout_ms: u64,
     },
@@ -329,8 +362,8 @@ enum AutomationCommands {
 }
 
 /// Best-effort delivery fallbacks for when the IPC socket is unavailable —
-/// AMF not running, or shutting down. These used to live in each hook script
-/// after the `amf notify` pipeline failed; they moved here so the scripts need
+/// AIW not running, or shutting down. These used to live in each hook script
+/// after the `aiw notify` pipeline failed; they moved here so the scripts need
 /// no JSON parsing to work out which session they are writing about.
 ///
 /// Every step is best-effort: a hook must never fail the agent's turn because
@@ -379,29 +412,100 @@ fn capture_reply_draft_in_store(
     body: &str,
 ) -> Result<()> {
     if !path.is_file() {
-        anyhow::bail!("AMF reply-draft store is unavailable");
+        anyhow::bail!("AIW reply-draft store is unavailable");
     }
-    let db = db::AmfDb::open(path)?;
+    let db = db::AiwDb::open(path)?;
     if !db.capture_pr_comment_reply_draft(number, comment, request, body)? {
         anyhow::bail!("Reply draft refused: this fix request is stale or unknown");
     }
     Ok(())
 }
 
+/// FORK: run the first-run AMF migration (`crate::fork::migrate`). A failure
+/// stops AIW before it creates its own config folder, so the next start
+/// retries instead of starting empty.
+fn run_first_run_migration() -> Result<()> {
+    match crate::fork::migrate::migrate_on_first_run() {
+        Ok(crate::fork::migrate::Outcome::Migrated(record)) => {
+            crate::debug::log_to_file(
+                crate::debug::LogLevel::Info,
+                "migrate",
+                &format!(
+                    "copied AMF setup from {} ({} projects, {} features); copied: {}; skipped: {}",
+                    record.from.display(),
+                    record.projects,
+                    record.features,
+                    record.copied.join(", "),
+                    record.skipped.join(", ")
+                ),
+            );
+            Ok(())
+        }
+        Ok(crate::fork::migrate::Outcome::NotNeeded) => Ok(()),
+        Err(err) => Err(err.context(
+            "AI Workstation could not copy your AMF setup on its first run; nothing was changed",
+        )),
+    }
+}
+
+/// FORK: what `aiw -V` prints.
+pub(crate) fn version_line() -> String {
+    format!("AI Workstation (aiw) {}", env!("CARGO_PKG_VERSION"))
+}
+
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
 
     if cli.version && cli.command.is_none() {
-        println!("amf {}", env!("CARGO_PKG_VERSION"));
+        // FORK: one command, `aiw`; the upstream credit lives in the README.
+        println!("{}", version_line());
         return Ok(());
-    }
-
-    if let Some(Commands::Upgrade) = cli.command {
-        return upgrade::upgrade();
     }
 
     if let Some(Commands::Doctor { json }) = cli.command {
         return run_doctor(json);
+    }
+
+    // FORK: on the first run, copy an existing AMF setup into AIW's own
+    // folders (never touching AMF's). Hook-time commands (`notify` and
+    // friends) only run inside sessions AIW started, so they skip this.
+    if !matches!(
+        cli.command,
+        Some(
+            Commands::Fonts { .. }
+                | Commands::Notify { .. }
+                | Commands::HookPayload { .. }
+                | Commands::HookField { .. }
+                | Commands::NotifyWait { .. }
+        )
+    ) {
+        run_first_run_migration()?;
+    }
+
+    // FORK: `aiw fonts`
+    if let Some(Commands::Fonts {
+        all,
+        font,
+        terminal,
+    }) = &cli.command
+    {
+        return crate::fork::fonts::run(*all, font.as_deref(), terminal.as_deref());
+    }
+
+    // FORK: `aiw grid`.
+    if let Some(Commands::Grid {
+        name,
+        list,
+        all,
+        project,
+    }) = cli.command
+    {
+        return crate::fork::grid::run(crate::fork::grid::GridOptions {
+            name,
+            list,
+            all,
+            project,
+        });
     }
 
     if let Some(Commands::Automation { command }) = cli.command {
@@ -433,7 +537,7 @@ pub fn run() -> Result<()> {
         });
         if let Err(ipc_err) = ipc::send(&ipc::socket_path(), &serde_json::to_string(&payload)?) {
             // A standalone GUI does not bind the TUI socket. The same SQLite
-            // request-id guard accepts receipts without launching another AMF.
+            // request-id guard accepts receipts without launching another AIW.
             capture_reply_draft_in_store(
                 &project::db_path(),
                 pr_number,
@@ -443,7 +547,7 @@ pub fn run() -> Result<()> {
             )
             .map_err(|e| {
                 e.context(format!(
-                    "AMF socket delivery failed first ({ipc_err:#}), then the reply-draft store fallback failed"
+                    "AIW socket delivery failed first ({ipc_err:#}), then the reply-draft store fallback failed"
                 ))
             })?;
         }
@@ -566,7 +670,7 @@ pub fn run() -> Result<()> {
     }) = cli.command
     {
         let db_path = project::db_path();
-        let db = db::AmfDb::open_or_seed(&db_path, &project::global_db_path())?;
+        let db = db::AiwDb::open_or_seed(&db_path, &project::global_db_path())?;
         let store = db.load_store()?;
         let feature_id = store
             .projects
@@ -581,7 +685,7 @@ pub fn run() -> Result<()> {
             })
             .context("session not found in store")?;
         db.upsert_session_status(&session_id, &feature_id, &status_text, None)?;
-        // Best-effort IPC push so a running AMF instance updates immediately.
+        // Best-effort IPC push so a running AIW instance updates immediately.
         let json = serde_json::json!({
             "type": "session-status",
             "session_id": session_id,
@@ -591,6 +695,10 @@ pub fn run() -> Result<()> {
         return Ok(());
     }
 
+    // FORK: decide on the first-run icon check before `load_config` writes a
+    // default config.json.
+    let icon_check =
+        crate::fork::appearance::icon_check_needed(&project::aiw_config_dir().join("config.json"));
     let config = load_config();
     TmuxManager::configure_control_mode(config.tmux_control_mode);
 
@@ -602,6 +710,10 @@ pub fn run() -> Result<()> {
     debug::install_panic_hook();
     debug::rotate_log_if_needed();
 
+    // FORK: colour depth and (opt-in) terminal light/dark detection. Runs
+    // before raw mode because it may query the terminal (OSC 11).
+    let appearance = crate::fork::appearance::Startup::detect(&config.appearance, icon_check);
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(
@@ -611,12 +723,16 @@ pub fn run() -> Result<()> {
         EnableMouseCapture,
         SetCursorStyle::SteadyBlock
     )?;
-    let backend = CrosstermBackend::new(stdout);
+    // FORK: downgrade RGB to 256 colours when the terminal lacks truecolor.
+    let backend = crate::fork::color::ColorBackend::new(
+        CrosstermBackend::new(stdout),
+        appearance.color_depth,
+    );
     let mut terminal = Terminal::new(backend)?;
     terminal.draw(|frame| {
         draw_loading(
             frame,
-            "Loading AMF...",
+            "Loading AIW...",
             startup_loading_hint(Duration::ZERO),
         )
     })?;
@@ -628,6 +744,17 @@ pub fn run() -> Result<()> {
         let db_path = project::db_path();
         let mut app = App::new(db_path)?;
         app.log_startup();
+        // FORK: tell the user once that their AMF setup was copied.
+        if let Some(notice) = crate::fork::migrate::take_pending_notice(&project::aiw_config_dir())
+        {
+            app.log_info("migrate", notice.clone());
+            app.push_toast_for(notice, app::ToastKind::Success, Duration::from_secs(20));
+        }
+        // FORK: followed theme, then the one-time icon check.
+        appearance.apply(&mut app);
+        if appearance.icon_check {
+            crate::fork::icon_check::run(&mut terminal, &mut app)?;
+        }
 
         // Check for VS Code availability in the background so it doesn't
         // block startup.  The result is applied once ready.
@@ -684,7 +811,7 @@ pub fn run() -> Result<()> {
     match result {
         Ok(result) => result,
         Err(_) => Err(anyhow::anyhow!(
-            "AMF panicked; see {}",
+            "AIW panicked; see {}",
             debug::global_log_path().display()
         )),
     }
@@ -696,7 +823,6 @@ fn startup_loading_message(
     session_status_pending: bool,
     usage_pending: bool,
     claude_hooks_pending: bool,
-    opencode_plugins_pending: bool,
     sidebar_warm_pending: bool,
     session_status_bg_pending: bool,
 ) -> &'static str {
@@ -708,12 +834,10 @@ fn startup_loading_message(
         "Refreshing usage..."
     } else if claude_hooks_pending {
         "Refreshing Claude hooks..."
-    } else if opencode_plugins_pending {
-        "Refreshing opencode plugins..."
     } else if sidebar_warm_pending {
         "Preparing dashboard..."
     } else {
-        "Loading AMF..."
+        "Loading AIW..."
     }
 }
 
@@ -733,12 +857,8 @@ fn startup_loading_pending(
     sync_statuses_pending: bool,
     session_status_pending: bool,
     claude_hooks_pending: bool,
-    opencode_plugins_pending: bool,
 ) -> bool {
-    sync_statuses_pending
-        || session_status_pending
-        || claude_hooks_pending
-        || opencode_plugins_pending
+    sync_statuses_pending || session_status_pending || claude_hooks_pending
 }
 
 fn startup_sidebar_can_warm(session_status_inflight: bool, usage_stats_inflight: bool) -> bool {
@@ -760,7 +880,7 @@ fn draw_loading(frame: &mut Frame, message: &str, hint: &str) {
 
     let text = vec![
         Line::from(Span::styled(
-            "AMF",
+            "AIW",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
@@ -804,12 +924,12 @@ fn read_json_input(file: Option<&PathBuf>) -> Result<String> {
     Ok(payload.to_string())
 }
 
-/// `amf doctor`. Runs entirely outside the TUI, so printing to stdout is the
+/// `aiw doctor`. Runs entirely outside the TUI, so printing to stdout is the
 /// right thing here — the no-`println!` rule is about corrupting the terminal
 /// while ratatui owns it.
 ///
 /// Read-only by construction, down to how the database is opened: `doctor` uses
-/// [`db::AmfDb::open_read_only`], which will not create the file, will not
+/// [`db::AiwDb::open_read_only`], which will not create the file, will not
 /// migrate the schema, and will not switch the journal mode — the ordinary
 /// `open` does all three, which would make "nothing was changed" untrue before
 /// the first check even ran. A database that does not exist yet, or that cannot
@@ -821,7 +941,7 @@ fn run_doctor(json: bool) -> Result<()> {
     // rewrite it on a key migration. Read it instead.
     let config = app::setup::read_config();
     let db_path = project::db_path();
-    let db = match db::AmfDb::open_read_only(&db_path) {
+    let db = match db::AiwDb::open_read_only(&db_path) {
         Ok(db) => Some(db),
         Err(err) => {
             if !json {
@@ -838,7 +958,7 @@ fn run_doctor(json: bool) -> Result<()> {
         Some(Err(err)) => {
             if !json {
                 println!(
-                    "Note: could not read the AMF store ({err}) - run amf once to migrate it.\n"
+                    "Note: could not read the AIW store ({err}) - run aiw once to migrate it.\n"
                 );
             }
             project::ProjectStore::empty()
@@ -853,15 +973,6 @@ fn run_doctor(json: bool) -> Result<()> {
         .and_then(|db| db.all_launched_editors().ok())
         .unwrap_or_default();
     let worktrees = doctor::worktrees_on_disk(&store);
-    let tailscale = crate::tailscale::TailscaleCli::new(
-        config.remote_tailscale_cli.as_deref(),
-        config.remote_tailscale_socket.as_deref(),
-    )
-    .probe(crate::tailscale::bind_port(&config.remote_bind));
-    let paired_devices = db
-        .as_ref()
-        .and_then(|db| db.list_remote_devices().ok())
-        .map_or(0, |devices| devices.iter().filter(|d| !d.revoked).count());
 
     let report = doctor::diagnose(&doctor::Inputs {
         config: &config,
@@ -873,8 +984,6 @@ fn run_doctor(json: bool) -> Result<()> {
         worktrees: &worktrees,
         editors: &editors,
         pid_alive: &doctor::pid_alive,
-        tailscale: &tailscale,
-        paired_devices,
     });
 
     if json {
@@ -968,15 +1077,15 @@ fn run_automation_command(command: AutomationCommands) -> Result<()> {
     }
 }
 
-/// Merges AMF thinking-detection hooks into ~/.claude/settings.json.
+/// Merges AIW thinking-detection hooks into ~/.claude/settings.json.
 ///
 /// Uses Claude Code's PreToolUse / Stop hooks to touch / remove a
-/// sentinel file at /tmp/amf-thinking/<AMF_SESSION> so the dashboard
+/// sentinel file at /tmp/aiw-thinking/<AIW_SESSION> so the dashboard
 /// can show a throbber without polling tmux pane content.
 ///
 /// The function is idempotent: it only appends entries when they are
 /// not already present, and silently skips on any I/O error.
-/// Removes any AMF-managed hook entries that were previously
+/// Removes any AIW-managed hook entries that were previously
 /// injected into the global ~/.claude/settings.json.
 /// Hook management now happens in the per-worktree local
 /// settings via `ensure_notification_hooks`.
@@ -988,6 +1097,8 @@ fn cleanup_global_hooks() {
     let settings_path = std::path::PathBuf::from(&home)
         .join(".claude")
         .join("settings.json");
+    // FORK: these are hooks old upstream AMF builds installed *globally*;
+    // AIW never installs global hooks, so only the AMF-era names are listed.
     let extra_cmds = [format!("{home}/.config/amf/notify.sh")];
     let extra: Vec<&str> = extra_cmds.iter().map(|s| s.as_str()).collect();
     cleanup_hooks_at(&settings_path, &extra);
@@ -996,7 +1107,7 @@ fn cleanup_global_hooks() {
 /// Inner logic for `cleanup_global_hooks`, factored out for
 /// testability.  `extra_cmds` are host-specific command
 /// strings (e.g. absolute paths) to remove in addition to
-/// the static AMF commands.
+/// the static AIW commands.
 pub fn cleanup_hooks_at(settings_path: &std::path::Path, extra_cmds: &[&str]) {
     use serde_json::Value;
 
@@ -1012,7 +1123,8 @@ pub fn cleanup_hooks_at(settings_path: &std::path::Path, extra_cmds: &[&str]) {
         return;
     };
 
-    // Static commands previously injected by AMF globally.
+    // Static commands old upstream AMF builds injected globally (legacy
+    // cleanup, kept verbatim so it still matches what they wrote).
     let static_cmds: &[&str] = &[
         "[ -n \"$AMF_SESSION\" ] && mkdir -p /tmp/amf-thinking && touch \"/tmp/amf-thinking/$AMF_SESSION\" || true",
         "[ -n \"$AMF_SESSION\" ] && rm -f \"/tmp/amf-thinking/$AMF_SESSION\" || true",
@@ -1031,7 +1143,7 @@ pub fn cleanup_hooks_at(settings_path: &std::path::Path, extra_cmds: &[&str]) {
                     h["command"].as_str().is_some_and(|c| {
                         static_cmds.contains(&c)
                             || extra_cmds.contains(&c)
-                            || app::setup::is_amf_claude_hook_command(c, &[])
+                            || app::setup::is_aiw_claude_hook_command(c, &[])
                     })
                 })
             })
@@ -1090,7 +1202,7 @@ impl LoopDeadlines {
 /// Hand the terminal to `$VISUAL`/`$EDITOR` for one file, then take it back.
 ///
 /// The teardown/restore pair mirrors `run()`'s setup exactly, so the editor
-/// runs on a terminal in the state it would have had if AMF were never
+/// runs on a terminal in the state it would have had if AIW were never
 /// started. Failures are reported through `app.message` rather than bubbling
 /// up: a missing editor should not end the session — but the screen is always
 /// restored first, since returning to a half-torn-down terminal is worse than
@@ -1197,9 +1309,8 @@ fn run_loop<B: Backend + io::Write>(
     let mut startup_session_status_pending = true;
     let mut startup_usage_pending = true;
     let mut startup_claude_hooks_pending = true;
-    let mut startup_opencode_plugins_pending = true;
     let mut startup_sidebar_warm_pending = true;
-    // Another process (the desktop GUI, a second TUI, `amf` automation) can
+    // Another process (the desktop GUI, a second TUI, `aiw` automation) can
     // commit to the shared store at any time. Picking that up here keeps the
     // next local save from conflicting on it; a one-row `store_meta` read is
     // cheap, but there is no reason to issue it every frame either.
@@ -1217,7 +1328,7 @@ fn run_loop<B: Backend + io::Write>(
     let startup_loading_started_at = Instant::now();
     let mut last_view_refresh_request = Instant::now();
     // Backoff for pane-size drift corrections: if drift reappears right
-    // after we fixed it, something else (another AMF instance, a user
+    // after we fixed it, something else (another AIW instance, a user
     // attached elsewhere) is also resizing the pane, and fighting it
     // every few seconds garbles the agent's screen on each SIGWINCH.
     const DRIFT_CORRECTION_BACKOFF: Duration = Duration::from_secs(30);
@@ -1237,19 +1348,10 @@ fn run_loop<B: Backend + io::Write>(
     let mut last_reanchor_bounce = Instant::now();
     let mut pending_reanchor_restore: Option<(String, String, u16, u16, Instant)> = None;
     let mut last_statuses_sync = std::time::Instant::now();
-    // Independent of `last_statuses_sync`/`is_viewing`: the ambient PR badge
-    // and PR Triage sidebar box are meant to stay live *while* the user is
-    // inside a session, so this cadence must not be gated on being back on
-    // the dashboard the way tmux status reconciliation is.
-    // Backdated so the first badge sweep lands seconds after launch rather
-    // than a full interval later. Lengthening the interval to 5 minutes
-    // (`ACTIVE_PR_SYNC_INTERVAL`) also, unintentionally, made a freshly opened
-    // dashboard sit blank for 5 minutes before any PR badge appeared; it used
-    // to be 30 seconds. The interval governs how often badges *refresh*, not
-    // how long the user waits to see one at all.
-    let mut last_active_pr_sync = std::time::Instant::now()
-        .checked_sub(ACTIVE_PR_SYNC_INTERVAL.saturating_sub(Duration::from_secs(5)))
-        .unwrap_or_else(std::time::Instant::now);
+    // FORK(no-cloud): no background PR badge sweep. AIW re-ran `gh` for every
+    // feature's PR every 5 minutes (and once at startup); AIW refreshes PR
+    // badges only on an explicit refresh (`R` / leader `r`) or when the user
+    // opens PR Triage, and shows the last-known badge state otherwise.
     let mut last_redraw_signature = app.redraw_signature();
 
     loop {
@@ -1259,7 +1361,9 @@ fn run_loop<B: Backend + io::Write>(
         let is_viewing = matches!(app.mode, app::AppMode::Viewing(_));
         // The compose box keeps the live pane visible behind it, so the
         // pane-refresh paths must stay active while composing too.
-        let pane_live = is_viewing || matches!(app.mode, app::AppMode::Compose(_));
+        let pane_live = is_viewing
+            || matches!(app.mode, app::AppMode::Compose(_))
+            || matches!(app.mode, app::AppMode::SplitView(_)); // FORK: split view tiles are live panes
         let animating = app.has_visible_animation();
 
         let size = terminal.size()?;
@@ -1448,12 +1552,6 @@ fn run_loop<B: Backend + io::Write>(
             force_redraw = true;
         }
 
-        if app.poll_remote_server_bg() {
-            force_redraw = true;
-        }
-        // Not gated on the server toggle: see `app/remote_push.rs`.
-        app.poll_remote_push();
-
         if app.latest_prompt_menu_bg.is_some() && app.poll_latest_prompt_menu_bg() {
             force_redraw = true;
         }
@@ -1490,7 +1588,6 @@ fn run_loop<B: Backend + io::Write>(
             || startup_session_status_pending
             || startup_usage_pending
             || startup_claude_hooks_pending
-            || startup_opencode_plugins_pending
             || startup_sidebar_warm_pending;
         // Usage parsing and sidebar warming remain startup-owned so periodic
         // refreshes do not overlap them, but they run behind the interactive
@@ -1499,7 +1596,6 @@ fn run_loop<B: Backend + io::Write>(
             startup_sync_statuses_pending,
             startup_session_status_pending,
             startup_claude_hooks_pending,
-            startup_opencode_plugins_pending,
         );
 
         let poll_duration = if startup_loading {
@@ -1515,7 +1611,6 @@ fn run_loop<B: Backend + io::Write>(
             };
             deadlines.register_after(last_thinking_sync, thinking_fallback);
             deadlines.register_after(last_file_log_flush, Duration::from_secs(1));
-            deadlines.register_after(last_active_pr_sync, ACTIVE_PR_SYNC_INTERVAL);
             if !is_viewing {
                 let statuses_fallback = if app.tmux_observer.is_some() {
                     STATUSES_SYNC_FALLBACK_INTERVAL
@@ -1726,7 +1821,7 @@ fn run_loop<B: Backend + io::Write>(
                 .is_none_or(|last| last.elapsed() >= VIEW_IDLE_REFRESH_QUIET_PERIOD)
         {
             // The pane can be resized behind our back (another client
-            // attaching to the session, a second AMF instance, etc.).
+            // attaching to the session, a second AIW instance, etc.).
             // last_resize only tracks sizes we set ourselves, so
             // reconcile against the actual pane size here; otherwise
             // every snapshot is parsed at the wrong geometry and the
@@ -1805,24 +1900,13 @@ fn run_loop<B: Backend + io::Write>(
             force_redraw = true;
         }
 
-        // Unlike the block above, this runs while viewing/composing too —
-        // see `last_active_pr_sync`'s comment. It has its own, much longer
-        // cadence: both `gh pr view` and the review-thread query are GraphQL,
-        // billed against a small hourly point budget, and they run once per
-        // feature (see `ACTIVE_PR_SYNC_INTERVAL`).
-        if !handled_user_events
-            && !startup_tasks_pending
-            && last_active_pr_sync.elapsed() >= ACTIVE_PR_SYNC_INTERVAL
-        {
-            app.sync_active_prs_background();
-            last_active_pr_sync = Instant::now();
-        }
-
         if !handled_user_events
             && last_sync.elapsed() >= Duration::from_secs(5)
             && !defer_background_sync
             && !startup_tasks_pending
         {
+            // FORK: drop/stop sessions whose tmux window closed on its own.
+            app.reconcile_vanished_windows();
             // Kick off a background refresh only when the previous one has
             // finished; results are applied each tick via poll_session_status_bg.
             if app.session_status_bg.is_none() {
@@ -1966,7 +2050,6 @@ fn run_loop<B: Backend + io::Write>(
             if startup_sync_statuses_pending {
                 let started_at = Instant::now();
                 app.sync_statuses();
-                app.sync_active_prs_background();
                 app.perf
                     .record_duration("startup.sync_statuses", started_at.elapsed());
                 startup_sync_statuses_pending = false;
@@ -1988,16 +2071,6 @@ fn run_loop<B: Backend + io::Write>(
                     format!("Refreshed Claude hooks for {refreshed} feature(s)"),
                 );
                 startup_claude_hooks_pending = false;
-            } else if startup_opencode_plugins_pending {
-                let started_at = Instant::now();
-                let refreshed = app::setup::refresh_opencode_plugins_for_store(&app.store);
-                app.perf
-                    .record_duration("startup.refresh_opencode_plugins", started_at.elapsed());
-                app.log_info(
-                    "setup",
-                    format!("Refreshed opencode plugins for {refreshed} feature(s)"),
-                );
-                startup_opencode_plugins_pending = false;
             } else if startup_usage_pending && app.session_status_bg.is_none() {
                 let started_at = Instant::now();
                 app.usage.refresh(None);
@@ -2023,6 +2096,13 @@ fn run_loop<B: Backend + io::Write>(
             } else {
                 Instant::now() + Duration::from_millis(250)
             };
+        }
+
+        // FORK: split view — lay out tiles, resize their windows, run their
+        // workers, take new frames. Its resizes invalidate the single view's.
+        force_redraw |= app.split_view_tick(Rect::new(0, 0, size.width, size.height));
+        if app.fork_split.take_view_resize_invalidation() {
+            last_resize = None;
         }
 
         let live_view_for_sizing = match &app.mode {
@@ -2079,7 +2159,7 @@ fn run_loop<B: Backend + io::Write>(
         // Periodic re-anchor bounce for live Claude panes. Claude Code's
         // incremental renderer drifts its input-box anchor over time and
         // leaves stale cells in the real tmux grid (input text bleeds into
-        // the divider above it); AMF can only display that grid
+        // the divider above it); AIW can only display that grid
         // faithfully, so the fix is to force a full agent repaint. A
         // SIGWINCH pair (shrink one row, then restore) does it. Two-phase
         // so the main thread never sleeps: shrink now, restore a later
@@ -2145,7 +2225,6 @@ fn run_loop<B: Backend + io::Write>(
                     startup_session_status_pending,
                     startup_usage_pending,
                     startup_claude_hooks_pending,
-                    startup_opencode_plugins_pending,
                     startup_sidebar_warm_pending,
                     app.session_status_bg.is_some(),
                 );
@@ -2180,6 +2259,13 @@ fn run_loop<B: Backend + io::Write>(
         // persist the summaries when profiling is explicitly enabled.
         let summary_lines = app.perf.take_due_summary_lines();
         if perf::perf_logging_enabled() {
+            // FORK: tmux processes started so far (view refresh cost, DESIGN.md §12.3).
+            if !summary_lines.is_empty() {
+                app.log_debug(
+                    "perf",
+                    format!("tmux.processes total={}", TmuxManager::processes_started()),
+                );
+            }
             for line in summary_lines {
                 app.log_debug("perf", line);
             }
@@ -2262,10 +2348,10 @@ mod tests {
     #[test]
     fn reply_draft_fallback_requires_existing_store_and_current_request() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("amf.db");
+        let path = dir.path().join("aiw.db");
         assert!(super::capture_reply_draft_in_store(&path, 7, 101, "request", "Fixed").is_err());
         assert!(!path.exists());
-        let db = crate::db::AmfDb::open(&path).unwrap();
+        let db = crate::db::AiwDb::open(&path).unwrap();
         db.begin_pr_comment_reply_draft(7, 101, "current", "head", None)
             .unwrap();
         assert!(super::capture_reply_draft_in_store(&path, 7, 101, "old", "Wrong").is_err());
@@ -2286,7 +2372,7 @@ mod tests {
     #[test]
     fn reply_draft_cli_parses_the_prompt_handoff_arguments() {
         let cli = Cli::try_parse_from([
-            "amf",
+            "aiw",
             "reply-draft",
             "--pr-number",
             "42",
@@ -2308,11 +2394,10 @@ mod tests {
 
     #[test]
     fn background_startup_work_does_not_hold_loading_screen() {
-        assert!(!startup_loading_pending(false, false, false, false));
-        assert!(startup_loading_pending(true, false, false, false));
-        assert!(startup_loading_pending(false, true, false, false));
-        assert!(startup_loading_pending(false, false, true, false));
-        assert!(startup_loading_pending(false, false, false, true));
+        assert!(!startup_loading_pending(false, false, false));
+        assert!(startup_loading_pending(true, false, false));
+        assert!(startup_loading_pending(false, true, false));
+        assert!(startup_loading_pending(false, false, true));
     }
 
     #[test]
@@ -2324,7 +2409,20 @@ mod tests {
     }
 
     #[test]
-    fn removes_static_amf_thinking_commands() {
+    fn version_line_names_ai_workstation_and_the_aiw_command() {
+        assert_eq!(
+            super::version_line(),
+            format!("AI Workstation (aiw) {}", env!("CARGO_PKG_VERSION"))
+        );
+        // The binary is `aiw`, and clap knows it by that name.
+        assert_eq!(
+            <super::Cli as clap::CommandFactory>::command().get_name(),
+            "aiw"
+        );
+    }
+
+    #[test]
+    fn removes_static_legacy_amf_thinking_commands() {
         let dir = TempDir::new().unwrap();
         let path = write_settings(
             &dir,
@@ -2374,14 +2472,14 @@ mod tests {
     }
 
     #[test]
-    fn removes_unquoted_macos_amf_hook() {
+    fn removes_unquoted_macos_aiw_hook() {
         let dir = TempDir::new().unwrap();
         let path = write_settings(
             &dir,
             r#"{
             "hooks": {
                 "PostToolUse": [{"matcher":"","hooks":[
-                    {"type":"command","command":"/Users/me/Library/Application Support/amf/tool-stop.sh"}
+                    {"type":"command","command":"/Users/me/Library/Application Support/ai_workstation/tool-stop.sh"}
                 ]}]
             }
         }"#,
@@ -2397,7 +2495,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_non_amf_hooks() {
+    fn preserves_non_aiw_hooks() {
         let dir = TempDir::new().unwrap();
         let path = write_settings(
             &dir,
@@ -2415,7 +2513,7 @@ mod tests {
 
         let s = read_settings(&path);
         let stop = s["hooks"]["Stop"].as_array().unwrap();
-        assert_eq!(stop.len(), 1, "only the AMF entry should be removed");
+        assert_eq!(stop.len(), 1, "only the legacy AMF entry should be removed");
         assert_eq!(
             stop[0]["hooks"][0]["command"].as_str().unwrap(),
             "/my/custom/hook.sh"

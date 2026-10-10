@@ -53,13 +53,14 @@ pub(crate) enum LaunchPath {
 }
 
 impl LaunchPath {
-    /// What AMF can actually carry to execution today. CLI support alone must
-    /// not make a choice applicable when the AMF launcher drops its settings.
+    /// What AIW can actually carry to execution today. CLI support alone must
+    /// not make a choice applicable when the AIW launcher drops its settings.
     fn supports_model(self, harness: &AgentKind) -> bool {
         match self {
             Self::Interactive => matches!(harness, AgentKind::Claude | AgentKind::Codex),
             Self::ExistingSession => matches!(harness, AgentKind::Codex),
-            Self::Headless => true,
+            // FORK: Gemini/Cursor have no headless runner yet.
+            Self::Headless => !crate::fork::extra_agents::is_extra(harness),
         }
     }
 
@@ -221,7 +222,9 @@ impl EligibleOptions {
                         toml::Value::String(level.into())
                     ),
                 ]),
-                AgentKind::Opencode | AgentKind::Pi => {
+                AgentKind::Pi
+                | AgentKind::Gemini // FORK
+                | AgentKind::Cursor => {
                     bail!("Interactive reasoning override unsupported")
                 }
             }
@@ -242,7 +245,8 @@ fn valid_model_identifier(harness: &AgentKind, value: &str) -> bool {
     }
     match harness {
         AgentKind::Claude | AgentKind::Codex => true,
-        AgentKind::Opencode | AgentKind::Pi => {
+        AgentKind::Gemini | AgentKind::Cursor => true, // FORK: plain model ids
+        AgentKind::Pi => {
             let qualified = value
                 .split_once('/')
                 .is_some_and(|(provider, model)| !provider.is_empty() && !model.is_empty());
@@ -250,7 +254,6 @@ fn valid_model_identifier(harness: &AgentKind, value: &str) -> bool {
             // Admit plain model identities only, otherwise a headless option
             // could bypass the lack of a reasoning-override launch seam.
             let has_suffix = match harness {
-                AgentKind::Opencode => value.contains('#'),
                 // A colon-bearing Pi ID is ambiguous without its resolver.
                 // Fail closed rather than accepting an implicit thinking pick.
                 AgentKind::Pi => value.contains(':'),
@@ -317,7 +320,8 @@ mod tests {
     fn capability(harness: AgentKind) -> HarnessCapability {
         let model = match harness {
             AgentKind::Claude | AgentKind::Codex => "exact-model",
-            AgentKind::Opencode | AgentKind::Pi => "provider/exact-model",
+            AgentKind::Gemini | AgentKind::Cursor => "exact-model", // FORK
+            AgentKind::Pi => "provider/exact-model",
         };
         HarnessCapability {
             harness,
@@ -375,13 +379,14 @@ mod tests {
     }
 
     #[test]
-    fn interactive_paths_exclude_overrides_that_amf_cannot_carry() {
+    fn interactive_paths_exclude_overrides_that_aiw_cannot_carry() {
         for harness in AgentKind::ALL {
             let cap = capability(harness.clone());
             let eligible = options(&[cap], LaunchPath::Interactive);
             let expected = match harness {
                 AgentKind::Claude | AgentKind::Codex => 3,
-                AgentKind::Opencode | AgentKind::Pi => 0,
+                AgentKind::Pi => 0,
+                AgentKind::Gemini | AgentKind::Cursor => 0, // FORK
             };
             assert_eq!(eligible.choices().len(), expected, "{harness:?}");
         }
@@ -399,7 +404,7 @@ mod tests {
     }
 
     #[test]
-    fn headless_paths_intersect_discovered_levels_with_settings_amf_can_carry() {
+    fn headless_paths_intersect_discovered_levels_with_settings_aiw_can_carry() {
         let caps: Vec<_> = AgentKind::ALL.into_iter().map(capability).collect();
         let eligible = options(&caps, LaunchPath::Headless);
         for harness in AgentKind::ALL {
@@ -411,8 +416,8 @@ mod tests {
                 .collect::<Vec<_>>();
             let expected = match harness {
                 AgentKind::Claude | AgentKind::Codex => vec![None, Some("high"), Some("low")],
-                AgentKind::Opencode => vec![None, Some("high")],
                 AgentKind::Pi => vec![None],
+                AgentKind::Gemini | AgentKind::Cursor => vec![], // FORK: no headless runner
             };
             assert_eq!(levels, expected, "{harness:?}");
         }
@@ -455,8 +460,8 @@ mod tests {
 
     #[test]
     fn provider_based_choices_require_an_unambiguous_provider_identity() {
-        for harness in [AgentKind::Opencode, AgentKind::Pi] {
-            let mut cap = capability(harness);
+        {
+            let mut cap = capability(AgentKind::Pi);
             for invalid in ["exact-model", "/exact-model", "provider/"] {
                 cap.models[0].model = invalid.into();
                 assert!(
@@ -466,24 +471,15 @@ mod tests {
                 );
             }
             cap.models[0].model = "provider/namespace/exact-model".into();
-            let expected = if cap.harness == AgentKind::Pi { 1 } else { 2 };
-            assert_eq!(
-                options(&[cap], LaunchPath::Headless).choices().len(),
-                expected
-            );
+            assert_eq!(options(&[cap], LaunchPath::Headless).choices().len(), 1);
         }
     }
 
     #[test]
     fn model_suffixes_cannot_bypass_unsupported_reasoning_overrides() {
-        for (harness, model) in [
-            (AgentKind::Opencode, "provider/exact-model#high"),
-            (AgentKind::Pi, "provider/exact-model:high"),
-        ] {
-            let mut cap = capability(harness);
-            cap.models[0].model = model.into();
-            assert!(options(&[cap], LaunchPath::Headless).choices().is_empty());
-        }
+        let mut cap = capability(AgentKind::Pi);
+        cap.models[0].model = "provider/exact-model:high".into();
+        assert!(options(&[cap], LaunchPath::Headless).choices().is_empty());
     }
 
     #[test]

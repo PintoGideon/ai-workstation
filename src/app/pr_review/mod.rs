@@ -27,10 +27,11 @@ use actions::new_fix_confirm;
 pub(crate) use actions::with_reply_draft_handoff;
 pub(crate) use domain::AI_ATTRIBUTION_FOOTER;
 pub(crate) use domain::AI_REVIEW_ATTRIBUTION_FOOTER;
-pub(crate) use domain::AMF_ATTRIBUTION_FOOTER;
+pub(crate) use domain::AIW_ATTRIBUTION_FOOTER;
 pub(crate) use domain::TRIAGE_SESSION_LABEL;
 pub(crate) use domain::fix_session_index;
 pub(crate) use domain::pr_triage_session_index;
+#[cfg(test)]
 pub(crate) use domain::pr_triage_session_index_named;
 pub(crate) use domain::window_parsed_hunk;
 use domain::{
@@ -55,7 +56,7 @@ pub use memory::{
 };
 
 #[cfg(test)]
-pub use domain::reply_posted_via_amf;
+pub use domain::reply_posted_via_aiw;
 #[cfg(test)]
 pub use fetch::normalize;
 #[cfg(test)]

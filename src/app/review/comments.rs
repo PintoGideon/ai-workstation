@@ -585,7 +585,7 @@ impl App {
             // use the source that was actually written, not the pre-apply patch.
             self.refresh_diff_viewer();
             self.complete_diff_viewer_loading();
-            // The reload also picks up any other file that changed outside AMF
+            // The reload also picks up any other file that changed outside AIW
             // since it was approved; its approval is just as stale. A failed
             // reload has no files to compare, and the written files were
             // already cleared above.
@@ -1460,7 +1460,7 @@ pub(super) fn editor_invocation(
 }
 
 /// Resolve the editor to run: `$VISUAL`, then `$EDITOR`, then `vi` — the
-/// standard precedence, so AMF honours whatever the reviewer's shell already
+/// standard precedence, so AIW honours whatever the reviewer's shell already
 /// configures. Blank values are ignored rather than treated as a program name.
 pub fn resolve_editor_command(
     path: &str,

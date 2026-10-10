@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Seed a feature/session plus an "unsent prompt" pair directly in a
-throwaway AMF database, for the unsent-prompt-recovery screenshot scenario.
+throwaway AIW database, for the unsent-prompt-recovery screenshot scenario.
 
 Bypasses `automation create-feature` (and its harness-availability gate)
 entirely, the same way seed-latest-prompt-session.py does: no real

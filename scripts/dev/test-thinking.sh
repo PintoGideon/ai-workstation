@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Pulse AMF thinking sentinel for a tmux session so dashboard
+# Pulse AIW thinking sentinel for a tmux session so dashboard
 # thinking detection can be tested without waiting for real agent activity.
 #
 # Usage:
 #   scripts/dev/test-thinking.sh <tmux_session> [seconds]
 # Example:
-#   scripts/dev/test-thinking.sh amf-my-feature 8
+#   scripts/dev/test-thinking.sh aiw-my-feature 8
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
     echo "Usage: $0 <tmux_session> [seconds]" >&2
@@ -16,7 +16,7 @@ fi
 
 SESSION="$1"
 DURATION="${2:-8}"
-SENTINEL_DIR="/tmp/amf-thinking"
+SENTINEL_DIR="/tmp/aiw-thinking"
 SENTINEL_PATH="$SENTINEL_DIR/$SESSION"
 
 if ! [[ "$DURATION" =~ ^[0-9]+$ ]]; then

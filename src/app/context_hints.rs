@@ -31,7 +31,7 @@ impl ContextHintState {
     }
 }
 
-/// Hint-eligibility state keyed by AMF session ID. It is transient and
+/// Hint-eligibility state keyed by AIW session ID. It is transient and
 /// intentionally not part of the persisted project model.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct ContextHintStates {

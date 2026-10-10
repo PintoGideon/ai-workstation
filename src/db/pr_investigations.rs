@@ -1,5 +1,5 @@
 //! SQLite persistence for PR Triage's **Investigate** action
-//! (`AMF_PLAN.md` — "PR Triage: Investigate").
+//! (`AIW_PLAN.md` — "PR Triage: Investigate").
 //!
 //! A [`PrInvestigation`] is one strictly read-only headless investigation of a
 //! single review comment. There is exactly one per `(project_id, PR#, comment
@@ -21,7 +21,7 @@
 //! signal, exactly as `pr_comment_triage` uses it, not part of the identity, so
 //! a push that moves the PR head doesn't orphan the finding.
 //!
-//! The persistence layer lands ahead of its UI consumers (later `AMF_PLAN.md`
+//! The persistence layer lands ahead of its UI consumers (later `AIW_PLAN.md`
 //! tasks), so parts of this API are allowed to be unused for now — like
 //! `src/db/todos.rs` and `src/db/learning.rs`.
 #![allow(dead_code)]
@@ -159,7 +159,7 @@ pub fn upsert(conn: &Connection, inv: &PrInvestigation) -> Result<()> {
 /// Record the outcome of a finished run against one row, addressed by key.
 ///
 /// Deliberately narrower than [`upsert`]: a blocking run can still outlive the
-/// overlay if the operator closes AMF, and there is then no in-memory row to
+/// overlay if the operator closes AIW, and there is then no in-memory row to
 /// write back — only the key the run was launched with. Returns whether a row
 /// was actually updated, so a completion for an investigation that has since
 /// been deleted can be reported rather than silently dropped.
@@ -218,16 +218,6 @@ pub fn set_status(
     Ok(updated > 0)
 }
 
-/// Delete one investigation.
-pub fn delete(conn: &Connection, project_id: &str, pr_number: u32, comment_id: u64) -> Result<()> {
-    conn.execute(
-        "DELETE FROM pr_investigations
-         WHERE project_id = ?1 AND pr_number = ?2 AND comment_id = ?3",
-        params![project_id, pr_number as i64, comment_id as i64],
-    )?;
-    Ok(())
-}
-
 /// Drop every investigation belonging to a project, for use when the project is
 /// deleted (there is no FK cascade — see the module doc).
 pub fn delete_for_project(conn: &Connection, project_id: &str) -> Result<()> {
@@ -266,12 +256,12 @@ fn row_to_investigation(row: &rusqlite::Row<'_>) -> rusqlite::Result<PrInvestiga
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use tempfile::NamedTempFile;
 
-    fn open_temp_db() -> (NamedTempFile, AmfDb) {
+    fn open_temp_db() -> (NamedTempFile, AiwDb) {
         let tmp = NamedTempFile::new().unwrap();
-        let db = AmfDb::open(tmp.path()).unwrap();
+        let db = AiwDb::open(tmp.path()).unwrap();
         (tmp, db)
     }
 

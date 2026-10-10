@@ -71,6 +71,21 @@ impl App {
     }
 
     fn enter_view_gated(&mut self, auto_compose: bool, intent: StartIntent) -> Result<()> {
+        // FORK: a session whose window closed on its own must not be attached
+        // as if it were running. Reconcile first, then read the (possibly
+        // adjusted) selection. Skipped under unit tests, whose strict tmux
+        // mocks don't expect the extra call; covered by fork tests instead.
+        #[cfg(not(test))]
+        {
+            let was_session = matches!(self.selection, Selection::Session(..));
+            if self.reconcile_vanished_windows()
+                && was_session
+                && !matches!(self.selection, Selection::Session(..))
+            {
+                self.message = Some("That terminal was closed, so it was removed".into());
+                return Ok(());
+            }
+        }
         let (pi, fi, target_si) = match &self.selection {
             Selection::Session(pi, fi, si) => (*pi, *fi, Some(*si)),
             Selection::Feature(pi, fi) => (*pi, *fi, None),
@@ -200,7 +215,7 @@ impl App {
         });
 
         // Clear-on-open, for harnesses that will never tell us they resumed.
-        // Harnesses AMF can observe thinking for clear themselves in
+        // Harnesses AIW can observe thinking for clear themselves in
         // `sync_thinking_status` when output actually resumes, which is the
         // more accurate signal — opening a session is not the same as dealing
         // with it, so we only fall back to it where nothing better exists.
@@ -261,6 +276,7 @@ impl App {
     }
 
     pub(crate) fn exit_view_without_resuming_plan_interview(&mut self) {
+        self.fork_split.zoom_stash = None; // FORK: a zoomed split tile left for the dashboard
         self.pane_content.clear();
         self.tmux_cursor = None;
         self.mode = AppMode::Normal;
@@ -366,7 +382,7 @@ impl App {
                             && current.window == result.view.window
                 );
                 if still_here {
-                    // Unsent entries lead the list — a prompt AMF failed to
+                    // Unsent entries lead the list — a prompt AIW failed to
                     // deliver is the thing most worth acting on, ahead of
                     // history that already reached the agent.
                     let unsent = self
@@ -483,7 +499,7 @@ impl App {
         // Bounce the pane height by one row and back: the agent gets a
         // SIGWINCH pair and performs a full repaint. This recovers from
         // agent-side renderer desync (incremental updates drawn at a
-        // stale anchor row), which AMF cannot fix by re-capturing — the
+        // stale anchor row), which AIW cannot fix by re-capturing — the
         // corruption is in the pane grid itself.
         self.tmux.resize_pane(
             &session,
@@ -1298,12 +1314,7 @@ impl App {
         let si = feature
             .sessions
             .iter()
-            .position(|s| {
-                matches!(
-                    s.kind,
-                    SessionKind::Claude | SessionKind::Opencode | SessionKind::Codex
-                )
-            })
+            .position(|s| matches!(s.kind, SessionKind::Claude | SessionKind::Codex))
             .unwrap_or(0);
         let (session_window, session_label, session_kind) =
             if let Some(s) = feature.sessions.get(si) {

@@ -7,7 +7,7 @@ import {
 } from "./promptOverridesApi";
 import { EmptyState, Field, Modal, Spinner } from "./ui";
 
-const HARNESSES: AgentSlug[] = ["claude", "opencode", "codex", "pi"];
+const HARNESSES: AgentSlug[] = ["claude", "codex", "pi", "gemini", "cursor"]; // FORK
 const contextKey = (context: OverrideContext) => JSON.stringify(context);
 
 /** A local, unsaved template edit for one prompt in one context. */
@@ -34,7 +34,7 @@ interface PendingClear {
  * The headless-prompt override manager (the TUI's dashboard `E`). Reads and
  * writes go through the shared registry, resolver and stores; every write is
  * checked against the revision the draft was based on, so a change made by the
- * TUI, another window or a hand edit of `amf.json` must be reloaded first.
+ * TUI, another window or a hand edit of `aiw.json` must be reloaded first.
  */
 export default function PromptOverridesPanel({ initialContext, initialPromptId, initialHarness, fromPrecall, contextNote = null, projects, onClose }: {
   initialContext: OverrideContext;
@@ -164,7 +164,7 @@ export default function PromptOverridesPanel({ initialContext, initialPromptId, 
   const editing = draft !== null && row?.id === draft.promptId;
 
   return <Modal label="Prompt overrides" title="Prompt overrides" size="xl" onClose={requestClose} dismissable={!busy}
-    subtitle="Change the prompts AMF sends for headless AI calls. The nearest scope wins: feature, then project, then global, then the built-in default."
+    subtitle="Change the prompts AIW sends for headless AI calls. The nearest scope wins: feature, then project, then global, then the built-in default."
     footer={<>
       <span className="muted small">{view ? `Context: ${view.context_label}` : ""}</span>
       <button className="btn btn-secondary" disabled={busy} onClick={requestClose}>Done</button>

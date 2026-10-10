@@ -31,7 +31,7 @@ const review: PrTriageView = {
     open_count: 1, total: 2, hide_resolved: false, sort: "fetch_order", hidden_resolved: 0, conversation_start: null,
     investigating: null, investigating_harness: null,
     comments: [
-      comment({ replies: [{ id: 3, author: "dev", body: "Looking.\n\n— posted via AMF", via_amf: true }] }),
+      comment({ replies: [{ id: 3, author: "dev", body: "Looking.\n\n— posted via AIW", via_aiw: true }] }),
       comment({ id: 2, author: "bot", is_bot: true, resolved: true, body: "Style nit", snippet: "Style nit", line: 12 }),
     ] },
 };
@@ -40,7 +40,6 @@ type Handler = (action: PrTriageAction) => PrTriageView | null | Promise<PrTriag
 function backend(begin: PrTriageView, onAct: Handler, snapshot: () => PrTriageView = () => begin) {
   vi.mocked(invoke).mockImplementation(async (command: string, args?: unknown) => {
     if (command === "screenshots_pr_document") return "PR description text";
-    if (command === "screenshots_inline_image") return { data_url: "data:image/png;base64,AA==", width: 4, height: 3 };
     if (command === "pr_triage_begin") return begin;
     if (command === "pr_triage_snapshot") return snapshot();
     if (command === "pr_triage_act") return onAct((args as { action: PrTriageAction }).action);
@@ -66,7 +65,7 @@ it("lists pull requests, opens one, polls the comment fetch and browses threads"
   expect(screen.getByText("1 reply")).toBeTruthy();
   const detail = screen.getByRole("article", { name: "Selected comment" });
   expect(within(detail).getByText("negative")).toBeTruthy();
-  expect(within(detail).getByText("via AMF")).toBeTruthy();
+  expect(within(detail).getByText("via AIW")).toBeTruthy();
   expect(within(detail).getByLabelText("Diff context").textContent).toContain("+return round(total);");
   fireEvent.click(screen.getByRole("button", { name: /bot/ }));
   expect(within(screen.getByRole("article", { name: "Selected comment" })).getByText("Style nit")).toBeTruthy();
@@ -164,7 +163,7 @@ it("investigates only after the pre-call notice is continued, once", async () =>
 
 it("keeps the reply draft local, shows the exact posted text and posts only on confirmation", async () => {
   const replying = { ...review, revision: 4, reply: { comment_id: 1, kind: "not_needed" as const, seed: "", agent_drafted: false } };
-  const confirming = { ...replying, revision: 5, write_confirm: { kind: "reply" as const, comment_id: 1, destination: "Reply in the inline review thread on PR #12", body: "Guarded upstream.\n\n— posted via AMF" } };
+  const confirming = { ...replying, revision: 5, write_confirm: { kind: "reply" as const, comment_id: 1, destination: "Reply in the inline review thread on PR #12", body: "Guarded upstream.\n\n— posted via AIW" } };
   backend(review, (action) => {
     if (action.kind === "start_reply") return replying;
     if (action.kind === "prepare_reply") return confirming;
@@ -183,7 +182,7 @@ it("keeps the reply draft local, shows the exact posted text and posts only on c
   fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
   fireEvent.click(screen.getByRole("button", { name: "Review reply…" }));
   const confirm = await screen.findByRole("alertdialog", { name: "Confirm GitHub write" });
-  expect(confirm.textContent).toContain("Guarded upstream.\n\n— posted via AMF");
+  expect(confirm.textContent).toContain("Guarded upstream.\n\n— posted via AIW");
   expect(actions().some((a) => a.action.kind === "confirm_write")).toBe(false);
   fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
   await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
@@ -303,14 +302,14 @@ it("explains how to get a fix target when a feature has no agent sessions", asyn
 
 it("previews the receipt-bearing prompt and requires explicit send without closing triage", async () => {
   const close = vi.fn(); const handoff = vi.fn();
-  const preview = { ...fixDraft, revision: 5, fix_draft: { ...fixDraft.fix_draft!, submission_prompt: "Edited instruction\n\namf reply-draft --request-id current" } };
+  const preview = { ...fixDraft, revision: 5, fix_draft: { ...fixDraft.fix_draft!, submission_prompt: "Edited instruction\n\naiw reply-draft --request-id current" } };
   backend(fixDraft, action => action.kind === "prepare_fix_submission" ? preview : { ...fixView, revision: 6, notice: "Fix sent to the agent." });
   render(<PrTriagePanel target={target} onClose={close} onHandoff={handoff} />);
   const prompt = await screen.findByRole("textbox", { name: "Fix prompt" });
   fireEvent.change(prompt, { target: { value: "Edited instruction" } });
   fireEvent.click(screen.getByRole("button", { name: "Preview send to agent…" }));
   const confirm = await screen.findByRole("alertdialog", { name: "Send fix to agent" });
-  expect(confirm.textContent).toContain("amf reply-draft --request-id current");
+  expect(confirm.textContent).toContain("aiw reply-draft --request-id current");
   expect(actions()[0].action).toEqual({ kind: "prepare_fix_submission", prompt: "Edited instruction" });
   expect((prompt as HTMLTextAreaElement).disabled).toBe(true);
   expect((screen.getByRole("button", { name: "Open in agent composer" }) as HTMLButtonElement).disabled).toBe(true);
@@ -335,11 +334,12 @@ it("cancels submission preview while retaining the edited fix prompt", async () 
   expect(actions().at(-1)?.action.kind).toBe("cancel_fix_submission");
 });
 
-it("shows uploaded images in the description, selected comment and replies without a gallery", async () => {
+it("shows uploaded images as placeholders in the description, selected comment and replies without downloading them", async () => {
+  // FORK(no-cloud): AIW fetches no images; each one is a placeholder.
   const uploaded = "https://github.com/user-attachments/assets/uploaded-image";
   const state = { ...review, review: { ...review.review!, comments: [comment({
     body: `Before ![Comment screenshot](${uploaded}) after`,
-    replies: [{ id: 3, author: "dev", body: `<img src="${uploaded}" alt="Reply screenshot" />`, via_amf: false }],
+    replies: [{ id: 3, author: "dev", body: `<img src="${uploaded}" alt="Reply screenshot" />`, via_aiw: false }],
   })] } };
   backend(state, () => state);
   const original = vi.mocked(invoke).getMockImplementation()!;
@@ -347,15 +347,13 @@ it("shows uploaded images in the description, selected comment and replies witho
     ? Promise.resolve(`<img width="1200" height="800" alt="Description screenshot" src="${uploaded}" />`)
     : original(command, args, options));
   render(<PrTriagePanel target={target} onClose={vi.fn()} />);
-  expect(await screen.findByRole("img", { name: "Description screenshot" })).toBeTruthy();
-  expect(await screen.findByRole("img", { name: "Comment screenshot" })).toBeTruthy();
-  expect(await screen.findByRole("img", { name: "Reply screenshot" })).toBeTruthy();
+  expect(await screen.findByText("[image: Description screenshot]", { exact: false })).toBeTruthy();
+  expect(await screen.findByText("[image: Comment screenshot]", { exact: false })).toBeTruthy();
+  expect(await screen.findByText("[image: Reply screenshot]", { exact: false })).toBeTruthy();
+  expect(document.querySelectorAll(".pr-markdown img")).toHaveLength(0);
   expect(screen.queryByRole("button", { name: "Screenshots" })).toBeNull();
-  expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "screenshots_remote_list")).toBe(false);
-  fireEvent.click(screen.getByRole("button", { name: "Enlarge image: Comment screenshot" }));
-  expect(await screen.findByRole("dialog", { name: "PR image" })).toBeTruthy();
-  fireEvent.keyDown(window, { key: "Escape" });
-  expect(screen.queryByRole("dialog", { name: "PR image" })).toBeNull();
+  expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "screenshots_remote_list"
+    || command === "screenshots_inline_image")).toBe(false);
   expect(screen.getByRole("article", { name: "Selected comment" })).toBeTruthy();
   expect(actions().some(({ action }) => action.kind === "close")).toBe(false);
 });

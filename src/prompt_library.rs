@@ -25,7 +25,7 @@ pub enum PromptSource {
     User,
     Global,
     Project,
-    /// Template lives in the active feature's worktree `.amf/config.json`.
+    /// Template lives in the active feature's worktree `aiw.json`.
     /// Branch-specific; not yet promoted to the main repo.
     Worktree,
 }

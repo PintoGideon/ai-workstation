@@ -2,7 +2,7 @@
 //!
 //! The PR head (`pull/<n>/head`, which the base repository carries even for a
 //! fork PR) and its base branch are fetched into private refs under
-//! `refs/amf/review/<n>/`. Nothing else changes: not HEAD, not the index, not
+//! `refs/aiw/review/<n>/`. Nothing else changes: not HEAD, not the index, not
 //! the working tree, not the stash, not any `refs/remotes/*` tracking ref. The
 //! review then reads everything by OID, so the refs exist only to keep the
 //! objects reachable while the review is open.
@@ -21,7 +21,7 @@ use crate::github::ReviewablePr;
 
 /// Namespace for every PR review's refs. Shared across the repository's
 /// worktrees, like every ref outside `refs/worktree/`.
-const REVIEW_REF_PREFIX: &str = "refs/amf/review/";
+const REVIEW_REF_PREFIX: &str = "refs/aiw/review/";
 
 /// The private ref holding one side (`head` / `base`) of PR `number`.
 pub(crate) fn review_ref(number: u32, side: &str) -> String {
@@ -245,7 +245,7 @@ fn wait_for_pending_removals(number: u32) {
 
 /// Delete every PR review ref in the repository, returning how many went.
 /// For clearing refs a crash left behind. Safe even while a review is open
-/// in another AMF process, because reviews read by OID and the objects
+/// in another AIW process, because reviews read by OID and the objects
 /// outlive their refs until `git gc`'s expiry.
 pub(crate) fn prune_review_refs(workdir: &Path) -> Result<usize> {
     let listed = git(
@@ -322,8 +322,8 @@ mod tests {
     }
 
     fn identity(dir: &Path) {
-        run(dir, &["config", "user.name", "AMF Test"]);
-        run(dir, &["config", "user.email", "amf@example.com"]);
+        run(dir, &["config", "user.name", "AIW Test"]);
+        run(dir, &["config", "user.email", "aiw@example.com"]);
     }
 
     /// An upstream repository with PR #7 whose base branch has moved on since
@@ -532,15 +532,15 @@ mod tests {
     fn pruning_removes_every_review_ref_and_nothing_else() {
         let fx = Fixture::new();
         materialize(&fx.local, &fx.url(), &fx.pr(), || unreachable!()).unwrap();
-        // Another AMF feature's private ref, outside the review namespace.
+        // Another AIW feature's private ref, outside the review namespace.
         run(
             &fx.local,
-            &["update-ref", "refs/amf/pr-7-123-head", &fx.pr_head],
+            &["update-ref", "refs/aiw/pr-7-123-head", &fx.pr_head],
         );
 
         assert_eq!(prune_review_refs(&fx.local).unwrap(), 2);
 
         assert_eq!(prune_review_refs(&fx.local).unwrap(), 0);
-        assert!(rev_parse(&fx.local, "refs/amf/pr-7-123-head").is_ok());
+        assert!(rev_parse(&fx.local, "refs/aiw/pr-7-123-head").is_ok());
     }
 }

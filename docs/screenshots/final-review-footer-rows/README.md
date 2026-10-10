@@ -1,7 +1,7 @@
 # The review footer's second hint row is no longer clipped
 
-Captured from an isolated, throwaway AMF instance
-(`scripts/dev/screenshot/amf-capture.sh`, scenario
+Captured from an isolated, throwaway AIW instance
+(`scripts/dev/screenshot/aiw-capture.sh`, scenario
 `scripts/dev/screenshot/scenarios/final-review-footer-rows.txt`) against a
 scratch demo repo whose `review-demo` branch makes token verification
 constant-time, bounds the token cache and puts a TTL on lookups, with matching
@@ -77,12 +77,12 @@ cannot crowd the diff off a short terminal:
 ## Reproducing
 
 ```bash
-scripts/dev/screenshot/amf-capture.sh \
+scripts/dev/screenshot/aiw-capture.sh \
   --scenario scripts/dev/screenshot/scenarios/final-review-footer-rows.txt \
   --seed <project.json> --seed-feature <feature.json> \
   --geometry 160x44
 ```
 
 Swap `--geometry` for `200x44`, `120x40` or `80x36` to see the width dependence;
-`--amf-bin` points the same scenario at a differently-built binary, which is how
+`--aiw-bin` points the same scenario at a differently-built binary, which is how
 the before/after pairs above were produced.

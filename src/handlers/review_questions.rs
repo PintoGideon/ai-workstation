@@ -5,7 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 pub(crate) fn handle(app: &mut App, key: KeyEvent) -> Result<()> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     // Ctrl+S is the submit key: without the kitty keyboard protocol (which
-    // AMF does not enable) most terminals send Ctrl+Enter as a plain Enter,
+    // AIW does not enable) most terminals send Ctrl+Enter as a plain Enter,
     // which the editor takes as a newline. Ctrl+Enter stays as an alias for
     // terminals that do report it.
     let submit = ctrl && matches!(key.code, KeyCode::Char('s') | KeyCode::Enter);

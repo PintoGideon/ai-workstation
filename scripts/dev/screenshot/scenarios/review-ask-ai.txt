@@ -4,7 +4,7 @@
 shim:codex:../review-question-fixture.py
 shim:gh:../review-question-fixture.py
 shim:git:../review-question-fixture.py
-run:python3 "$SCRIPT_DIR/review-question-fixture.py" "$SHOT_ROOT" "$AMF_BIN" "$SESSION"
+run:python3 "$SCRIPT_DIR/review-question-fixture.py" "$SHOT_ROOT" "$AIW_BIN" "$SESSION"
 wait:2000
 key:j|wait:200
 key:Enter|wait:400
@@ -99,7 +99,7 @@ key:Escape|wait:200
 key:Escape|wait:200
 key:Escape|wait:200
 # Existing automation seam opens a deterministic completed AI PR review.
-run:"$AMF_BIN" automation seed-ai-review --file "$SHOT_ROOT/ai-review.json"
+run:"$AIW_BIN" automation seed-ai-review --file "$SHOT_ROOT/ai-review.json"
 wait:800
 key:Q|wait:200
 text:Can we reuse an existing helper for this normalization?

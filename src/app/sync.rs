@@ -7,7 +7,6 @@ use crate::context_tracking::{ContextThresholds, SessionContextState};
 use crate::github::{GhCli, GhGraphqlError};
 use crate::project::{AgentKind, SessionKind, TokenUsageSourceMatch};
 use crate::summary::SummaryManager;
-use crate::tmux::TmuxManager;
 use crate::token_tracking::{
     SessionTokenTracker, SessionTokenUsage, TokenPricingConfig, TokenUsageProvider,
     TokenUsageSource, format_token_usage, provider_for_session_kind,
@@ -135,10 +134,10 @@ fn read_custom_session_status(
     session_id: &str,
     feature_id: &str,
     workdir: &Path,
-    db: Option<&crate::db::AmfDb>,
+    db: Option<&crate::db::AiwDb>,
 ) -> Option<String> {
     let status_path = workdir
-        .join(".amf")
+        .join(".aiw")
         .join("session-status")
         .join(format!("{}.txt", session_id));
 
@@ -214,7 +213,7 @@ pub(crate) struct SessionStatusBgResult {
 
 fn collect_jobs(
     store: &crate::project::ProjectStore,
-    db: Option<&crate::db::AmfDb>,
+    db: Option<&crate::db::AiwDb>,
     context_states: &HashMap<String, SessionContextState>,
 ) -> Vec<SessionStatusJob> {
     store
@@ -404,7 +403,7 @@ fn run_jobs(
             .map(|usage| format_token_usage(usage, pricing));
         // Live signals win over the cached id: `context_conversation_id` is
         // derived from this same collector's *previous* output, so once it
-        // drifts (a `/clear`, a new Codex/OpenCode thread) it can only
+        // drifts (a `/clear`, a new Codex thread) it can only
         // self-correct if something fresher outranks it here.
         let conversation_id = job
             .claude_session_id
@@ -452,7 +451,6 @@ fn run_jobs(
 fn session_kind_key(kind: &SessionKind) -> u8 {
     match kind {
         SessionKind::Claude => 0,
-        SessionKind::Opencode => 1,
         SessionKind::Codex => 2,
         SessionKind::Pi => 3,
         SessionKind::Terminal => 4,
@@ -460,6 +458,8 @@ fn session_kind_key(kind: &SessionKind) -> u8 {
         SessionKind::Vscode => 6,
         SessionKind::Custom => 7,
         SessionKind::Todos => 8,
+        SessionKind::Gemini => 9,  // FORK
+        SessionKind::Cursor => 10, // FORK
     }
 }
 
@@ -575,43 +575,6 @@ fn apply_context_result(
         } => state.begin_reset(conversation_id, event),
         ContextCollectionResult::Unavailable(_) => state.mark_unavailable(checked_at),
     }
-}
-
-pub(super) fn pane_shows_thinking_hint(content: &str) -> bool {
-    let lower = content.to_lowercase();
-    ["esc interrupt", "esc to interrupt", "ctrl+c to interrupt"]
-        .iter()
-        .any(|marker| lower.contains(marker))
-}
-
-pub(super) fn opencode_sidebar_thinking_state(
-    sidebar: &crate::app::opencode_storage::OpencodeSidebarData,
-) -> Option<bool> {
-    if sidebar
-        .pending_permission
-        .as_deref()
-        .is_some_and(|permission| !permission.trim().is_empty())
-    {
-        return Some(false);
-    }
-
-    let status = sidebar.status.as_deref()?.trim().to_ascii_lowercase();
-    if status.is_empty() {
-        return None;
-    }
-
-    Some(!matches!(
-        status.as_str(),
-        "idle"
-            | "ready"
-            | "done"
-            | "completed"
-            | "closed"
-            | "cancelled"
-            | "canceled"
-            | "stopped"
-            | "waiting"
-    ))
 }
 
 impl App {
@@ -1170,7 +1133,7 @@ impl App {
         self.age_out_attention();
 
         // A feature that came back up through any path (picker restart, another
-        // AMF window) is no longer "stopped on purpose", so a future missing
+        // AIW window) is no longer "stopped on purpose", so a future missing
         // session should reach the recovery dialog again.
         if !self.user_stopped_features.is_empty() {
             let live_feature_ids: HashSet<String> = self
@@ -1227,19 +1190,15 @@ impl App {
     }
 
     pub fn sync_thinking_status(&mut self) -> bool {
-        // Background sidebar loads warm Opencode status/prompt data for the
-        // dashboard. Drain them here too, not just when a sidebar is open, so
-        // thinking sync can use cached state instead of falling back to
-        // `tmux capture-pane` across many features.
+        // Drain background sidebar loads here too, not just when a sidebar
+        // is open, so the dashboard's cached sidebar state stays warm.
         self.poll_sidebar_load_results();
 
-        // Opencode features without sidebar cache need a capture-pane
-        // fallback, which requires &mut self — collect probe targets up
-        // front instead of borrowing the store across the loop.
+        // Collect probe targets up front instead of borrowing the store
+        // across the loop.
         struct ThinkingProbe {
             tmux_session: String,
             agent: AgentKind,
-            opencode_window: Option<String>,
         }
         let probes: Vec<ThinkingProbe> = self
             .store
@@ -1253,11 +1212,6 @@ impl App {
                     Some(ThinkingProbe {
                         tmux_session: feature.tmux_session.clone(),
                         agent: feature.agent.clone(),
-                        opencode_window: feature
-                            .sessions
-                            .iter()
-                            .find(|s| s.kind == SessionKind::Opencode)
-                            .map(|s| s.tmux_window.clone()),
                     })
                 })
             })
@@ -1267,7 +1221,8 @@ impl App {
         let ipc_mode = self.ipc.is_some();
         for probe in &probes {
             let thinking = match probe.agent {
-                AgentKind::Claude => {
+                // FORK: Gemini/Cursor report thinking/tool hooks like Claude.
+                AgentKind::Claude | AgentKind::Gemini | AgentKind::Cursor => {
                     if ipc_mode {
                         self.ipc_thinking_sessions.contains(&probe.tmux_session)
                             || self.ipc_tool_sessions.contains(&probe.tmux_session)
@@ -1275,16 +1230,6 @@ impl App {
                         Self::is_session_marked_thinking(&probe.tmux_session)
                     }
                 }
-                AgentKind::Opencode => self
-                    .opencode_sidebar_cache
-                    .get(&probe.tmux_session)
-                    .and_then(opencode_sidebar_thinking_state)
-                    .or_else(|| {
-                        probe.opencode_window.as_ref().and_then(|window| {
-                            self.opencode_thinking_pane_fallback(&probe.tmux_session, window)
-                        })
-                    })
-                    .unwrap_or(false),
                 AgentKind::Codex => {
                     if ipc_mode {
                         self.ipc_thinking_sessions.contains(&probe.tmux_session)
@@ -1332,12 +1277,11 @@ impl App {
                 // started producing output again. Clearing on every poll while
                 // thinking would retire attention the session raised while it
                 // was already busy — Claude keeps its thinking marker set
-                // through a permission prompt, and OpenCode stays busy while
-                // its `question` tool is open, so a real Question would be
+                // through a permission prompt, so a real Question would be
                 // dropped within one poll of being raised.
                 //
                 // This is the "clear on new output" path for every harness
-                // whose thinking state AMF can observe; harnesses that report
+                // whose thinking state AIW can observe; harnesses that report
                 // no thinking at all clear on open instead (see
                 // `HarnessCapabilities::clears_on_open`).
                 if !was_thinking && self.clear_attention(&sid) {
@@ -1482,31 +1426,8 @@ impl App {
         old_thinking != self.thinking_features || pending_inputs_changed
     }
 
-    /// Capture-pane is a subprocess; cache its thinking verdict per
-    /// session so the 500ms thinking tick spawns it at most every 5s.
-    fn opencode_thinking_pane_fallback(
-        &mut self,
-        tmux_session: &str,
-        window: &str,
-    ) -> Option<bool> {
-        const FALLBACK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
-
-        if let Some((checked_at, result)) = self.opencode_thinking_pane_cache.get(tmux_session)
-            && checked_at.elapsed() < FALLBACK_INTERVAL
-        {
-            return *result;
-        }
-
-        let result = TmuxManager::capture_pane(tmux_session, window)
-            .ok()
-            .map(|content| pane_shows_thinking_hint(&content));
-        self.opencode_thinking_pane_cache
-            .insert(tmux_session.to_string(), (Instant::now(), result));
-        result
-    }
-
     pub(super) fn is_session_marked_thinking(tmux_session: &str) -> bool {
-        let path_str = format!("/tmp/amf-thinking/{}", tmux_session);
+        let path_str = format!("/tmp/aiw-thinking/{}", tmux_session);
         let path = std::path::Path::new(&path_str);
         if !path.exists() {
             return false;
@@ -1525,7 +1446,7 @@ impl App {
     }
 
     pub fn cleanup_stale_thinking_files() {
-        let Ok(entries) = std::fs::read_dir("/tmp/amf-thinking") else {
+        let Ok(entries) = std::fs::read_dir("/tmp/aiw-thinking") else {
             return;
         };
 
@@ -1546,23 +1467,19 @@ impl App {
 
     /// The thinking verdict available to a process that does not own the IPC
     /// socket (the desktop GUI): the sources `sync_thinking_status` reads when
-    /// `self.ipc` is `None`, without the OpenCode capture-pane fallback (a
-    /// subprocess per feature per poll) and without its pending-input and
-    /// attention side effects.
+    /// `self.ipc` is `None`, without its pending-input and attention side
+    /// effects.
     pub(crate) fn thinking_from_shared_sources(
         &self,
         tmux_session: &str,
         agent: &AgentKind,
     ) -> bool {
         match agent {
-            AgentKind::Claude | AgentKind::Codex | AgentKind::Pi => {
-                Self::is_session_marked_thinking(tmux_session)
-            }
-            AgentKind::Opencode => self
-                .opencode_sidebar_cache
-                .get(tmux_session)
-                .and_then(opencode_sidebar_thinking_state)
-                .unwrap_or(false),
+            AgentKind::Claude
+            | AgentKind::Codex
+            | AgentKind::Pi
+            | AgentKind::Gemini // FORK
+            | AgentKind::Cursor => Self::is_session_marked_thinking(tmux_session),
         }
     }
 
@@ -1745,9 +1662,10 @@ impl App {
     fn get_agent_window(feature: &Feature) -> Option<String> {
         let target_kind = match feature.agent {
             AgentKind::Claude => SessionKind::Claude,
-            AgentKind::Opencode => SessionKind::Opencode,
             AgentKind::Codex => SessionKind::Codex,
             AgentKind::Pi => SessionKind::Pi,
+            AgentKind::Gemini => SessionKind::Gemini, // FORK
+            AgentKind::Cursor => SessionKind::Cursor, // FORK
         };
         feature
             .sessions

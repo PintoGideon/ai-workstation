@@ -1,7 +1,13 @@
 # GUI screenshot viewer implementation basis
 
+> **AIW note (2026-10-10):** the remote half of this viewer (GitHub attachments and Actions
+> artifacts, `screenshots_remote_*`, `screenshots_inline_image`, `screenshots_check_access`) was
+> removed for the no-cloud build ([NO_CLOUD.md](../../NO_CLOUD.md)), and so was its acceptance
+> script `scripts/dev/check-gui-screenshots.py`. Local agent-validation evidence still works.
+> The rest of this page is the upstream implementation record.
+
 This records the implementation boundaries and verified coverage for
-`AMF_PLAN.md`. The GUI viewer and adapters are implemented; authenticated
+`AIW_PLAN.md`. The GUI viewer and adapters are implemented; authenticated
 private-source coverage remains a release gate.
 The user confirmed both recommended source policies on 2026-10-07.
 The evidence contract is defined in [screenshot-evidence-contract.md](screenshot-evidence-contract.md).
@@ -19,7 +25,7 @@ The evidence contract is defined in [screenshot-evidence-contract.md](screenshot
 | Session entry | `FeatureView`: `activeTab`, `activeSession` and stable `SessionTarget` | Offer the selected session's evidence; feature browsing must also include historical sessions |
 | Workspace entry | `App.tsx` workspace navigation | Retained evidence cleanup must remain reachable when original features or sessions no longer exist |
 | Watcher ownership | `src/app/mod.rs`: App owns `FsWatcher`; `src/fswatch.rs`: `notify` dirty flags with timer fallbacks | Evidence reconciliation belongs to App; events are hints, with initial and fallback scans and restart rediscovery |
-| Launch attribution | `src/project.rs`: `FeatureSession.id`; `src/tmux.rs`: launch environment already includes `AMF_FEATURE_SESSION_ID` | Use the stable AMF ID, independently of harness resume IDs and tmux window names |
+| Launch attribution | `src/project.rs`: `FeatureSession.id`; `src/tmux.rs`: launch environment already includes `AIW_FEATURE_SESSION_ID` | Use the stable AIW ID, independently of harness resume IDs and tmux window names |
 | Deletion | `src/app/feature_ops.rs`: foreground and background deletion, successful completion and failure recovery; `GuiHandle::delete_feature` delegates to this engine | Coordinate cleanup in the shared lifecycle, including background deletion and pending evidence operations |
 
 The GUI refreshes external workspace state through `GuiHandle::refresh_store`
@@ -163,7 +169,7 @@ does not require modifying the capture engine or publishing screenshot proof.
 ## Validation commands and acceptance boundary
 
 Use Node 22.12+ and stable edition-2024 Rust. This workspace includes the
-`amf-gui` Rust package, so workspace tests and Clippy also cover its desktop
+`aiw-gui` Rust package, so workspace tests and Clippy also cover its desktop
 commands. Linux requires GTK 3, WebKitGTK 4.1 and the other system prerequisites
 already installed in `.github/workflows/main.yml` and `release.yml`.
 
@@ -184,7 +190,7 @@ cargo test --locked app::pr_review
 
 # Code milestone, from repository root
 cargo build --locked
-cargo build --locked -p amf-gui
+cargo build --locked -p aiw-gui
 cargo test --workspace --locked
 cargo fmt --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -202,7 +208,7 @@ to capture or publish visual proof has been made for this task.
 
 Investigation environment: Node 22.20.0, npm 10.9.3, Rust 1.99.0, GTK 3.24.33
 and WebKitGTK 2.50.4; `tmux` and `gh` are present. Check results are recorded
-in the local `AMF_PLAN.md` progress notes.
+in the local `AIW_PLAN.md` progress notes.
 
 ## Implemented coverage and acceptance
 
@@ -275,12 +281,12 @@ process groups and temporary state; it never invokes a paid harness or writes to
 GitHub:
 
 ```sh
-cargo build --locked -p amf-gui
-/usr/bin/python3 scripts/dev/check-gui-screenshots.py /tmp/amf-gui-screenshot-check
+cargo build --locked -p aiw-gui
+# removed in AIW (see the note at the top): scripts/dev/check-gui-screenshots.py
 ```
 
 The optional `--public-attachment` flag repeats acceptance and additionally reads
-the public README attachment using existing `gh` authentication. AMF state remains
+the public README attachment using existing `gh` authentication. AIW state remains
 isolated; only this optional read uses the existing GitHub authentication config.
 `--public-artifact <id>` adds a live artifact metadata/download read from this
 public repository; choose an unexpired screenshot artifact. Its repository and

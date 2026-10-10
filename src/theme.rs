@@ -1,15 +1,22 @@
 use anyhow::Result;
 use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::Path;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum ThemeName {
     #[default]
     Default,
-    Amf,
+    // FORK: AI Workstation palettes (see `crate::fork::themes`).
+    Ember,
+    Graphite,
+    Midnight,
+    Paper,
+    Porcelain,
+    /// FORK: upstream AMF's signature palette, renamed from `amf`; a config
+    /// that still says `"theme": "amf"` keeps loading it.
+    #[serde(alias = "amf")]
+    Classic,
     Dracula,
     Nord,
     CatppuccinLatte,
@@ -78,7 +85,12 @@ impl ThemeName {
     fn as_str(&self) -> &'static str {
         match self {
             ThemeName::Default => "default",
-            ThemeName::Amf => "amf",
+            ThemeName::Ember => "ember", // FORK
+            ThemeName::Graphite => "graphite",
+            ThemeName::Midnight => "midnight",
+            ThemeName::Paper => "paper",
+            ThemeName::Porcelain => "porcelain",
+            ThemeName::Classic => "classic",
             ThemeName::Dracula => "dracula",
             ThemeName::Nord => "nord",
             ThemeName::CatppuccinLatte => "catppuccin-latte",
@@ -151,7 +163,12 @@ impl ThemeName {
 
         match self {
             ThemeName::Default => "Default",
-            ThemeName::Amf => "AMF",
+            ThemeName::Ember => "Ember", // FORK
+            ThemeName::Graphite => "Graphite",
+            ThemeName::Midnight => "Midnight",
+            ThemeName::Paper => "Paper",
+            ThemeName::Porcelain => "Porcelain",
+            ThemeName::Classic => "Classic",
             ThemeName::Dracula => "Dracula",
             ThemeName::Nord => "Nord",
             ThemeName::CatppuccinLatte => "Catppuccin Latte",
@@ -177,7 +194,12 @@ impl std::str::FromStr for ThemeName {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "default" => Ok(ThemeName::Default),
-            "amf" => Ok(ThemeName::Amf),
+            "ember" => Ok(ThemeName::Ember), // FORK
+            "graphite" => Ok(ThemeName::Graphite),
+            "midnight" => Ok(ThemeName::Midnight),
+            "paper" => Ok(ThemeName::Paper),
+            "porcelain" => Ok(ThemeName::Porcelain),
+            "classic" | "amf" => Ok(ThemeName::Classic), // FORK: "amf" = legacy name
             "dracula" => Ok(ThemeName::Dracula),
             "nord" => Ok(ThemeName::Nord),
             "catppuccin-latte" | "catppuccin_latte" => Ok(ThemeName::CatppuccinLatte),
@@ -319,6 +341,15 @@ impl ColorDef {
         ColorDef::Named(name.to_string())
     }
 
+    /// FORK: the colour as RGB. Named colours use the common xterm defaults
+    /// (the terminal's real palette is unknown), `reset` has none.
+    pub fn as_rgb(&self) -> Option<(u8, u8, u8)> {
+        match self {
+            ColorDef::Rgb { r, g, b } => Some((*r, *g, *b)),
+            ColorDef::Named(_) => crate::fork::color::named_rgb(self.to_color()),
+        }
+    }
+
     pub fn to_color(&self) -> Color {
         match self {
             ColorDef::Named(name) => match name.as_str() {
@@ -373,13 +404,18 @@ pub struct Theme {
     pub project_title: ColorDef,
     pub feature_title: ColorDef,
     pub session_icon_claude: ColorDef,
-    pub session_icon_opencode: ColorDef,
     pub session_icon_codex: ColorDef,
+    // FORK: G2 agents (Gemini CLI, Cursor agent) get their own icon colours.
+    pub session_icon_gemini: ColorDef,
+    pub session_icon_cursor: ColorDef,
     pub session_icon_terminal: ColorDef,
     pub session_icon_nvim: ColorDef,
     pub session_icon_vscode: ColorDef,
     pub session_icon_custom: ColorDef,
     pub status_active: ColorDef,
+    // FORK: colour of the "agent is working" spinner. Upstream themes keep
+    // their `primary` here (unchanged look); AIW themes use blue.
+    pub status_working: ColorDef,
     pub status_idle: ColorDef,
     pub status_stopped: ColorDef,
     pub status_waiting: ColorDef,
@@ -409,7 +445,12 @@ impl Theme {
 
         match name {
             ThemeName::Default => Self::default_theme(),
-            ThemeName::Amf => Self::amf(),
+            ThemeName::Ember => crate::fork::themes::ember(), // FORK
+            ThemeName::Graphite => crate::fork::themes::graphite(),
+            ThemeName::Midnight => crate::fork::themes::midnight(),
+            ThemeName::Paper => crate::fork::themes::paper(),
+            ThemeName::Porcelain => crate::fork::themes::porcelain(),
+            ThemeName::Classic => Self::classic(),
             ThemeName::Dracula => Self::dracula(),
             ThemeName::Nord => Self::nord(),
             ThemeName::CatppuccinLatte => Self::catppuccin_latte(),
@@ -446,6 +487,15 @@ impl Theme {
         self.selection.to_color()
     }
 
+    /// FORK: whether this is a light theme (light background). Used to group
+    /// the theme picker and to pick `theme_light` vs `theme_dark` when
+    /// following the terminal.
+    pub fn is_light(&self) -> bool {
+        self.background
+            .as_rgb()
+            .is_some_and(|rgb| crate::fork::contrast::relative_luminance(rgb) > 0.4)
+    }
+
     fn default_theme() -> Self {
         Self {
             name: "default".to_string(),
@@ -470,13 +520,15 @@ impl Theme {
             project_title: ColorDef::named("cyan"),
             feature_title: ColorDef::named("white"),
             session_icon_claude: ColorDef::named("magenta"),
-            session_icon_opencode: ColorDef::named("cyan"),
             session_icon_codex: ColorDef::named("lightblue"),
+            session_icon_gemini: ColorDef::named("lightmagenta"),
+            session_icon_cursor: ColorDef::named("lightcyan"),
             session_icon_terminal: ColorDef::named("green"),
             session_icon_nvim: ColorDef::named("cyan"),
             session_icon_vscode: ColorDef::named("lightblue"),
             session_icon_custom: ColorDef::named("yellow"),
             status_active: ColorDef::named("green"),
+            status_working: ColorDef::named("cyan"),
             status_idle: ColorDef::named("yellow"),
             status_stopped: ColorDef::named("red"),
             status_waiting: ColorDef::rgb(255, 165, 0),
@@ -492,9 +544,9 @@ impl Theme {
         }
     }
 
-    fn amf() -> Self {
+    fn classic() -> Self {
         Self {
-            name: "amf".to_string(),
+            name: "classic".to_string(),
             background: ColorDef::rgb(46, 52, 64),
             text: ColorDef::named("white"),
             text_muted: ColorDef::named("darkgray"),
@@ -516,13 +568,15 @@ impl Theme {
             project_title: ColorDef::named("cyan"),
             feature_title: ColorDef::named("white"),
             session_icon_claude: ColorDef::named("magenta"),
-            session_icon_opencode: ColorDef::named("cyan"),
             session_icon_codex: ColorDef::named("lightblue"),
+            session_icon_gemini: ColorDef::named("lightmagenta"),
+            session_icon_cursor: ColorDef::named("lightcyan"),
             session_icon_terminal: ColorDef::named("green"),
             session_icon_nvim: ColorDef::named("cyan"),
             session_icon_vscode: ColorDef::named("lightblue"),
             session_icon_custom: ColorDef::named("yellow"),
             status_active: ColorDef::named("green"),
+            status_working: ColorDef::named("cyan"),
             status_idle: ColorDef::named("yellow"),
             status_stopped: ColorDef::named("red"),
             status_waiting: ColorDef::rgb(255, 165, 0),
@@ -562,13 +616,15 @@ impl Theme {
             project_title: ColorDef::rgb(139, 233, 253),
             feature_title: ColorDef::rgb(248, 248, 242),
             session_icon_claude: ColorDef::rgb(255, 121, 198),
-            session_icon_opencode: ColorDef::rgb(139, 233, 253),
             session_icon_codex: ColorDef::rgb(80, 250, 123),
+            session_icon_gemini: ColorDef::rgb(189, 147, 249),
+            session_icon_cursor: ColorDef::rgb(248, 248, 242),
             session_icon_terminal: ColorDef::rgb(80, 250, 123),
             session_icon_nvim: ColorDef::rgb(139, 233, 253),
             session_icon_vscode: ColorDef::rgb(189, 147, 249),
             session_icon_custom: ColorDef::rgb(255, 184, 108),
             status_active: ColorDef::rgb(80, 250, 123),
+            status_working: ColorDef::rgb(139, 233, 253),
             status_idle: ColorDef::rgb(255, 184, 108),
             status_stopped: ColorDef::rgb(255, 85, 85),
             status_waiting: ColorDef::rgb(241, 250, 140),
@@ -608,13 +664,15 @@ impl Theme {
             project_title: ColorDef::rgb(136, 192, 208),
             feature_title: ColorDef::rgb(236, 239, 244),
             session_icon_claude: ColorDef::rgb(180, 142, 173),
-            session_icon_opencode: ColorDef::rgb(136, 192, 208),
             session_icon_codex: ColorDef::rgb(163, 190, 140),
+            session_icon_gemini: ColorDef::rgb(129, 161, 193),
+            session_icon_cursor: ColorDef::rgb(216, 222, 233),
             session_icon_terminal: ColorDef::rgb(163, 190, 140),
             session_icon_nvim: ColorDef::rgb(136, 192, 208),
             session_icon_vscode: ColorDef::rgb(94, 129, 172),
             session_icon_custom: ColorDef::rgb(235, 203, 139),
             status_active: ColorDef::rgb(163, 190, 140),
+            status_working: ColorDef::rgb(136, 192, 208),
             status_idle: ColorDef::rgb(235, 203, 139),
             status_stopped: ColorDef::rgb(191, 97, 106),
             status_waiting: ColorDef::rgb(208, 135, 112),
@@ -654,13 +712,15 @@ impl Theme {
             project_title: ColorDef::rgb(30, 102, 245),
             feature_title: ColorDef::rgb(76, 79, 105),
             session_icon_claude: ColorDef::rgb(136, 57, 239),
-            session_icon_opencode: ColorDef::rgb(32, 159, 181),
             session_icon_codex: ColorDef::rgb(64, 160, 43),
+            session_icon_gemini: ColorDef::rgb(114, 135, 253),
+            session_icon_cursor: ColorDef::rgb(92, 95, 119),
             session_icon_terminal: ColorDef::rgb(64, 160, 43),
             session_icon_nvim: ColorDef::rgb(23, 146, 153),
             session_icon_vscode: ColorDef::rgb(4, 165, 229),
             session_icon_custom: ColorDef::rgb(254, 100, 11),
             status_active: ColorDef::rgb(64, 160, 43),
+            status_working: ColorDef::rgb(30, 102, 245),
             status_idle: ColorDef::rgb(223, 142, 29),
             status_stopped: ColorDef::rgb(210, 15, 57),
             status_waiting: ColorDef::rgb(254, 100, 11),
@@ -700,13 +760,15 @@ impl Theme {
             project_title: ColorDef::rgb(140, 170, 238),
             feature_title: ColorDef::rgb(198, 208, 245),
             session_icon_claude: ColorDef::rgb(202, 158, 230),
-            session_icon_opencode: ColorDef::rgb(133, 193, 220),
             session_icon_codex: ColorDef::rgb(166, 218, 149),
+            session_icon_gemini: ColorDef::rgb(186, 187, 241),
+            session_icon_cursor: ColorDef::rgb(181, 191, 226),
             session_icon_terminal: ColorDef::rgb(166, 218, 149),
             session_icon_nvim: ColorDef::rgb(129, 200, 190),
             session_icon_vscode: ColorDef::rgb(153, 209, 219),
             session_icon_custom: ColorDef::rgb(239, 159, 118),
             status_active: ColorDef::rgb(166, 218, 149),
+            status_working: ColorDef::rgb(140, 170, 238),
             status_idle: ColorDef::rgb(229, 200, 144),
             status_stopped: ColorDef::rgb(231, 130, 132),
             status_waiting: ColorDef::rgb(239, 159, 118),
@@ -746,13 +808,15 @@ impl Theme {
             project_title: ColorDef::rgb(138, 173, 244),
             feature_title: ColorDef::rgb(202, 211, 245),
             session_icon_claude: ColorDef::rgb(198, 160, 246),
-            session_icon_opencode: ColorDef::rgb(125, 196, 228),
             session_icon_codex: ColorDef::rgb(166, 218, 149),
+            session_icon_gemini: ColorDef::rgb(183, 189, 248),
+            session_icon_cursor: ColorDef::rgb(184, 192, 224),
             session_icon_terminal: ColorDef::rgb(166, 218, 149),
             session_icon_nvim: ColorDef::rgb(139, 213, 202),
             session_icon_vscode: ColorDef::rgb(145, 215, 227),
             session_icon_custom: ColorDef::rgb(245, 169, 127),
             status_active: ColorDef::rgb(166, 218, 149),
+            status_working: ColorDef::rgb(138, 173, 244),
             status_idle: ColorDef::rgb(238, 212, 159),
             status_stopped: ColorDef::rgb(237, 135, 150),
             status_waiting: ColorDef::rgb(245, 169, 127),
@@ -792,13 +856,15 @@ impl Theme {
             project_title: ColorDef::rgb(137, 180, 250),
             feature_title: ColorDef::rgb(205, 214, 244),
             session_icon_claude: ColorDef::rgb(203, 166, 247),
-            session_icon_opencode: ColorDef::rgb(116, 199, 236),
             session_icon_codex: ColorDef::rgb(166, 227, 161),
+            session_icon_gemini: ColorDef::rgb(180, 190, 254),
+            session_icon_cursor: ColorDef::rgb(186, 194, 222),
             session_icon_terminal: ColorDef::rgb(166, 227, 161),
             session_icon_nvim: ColorDef::rgb(148, 226, 213),
             session_icon_vscode: ColorDef::rgb(137, 220, 235),
             session_icon_custom: ColorDef::rgb(250, 179, 135),
             status_active: ColorDef::rgb(166, 227, 161),
+            status_working: ColorDef::rgb(137, 180, 250),
             status_idle: ColorDef::rgb(249, 226, 175),
             status_stopped: ColorDef::rgb(243, 139, 168),
             status_waiting: ColorDef::rgb(250, 179, 135),
@@ -859,9 +925,10 @@ impl Theme {
             // bright_purple: #d3869b
             session_icon_claude: ColorDef::rgb(211, 134, 155),
             // bright_aqua: #8ec07c
-            session_icon_opencode: ColorDef::rgb(142, 192, 124),
             // bright_green: #b8bb26
             session_icon_codex: ColorDef::rgb(184, 187, 38),
+            session_icon_gemini: ColorDef::rgb(177, 98, 134),
+            session_icon_cursor: ColorDef::rgb(235, 219, 178),
             // bright_green: #b8bb26
             session_icon_terminal: ColorDef::rgb(184, 187, 38),
             // bright_blue: #83a598
@@ -872,6 +939,7 @@ impl Theme {
             session_icon_custom: ColorDef::rgb(254, 128, 25),
             // bright_green: #b8bb26
             status_active: ColorDef::rgb(184, 187, 38),
+            status_working: ColorDef::rgb(131, 165, 152),
             // bright_yellow: #fabd2f
             status_idle: ColorDef::rgb(250, 189, 47),
             // bright_red: #fb4934
@@ -946,9 +1014,10 @@ impl Theme {
             // purple: #b16286
             session_icon_claude: ColorDef::rgb(177, 98, 134),
             // aqua: #689d6a
-            session_icon_opencode: ColorDef::rgb(104, 157, 106),
             // green: #98971a
             session_icon_codex: ColorDef::rgb(152, 151, 26),
+            session_icon_gemini: ColorDef::rgb(143, 63, 113),
+            session_icon_cursor: ColorDef::rgb(60, 56, 54),
             // green: #98971a
             session_icon_terminal: ColorDef::rgb(152, 151, 26),
             // blue: #458588
@@ -959,6 +1028,7 @@ impl Theme {
             session_icon_custom: ColorDef::rgb(214, 93, 14),
             // green: #98971a
             status_active: ColorDef::rgb(152, 151, 26),
+            status_working: ColorDef::rgb(69, 133, 136),
             // yellow: #d79921
             status_idle: ColorDef::rgb(215, 153, 33),
             // red: #cc241d
@@ -1012,13 +1082,15 @@ impl Theme {
             project_title: fg.blue.color_def(),
             feature_title: fg.fg1.color_def(),
             session_icon_claude: fg.purple.color_def(),
-            session_icon_opencode: fg.aqua.color_def(),
             session_icon_codex: fg.green.color_def(),
+            session_icon_gemini: fg.blue.color_def(),
+            session_icon_cursor: fg.fg1.color_def(),
             session_icon_terminal: fg.green.color_def(),
             session_icon_nvim: fg.blue.color_def(),
             session_icon_vscode: fg.blue.color_def(),
             session_icon_custom: fg.orange.color_def(),
             status_active: fg.green.color_def(),
+            status_working: fg.blue.color_def(),
             status_idle: fg.yellow.color_def(),
             status_stopped: fg.red.color_def(),
             status_waiting: fg.orange.color_def(),
@@ -1038,7 +1110,12 @@ impl Theme {
     pub fn list() -> Vec<ThemeName> {
         vec![
             ThemeName::Default,
-            ThemeName::Amf,
+            ThemeName::Ember, // FORK
+            ThemeName::Graphite,
+            ThemeName::Midnight,
+            ThemeName::Paper,
+            ThemeName::Porcelain,
+            ThemeName::Classic,
             ThemeName::Dracula,
             ThemeName::Nord,
             ThemeName::CatppuccinLatte,
@@ -1219,99 +1296,22 @@ fn gruvbox_material_foreground(
     }
 }
 
-pub struct ThemeManager;
-
-impl ThemeManager {
-    pub fn inject_opencode_themes(workdir: &Path) -> Result<()> {
-        let themes_dir = workdir.join(".opencode").join("themes");
-
-        fs::create_dir_all(&themes_dir)?;
-
-        let theme_files = [
-            ("amf.json", include_str!("../themes/opencode/amf.json")),
-            (
-                "amf-tokyonight.json",
-                include_str!("../themes/opencode/amf-tokyonight.json"),
-            ),
-            (
-                "amf-catppuccin.json",
-                include_str!("../themes/opencode/amf-catppuccin.json"),
-            ),
-            (
-                "amf-gruvbox.json",
-                include_str!("../themes/opencode/amf-gruvbox.json"),
-            ),
-        ];
-
-        for (filename, content) in theme_files {
-            let theme_path = themes_dir.join(filename);
-            fs::write(&theme_path, content)?;
-        }
-
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
 
+    /// FORK: the palette AMF called `amf` is now `classic`; old configs that
+    /// name it still load it.
     #[test]
-    fn test_inject_opencode_themes() {
-        let dir = TempDir::new().unwrap();
-        let workdir = dir.path();
-
-        ThemeManager::inject_opencode_themes(workdir).unwrap();
-
-        let themes_dir = workdir.join(".opencode").join("themes");
-        assert!(themes_dir.exists(), "Themes directory should exist");
-
-        let amf_theme = themes_dir.join("amf.json");
-        assert!(amf_theme.exists(), "amf.json should exist");
-
-        let tokyonight_theme = themes_dir.join("amf-tokyonight.json");
-        assert!(
-            tokyonight_theme.exists(),
-            "amf-tokyonight.json should exist"
+    fn legacy_amf_theme_name_loads_the_classic_palette() {
+        assert_eq!("amf".parse::<ThemeName>().unwrap(), ThemeName::Classic);
+        assert_eq!(
+            serde_json::from_str::<ThemeName>(r#""amf""#).unwrap(),
+            ThemeName::Classic
         );
-
-        let catppuccin_theme = themes_dir.join("amf-catppuccin.json");
-        assert!(
-            catppuccin_theme.exists(),
-            "amf-catppuccin.json should exist"
-        );
-
-        let gruvbox_theme = themes_dir.join("amf-gruvbox.json");
-        assert!(gruvbox_theme.exists(), "amf-gruvbox.json should exist");
-
-        let content = std::fs::read_to_string(&amf_theme).unwrap();
-        assert!(
-            content.contains("\"background\": {"),
-            "Theme main background should be defined"
-        );
-        assert!(
-            content.contains("\"backgroundPanel\":"),
-            "Theme should have backgroundPanel defined"
-        );
-    }
-
-    #[test]
-    fn test_inject_opencode_themes_idempotent() {
-        let dir = TempDir::new().unwrap();
-        let workdir = dir.path();
-
-        ThemeManager::inject_opencode_themes(workdir).unwrap();
-
-        let amf_theme = workdir.join(".opencode").join("themes").join("amf.json");
-        std::fs::write(&amf_theme, "{\"custom\":true}").unwrap();
-
-        ThemeManager::inject_opencode_themes(workdir).unwrap();
-
-        let new_content = std::fs::read_to_string(&amf_theme).unwrap();
-        assert!(
-            new_content.contains("\"background\": {"),
-            "Second injection should refresh AMF-managed theme files"
+        assert_eq!(
+            serde_json::to_string(&ThemeName::Classic).unwrap(),
+            r#""classic""#
         );
     }
 

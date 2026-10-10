@@ -10,8 +10,8 @@
 # this file's assertions avoid hardcoding "Claude" because which harness a
 # scratch instance ends up with is environment-dependent (Claude locally,
 # Codex on the CI runner that publishes this gallery -- see
-# amf-capture.sh's own comment on CAPTURE_HARNESS_SLUG). The fix applies
-# identically to all three saved-session pickers (Claude, Codex, Opencode),
+# aiw-capture.sh's own comment on CAPTURE_HARNESS_SLUG). The fix applies
+# identically to both saved-session pickers (Claude, Codex),
 # so a capture against whichever harness is actually available is equally
 # valid proof.
 #
@@ -26,15 +26,15 @@
 #     to a feature that is not yet running brings its tmux session up and
 #     launches the real harness for the session just added. Instead, a run:
 #     step clones the seeded feature's sole session directly as a row in
-#     the scratch instance's own amf.db (feature_sessions table -- AMF
+#     the scratch instance's own aiw.db (feature_sessions table -- AIW
 #     persists to SQLite, not a JSON file), using $CAPTURE_HARNESS_SLUG to
 #     match whichever harness got seeded, then restarts the isolated pane
-#     so AMF reloads it from disk -- the same "seed on disk, then respawn"
+#     so AIW reloads it from disk -- the same "seed on disk, then respawn"
 #     trick other scenarios use to pick up automation-written state.
 #
 # The fix itself (which session's stored resume id gets overwritten on a
 # real restore) is not something the TUI displays for a human to compare on
-# screen -- AMF never shows a session's raw resume id. That correctness is
+# screen -- AIW never shows a session's raw resume id. That correctness is
 # proven by the automated regression test added alongside the fix
 # (restore_claude_session_only_affects_the_targeted_session in
 # src/app/tests/feature_sessions.rs), not by this screenshot. This capture
@@ -63,9 +63,9 @@ expect:restore-me
 expect:[1]
 shot:feature-before-second-session
 
-run:sqlite3 "$XDG_CONFIG_HOME/amf/amf.db" "INSERT INTO feature_sessions (id, feature_id, kind, label, tmux_window, claude_session_id, token_usage_source, token_usage_source_match, created_at, command, on_stop, pre_check, sort_order, todo_id, todo_launched_from_menu) SELECT lower(hex(randomblob(16))), feature_id, kind, '${CAPTURE_HARNESS_SLUG^} 2', '${CAPTURE_HARNESS_SLUG}-2', claude_session_id, token_usage_source, token_usage_source_match, created_at, command, on_stop, pre_check, sort_order + 1, todo_id, todo_launched_from_menu FROM feature_sessions WHERE kind = '$CAPTURE_HARNESS_SLUG' LIMIT 1;"
+run:sqlite3 "$XDG_CONFIG_HOME/ai_workstation/aiw.db" "INSERT INTO feature_sessions (id, feature_id, kind, label, tmux_window, claude_session_id, token_usage_source, token_usage_source_match, created_at, command, on_stop, pre_check, sort_order, todo_id, todo_launched_from_menu) SELECT lower(hex(randomblob(16))), feature_id, kind, '${CAPTURE_HARNESS_SLUG^} 2', '${CAPTURE_HARNESS_SLUG}-2', claude_session_id, token_usage_source, token_usage_source_match, created_at, command, on_stop, pre_check, sort_order + 1, todo_id, todo_launched_from_menu FROM feature_sessions WHERE kind = '$CAPTURE_HARNESS_SLUG' LIMIT 1;"
 wait:300
-run:tmux respawn-pane -k -t "$SESSION" "$AMF_BIN"
+run:tmux respawn-pane -k -t "$SESSION" "$AIW_BIN"
 wait:1500
 
 key:j
@@ -90,6 +90,6 @@ shot:first-session-selected
 
 key:S
 wait:400
-note:"S" opens the saved-transcript picker for whichever session is selected -- here, the first one. A fresh checkout has no real harness history for itself yet, so AMF reports that plainly rather than showing an empty picker. The id-scoping fix downstream of this entry point (only the targeted session's stored id changes on a real restore, not every session sharing its harness) is verified by the regression test, not visible here as a raw id AMF never renders on screen.
+note:"S" opens the saved-transcript picker for whichever session is selected -- here, the first one. A fresh checkout has no real harness history for itself yet, so AIW reports that plainly rather than showing an empty picker. The id-scoping fix downstream of this entry point (only the targeted session's stored id changes on a real restore, not every session sharing its harness) is verified by the regression test, not visible here as a raw id AIW never renders on screen.
 expect:sessions for this worktree
 shot:saved-session-picker-entry

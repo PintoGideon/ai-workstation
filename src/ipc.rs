@@ -7,13 +7,28 @@ use std::time::{Duration, Instant};
 
 use crate::debug::{LogLevel, log_to_file};
 
-/// Path to the AMF IPC socket.
-/// Matches the state directory used by the debug log.
-pub fn socket_path() -> PathBuf {
+/// AIW's state directory: `~/.local/state/ai_workstation` (Linux) or
+/// `/tmp/ai_workstation` where the platform has no state dir (macOS). Holds
+/// the IPC socket, reply sockets and the debug log.
+///
+/// FORK: under `cargo test` this is the per-process sandbox, so the suite
+/// never appends to a real debug log or binds a real socket path.
+pub fn state_dir() -> PathBuf {
+    #[cfg(test)]
+    return crate::project::test_sandbox_root()
+        .join(".local")
+        .join("state")
+        .join(crate::project::AIW_DIR_NAME);
+    #[cfg(not(test))]
     dirs::state_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("amf")
-        .join("amf.sock")
+        .join(crate::project::AIW_DIR_NAME)
+}
+
+/// Path to the AIW IPC socket.
+/// Matches the state directory used by the debug log.
+pub fn socket_path() -> PathBuf {
+    state_dir().join("aiw.sock")
 }
 
 /// Directory used for temporary reply sockets for `notify-wait`.
@@ -22,10 +37,7 @@ pub fn socket_path() -> PathBuf {
 /// the reply socket path past the 104-byte `sun_path` limit and makes
 /// `bind` fail, silently breaking the diff-review popup.
 pub fn reply_dir() -> PathBuf {
-    dirs::state_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("amf")
-        .join("reply")
+    state_dir().join("reply")
 }
 
 /// Owns the IPC socket lifetime. Removes the socket file on drop
@@ -153,10 +165,10 @@ pub fn start_with_wakeup(path: &Path, wakeup: Option<Arc<OwnedFd>>) -> Result<Ip
     })
 }
 
-/// Connect to a running AMF instance and send a single
-/// newline-terminated JSON payload. Used by the `amf notify`
+/// Connect to a running AIW instance and send a single
+/// newline-terminated JSON payload. Used by the `aiw notify`
 /// subcommand so hook scripts can push messages without `nc`.
-/// Returns an error (non-zero exit) when AMF is not running,
+/// Returns an error (non-zero exit) when AIW is not running,
 /// allowing shell scripts to fall back to file-based delivery.
 pub fn send(path: &Path, payload: &str) -> Result<()> {
     use std::io::Write;
@@ -166,12 +178,12 @@ pub fn send(path: &Path, payload: &str) -> Result<()> {
     }
     let mut stream = std::os::unix::net::UnixStream::connect(path).with_context(|| {
         format!(
-            "AMF socket not found at {} — is amf running?",
+            "AIW socket not found at {} — is aiw running?",
             path.display()
         )
     })?;
-    writeln!(stream, "{payload}").context("Failed to write to AMF socket")?;
-    stream.flush().context("Failed to flush AMF socket")?;
+    writeln!(stream, "{payload}").context("Failed to write to AIW socket")?;
+    stream.flush().context("Failed to flush AIW socket")?;
     Ok(())
 }
 
@@ -227,19 +239,19 @@ pub fn send_wait(path: &Path, payload: &str, timeout: Duration) -> Result<serde_
                 let mut line = String::new();
                 reader
                     .read_line(&mut line)
-                    .context("Failed to read reply from AMF")?;
+                    .context("Failed to read reply from AIW")?;
                 let reply: serde_json::Value =
                     serde_json::from_str(line.trim()).context("Reply was not valid JSON")?;
                 break Ok(reply);
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 if start.elapsed() >= timeout {
-                    break Err(anyhow::anyhow!("Timed out waiting for AMF reply"));
+                    break Err(anyhow::anyhow!("Timed out waiting for AIW reply"));
                 }
                 std::thread::sleep(Duration::from_millis(25));
             }
             Err(e) => {
-                break Err(anyhow::anyhow!("Failed waiting for AMF reply: {e}"));
+                break Err(anyhow::anyhow!("Failed waiting for AIW reply: {e}"));
             }
         }
     };
@@ -261,7 +273,7 @@ mod tests {
     #[test]
     fn send_and_receive() {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("amf.sock");
+        let path = dir.path().join("aiw.sock");
         let guard = start(&path).unwrap();
         wait(10);
 
@@ -278,7 +290,7 @@ mod tests {
     #[test]
     fn socket_removed_on_drop() {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("amf.sock");
+        let path = dir.path().join("aiw.sock");
         {
             let _guard = start(&path).unwrap();
             assert!(path.exists(), "socket should exist while guard is live");
@@ -288,7 +300,7 @@ mod tests {
 
     #[test]
     fn send_fails_when_no_server() {
-        let path = std::path::PathBuf::from("/tmp/amf-ipc-test-no-server.sock");
+        let path = std::path::PathBuf::from("/tmp/aiw-ipc-test-no-server.sock");
         let result = send(&path, r#"{"test":true}"#);
         assert!(result.is_err());
     }
@@ -296,7 +308,7 @@ mod tests {
     #[test]
     fn invalid_json_is_dropped() {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("amf.sock");
+        let path = dir.path().join("aiw.sock");
         let guard = start(&path).unwrap();
         wait(10);
 
@@ -314,7 +326,7 @@ mod tests {
     #[test]
     fn multiple_messages_in_sequence() {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("amf.sock");
+        let path = dir.path().join("aiw.sock");
         let guard = start(&path).unwrap();
         wait(10);
 
@@ -352,7 +364,7 @@ mod tests {
     #[test]
     fn clear_message_roundtrip() {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("amf.sock");
+        let path = dir.path().join("aiw.sock");
         let guard = start(&path).unwrap();
         wait(10);
 
@@ -368,9 +380,9 @@ mod tests {
 
     #[test]
     fn empty_payload_does_not_send() {
-        // amf notify exits early for empty stdin; mirror that here.
+        // aiw notify exits early for empty stdin; mirror that here.
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("amf.sock");
+        let path = dir.path().join("aiw.sock");
         let guard = start(&path).unwrap();
         wait(10);
 

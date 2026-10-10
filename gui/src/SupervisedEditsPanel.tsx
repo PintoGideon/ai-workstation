@@ -267,7 +267,7 @@ const SupervisedEditsPanel = forwardRef<SupervisedEditsPanelHandle, {
     </div>}
     {view && !query.error && (edits.length === 0
       ? <EmptyState icon="check" title="No edits are waiting for review">
-        Edits a Vibeless agent asks to write appear here. Requests already delivered to a running AMF TUI are answered there.
+        Edits a Vibeless agent asks to write appear here. Requests already delivered to a running AIW TUI are answered there.
       </EmptyState>
       : <div className="diff-reader">
         <nav className="diff-files" aria-label="Pending edits">{edits.map((candidate) => <button key={candidate.id}
@@ -300,7 +300,7 @@ const SupervisedEditsPanel = forwardRef<SupervisedEditsPanelHandle, {
           <Field label="Feedback for the agent"
             hint={edit.effects.feedback_reaches_agent
               ? `Sent with Reject (optional, ${draft.length}/${MAX_FEEDBACK_CHARS}).`
-              : `OpenCode does not forward rejection feedback (${draft.length}/${MAX_FEEDBACK_CHARS}).`}>
+              : `This agent does not receive rejection feedback (${draft.length}/${MAX_FEEDBACK_CHARS}).`}>
             <textarea aria-label="Feedback for the agent" rows={2} maxLength={MAX_FEEDBACK_CHARS} value={draft} disabled={blocked}
               onChange={(event) => { const text = event.target.value; feedbackPaths.current[edit.id] = edit.path; setFeedback((current) => ({ ...current, [edit.id]: text })); }} />
           </Field>

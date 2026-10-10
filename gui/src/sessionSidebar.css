@@ -12,7 +12,6 @@
   --sb-rail-width: 30px;
   --sb-harness-claude: #c4643f;
   --sb-harness-codex: #0e8a6a;
-  --sb-harness-opencode: #5562e8;
   --sb-harness-pi: var(--accent);
   --sb-accent-status: var(--amber);
   --sb-accent-usage: var(--green);
@@ -44,7 +43,6 @@
   :root:not([data-theme="light"]) {
     --sb-harness-claude: #ffb69b;
     --sb-harness-codex: #88e0a8;
-    --sb-harness-opencode: #bec7ff;
     --sb-accent-pr: #a6caff;
     --sb-accent-summary: #a6caff;
     --sb-accent-prompt: #d4b6ff;
@@ -73,7 +71,6 @@
 }
 .agent-sidebar[data-harness="claude"] { --sb-accent: var(--sb-harness-claude); }
 .agent-sidebar[data-harness="codex"] { --sb-accent: var(--sb-harness-codex); }
-.agent-sidebar[data-harness="opencode"] { --sb-accent: var(--sb-harness-opencode); }
 .agent-sidebar[data-harness="pi"] { --sb-accent: var(--sb-harness-pi); }
 
 .agent-sidebar-collapsed {
@@ -257,7 +254,6 @@
 :root[data-theme="dark"] {
   --sb-harness-claude: #ffb69b;
   --sb-harness-codex: #88e0a8;
-  --sb-harness-opencode: #bec7ff;
   --sb-accent-pr: #a6caff;
   --sb-accent-summary: #a6caff;
   --sb-accent-prompt: #d4b6ff;

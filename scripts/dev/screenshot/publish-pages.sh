@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Publish browser-viewable screenshot evidence without exposing Pages credentials
-# to the requested capture ref. See amf-screenshot-artifact.yml.
+# to the requested capture ref. See aiw-screenshot-artifact.yml.
 set -u -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-WORKFLOW="amf-screenshot-artifact.yml"
+WORKFLOW="aiw-screenshot-artifact.yml"
 WORKFLOW_REF="main"
 PR_NUMBER=""
 SCENARIO=""
@@ -27,8 +27,8 @@ Usage: $(basename "$0") --pr <number> --scenario <file> [options]
 Dispatch the isolated capture workflow (run from main; only its capture job
 checks out --ref), then download this run's rendered frames and deploy the
 private Pages gallery from this machine. The Cloudflare credentials never enter
-CI: set CLOUDFLARE_API_TOKEN (the owner keeps it in ~/.secrets/cf-amf-pages.env,
-sourced by the 'amf-publish-screenshots' shell wrapper) and CLOUDFLARE_ACCOUNT_ID,
+CI: set CLOUDFLARE_API_TOKEN (the owner keeps it in ~/.secrets/cf-aiw-pages.env,
+sourced by the 'aiw-publish-screenshots' shell wrapper) and CLOUDFLARE_ACCOUNT_ID,
 and have wrangler on PATH or npx available. 'wrangler login' also works but is
 unreliable here; prefer the token. Failures warn by default.
 
@@ -41,7 +41,7 @@ unreliable here; prefer the token. Failures warn by default.
   --gif                  Include an animated GIF
   --seed <file>          Repository-relative project seed payload
   --seed-feature <file>  Repository-relative feature seed payload
-  --config <file>        Repository-relative AMF config payload
+  --config <file>        Repository-relative AIW config payload
   --strict               Return nonzero on failure
 EOF
 }
@@ -79,10 +79,10 @@ else
 fi
 # Auth is an explicit API token (preferred) or a completed `wrangler login`.
 # Check now so missing auth doesn't burn a full CI capture that can't publish.
-# The owner keeps the token in ~/.secrets/cf-amf-pages.env; the
-# `amf-publish-screenshots` shell wrapper sources it before calling this script.
+# The owner keeps the token in ~/.secrets/cf-aiw-pages.env; the
+# `aiw-publish-screenshots` shell wrapper sources it before calling this script.
 if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && ! "${WRANGLER[@]}" whoami >/dev/null 2>&1; then
-  warn "no Cloudflare auth: export CLOUDFLARE_API_TOKEN (see ~/.secrets/cf-amf-pages.env / the amf-publish-screenshots wrapper)"
+  warn "no Cloudflare auth: export CLOUDFLARE_API_TOKEN (see ~/.secrets/cf-aiw-pages.env / the aiw-publish-screenshots wrapper)"
 fi
 # Not a secret, but needed so the deploy picks the right account non-interactively.
 [[ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]] || warn "CLOUDFLARE_ACCOUNT_ID is not set"
@@ -137,13 +137,13 @@ done
 
 # Privileged half runs here, not in CI. The capture job checked out --ref; this
 # machine only ever touches the rendered frames it uploaded.
-workdir="$(mktemp -d "${TMPDIR:-/tmp}/amf-pages.XXXXXX")"
-fragment="$(mktemp "${TMPDIR:-/tmp}/amf-pages-fragment.XXXXXX")"
-body="$(mktemp "${TMPDIR:-/tmp}/amf-pages-body.XXXXXX")"
-updated="$(mktemp "${TMPDIR:-/tmp}/amf-pages-updated.XXXXXX")"
+workdir="$(mktemp -d "${TMPDIR:-/tmp}/aiw-pages.XXXXXX")"
+fragment="$(mktemp "${TMPDIR:-/tmp}/aiw-pages-fragment.XXXXXX")"
+body="$(mktemp "${TMPDIR:-/tmp}/aiw-pages-body.XXXXXX")"
+updated="$(mktemp "${TMPDIR:-/tmp}/aiw-pages-updated.XXXXXX")"
 trap 'rm -rf "$workdir"; rm -f "$fragment" "$body" "$updated"' EXIT
 
-artifact_name="amf-screenshot-pr-${PR_NUMBER}-${run_id}"
+artifact_name="aiw-screenshot-pr-${PR_NUMBER}-${run_id}"
 gh run download "$run_id" --repo "$REPO" --name "$artifact_name" --dir "$workdir/capture" \
   || warn "capture succeeded but its artifact could not be downloaded: https://github.com/$REPO/actions/runs/$run_id"
 
@@ -156,10 +156,10 @@ python3 "$SCRIPT_DIR/build_static_gallery.py" \
 # about this script's own repo checkout being dirty. It is irrelevant here.
 "${WRANGLER[@]}" pages deploy "$workdir/pages" \
   --project-name="$PROJECT" --branch="pr-${PR_NUMBER}" --commit-dirty=true \
-  || warn "gallery built but 'wrangler pages deploy' failed; check CLOUDFLARE_API_TOKEN (~/.secrets/cf-amf-pages.env) / CLOUDFLARE_ACCOUNT_ID"
+  || warn "gallery built but 'wrangler pages deploy' failed; check CLOUDFLARE_API_TOKEN (~/.secrets/cf-aiw-pages.env) / CLOUDFLARE_ACCOUNT_ID"
 
 url="https://pr-${PR_NUMBER}.${PROJECT}.pages.dev"
-printf '<!-- amf:screenshots:start -->\n### Visual proof\n\n[Open the private screenshot gallery for PR #%s](%s)\n\nRestricted to approved Cloudflare Access reviewers.\n<!-- amf:screenshots:end -->\n' "$PR_NUMBER" "$url" >"$fragment"
+printf '<!-- aiw:screenshots:start -->\n### Visual proof\n\n[Open the private screenshot gallery for PR #%s](%s)\n\nRestricted to approved Cloudflare Access reviewers.\n<!-- aiw:screenshots:end -->\n' "$PR_NUMBER" "$url" >"$fragment"
 gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq .body >"$body" 2>/dev/null || warn "gallery is ready but the existing PR body could not be read: $url"
 python3 "$SCRIPT_DIR/update_pr_body.py" --body-file "$body" --fragment-file "$fragment" --output-file "$updated" || warn "gallery is ready but markers could not be updated: $url"
 UPDATED_BODY="$updated" python3 - <<'PY' | gh api "repos/$REPO/issues/$PR_NUMBER" --method PATCH --input - >/dev/null 2>&1 || warn "gallery is ready but the PR body update failed: $url"

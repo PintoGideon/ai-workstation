@@ -17,11 +17,11 @@ shot:codex-harness-verified
 key:c
 wait:500
 
-run:$AMF_BIN automation create-feature --file "$SUMMARY_SHOT_SEED_FEATURE"
+run:$AIW_BIN automation create-feature --file "$SUMMARY_SHOT_SEED_FEATURE"
 wait:1400
 
 # Select the new feature. Its agent session contains enough deterministic pane
-# output for AMF's minimum-content summary guard.
+# output for AIW's minimum-content summary guard.
 key:j
 wait:300
 shot:codex-feature-before-summary

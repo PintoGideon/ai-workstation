@@ -19,6 +19,8 @@ pub fn handle_paste(app: &mut App, text: &str) -> Result<()> {
         return Ok(());
     }
     match &app.mode {
+        // FORK: paste into the focused split-view tile.
+        AppMode::SplitView(_) => super::fork_split::handle_split_paste(app, text)?,
         AppMode::Viewing(view) => {
             if app.compose_intercept_active(view) {
                 app.open_compose_from_view(None)?;

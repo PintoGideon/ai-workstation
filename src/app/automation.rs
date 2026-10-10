@@ -59,9 +59,11 @@ impl App {
                 BatchFeatureAutomationResult {
                     name: branch.clone(),
                     branch: branch.clone(),
-                    workdir: project_repo
-                        .join(".worktrees")
-                        .join(worktree_name(&request.project_name, &branch)),
+                    // FORK: worktrees live outside the repo.
+                    workdir: crate::fork::worktree_paths::new_worktree_path(
+                        project_repo,
+                        &worktree_name(&request.project_name, &branch),
+                    ),
                     tmux_session: tmux_session_name(&request.project_name, &branch),
                     started: !request.dry_run,
                 }
@@ -92,7 +94,7 @@ impl App {
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::piped());
         if let Some(c) = choice {
-            cmd.env("AMF_HOOK_CHOICE", c);
+            cmd.env("AIW_HOOK_CHOICE", c);
         }
 
         match cmd.output() {
@@ -150,6 +152,20 @@ impl App {
         if request.path.as_os_str().is_empty() {
             bail!("Path cannot be empty");
         }
+
+        // FORK: accept `~/repo` / `$HOME/repo` from every front end.
+        let expanded_request;
+        let request = if request.path.to_str().is_some_and(|p| {
+            p.starts_with('~') || p.starts_with("$HOME") || p.starts_with("${HOME}")
+        }) {
+            expanded_request = CreateProjectRequest {
+                path: crate::fork::paths::expand_user_path(&request.path.to_string_lossy()),
+                ..request.clone()
+            };
+            &expanded_request
+        } else {
+            request
+        };
 
         if !request.path.exists() {
             bail!("Path does not exist: {}", request.path.display());
@@ -285,9 +301,11 @@ impl App {
         let mut hook_ran = false;
         let mut hook_succeeded = None;
         let workdir = if use_worktree {
-            let planned_workdir = project_repo
-                .join(".worktrees")
-                .join(worktree_name(&request.project_name, &request.branch));
+            // FORK: worktrees live outside the repo.
+            let planned_workdir = crate::fork::worktree_paths::new_worktree_path(
+                &project_repo,
+                &worktree_name(&request.project_name, &request.branch),
+            );
             if planned_workdir.exists() {
                 bail!(
                     "Worktree path already exists: {}",
@@ -335,6 +353,13 @@ impl App {
                 .worktree
                 .create(&project_repo, &worktree_name, &request.branch)?;
 
+            // FORK: an unapproved repo-supplied hook is skipped (no dialog here).
+            let worktree_hook = self.approved_repo_hook_or_skip(
+                &project_repo,
+                crate::fork::hook_approval::HookName::WorktreeCreated,
+                worktree_hook,
+                &workdir,
+            );
             if let Some(ref hook_cfg) = worktree_hook {
                 hook_ran = true;
                 let (success, detail) =
@@ -659,7 +684,7 @@ impl App {
             }),
             summary: Some(request.summary.clone()),
             // The screenshot fixture seeder has no harness/model/usage inputs,
-            // so the seeded row renders the bare `— AI review via AMF` marker
+            // so the seeded row renders the bare `— AI review via AIW` marker
             // with no model/token/cost disclosure line.
             attribution: None,
         };

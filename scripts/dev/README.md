@@ -1,6 +1,6 @@
 # Dev scripts
 
-Tooling for developing and releasing AMF itself — not shipped to end
+Tooling for developing and releasing AIW itself — not shipped to end
 users, not embedded in the binary.
 
 - `release.sh` — bump the version, validate `CHANGELOG.md`, tag, and
@@ -10,12 +10,10 @@ users, not embedded in the binary.
 - `package-no-tmux-test-bundle.sh`, `run-no-tmux-docker.sh` — build
   and run the no-tmux Docker test image (see
   [`docs/docker-no-tmux.md`](../../docs/docker-no-tmux.md))
-- `generate-amf-themes.sh` / `.js` — regenerate the bundled OpenCode
-  theme presets from upstream
 - `test-thinking.sh` — manually pulse the "thinking" sentinel for a
   tmux session to test dashboard detection without a real agent
-- `amf/pr-checks.sh`, `amf/pr-info.sh` — PR context helpers used by
-  the `amf:pr-*` Claude Code skills
+- `aiw/pr-checks.sh`, `aiw/pr-info.sh` — PR context helpers used by
+  the `aiw:pr-*` Claude Code skills
 
 For focused and full tests, runner prerequisites, dependency audits and debug
 logging, see [development checks](../../docs/development/checks.md).

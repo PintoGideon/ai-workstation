@@ -325,7 +325,7 @@ impl App {
             .map(|row| {
                 row.status = crate::app::LearningQaStatus::Failed;
                 row.error = Some(
-                    "AMF stopped while this question was still being answered, \
+                    "AIW stopped while this question was still being answered, \
                      so the answer never arrived. Ask it again."
                         .to_string(),
                 );

@@ -186,7 +186,7 @@ try:
     assert sorted(listed) == ["billing-retry", "docs-refresh", "search-index"], listed
     capture(
         "001-dormant-list.png",
-        "Three running features are idle (no agent output for over a minute) and unopened for over an hour, each with how long and since when. checkout-flow is just as unattended but its agent is printing output, so it is not listed. One row has an AMF-tracked editor open.",
+        "Three running features are idle (no agent output for over a minute) and unopened for over an hour, each with how long and since when. checkout-flow is just as unattended but its agent is printing output, so it is not listed. One row has an AIW-tracked editor open.",
         ["Dormant features", "billing-retry", "docs-refresh", "search-index", "no agent output since", "last opened", "Editor open", "Stop selected (0)"],
         f"!{panel}.innerText.includes('checkout-flow')",
     )
@@ -196,14 +196,14 @@ try:
     wait('Array.from(document.querySelectorAll("button")).some(b=>b.textContent.trim()==="Stop selected (3)")')
     click("Stop selected (3)")
     wait("!!document.querySelector('[role=alertdialog]')")
-    assert all(tmux_alive(f"amf-{name}") for name in ["billing-retry", "docs-refresh", "search-index", "checkout-flow"])
+    assert all(tmux_alive(f"aiw-{name}") for name in ["billing-retry", "docs-refresh", "search-index", "checkout-flow"])
     capture(
         "002-confirm-stop.png",
-        "Nothing stops until this explicit confirmation. It names each tmux session, explains which editor windows AMF will and will not close, and says every feature is re-checked first.",
-        ["Stop 3 dormant features?", "(amf-billing-retry)", "Editor windows AMF opened", "left running and reported", "Each one is checked again first", "Stop 3 features"],
+        "Nothing stops until this explicit confirmation. It names each tmux session, explains which editor windows AIW will and will not close, and says every feature is re-checked first.",
+        ["Stop 3 dormant features?", "(aiw-billing-retry)", "Editor windows AIW opened", "left running and reported", "Each one is checked again first", "Stop 3 features"],
     )
 
-    # search-index is opened in another AMF window after the list loaded.
+    # search-index is opened in another AIW window after the list loaded.
     with sqlite3.connect(dbpath) as db:
         db.execute("UPDATE features SET last_accessed=? WHERE id='search-index'",
                    (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),))
@@ -215,14 +215,14 @@ try:
         if not pid_running(owned_pid):
             break
         time.sleep(0.1)
-    assert not pid_running(owned_pid), "the AMF-owned stand-in editor should be closed"
-    assert pid_running(foreign_pid), "the editor AMF did not open must keep running"
-    assert not tmux_alive("amf-billing-retry") and not tmux_alive("amf-docs-refresh")
-    assert tmux_alive("amf-search-index") and tmux_alive("amf-checkout-flow")
+    assert not pid_running(owned_pid), "the AIW-owned stand-in editor should be closed"
+    assert pid_running(foreign_pid), "the editor AIW did not open must keep running"
+    assert not tmux_alive("aiw-billing-retry") and not tmux_alive("aiw-docs-refresh")
+    assert tmux_alive("aiw-search-index") and tmux_alive("aiw-checkout-flow")
     capture(
         "003-stop-results.png",
-        "Per-feature results after the confirm-time re-check: billing-retry stopped and its AMF-opened stand-in editor was closed with its child process; docs-refresh stopped but the editor AMF did not open was left running; search-index was opened elsewhere after the list loaded, so it was refused and its session still runs.",
-        ["billing-retry", "Closed VS Code (2 processes ended)", "Left VS Code running: AMF did not open this window", "not stopped: It was opened in AMF after the list was loaded"],
+        "Per-feature results after the confirm-time re-check: billing-retry stopped and its AIW-opened stand-in editor was closed with its child process; docs-refresh stopped but the editor AIW did not open was left running; search-index was opened elsewhere after the list loaded, so it was refused and its session still runs.",
+        ["billing-retry", "Closed VS Code (2 processes ended)", "Left VS Code running: AIW did not open this window", "not stopped: It was opened in AIW after the list was loaded"],
     )
 
     click("Back to dormant features")

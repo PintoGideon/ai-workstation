@@ -383,7 +383,7 @@ fn file_row(
         } => {
             // Leaf name only. The full path is the pane title's job — this
             // pane is ~32 columns at a 140-column terminal, which is what made
-            // the flat list render `…ude/commands/amf/ai-review.m` for three
+            // the flat list render `…ude/commands/aiw/ai-review.m` for three
             // consecutive rows.
             let name = leaf_name(path);
             let marker = if *expanded { "▾" } else { "▸" };
@@ -1887,7 +1887,7 @@ let files = list_repo_files(workdir)?;
             "proj-1".to_string(),
             0,
             0,
-            "amf".to_string(),
+            "aiw".to_string(),
             "learning-mode".to_string(),
             PathBuf::from("/tmp/does-not-matter"),
             true,

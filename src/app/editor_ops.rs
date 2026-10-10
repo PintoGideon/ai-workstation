@@ -1,11 +1,11 @@
-//! Reclaiming editors AMF launched for a feature.
+//! Reclaiming editors AIW launched for a feature.
 //!
 //! An editor window is usually the largest thing a feature leaves behind — a
 //! language server on a medium Rust repo outweighs every agent harness on the
 //! machine put together — and, unlike everything else a feature owns, it is not
 //! in tmux, so stopping the feature never touched it.
 //!
-//! The rule is ownership, not tidiness: AMF only ever signals a window it
+//! The rule is ownership, not tidiness: AIW only ever signals a window it
 //! opened itself with `--new-window` *and* can still identify (see
 //! [`crate::db::editors`]). Anything else is reported as skipped, never killed.
 
@@ -20,19 +20,19 @@ use crate::resources::procs;
 /// Polled, so a quick exit costs a fraction of this.
 const EDITOR_KILL_GRACE: Duration = Duration::from_secs(2);
 
-/// Why an editor AMF knew about was left running.
+/// Why an editor AIW knew about was left running.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkipReason {
-    /// AMF handed the folder to an instance it did not open (or the window
+    /// AIW handed the folder to an instance it did not open (or the window
     /// never appeared locally, as with a remote/WSL editor).
     NotOwned,
     /// The process is already gone.
     AlreadyGone,
-    /// The PID is alive but is no longer the editor AMF launched — the OS
+    /// The PID is alive but is no longer the editor AIW launched — the OS
     /// recycled it. Signalling would hit an unrelated process.
     PidRecycled,
-    /// The process AMF opened is now hosting other windows too. VS Code is a
-    /// singleton: if AMF's launch is what started the application, every window
+    /// The process AIW opened is now hosting other windows too. VS Code is a
+    /// singleton: if AIW's launch is what started the application, every window
     /// the user opened afterwards lives in the same process tree, and killing
     /// it would close their work.
     SharedInstance,
@@ -41,7 +41,7 @@ pub enum SkipReason {
 impl SkipReason {
     pub fn explain(self) -> &'static str {
         match self {
-            SkipReason::NotOwned => "AMF did not open this window",
+            SkipReason::NotOwned => "AIW did not open this window",
             SkipReason::AlreadyGone => "already closed",
             SkipReason::PidRecycled => "pid was recycled",
             SkipReason::SharedInstance => "other windows share this instance",
@@ -129,7 +129,7 @@ impl EditorKillReport {
 
 /// Whether a live PID is still the editor that was recorded.
 ///
-/// A stored PID outlives AMF restarts and reboots, so liveness alone proves
+/// A stored PID outlives AIW restarts and reboots, so liveness alone proves
 /// nothing: the number may have been handed to something else entirely. Two
 /// things have to hold.
 ///
@@ -137,7 +137,7 @@ impl EditorKillReport {
 /// boundaries, so a window on `…/feature-two` is not taken for one on `…/feat`.
 ///
 /// *Start time* must still be the one recorded when the window was attributed.
-/// Argv alone cannot separate AMF's window from a user-opened VS Code that
+/// Argv alone cannot separate AIW's window from a user-opened VS Code that
 /// happens to have inherited the PID and be sitting on the same worktree — it
 /// looks identical, because it is identical apart from who started it. The
 /// process's own start time is the part it cannot reproduce. Records written
@@ -192,9 +192,9 @@ impl App {
             .collect()
     }
 
-    /// Close the editors AMF opened for a feature, and forget the records it
-    /// resolved either way. Records for windows that are alive but not AMF's
-    /// are kept, so `amf doctor` can still point at them.
+    /// Close the editors AIW opened for a feature, and forget the records it
+    /// resolved either way. Records for windows that are alive but not AIW's
+    /// are kept, so `aiw doctor` can still point at them.
     pub fn kill_tracked_editors(&mut self, feature_id: &str) -> EditorKillReport {
         let mut report = EditorKillReport::default();
         // Claim the launches still resolving *before* reading the rows: a
@@ -245,7 +245,7 @@ impl App {
             }
 
             // Owning the process is not the same as owning everything in it.
-            // VS Code runs one application process for the machine, so if AMF's
+            // VS Code runs one application process for the machine, so if AIW's
             // launch is the one that started it, the user's later windows are
             // in this same tree. Reclaiming memory is never worth closing
             // someone's other editors.
@@ -286,9 +286,9 @@ impl App {
     /// resolver, and report them as pending.
     ///
     /// Returns the record ids claimed, so the row walk can skip them instead of
-    /// reporting them as windows AMF does not own — which is what a stop during
+    /// reporting them as windows AIW does not own — which is what a stop during
     /// the resolve window used to do, leaving a real editor running with a
-    /// message saying it was never AMF's.
+    /// message saying it was never AIW's.
     fn claim_pending_editor_launches(
         &mut self,
         feature_id: &str,
@@ -312,7 +312,7 @@ impl App {
 
     /// Forget launches whose resolver has finished. Called from the launch and
     /// stop paths, which is often enough: the list only ever holds launches
-    /// from this run of AMF, and only for the seconds it takes a window to
+    /// from this run of AIW, and only for the seconds it takes a window to
     /// appear.
     pub(crate) fn prune_resolved_editor_launches(&mut self) {
         self.pending_editor_launches
@@ -362,7 +362,7 @@ mod tests {
         };
         assert_eq!(
             report.summary().as_deref(),
-            Some("left VS Code running (AMF did not open this window)")
+            Some("left VS Code running (AIW did not open this window)")
         );
     }
 
@@ -433,7 +433,7 @@ mod tests {
     }
 
     /// A live process with a VS Code-shaped argv on the worktree — argv alone
-    /// cannot tell it apart from the window AMF opened, which is the whole
+    /// cannot tell it apart from the window AIW opened, which is the whole
     /// reason the start time is recorded.
     fn spawn_lookalike(
         dir: &std::path::Path,
@@ -493,8 +493,8 @@ mod tests {
     #[test]
     fn a_lookalike_that_started_at_a_different_time_is_not_the_editor() {
         // The PID-recycling case argv cannot catch: the user's own VS Code, on
-        // the same worktree, holding the number AMF recorded. Only the start
-        // time separates it from the window AMF opened.
+        // the same worktree, holding the number AIW recorded. Only the start
+        // time separates it from the window AIW opened.
         let tmp = tempfile::TempDir::new().unwrap();
         let workdir = tmp.path().join("worktree");
         std::fs::create_dir_all(&workdir).unwrap();
@@ -505,7 +505,7 @@ mod tests {
         let editor = recorded(pid, &workdir, "Thu Jan 1 00:00:00 1970");
         assert!(
             !still_the_same_editor(&editor),
-            "argv matches, but this is not the process AMF launched"
+            "argv matches, but this is not the process AIW launched"
         );
 
         let _ = child.kill();

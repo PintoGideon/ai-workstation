@@ -20,9 +20,7 @@ const DASHBOARD_LEADER_COMMANDS: &[(&str, &str)] = &[
     ("H", "Bookmark current session"),
     ("M", "Remove bookmark"),
     ("1-9", "Jump to bookmark"),
-    ("r", "Refresh statuses"),
-    ("C", "AMF Remote server on / off"),
-    ("Q", "Pair a phone (QR)"),
+    ("r", "Refresh statuses + PR badges"),
 ];
 
 /// The ambient `[PR #N · M open]` badge span shown in the top-right corner
@@ -66,7 +64,7 @@ fn pr_triage_badge_span(app: &App, view: &crate::app::ViewState) -> Option<Span<
         ));
     }
     // No open PR: a merged or closed one is finished work, not "no PR" —
-    // show that instead of nothing (D3 in AMF_PLAN.md).
+    // show that instead of nothing (D3 in AIW_PLAN.md).
     let pr = app.terminal_pr_for_feature(&feature.id)?;
     let color = match pr.state {
         crate::github::TerminalPrState::Merged => app.theme.pr_merged.to_color(),
@@ -295,7 +293,8 @@ fn draw_context_bar(
 }
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
-    frame.render_widget(Clear, frame.area());
+    // FORK: no full-screen `Clear` — `Terminal::draw` hands us a freshly reset
+    // buffer, so it only cost a pass over every cell (~6% of a frame).
     frame.render_widget(
         Block::default().style(Style::default().bg(app.theme.effective_bg())),
         frame.area(),
@@ -399,8 +398,8 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         return;
     }
     if let AppMode::PrPicker(state) = &app.mode {
-        let repo = app.repo_for_project_path(&state.workdir);
-        let memory_paths = app.review_memory_paths(&repo);
+        // FORK: memoised — this ran `git rev-parse` + config reads per frame.
+        let memory_paths = app.render_review_memory_paths(&state.workdir);
         super::dialogs::draw_pr_picker(frame, state, &app.theme, &memory_paths);
         super::draw_toasts(frame, &app.toasts, &app.theme);
         return;
@@ -464,7 +463,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     if matches!(app.mode, AppMode::Viewing(_)) {
         // `message` is shared by dashboard status bars and dialog validation,
-        // but pane view should not leave AMF-owned text painted over the
+        // but pane view should not leave AIW-owned text painted over the
         // harness. Promote any such feedback to a timed toast before drawing.
         app.promote_message_to_toast();
     }
@@ -770,15 +769,16 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         .split(frame.area());
 
     let (attention_counts, unexplained_pending) = app.attention_badge_counts();
+    // FORK: G11 status pills; cwd read once (`fork_chrome::cwd_label`).
+    let pills = super::fork_chrome::header_pills(app, attention_counts, unexplained_pending);
     super::header::draw(
         frame,
         chunks[0],
-        &std::env::current_dir()
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_default(),
+        super::fork_chrome::cwd_label(),
         env!("CARGO_PKG_VERSION"),
         unexplained_pending,
         attention_counts,
+        pills,
         &app.theme,
     );
     super::list::draw(frame, app, chunks[1]);
@@ -815,7 +815,8 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     match &app.mode {
         AppMode::CreatingProject(state) => {
             let allowed_agents =
-                app.allowed_agents_for_project_path(&std::path::PathBuf::from(&state.path));
+                // FORK: memoised — this ran `git rev-parse` + config reads per frame.
+                app.render_allowed_agents_for_project_path(std::path::Path::new(&state.path));
             super::dialogs::draw_create_project_dialog(
                 frame,
                 state,
@@ -947,14 +948,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         super::dialogs::draw_search_dialog(frame, state, &app.theme);
     }
 
-    if let AppMode::OpencodeSessionPicker(state) = &app.mode {
-        super::picker::draw_opencode_session_picker(frame, state, &app.theme);
-    }
-
-    if matches!(app.mode, AppMode::ConfirmingOpencodeSession { .. }) {
-        super::picker::draw_opencode_session_confirm(frame, &app.theme);
-    }
-
     if let AppMode::ClaudeSessionPicker(state) = &app.mode {
         super::picker::draw_claude_session_picker(frame, state, &app.theme);
     }
@@ -1003,6 +996,11 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     if let AppMode::HookPrompt(state) = &app.mode {
         super::dialogs::draw_hook_prompt_dialog(frame, state, &app.theme);
+    }
+
+    // FORK: repo hook approval dialog.
+    if let AppMode::ApprovingRepoHook(state) = &app.mode {
+        crate::fork::hook_approval::draw(frame, state, &app.theme);
     }
 
     if let AppMode::ForkingFeature(state) = &app.mode {
@@ -1064,8 +1062,8 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
 
     if let AppMode::ReviewMemoryCompactConfirm(state) = &app.mode {
-        let repo = app.repo_for_project_path(&state.workdir);
-        let memory_paths = app.review_memory_paths(&repo);
+        // FORK: memoised — this ran `git rev-parse` + config reads per frame.
+        let memory_paths = app.render_review_memory_paths(&state.workdir);
         super::dialogs::draw_compact_confirm(
             frame,
             &state.confirm,
@@ -1088,10 +1086,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     if let AppMode::ContextSettings(state) = &app.mode {
         super::dialogs::draw_context_settings_dialog(frame, state, &app.theme);
-    }
-
-    if let AppMode::RemotePairing(state) = &app.mode {
-        super::dialogs::draw_remote_pairing_dialog(frame, app, state);
     }
 
     draw_mode_context_bar(frame, &app.mode, &app.theme);
@@ -1171,15 +1165,6 @@ mod tests {
         crate::app::agent_sidebar::fallback_sidebar_work_text(&runtime)
     }
 
-    #[allow(dead_code)]
-    fn pending_diff_review_work_text(
-        app: &App,
-        project: &Project,
-        feature: &Feature,
-    ) -> Option<String> {
-        let runtime = app.tui_sidebar_runtime(project, feature, &feature.tmux_session);
-        crate::app::agent_sidebar::pending_diff_review_work_text(&runtime.pending_inputs)
-    }
     use crate::app::{App, PendingInput, ViewState};
     use crate::project::FeatureSession;
     use crate::project::{
@@ -1315,7 +1300,7 @@ mod tests {
         app.mode = crate::app::AppMode::Viewing(ViewState::new(
             "demo".into(),
             "feature".into(),
-            "amf-feature".into(),
+            "aiw-feature".into(),
             "claude".into(),
             "Claude".into(),
             SessionKind::Claude,
@@ -1405,7 +1390,7 @@ mod tests {
             branch: "feature".into(),
             workdir: PathBuf::from("/tmp/demo"),
             is_worktree: false,
-            tmux_session: "amf-feature".into(),
+            tmux_session: "aiw-feature".into(),
             sessions: vec![
                 sidebar_usage_session(
                     "session-1",
@@ -1469,7 +1454,7 @@ mod tests {
         ViewState::new(
             "demo".into(),
             "feature".into(),
-            "amf-feature".into(),
+            "aiw-feature".into(),
             window.into(),
             label.into(),
             kind,
@@ -1598,11 +1583,7 @@ mod tests {
 
     #[test]
     fn sidebar_usage_follows_selected_agent_window() {
-        for kind in [
-            SessionKind::Claude,
-            SessionKind::Codex,
-            SessionKind::Opencode,
-        ] {
+        for kind in [SessionKind::Claude, SessionKind::Codex] {
             let app = sidebar_usage_app(kind.clone());
             let first = build_agent_sidebar_data(
                 &app,
@@ -1696,8 +1677,9 @@ mod tests {
         for kind in [
             SessionKind::Claude,
             SessionKind::Codex,
-            SessionKind::Opencode,
             SessionKind::Pi,
+            SessionKind::Gemini, // FORK
+            SessionKind::Cursor, // FORK
         ] {
             let app = sidebar_usage_app(kind.clone());
             let sidebar =
@@ -1751,8 +1733,8 @@ mod tests {
         // way `poll_sidebar_load_results` would to exercise that plumbing.
         let mut app = sidebar_usage_app(SessionKind::Codex);
         app.sidebar_effective_plan_cache.insert(
-            "amf-feature".to_string(),
-            "Current: AMF_PLAN.md".to_string(),
+            "aiw-feature".to_string(),
+            "Current: AIW_PLAN.md".to_string(),
         );
 
         let sidebar = build_agent_sidebar_data(
@@ -1761,7 +1743,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(sidebar.plan_text, "Current: AMF_PLAN.md");
+        assert_eq!(sidebar.plan_text, "Current: AIW_PLAN.md");
     }
 
     #[test]
@@ -1783,7 +1765,7 @@ mod tests {
             branch: "feature".into(),
             workdir: PathBuf::from("/tmp/demo"),
             is_worktree: false,
-            tmux_session: "amf-feature".into(),
+            tmux_session: "aiw-feature".into(),
             sessions: vec![],
             collapsed: false,
             mode: VibeMode::Vibeless,
@@ -1923,7 +1905,7 @@ mod tests {
         app.handle_ipc_message_value(serde_json::json!({
             "type": "thinking-start",
             "session_id": feature.tmux_session,
-            "amf_feature_session_id": dedicated_id,
+            "aiw_feature_session_id": dedicated_id,
         }));
         assert_eq!(
             pr_triage_sidebar_text(&app, &feature),
@@ -2401,7 +2383,7 @@ mod tests {
             branch: "feature".into(),
             workdir: PathBuf::from("/tmp/demo"),
             is_worktree: false,
-            tmux_session: "amf-feature".into(),
+            tmux_session: "aiw-feature".into(),
             sessions: vec![codex_feature_session("sess-current")],
             collapsed: false,
             mode: VibeMode::Vibeless,
@@ -2446,7 +2428,7 @@ mod tests {
             Box::new(MockWorktreeOps::new()),
         );
         app.pending_inputs.push(PendingInput {
-            session_id: "amf-feature".into(),
+            session_id: "aiw-feature".into(),
             cwd: "/tmp/demo".into(),
             message: "Need approval before applying the patch.".into(),
             notification_type: "input-request".into(),
@@ -2472,7 +2454,7 @@ mod tests {
         let view = ViewState::new(
             "demo".into(),
             "feature".into(),
-            "amf-feature".into(),
+            "aiw-feature".into(),
             "codex".into(),
             "Codex".into(),
             SessionKind::Codex,
@@ -2495,7 +2477,7 @@ mod tests {
             branch: "feature".into(),
             workdir: PathBuf::from("/tmp/demo"),
             is_worktree: false,
-            tmux_session: "amf-feature".into(),
+            tmux_session: "aiw-feature".into(),
             sessions: vec![FeatureSession {
                 id: "session-1".into(),
                 kind: SessionKind::Claude,
@@ -2556,7 +2538,7 @@ mod tests {
             Box::new(MockWorktreeOps::new()),
         );
         app.pending_inputs.push(PendingInput {
-            session_id: "amf-feature".into(),
+            session_id: "aiw-feature".into(),
             cwd: "/tmp/demo".into(),
             message: "Review the change before continuing.".into(),
             notification_type: "diff-review".into(),
@@ -2582,7 +2564,7 @@ mod tests {
         let view = ViewState::new(
             "demo".into(),
             "feature".into(),
-            "amf-feature".into(),
+            "aiw-feature".into(),
             "claude".into(),
             "Claude".into(),
             SessionKind::Claude,
@@ -2608,7 +2590,7 @@ mod tests {
             branch: "feature".into(),
             workdir: PathBuf::from("/tmp/demo"),
             is_worktree: false,
-            tmux_session: "amf-feature".into(),
+            tmux_session: "aiw-feature".into(),
             sessions: vec![FeatureSession {
                 id: "session-1".into(),
                 kind: SessionKind::Claude,
@@ -2669,7 +2651,7 @@ mod tests {
             Box::new(MockWorktreeOps::new()),
         );
         app.pending_inputs.push(PendingInput {
-            session_id: "amf-feature".into(),
+            session_id: "aiw-feature".into(),
             cwd: "/tmp/demo".into(),
             message: "".into(),
             notification_type: "change-reason".into(),
@@ -2695,7 +2677,7 @@ mod tests {
         let view = ViewState::new(
             "demo".into(),
             "feature".into(),
-            "amf-feature".into(),
+            "aiw-feature".into(),
             "claude".into(),
             "Claude".into(),
             SessionKind::Claude,
@@ -2713,119 +2695,6 @@ mod tests {
     }
 
     #[test]
-    fn pending_diff_review_updates_opencode_sidebar_work_text() {
-        let now = chrono::Utc::now();
-        let feature = Feature {
-            id: "feat-1".into(),
-            name: "feature".into(),
-            branch: "feature".into(),
-            workdir: PathBuf::from("/tmp/demo"),
-            is_worktree: false,
-            tmux_session: "amf-feature".into(),
-            sessions: vec![FeatureSession {
-                id: "session-1".into(),
-                kind: SessionKind::Opencode,
-                label: "Opencode".into(),
-                tmux_window: "opencode".into(),
-                claude_session_id: None,
-                todo_reference: None,
-                token_usage_source: None,
-                token_usage_source_match: None,
-                created_at: now,
-                command: None,
-                on_stop: None,
-                pre_check: None,
-                status_text: None,
-                token_usage: None,
-                stopped: false,
-            }],
-            collapsed: false,
-            mode: VibeMode::Vibeless,
-            review: false,
-            plan_mode: false,
-            agent: AgentKind::Opencode,
-            enable_chrome: false,
-            remote_control: false,
-            pending_worktree_script: false,
-            ready: false,
-            status: ProjectStatus::Idle,
-            created_at: now,
-            last_accessed: now,
-            summary: None,
-            summary_updated_at: None,
-            nickname: None,
-            selected_plan_path: None,
-            triage_source: None,
-            review_source: None,
-            issue_source: None,
-        };
-        let project = Project {
-            id: "proj-1".into(),
-            name: "demo".into(),
-            repo: PathBuf::from("/tmp/demo"),
-            collapsed: false,
-            features: vec![feature.clone()],
-            created_at: now,
-            preferred_agent: AgentKind::Opencode,
-            is_git: false,
-        };
-        let mut app = App::new_for_test(
-            ProjectStore {
-                version: 5,
-                projects: vec![project],
-                session_bookmarks: vec![],
-                available_harnesses: vec![],
-                prompt_templates: Vec::new(),
-                extra: HashMap::new(),
-            },
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.pending_inputs.push(PendingInput {
-            session_id: "amf-feature".into(),
-            cwd: "/tmp/demo".into(),
-            message: "Review the change before continuing.".into(),
-            notification_type: "diff-review".into(),
-            file_path: PathBuf::new(),
-            target_file_path: Some("src/main.rs".into()),
-            relative_path: Some("src/main.rs".into()),
-            change_id: None,
-            tool: Some("Edit".into()),
-            old_snippet: None,
-            new_snippet: None,
-            original_file: None,
-            proposed_file: None,
-            is_new_file: None,
-            reason: None,
-            response_file: None,
-            project_name: Some("demo".into()),
-            feature_name: Some("feature".into()),
-            proceed_signal: None,
-            request_id: None,
-            reply_socket: None,
-        });
-
-        let view = ViewState::new(
-            "demo".into(),
-            "feature".into(),
-            "amf-feature".into(),
-            "opencode".into(),
-            "Opencode".into(),
-            SessionKind::Opencode,
-            VibeMode::Vibeless,
-            false,
-        );
-
-        let sidebar = build_agent_sidebar_data(&app, &view).unwrap();
-        assert_eq!(
-            sidebar.work_text.as_deref(),
-            Some(
-                "State: waiting for diff review\nRequest: Review the change before continuing.\nHint: use leader V if the review prompt is not appearing."
-            )
-        );
-    }
-
-    #[test]
     fn build_agent_sidebar_data_still_builds_for_codex_with_plan_sources_present() {
         let now = chrono::Utc::now();
         let feature = Feature {
@@ -2834,7 +2703,7 @@ mod tests {
             branch: "feature".into(),
             workdir: PathBuf::from("/tmp/demo"),
             is_worktree: false,
-            tmux_session: "amf-feature".into(),
+            tmux_session: "aiw-feature".into(),
             sessions: vec![codex_feature_session("sess-current")],
             collapsed: false,
             mode: VibeMode::Vibeless,
@@ -2879,11 +2748,9 @@ mod tests {
             Box::new(MockWorktreeOps::new()),
         );
         app.sidebar_model_cache
-            .insert("amf-feature".into(), "Model: gpt-5.5".into());
-        app.sidebar_plan_cache
-            .insert("amf-feature".into(), "Plan\n1. Inspect\n2. Patch".into());
+            .insert("aiw-feature".into(), "Model: gpt-5.5".into());
         app.apply_codex_live_event(
-            "amf-feature",
+            "aiw-feature",
             &serde_json::json!({
                 "type": "plan",
                 "payload": { "text": "1. Inspect\n2. Patch" }
@@ -2893,7 +2760,7 @@ mod tests {
         let view = ViewState::new(
             "demo".into(),
             "feature".into(),
-            "amf-feature".into(),
+            "aiw-feature".into(),
             "codex".into(),
             "Codex".into(),
             SessionKind::Codex,

@@ -201,8 +201,8 @@ it("nests session rows with kind icons, run state, context and status text", () 
 });
 
 it("truncates a long session label before the context indicator and says when a reset is pending", () => {
-  const long = "A very long OpenCode session name that cannot fit";
-  renderTree([project([feature("f", { collapsed: false, sessions: [session(long, "opencode"), session("Pi", "pi")] })])], {
+  const long = "A very long Codex session name that cannot fit";
+  renderTree([project([feature("f", { collapsed: false, sessions: [session(long, "codex"), session("Pi", "pi")] })])], {
     sessions: {
       [long]: { status_text: null, context: { text: "Ctx ~91% CRITICAL · 819,000", band: "critical", stale: false, pending_reset: false }, icon: null, icon_nerd: null },
       Pi: { status_text: null, context: { text: "", band: "normal", stale: false, pending_reset: true }, icon: null, icon_nerd: null },

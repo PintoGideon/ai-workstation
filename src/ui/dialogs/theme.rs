@@ -18,7 +18,7 @@ pub fn draw_theme_picker(
     theme: &Theme,
     transparent: bool,
 ) {
-    let area = centered_rect(40, 40, frame.area());
+    let area = centered_rect(44, 60, frame.area()); // FORK: room for the Dark / Light sections
     crate::ui::draw_modal_overlay(frame, area, theme);
 
     let title = match &state.group {
@@ -29,7 +29,7 @@ pub fn draw_theme_picker(
     let block = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().bg(theme.effective_bg()))
-        .border_style(Style::default().fg(theme.primary.to_color()))
+        .border_style(Style::default().fg(theme.border_focus.to_color())) // FORK: focus colour
         .title(title);
 
     let inner = block.inner(area);
@@ -37,8 +37,14 @@ pub fn draw_theme_picker(
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(1)])
+        // FORK: a status-colour swatch between the list and the hints.
+        .constraints([
+            Constraint::Min(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
         .split(inner);
+    let row_width = chunks[0].width.saturating_sub(1) as usize;
 
     let visible_height = chunks[0].height as usize;
     let (total, selected) = match &state.group {
@@ -61,6 +67,7 @@ pub fn draw_theme_picker(
                     theme_name == current_theme,
                     &label,
                     theme,
+                    row_width,
                 )
             })
             .collect()
@@ -79,12 +86,20 @@ pub fn draw_theme_picker(
                         theme_name == current_theme,
                         theme_name.display_name(),
                         theme,
+                        row_width,
                     ),
                     ThemePickerEntry::Group { label, themes } => {
                         let is_current = themes.contains(current_theme);
                         let group_label = format!("{} \u{25b8} ({})", label, themes.len());
-                        render_row(is_selected, is_current, &group_label, theme)
+                        render_row(is_selected, is_current, &group_label, theme, row_width)
                     }
+                    // FORK: section title.
+                    ThemePickerEntry::Header(label) => Line::from(Span::styled(
+                        format!(" {}", label.to_uppercase()),
+                        Style::default()
+                            .fg(theme.text_muted.to_color())
+                            .add_modifier(Modifier::BOLD),
+                    )),
                 }
             })
             .collect()
@@ -133,10 +148,32 @@ pub fn draw_theme_picker(
             "Esc",
             Style::default().fg(theme.warning.to_color()),
         ));
-        hint_spans.push(Span::raw(" close"));
+        hint_spans.push(Span::raw(" revert")); // FORK: Esc undoes the live preview
     }
+    frame.render_widget(Paragraph::new(status_swatch(theme)), chunks[1]);
     let hints = Paragraph::new(Line::from(hint_spans));
-    frame.render_widget(hints, chunks[1]);
+    frame.render_widget(hints, chunks[2]);
+}
+
+/// FORK: the previewed theme's status colours, so moving through the list
+/// shows how working / needs-you / done / error / idle will look.
+fn status_swatch(theme: &Theme) -> Line<'static> {
+    let muted = Style::default().fg(theme.text_muted.to_color());
+    let mut spans = vec![Span::raw(" ")];
+    for (color, label) in [
+        (&theme.status_working, "working"),
+        (&theme.status_waiting, "needs you"),
+        (&theme.success, "done"),
+        (&theme.danger, "error"),
+        (&theme.status_idle, "idle"),
+    ] {
+        spans.push(Span::styled(
+            "\u{25cf} ",
+            Style::default().fg(color.to_color()),
+        ));
+        spans.push(Span::styled(format!("{label}  "), muted));
+    }
+    Line::from(spans)
 }
 
 fn theme_picker_scroll_offset(selected: usize, total: usize, visible: usize) -> usize {
@@ -150,20 +187,39 @@ fn theme_picker_scroll_offset(selected: usize, total: usize, visible: usize) -> 
         .min(total.saturating_sub(visible))
 }
 
-fn render_row<'a>(is_selected: bool, is_current: bool, label: &str, theme: &Theme) -> Line<'a> {
-    let marker = if is_current { " *" } else { "" };
-    let text = format!(" {}{}", label, marker);
-    let style = if is_selected {
+// FORK: calmer rows — the selected row gets the theme's selection background
+// and an accent `›`, the active theme a muted "current" tag.
+fn render_row<'a>(
+    is_selected: bool,
+    is_current: bool,
+    label: &str,
+    theme: &Theme,
+    width: usize,
+) -> Line<'a> {
+    let row_bg = if is_selected {
+        Style::default().bg(theme.effective_selection_bg())
+    } else {
         Style::default()
-            .fg(theme.shortcut_text.to_color())
-            .bg(theme.primary.to_color())
+    };
+    let marker = if is_selected { " \u{203a} " } else { "   " };
+    let label_style = if is_selected {
+        Style::default()
+            .fg(theme.text.to_color())
             .add_modifier(Modifier::BOLD)
     } else if is_current {
         Style::default().fg(theme.primary.to_color())
     } else {
         Style::default().fg(theme.text.to_color())
     };
-    Line::from(Span::styled(text, style))
+    let tag = if is_current { "  current" } else { "" };
+    let used = 3 + unicode_width::UnicodeWidthStr::width(label) + tag.len();
+    Line::from(vec![
+        Span::styled(marker, Style::default().fg(theme.primary.to_color())),
+        Span::styled(label.to_string(), label_style),
+        Span::styled(tag, Style::default().fg(theme.text_muted.to_color())),
+        Span::raw(" ".repeat(width.saturating_sub(used))),
+    ])
+    .style(row_bg)
 }
 
 /// Strips a group's own name from a theme's display name so the second

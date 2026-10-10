@@ -6,7 +6,7 @@
 
 A running list of known bugs that are not yet scheduled for a fix. Unlike
 the feature plans in this directory, this is a single shared doc — add a
-new `## ` section per bug. The filename ends in `-plan` only so AMF's
+new `## ` section per bug. The filename ends in `-plan` only so AIW's
 in-app Markdown viewer (which filters to paths containing "plan") picks
 it up.
 
@@ -91,16 +91,16 @@ clean blank rows and scrolling aligned to the rendered text.
 Partial diff/source lines can remain mixed into the summary, and the scroll
 limit can disagree with the content's wrapped height.
 
-## ~~OSC 8 hyperlinks do not open through AMF's managed tmux server on macOS~~ (Fixed)
+## ~~OSC 8 hyperlinks do not open through AIW's managed tmux server on macOS~~ (Fixed)
 
 - **Status:** Fixed (2026-07-31)
 - **Reported:** 2026-07-30
 - **Relates to:** tmux control clients (`src/tmux.rs`)
-- **Root cause:** AMF launches its embedded tmux control clients with
+- **Root cause:** AIW launches its embedded tmux control clients with
   `TERM=xterm-256color`, but its dedicated tmux server did not add the
   `hyperlinks` terminal feature for that terminal type. Tmux therefore did not
   know that the client could render OSC 8 hyperlinks.
-- **Fix:** Configure AMF's managed tmux server with
+- **Fix:** Configure AIW's managed tmux server with
   `xterm*:hyperlinks` before creating or attaching control clients. New
   sessions receive the setting at creation, while saved sessions receive it
   when reopened after upgrading. External tmux servers remain unchanged, and
@@ -109,7 +109,7 @@ limit can disagree with the content's wrapped height.
 
 ### Repro
 
-1. On macOS, start AMF with its default dedicated tmux socket.
+1. On macOS, start AIW with its default dedicated tmux socket.
 2. Open an agent session that emits an OSC 8 hyperlink.
 3. Attempt to open the rendered link in a terminal that supports hyperlinks.
 
@@ -133,20 +133,20 @@ The link target is unavailable because tmux does not emit the OSC 8 hyperlink.
   a recovery dialog (resume / clear start / pick a different saved session /
   cancel). Recovery recreates the saved tmux layout, always launches the
   selected agent pane regardless of the autostart limit, passes the persisted
-  harness ID only for resume, and reports setup or launch failures in AMF.
+  harness ID only for resume, and reports setup or launch failures in AIW.
   The dialog is deliberately narrow — it needs a persisted resume ID and a
-  stop AMF did not perform itself — so ordinary restarts keep their one
+  stop AIW did not perform itself — so ordinary restarts keep their one
   keypress, and `S` keeps its saved-transcript picker.
 
 ### Repro
 
 1. Start a feature with a Claude, Codex, or Opencode session.
 2. Stop its tmux session externally, or restart the computer.
-3. Relaunch AMF, select the saved agent session, and press `Enter`.
+3. Relaunch AIW, select the saved agent session, and press `Enter`.
 
 ### Expected
 
-AMF offers to resume the previous harness session or start a clear one, then
+AIW offers to resume the previous harness session or start a clear one, then
 opens the selected agent pane.
 
 ### Actual
@@ -318,9 +318,9 @@ appear after an explicit manual refresh.
 - **Status:** Fixed (2026-07-09)
 - **Reported:** 2026-07-09
 - **Relates to:** agent harness startup (`src/tmux.rs`)
-- **Root cause:** AMF typed the full environment-prefixed launch command into
+- **Root cause:** AIW typed the full environment-prefixed launch command into
   the tmux pane. On macOS that long input could be truncated before
-  `AMF_FEATURE_SESSION_ID` and the agent binary were reached, leaving the pane
+  `AIW_FEATURE_SESSION_ID` and the agent binary were reached, leaving the pane
   at a shell prompt with only part of the launch command visible.
 - **Fix:** Write launch commands to a short-lived shell script and send only
   `sh <script>` through tmux. The same path is used for Claude, Codex,
@@ -328,41 +328,41 @@ appear after an explicit manual refresh.
 
 ### Repro
 
-1. On macOS, create or start an agent session in AMF.
+1. On macOS, create or start an agent session in AIW.
 2. Watch the pane while the harness starts.
 
 ### Expected
 
-The agent harness starts after AMF creates the tmux window.
+The agent harness starts after AIW creates the tmux window.
 
 ### Actual
 
 The shell input stops partway through the environment setup, around
-`AMF_TMUX_WINDOW='claude' AMF_FEAT...`, and Claude never starts.
+`AIW_TMUX_WINDOW='claude' AIW_FEAT...`, and Claude never starts.
 
 ## ~~Claude hook commands fail under macOS Application Support~~ (Fixed)
 
 - **Status:** Fixed (2026-07-13)
 - **Reported:** 2026-07-13
 - **Relates to:** Claude hook setup (`src/app/setup.rs`)
-- **Root cause:** AMF wrote Claude hook commands as bare script paths. On
-  fresh macOS installs, the AMF config directory can live under
-  `~/Library/Application Support/amf`, and Claude executes hook commands
+- **Root cause:** AIW wrote Claude hook commands as bare script paths. On
+  fresh macOS installs, the AIW config directory can live under
+  `~/Library/Application Support/aiw`, and Claude executes hook commands
   through `/bin/sh`. The unquoted space after `Application` made the shell
   split the path before the helper script could run. Older unquoted hook
   entries also stayed in existing `.claude/settings.local.json` files.
-- **Fix:** Quote AMF-managed Claude hook command paths, force one more hook
-  refresh, and treat older unquoted `Library/Application Support/amf` helper
-  entries as managed so AMF removes and replaces them automatically. AMF also
+- **Fix:** Quote AIW-managed Claude hook command paths, force one more hook
+  refresh, and treat older unquoted `Library/Application Support/aiw` helper
+  entries as managed so AIW removes and replaces them automatically. AIW also
   checks stored Claude feature workdirs during startup and immediately repairs
   stale unquoted local hook settings, even if the global hook refresh stamp is
   already current.
 
 ### Repro
 
-1. On a fresh macOS install that stores AMF config under
-   `~/Library/Application Support/amf`, create or start a Claude feature.
-2. Submit a prompt or stop the session so Claude runs AMF's local hooks.
+1. On a fresh macOS install that stores AIW config under
+   `~/Library/Application Support/aiw`, create or start a Claude feature.
+2. Submit a prompt or stop the session so Claude runs AIW's local hooks.
 
 ### Expected
 
@@ -378,19 +378,19 @@ Claude reports a non-blocking hook error like
 - **Status:** Fixed (2026-07-20)
 - **Reported:** 2026-07-20
 - **Relates to:** Claude hook setup (`src/app/setup.rs`)
-- **Root cause:** The managed-hook heuristic only recognized AMF helper
-  scripts under a path ending in `/.config/amf` (the dotted XDG default) or
-  `/Library/Application Support/amf` (macOS). `XDG_CONFIG_HOME` can point
+- **Root cause:** The managed-hook heuristic only recognized AIW helper
+  scripts under a path ending in `/.config/ai_workstation` (the dotted XDG default) or
+  `/Library/Application Support/aiw` (macOS). `XDG_CONFIG_HOME` can point
   anywhere per the XDG spec — it isn't required to end in `config` at all
-  (e.g. `XDG_CONFIG_HOME=/tmp/foo` resolves the AMF config dir to
-  `/tmp/foo/amf`), and tools like the screenshot dev tool use an isolated
-  `<tmp>/config` root, producing hook paths like `.../config/amf/<script>.sh`.
+  (e.g. `XDG_CONFIG_HOME=/tmp/foo` resolves the AIW config dir to
+  `/tmp/foo/aiw`), and tools like the screenshot dev tool use an isolated
+  `<tmp>/config` root, producing hook paths like `.../config/aiw/<script>.sh`.
   Neither shape matched the hardcoded patterns, so `ensure_notification_hooks`
-  never recognized these as AMF-managed, never removed them on a later run
+  never recognized these as AIW-managed, never removed them on a later run
   with a different config root, and every such run left a new stale hook
   block behind in whatever `.claude/settings.local.json` it touched.
-- **Fix:** Generalized `is_amf_claude_hook_command` to match any parent
-  directory literally named `amf` (the invariant `amf_config_dir()` always
+- **Fix:** Generalized `is_aiw_claude_hook_command` to match any parent
+  directory literally named `aiw` (the invariant `aiw_config_dir()` always
   produces, regardless of what config root it's nested under), instead of
   hardcoding specific parent path shapes. Stale entries from any custom
   `XDG_CONFIG_HOME` — dotted, non-dotted, or unrelated to the word `config`
@@ -398,21 +398,21 @@ Claude reports a non-blocking hook error like
 
 ### Repro
 
-1. Run AMF once with `XDG_CONFIG_HOME` pointed at `/tmp/some-dir/config`
+1. Run AIW once with `XDG_CONFIG_HOME` pointed at `/tmp/some-dir/config`
    (as the screenshot dev tool does) against a feature's workdir.
-2. Run AMF again normally (real `~/.config/amf`) against the same workdir.
+2. Run AIW again normally (real `~/.config/ai_workstation`) against the same workdir.
 3. Inspect `.claude/settings.local.json` in that workdir.
 
 ### Expected
 
-Only one set of AMF-managed hook commands remains, pointing at the current
+Only one set of AIW-managed hook commands remains, pointing at the current
 config directory.
 
 ### Actual
 
 Both the stale temp-path hook commands and the current ones are present.
 Claude reports non-blocking `UserPromptSubmit`/`PreToolUse`/etc. hook
-errors like `/bin/sh: 1: /tmp/.../config/amf/thinking-start.sh: not found`
+errors like `/bin/sh: 1: /tmp/.../config/aiw/thinking-start.sh: not found`
 for every leftover temp-path entry.
 
 ## ~~macOS build fails in tmux PTY setup~~ (Fixed)
@@ -422,14 +422,14 @@ for every leftover temp-path entry.
 - **Relates to:** tmux PTY control clients (`src/tmux.rs`)
 - **Root cause:** macOS exposes libc signatures where `openpty` expects
   mutable `termios` / `winsize` pointers, and `ioctl` expects the
-  controlling-terminal request as `c_ulong`. AMF passed immutable pointers to
+  controlling-terminal request as `c_ulong`. AIW passed immutable pointers to
   `openpty` and passed `TIOCSCTTY` without the platform-width cast.
 - **Fix:** Pass mutable `termios` and `winsize` values into `openpty`, and
   cast each `TIOCSCTTY` request to `libc::c_ulong`.
 
 ### Repro
 
-1. Build AMF on macOS with `cargo build`.
+1. Build AIW on macOS with `cargo build`.
 
 ### Expected
 
@@ -479,7 +479,7 @@ options.
 - **Status:** Fixed (2026-07-02)
 - **Reported:** 2026-07-02
 - **Relates to:** embedded terminal input (`src/handlers/view.rs`)
-- **Root cause:** AMF treated every Enter repeat event as a real submit and
+- **Root cause:** AIW treated every Enter repeat event as a real submit and
   could also forward raw carriage-return/newline character events as literal
   terminal input. On macOS terminals this could show up as several blank lines
   from a single input action.
@@ -489,7 +489,7 @@ options.
 
 ### Repro
 
-1. On macOS, open a plain terminal session inside AMF.
+1. On macOS, open a plain terminal session inside AIW.
 2. Press Enter or submit input in the embedded terminal.
 
 ### Expected
@@ -505,9 +505,9 @@ awkward and jumpy.
 
 - **Status:** Fixed (2026-07-02)
 - **Reported:** 2026-07-02
-- **Root cause:** AMF created the tmux pane and immediately rendered captured
+- **Root cause:** AIW created the tmux pane and immediately rendered captured
   pane content. For newly launched agent sessions, the first captured frame can
-  still be the shell echo of AMF's long harness launch command and environment.
+  still be the shell echo of AIW's long harness launch command and environment.
   The first loading-mask attempt only covered brand-new feature tmux sessions,
   but adding `Codex 2` / another agent from the session picker creates a new
   tmux window inside an already-running feature tmux session. A content-only
@@ -516,7 +516,7 @@ awkward and jumpy.
 - **Fix:** Track a transient startup mask on the specific `ViewState` created
   for a new agent pane. Brand-new feature sessions and new agent windows from
   the session picker set that mask explicitly. The mask clears when fresh pane
-  content no longer looks like AMF's launch echo, with a timeout fallback so a
+  content no longer looks like AIW's launch echo, with a timeout fallback so a
   failed launch becomes visible. Follow-up coverage applies the same mask to
   resumed Claude/Codex/opencode sessions launched from `S`, and includes Pi in
   the feature-row default agent lookup so Pi gets the same loading screen when
@@ -525,15 +525,15 @@ awkward and jumpy.
 ### Repro
 
 1. From an existing feature, add a new agent session such as `Codex 2`.
-2. AMF switches into the new session view while the harness is launching.
+2. AIW switches into the new session view while the harness is launching.
 
 ### Expected
 
-AMF shows a short loading screen until the agent harness is visible.
+AIW shows a short loading screen until the agent harness is visible.
 
 ### Actual
 
-The embedded pane briefly shows the full tmux launch command and exported AMF
+The embedded pane briefly shows the full tmux launch command and exported AIW
 environment before the harness takes over.
 
 ## ~~PR review: triage / reply state is lost on return~~ (Fixed)
@@ -607,7 +607,7 @@ state are gone.
 
 ### Repro
 
-1. Launch AMF and land on the dashboard.
+1. Launch AIW and land on the dashboard.
 2. Press `A` (capital A), expecting the harness setup picker (the
    first-run multi-select where you enable Claude / Opencode / Codex /
    Pi) to open.
@@ -648,7 +648,7 @@ uppercase-key problem.
 
 - **Status:** Fixed (2026-06-24)
 - **Reported:** 2026-06-24
-- **Root cause:** AMF only looked for Claude tasks under
+- **Root cause:** AIW only looked for Claude tasks under
   `~/.claude/tasks/<session_id>` or reconstructed them from transcript
   `TaskCreate` / `TaskUpdate` events. Claude can persist the visible
   checklist under a separate task-store ID, leaving the sidebar with no
@@ -659,14 +659,14 @@ uppercase-key problem.
   both the fallback and exact-session precedence.
 - **Follow-up fix (2026-07-11):** Removed the newest global task-store
   fallback after it proved too broad: a newer checklist from another Claude
-  session could appear in the current session's sidebar. AMF now only reads
+  session could appear in the current session's sidebar. AIW now only reads
   the exact task-store directory for the selected session, then falls back to
   that session's transcript.
 
 ### Repro
 
 1. Open a Claude feature that has an active checklist in the Claude pane.
-2. Keep the AMF sidebar visible.
+2. Keep the AIW sidebar visible.
 3. Observe the sidebar sections.
 
 ### Expected
@@ -681,7 +681,7 @@ The sidebar shows `Status`, `Work`, and `Prompt`, but no `Todos` section.
 
 - **Status:** Fixed (2026-06-25)
 - **Reported:** 2026-06-25
-- **Root cause:** Opening an agent session with composer input enabled moved AMF
+- **Root cause:** Opening an agent session with composer input enabled moved AIW
   directly into `AppMode::Compose`. The main loop only initialized pane sizing
   for `AppMode::Viewing`, so the snapshot worker had zero pane dimensions and
   did not capture the Claude pane behind the composer.
@@ -692,7 +692,7 @@ The sidebar shows `Status`, `Work`, and `Prompt`, but no `Todos` section.
 ### Repro
 
 1. Open a Claude Code agent session with composer input enabled.
-2. Let AMF auto-open the composer on entry.
+2. Let AIW auto-open the composer on entry.
 3. Look at the pane behind the composer.
 
 ### Expected
@@ -714,7 +714,7 @@ closed or input is sent.
   (`wl-paste`/`wl-copy`), and X11 (`xclip`). There was no macOS branch at all,
   so every clipboard call on macOS fell through to
   `Err("No clipboard utility found")`. Typing directly into Claude Code
-  (bypassing AMF's composer) still worked because that path never goes
+  (bypassing AIW's composer) still worked because that path never goes
   through these helpers.
 - **Fix:** Add macOS clipboard helpers using `pbcopy`/`pbpaste` for text and
   `osascript` (via a temp PNG file) for images, wired in ahead of the
@@ -722,7 +722,7 @@ closed or input is sent.
 
 ### Repro
 
-1. On macOS, open an agent session in AMF with the composer enabled.
+1. On macOS, open an agent session in AIW with the composer enabled.
 2. Copy an image or text, then press Ctrl+V in the composer.
 
 ### Expected
@@ -746,9 +746,9 @@ paste goes directly to Claude Code's own input handling.
   `DELETE FROM prompt_templates` + full re-`INSERT` from whatever's in that
   process's in-memory `ProjectStore` on *every* save — status sync, feature
   start/stop, session changes, etc., not just prompt-library edits.
-  `prompt_templates` is a global table, and it's normal to run several `amf`
+  `prompt_templates` is a global table, and it's normal to run several `aiw`
   processes concurrently (one per checkout) against the same
-  `~/.config/amf/amf.db`. Any instance's routine background save would blow
+  `~/.config/ai_workstation/aiw.db`. Any instance's routine background save would blow
   away the entire table with its own stale in-memory snapshot, silently
   erasing templates a sibling instance had added since.
 - **Fix:** Give prompt templates targeted `insert`/`update`/`delete`
@@ -759,12 +759,12 @@ paste goes directly to Claude Code's own input handling.
   generic `App::save()` can no longer touch it. The prompt library picker now
   also re-reads templates fresh from the DB on every open (mirroring the
   existing fresh-read behavior for global config templates), so edits made by
-  a sibling AMF process become visible immediately instead of only after a
+  a sibling AIW process become visible immediately instead of only after a
   restart.
 
 ### Repro
 
-1. Run two `amf` instances at once (e.g. two terminals, each in a different
+1. Run two `aiw` instances at once (e.g. two terminals, each in a different
    project checkout) against the same global database.
 2. In instance A, open the prompt library and add or edit a template.
 3. In instance B, trigger any save (e.g. wait for the 5s status sync, or

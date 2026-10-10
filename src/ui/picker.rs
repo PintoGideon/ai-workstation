@@ -10,8 +10,8 @@ use ratatui::{
 use crate::app::attention::AttentionRow;
 use crate::app::{
     BookmarkPickerState, ClaudeSessionPickerState, CodexSessionPickerState, CommandAction,
-    CommandPickerState, MarkdownFilePickerState, OpencodeSessionPickerState, PendingInput,
-    SessionPickerState, SessionSwitcherState, SyntaxLanguagePickerState, SyntaxOperationAction,
+    CommandPickerState, MarkdownFilePickerState, PendingInput, SessionPickerState,
+    SessionSwitcherState, SyntaxLanguagePickerState, SyntaxOperationAction,
 };
 use crate::custom_session_icons::resolve_custom_session_icon;
 use crate::project::SessionKind;
@@ -25,7 +25,7 @@ use super::dashboard::centered_rect;
 /// Rows come pre-ordered from `App::attention_rows`: questions first, then
 /// completions, then generic waits, then whatever pending inputs the attention
 /// layer could not explain. Each row is labelled with its state rather than
-/// with the agent's message — AMF deliberately does not capture the question
+/// with the agent's message — AIW deliberately does not capture the question
 /// text, so the label is all there is to say without opening the session.
 pub fn draw_notification_picker(
     frame: &mut Frame,
@@ -304,7 +304,8 @@ pub fn draw_syntax_language_picker(
 
     let status_line = if let Some(operation) = &state.operation {
         let verb = match operation.action {
-            SyntaxOperationAction::Install => "Installing",
+            // FORK(no-cloud): say plainly that this goes to the network.
+            SyntaxOperationAction::Install => "Downloading (git clone) + building",
             SyntaxOperationAction::Uninstall => "Removing",
         };
         let throbber = throbber_widgets_tui::Throbber::default()
@@ -352,7 +353,7 @@ pub fn draw_syntax_language_picker(
         )))
     } else {
         Paragraph::new(Line::from(Span::styled(
-            "  Install only the tree-sitter parsers this workspace actually needs.",
+            "  Installing downloads the parser from GitHub (git clone) and builds it locally.",
             Style::default().fg(theme.text_muted.to_color()),
         )))
     };
@@ -372,7 +373,7 @@ pub fn draw_syntax_language_picker(
             let (badge_label, badge_style) = if is_operating {
                 (
                     match state.operation.as_ref().map(|op| op.action) {
-                        Some(SyntaxOperationAction::Install) => " INSTALLING ",
+                        Some(SyntaxOperationAction::Install) => " DOWNLOADING ",
                         Some(SyntaxOperationAction::Uninstall) => " REMOVING ",
                         None => " WORKING ",
                     },
@@ -464,7 +465,7 @@ pub fn draw_syntax_language_picker(
             ),
             Span::styled("Enter/i", Style::default().fg(theme.warning.to_color())),
             Span::styled(
-                " install or reinstall  ",
+                " download + install  ",
                 Style::default().fg(theme.text_muted.to_color()),
             ),
             Span::styled("x", Style::default().fg(theme.warning.to_color())),
@@ -946,10 +947,6 @@ pub fn draw_session_switcher(
                     "  * ",
                     Style::default().fg(theme.session_icon_claude.to_color()),
                 ),
-                SessionKind::Opencode => Span::styled(
-                    "  * ",
-                    Style::default().fg(theme.session_icon_opencode.to_color()),
-                ),
                 SessionKind::Codex => Span::styled(
                     "  * ",
                     Style::default().fg(theme.session_icon_codex.to_color()),
@@ -957,6 +954,15 @@ pub fn draw_session_switcher(
                 SessionKind::Pi => Span::styled(
                     "  * ",
                     Style::default().fg(theme.session_icon_codex.to_color()),
+                ),
+                // FORK: Gemini/Cursor theme colours
+                SessionKind::Gemini => Span::styled(
+                    "  * ",
+                    Style::default().fg(theme.session_icon_gemini.to_color()),
+                ),
+                SessionKind::Cursor => Span::styled(
+                    "  * ",
+                    Style::default().fg(theme.session_icon_cursor.to_color()),
                 ),
                 SessionKind::Terminal => Span::styled(
                     "  > ",
@@ -1050,87 +1056,6 @@ pub fn draw_session_switcher(
         Span::styled("r", Style::default().fg(theme.warning.to_color())),
         Span::styled(
             " rename  ",
-            Style::default().fg(theme.text_muted.to_color()),
-        ),
-        Span::styled("Esc", Style::default().fg(theme.warning.to_color())),
-        Span::styled(" cancel", Style::default().fg(theme.text_muted.to_color())),
-    ]));
-    frame.render_widget(hints, chunks[1]);
-}
-
-pub fn draw_opencode_session_picker(
-    frame: &mut Frame,
-    state: &OpencodeSessionPickerState,
-    theme: &Theme,
-) {
-    let area = centered_rect(60, 50, frame.area());
-    crate::ui::draw_modal_overlay(frame, area, theme);
-
-    let title = format!(" Opencode Sessions ({}) ", state.sessions.len());
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .style(Style::default().bg(theme.effective_bg()))
-        .border_style(Style::default().fg(theme.primary.to_color()));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    if state.sessions.is_empty() {
-        let empty = Paragraph::new(Line::from(Span::styled(
-            "  No sessions for this worktree.",
-            Style::default().fg(theme.text_muted.to_color()),
-        )));
-        frame.render_widget(empty, inner);
-        return;
-    }
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(2)])
-        .split(inner);
-    let row_width = inner.width as usize;
-
-    let items: Vec<ListItem> = state
-        .sessions
-        .iter()
-        .enumerate()
-        .map(|(i, session)| {
-            let identifier = session
-                .slug
-                .as_deref()
-                .filter(|slug| !slug.trim().is_empty())
-                .map(|slug| truncate_text(slug, 12))
-                .unwrap_or_else(|| short_session_id(&session.id));
-            session_picker_item(
-                theme,
-                theme.primary.to_color(),
-                row_width,
-                i == state.selected,
-                session.updated,
-                &identifier,
-                &session.title,
-                theme.info.to_color(),
-            )
-        })
-        .collect();
-
-    let list = List::new(items);
-    let mut list_state = ListState::default().with_selected(Some(state.selected));
-    frame.render_stateful_widget(list, chunks[0], &mut list_state);
-
-    let hints = Paragraph::new(Line::from(vec![
-        Span::styled(
-            "  j/k or \u{2191}/\u{2193}",
-            Style::default().fg(theme.warning.to_color()),
-        ),
-        Span::styled(
-            " navigate  ",
-            Style::default().fg(theme.text_muted.to_color()),
-        ),
-        Span::styled("Enter", Style::default().fg(theme.warning.to_color())),
-        Span::styled(
-            " select  ",
             Style::default().fg(theme.text_muted.to_color()),
         ),
         Span::styled("Esc", Style::default().fg(theme.warning.to_color())),
@@ -1536,10 +1461,6 @@ pub fn draw_codex_session_confirm(frame: &mut Frame, theme: &Theme) {
     draw_session_restore_confirm(frame, theme, "codex");
 }
 
-pub fn draw_opencode_session_confirm(frame: &mut Frame, theme: &Theme) {
-    draw_session_restore_confirm(frame, theme, "opencode");
-}
-
 pub fn draw_session_picker(
     frame: &mut Frame,
     state: &SessionPickerState,
@@ -1595,10 +1516,6 @@ pub fn draw_session_picker(
                 crate::project::SessionKind::Claude => Span::styled(
                     "  * ",
                     Style::default().fg(theme.session_icon_claude.to_color()),
-                ),
-                crate::project::SessionKind::Opencode => Span::styled(
-                    "  * ",
-                    Style::default().fg(theme.session_icon_opencode.to_color()),
                 ),
                 crate::project::SessionKind::Codex => Span::styled(
                     "  * ",

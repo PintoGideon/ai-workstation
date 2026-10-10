@@ -8,7 +8,7 @@ draft that already holds a plan reopens straight at the review gate instead of
 synthesizing again, so seeding one is how a capture can show what happens
 *after* an accept without paying for one.
 
-Keyed on the single feature the screenshot seeds create, so the interview AMF
+Keyed on the single feature the screenshot seeds create, so the interview AIW
 opens with `P` on that feature finds it.
 
 `--long` swaps in a plan that overflows the review pane at the harness's
@@ -17,7 +17,7 @@ scroll offset is clamped to zero and a scrolling capture would have nothing to
 show; anything proving scrollback needs a plan that is actually taller than the
 viewport.
 
-Usage: seed_plan_draft.py <path-to-amf.db> [--long]
+Usage: seed_plan_draft.py <path-to-aiw.db> [--long]
 """
 
 import json
@@ -100,7 +100,7 @@ does what the `j`/`k` hint already promised.
   row underneath and start it.
 - The editor phases share one offset with the cursor-sync path, which
   re-centres on the next keystroke. Scrolling away and typing snaps
-  back, which is the same behaviour every other editor in AMF has.
+  back, which is the same behaviour every other editor in AIW has.
 
 ## Tasks
 - [ ] Add the phase-to-offset accessor on the interview state
@@ -118,7 +118,7 @@ without touching the plan's offset, and an unscrollable phase leaves
   `edit_scroll_offset`. That is a small feature, not a regression, but
   it was not asked for.
 - Terminals that do not report SGR mouse events are unaffected either
-  way; nothing here changes what AMF asks the terminal for.
+  way; nothing here changes what AIW asks the terminal for.
 
 ## Out of scope
 - Drag-selecting text inside the plan pane.

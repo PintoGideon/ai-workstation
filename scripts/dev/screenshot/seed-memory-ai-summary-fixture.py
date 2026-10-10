@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inject a PR-Triage "add to memory" fixture into a scratch AMF DB.
+"""Inject a PR-Triage "add to memory" fixture into a scratch AIW DB.
 
 Usage: seed-memory-ai-summary-fixture.py <db_path> <repo_root> [pr_number]
 
@@ -33,7 +33,7 @@ db_path = sys.argv[1]
 repo_root = sys.argv[2]
 pr_number = int(sys.argv[3]) if len(sys.argv) > 3 else 636
 
-OWNER, REPO = "eldridgerdev", "agent-mainframe"
+OWNER, REPO = "example-org", "ai-workstation"
 COMMENT_ID = 700201
 
 head_sha = subprocess.run(
@@ -87,7 +87,7 @@ conn.execute(
     "INSERT OR REPLACE INTO features "
     "(id, project_id, name, branch, workdir, is_worktree, tmux_session, mode, agent, status, collapsed, created_at, last_accessed) "
     "VALUES ('memo-demo-feature', ?, 'memory ai summary demo', 'memory-ai-summary-demo', ?, 0, "
-    "'amf-memo-demo', 'vibe', 'codex', 'stopped', 0, datetime('now'), datetime('now'))",
+    "'aiw-memo-demo', 'vibe', 'codex', 'stopped', 0, datetime('now'), datetime('now'))",
     (project_id, repo_root),
 )
 

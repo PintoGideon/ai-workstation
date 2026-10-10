@@ -168,8 +168,8 @@ def choose_comment(author_prefix):
     evaluate(f'Array.from(document.querySelectorAll(".pr-comment")).find(b=>b.textContent.startsWith({json.dumps(author_prefix)})).click()')
 
 
-state = pathlib.Path(os.environ["AMF_GUI_GH_STATE"])
-calls_path = pathlib.Path(os.environ["AMF_GUI_AI_CALLS"])
+state = pathlib.Path(os.environ["AIW_GUI_GH_STATE"])
+calls_path = pathlib.Path(os.environ["AIW_GUI_AI_CALLS"])
 
 
 def ai_calls():

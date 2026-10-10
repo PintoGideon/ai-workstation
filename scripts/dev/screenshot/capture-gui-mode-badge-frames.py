@@ -20,7 +20,7 @@ from Xlib import display
 
 out = pathlib.Path(sys.argv[1]).resolve()
 pid = int(sys.argv[2])
-dbpath = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "amf/amf.db"
+dbpath = pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "ai_workstation/aiw.db"
 
 for attempt in range(100):
     try:
@@ -149,7 +149,7 @@ try:
     assert evaluate(f"({row}).querySelector('.tree-name').title.includes('Mode: supervibe')")
     click_nav("Round invoice totals")
     wait("document.querySelector('main')?.innerText.includes('Round invoice totals')")
-    wait("!document.body.innerText.includes('Waiting for terminal connection') && document.body.innerText.includes('No plan selected') && document.body.innerText.includes('AMF capture fixture')")
+    wait("!document.body.innerText.includes('Waiting for terminal connection') && document.body.innerText.includes('No plan selected') && document.body.innerText.includes('AIW capture fixture')")
     time.sleep(1)
     capture("001-collapsed-mode-hidden.png",
             "Collapsed feature: the supervibe badge is hidden, while review and session-count badges stay visible. The row tooltip still contains Mode: supervibe (asserted).",

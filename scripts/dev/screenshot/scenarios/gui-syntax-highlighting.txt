@@ -4,4 +4,4 @@
 note:The isolated TUI confirms the capture harness is ready before native syntax-highlighting proof begins.
 expect:0 projects, 0 features
 shot:gui-capture-ready
-run:env AMF_GUI_CAPTURE_RUNNER="$SCRIPT_DIR/capture-gui-syntax.py" AMF_GUI_CAPTURE_FRAMES="$SCRIPT_DIR/capture-gui-syntax-frames.py" bash "$SCRIPT_DIR/capture-gui-diff.sh" "$OUT_DIR"
+run:env AIW_GUI_CAPTURE_RUNNER="$SCRIPT_DIR/capture-gui-syntax.py" AIW_GUI_CAPTURE_FRAMES="$SCRIPT_DIR/capture-gui-syntax-frames.py" bash "$SCRIPT_DIR/capture-gui-diff.sh" "$OUT_DIR"

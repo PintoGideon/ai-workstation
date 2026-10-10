@@ -1,13 +1,13 @@
 //! Project-scope prompt overrides — the layer that is **shared and committed**
 //! with the repo.
 //!
-//! The plan originally put these in a `.amf/prompts/` directory, but `.amf/`
-//! is gitignored dir-wide in this codebase (see the generated `.amf/README.md`
+//! The plan originally put these in a `.aiw/prompts/` directory, but `.aiw/`
+//! is gitignored dir-wide in this codebase (see the generated `.aiw/README.md`
 //! and the repo's own `.gitignore`), so a file there would never be committed.
 //! Instead they live under a `prompt_overrides` key in the tracked repo config,
-//! `amf.json` (`ExtensionConfig::prompt_overrides`), keyed by stable
+//! `aiw.json` (`ExtensionConfig::prompt_overrides`), keyed by stable
 //! [`PromptId`] string. Feature- and global-scope overrides are per-user and
-//! live in `amf.db` (`crate::db::prompt_overrides`).
+//! live in `aiw.db` (`crate::db::prompt_overrides`).
 //!
 //! Shape:
 //! ```json
@@ -39,8 +39,8 @@ pub struct PromptOverrideEntry {
     /// override (the entry then only carries per-harness templates).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub template: Option<String>,
-    /// Per-harness templates, keyed by `"claude"` / `"codex"` / `"opencode"` /
-    /// `"pi"`. Each beats [`Self::template`] for that one harness.
+    /// Per-harness templates, keyed by `"claude"` / `"codex"` / `"pi"` /
+    /// `"gemini"` / `"cursor"`. Each beats [`Self::template`] for that one harness.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub harnesses: BTreeMap<String, String>,
 }
@@ -78,7 +78,7 @@ impl PromptOverrideEntry {
     }
 }
 
-/// The `amf.json` `prompt_overrides` map: prompt-id string → entry.
+/// The `aiw.json` `prompt_overrides` map: prompt-id string → entry.
 pub type ProjectPromptOverrides = BTreeMap<String, PromptOverrideEntry>;
 
 /// The effective project-scope template for `id` under `harness`, or `None`
@@ -92,13 +92,13 @@ pub fn effective<'a>(
         .and_then(|entry| entry.for_harness(harness))
 }
 
-/// Read `{repo}/amf.json` (or the legacy `.amf/config.json`) and return just
+/// Read `{repo}/aiw.json` (or a legacy AMF `amf.json` / `.amf/config.json`) and return just
 /// its `prompt_overrides` map. Tolerant: a missing file, unreadable file, or
 /// malformed JSON yields an empty map, so project scope simply contributes
 /// nothing rather than failing a headless run.
 ///
-/// Read live at resolution time (not cached), so hand-editing `amf.json`
-/// changes the next prompt AMF sends.
+/// Read live at resolution time (not cached), so hand-editing `aiw.json`
+/// changes the next prompt AIW sends.
 pub fn load_from_repo(repo: &Path) -> ProjectPromptOverrides {
     let Some(path) = crate::extension::resolve_project_config_path(repo) else {
         return ProjectPromptOverrides::new();
@@ -187,7 +187,7 @@ mod tests {
     fn update_in_repo_preserves_other_keys_and_drops_empty_entries() {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(
-            dir.path().join("amf.json"),
+            dir.path().join("aiw.json"),
             r#"{"future_key":{"kept":true},"allowed_agents":["codex"]}"#,
         )
         .unwrap();
@@ -198,7 +198,7 @@ mod tests {
         })
         .unwrap();
         let raw: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(dir.path().join("amf.json")).unwrap())
+            serde_json::from_str(&std::fs::read_to_string(dir.path().join("aiw.json")).unwrap())
                 .unwrap();
         assert_eq!(raw["future_key"]["kept"], true);
         assert_eq!(raw["allowed_agents"][0], "codex");
@@ -216,7 +216,7 @@ mod tests {
         })
         .unwrap();
         let raw: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(dir.path().join("amf.json")).unwrap())
+            serde_json::from_str(&std::fs::read_to_string(dir.path().join("aiw.json")).unwrap())
                 .unwrap();
         assert!(raw.get("prompt_overrides").is_none(), "{raw}");
         assert_eq!(raw["future_key"]["kept"], true);
@@ -226,7 +226,7 @@ mod tests {
     fn update_in_repo_keeps_the_files_key_order() {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(
-            dir.path().join("amf.json"),
+            dir.path().join("aiw.json"),
             r#"{"zeta":1,"allowed_agents":["codex"],"lifecycle_hooks":{"on_stop":null,"on_start":null},"alpha":2}"#,
         )
         .unwrap();
@@ -239,7 +239,7 @@ mod tests {
                 .set_shared(Some("shared".into()));
         })
         .unwrap();
-        let text = std::fs::read_to_string(dir.path().join("amf.json")).unwrap();
+        let text = std::fs::read_to_string(dir.path().join("aiw.json")).unwrap();
         let at = |needle: &str| {
             text.find(needle)
                 .unwrap_or_else(|| panic!("{needle}: {text}"))
@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn update_in_repo_refuses_to_replace_a_malformed_config() {
         let dir = tempfile::TempDir::new().unwrap();
-        let path = dir.path().join("amf.json");
+        let path = dir.path().join("aiw.json");
         for junk in ["{ not json", "[1, 2]", r#"{"prompt_overrides": 7}"#] {
             std::fs::write(&path, junk).unwrap();
             assert!(load_strict(dir.path()).is_err(), "{junk}");
@@ -343,11 +343,11 @@ mod tests {
     #[test]
     fn load_from_repo_tolerates_absence_and_junk() {
         let dir = tempfile::TempDir::new().unwrap();
-        // No amf.json at all.
+        // No aiw.json at all.
         assert!(load_from_repo(dir.path()).is_empty());
 
         // Malformed JSON.
-        std::fs::write(dir.path().join("amf.json"), "{ not json").unwrap();
+        std::fs::write(dir.path().join("aiw.json"), "{ not json").unwrap();
         assert!(load_from_repo(dir.path()).is_empty());
     }
 
@@ -355,7 +355,7 @@ mod tests {
     fn load_from_repo_picks_up_a_hand_authored_entry() {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(
-            dir.path().join("amf.json"),
+            dir.path().join("aiw.json"),
             r#"{
                 "custom_sessions": [],
                 "prompt_overrides": {

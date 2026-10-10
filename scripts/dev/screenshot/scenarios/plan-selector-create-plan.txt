@@ -5,16 +5,16 @@
 # Requires --seed with plan-selector-create-plan-project.json and
 # --seed-feature with plan-selector-create-plan-feature.json: a fresh
 # worktree feature (use_worktree: true, plan_mode: false) with no
-# AMF_PLAN.md, but plenty of other tracked Markdown files (README.md,
+# AIW_PLAN.md, but plenty of other tracked Markdown files (README.md,
 # docs/**/*.md, ...) so the plan picker opens instead of showing a
 # "no markdown plan available" toast.
 #
 # Stops at the interview's brief step rather than accepting: accepting
-# writes a real AMF_PLAN.md and (with a live session) offers a kickoff
+# writes a real AIW_PLAN.md and (with a live session) offers a kickoff
 # handoff, which is a separate, already-covered flow
 # (plan-interview-on-demand.txt) and not what this scenario is proving.
 
-note:The seeded feature has no AMF_PLAN.md yet, so its row carries no [plan] badge.
+note:The seeded feature has no AIW_PLAN.md yet, so its row carries no [plan] badge.
 shot:dashboard-seeded
 
 # Reach the feature's session view the same way sidebar-todo-proof.txt
@@ -29,7 +29,7 @@ key:Enter|wait:750
 key:Enter|wait:1200
 shot:session-view
 
-# Ctrl+Space arms the leader; 'n' is "current plan". Neither AMF_PLAN.md
+# Ctrl+Space arms the leader; 'n' is "current plan". Neither AIW_PLAN.md
 # nor a manual selection resolves for this feature, so this opens the
 # picker (AppMode::MarkdownFilePicker, purpose SelectPlan) instead of
 # the Markdown viewer.
@@ -38,7 +38,7 @@ key:n|wait:800
 
 expect:Select Current Plan
 expect_not:Plan Mode ·
-note:Leader `n` opens the plan picker in "select an existing plan" mode, listing this worktree's other Markdown files -- there is no AMF_PLAN.md to jump straight to.
+note:Leader `n` opens the plan picker in "select an existing plan" mode, listing this worktree's other Markdown files -- there is no AIW_PLAN.md to jump straight to.
 shot:plan-picker-opens
 
 # THE FRAME: 'p' inside this picker is new. It used to be a dead key

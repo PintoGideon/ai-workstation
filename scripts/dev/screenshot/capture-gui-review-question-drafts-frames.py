@@ -175,7 +175,7 @@ def save(label):
 
 repo = pathlib.Path(sys.argv[4])
 progress_path = repo / ".claude/final-review-progress.json"
-calls_path = pathlib.Path(os.environ["AMF_GUI_AI_CALLS"])
+calls_path = pathlib.Path(os.environ["AIW_GUI_AI_CALLS"])
 
 
 def calls():

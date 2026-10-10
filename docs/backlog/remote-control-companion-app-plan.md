@@ -1,25 +1,25 @@
 # Remote Control — companion app
 
 - **Status:** Phases 1–3 implemented (2026-09-28) as a **PWA** served by
-  AMF itself, which replaced the Flutter client at the user's direction
+  AIW itself, which replaced the Flutter client at the user's direction
   (2026-09-26). It covers status, push, the terminal (simple and full), and
   feature/session/TODO/prompt/diff actions. User guide:
   [`docs/remote-control.md`](../remote-control.md). Detailed progress is in the
-  feature's `AMF_PLAN.md`. The Flutter epics below (3, 6) are superseded;
+  feature's `AIW_PLAN.md`. The Flutter epics below (3, 6) are superseded;
   the `mobile/` Flutter project was removed before merge (2026-09-28).
 - **Owner:** unassigned
 - **Relates to:** shipped interactive Remote Control (v0.24.0, see
   `CHANGELOG.md`) — bridges **one Claude session at a time** to
   claude.ai/code or the Claude mobile app via Anthropic's own
   infrastructure (`claude --remote-control`). This plan is a separate,
-  AMF-owned capability: a dashboard-wide view across **every feature and
+  AIW-owned capability: a dashboard-wide view across **every feature and
   every harness** (Claude, Codex, opencode, Pi), with its own auth
   model, its own server, and its own client app. The two are
   complementary, not competing — a user could have both enabled.
   [Remote Control — server mode](remote-control-server-mode-plan.md) is
   also related but orthogonal: it is about **spawning new sessions**
   remotely (provision-and-review), where this plan is about **observing
-  and driving sessions AMF already created**.
+  and driving sessions AIW already created**.
   [Remote Control — QR code overlay](remote-control-qr-overlay-plan.md)
   designs a TUI QR overlay for the *shipped* feature's session URL; this
   plan needs its own, different QR (a pairing code, not a session URL —
@@ -27,11 +27,11 @@
 
 ## Why / problem
 
-Today, checking on or steering an AMF-managed agent session requires
-being at the machine running AMF. There is no way to see which features
+Today, checking on or steering an AIW-managed agent session requires
+being at the machine running AIW. There is no way to see which features
 need attention, answer a blocked agent's question, or type into a
 session from a phone. The goal: let a user monitor and, eventually,
-fully interact with their AMF agent sessions from a phone — starting
+fully interact with their AIW agent sessions from a phone — starting
 with read-only status/notifications and growing toward full terminal
 control — over a connection method the user configures per setup (LAN
 and/or tunnel).
@@ -51,7 +51,7 @@ explicitly:
   session/device.
 - **Server lifecycle**: the remote-control server is on-demand only,
   toggled on/off by the user; it is not a background daemon that runs
-  automatically whenever AMF is running. Asking to pair (`Ctrl+Space Q`)
+  automatically whenever AIW is running. Asking to pair (`Ctrl+Space Q`)
   while it is off counts as such a request: it starts the server and
   opens the pairing dialog once it is listening. Nothing starts it
   without a keypress.
@@ -59,7 +59,7 @@ explicitly:
   terminal (xterm.js-style, over WebSocket) and a simplified
   mobile-friendly view, user-selectable.
 - **Push notifications**: in scope — the phone should be notified when
-  an agent needs attention, mirroring AMF's existing attention (`i`)
+  an agent needs attention, mirroring AIW's existing attention (`i`)
   view.
 - **Concurrent access**: shared read/write between phone and local
   desktop session with no conflict resolution — both sides can type
@@ -73,7 +73,7 @@ explicitly:
   terminal view uses an embedded WebView hosting xterm.js for
   full-terminal mode; the simplified view is built with native Flutter
   widgets.
-- **Auth**: QR-code pairing — AMF desktop shows a QR code encoding a
+- **Auth**: QR-code pairing — AIW desktop shows a QR code encoding a
   one-time, short-lived pairing code, the phone scans it and exchanges
   it for a long-lived, per-device secret token stored in the app and in
   a new `remote_devices` table. Every subsequent connection
@@ -92,19 +92,19 @@ explicitly:
 
 - **New always-addressable pieces**:
   - A remote-control server (HTTP + WebSocket) toggled on/off from the
-    AMF dashboard, bound to LAN by default, with an optional tunnel
+    AIW dashboard, bound to LAN by default, with an optional tunnel
     connection mode via an existing third-party tool the user installs
-    and configures — AMF does not run its own relay infrastructure.
+    and configures — AIW does not run its own relay infrastructure.
   - A `remote_devices` table (SQLite, alongside the existing
-    `~/.config/amf/amf.db` schema and migration pattern used by
+    `~/.config/ai_workstation/aiw.db` schema and migration pattern used by
     `todo_lists`/`todos`) storing device id, per-device token (hashed at
     rest), pairing time, last-seen time, and revoked flag.
   - A Flutter mobile app (iOS + Android), built and distributed
-    separately from the AMF server process rather than served as static
+    separately from the AIW server process rather than served as static
     assets, with three views matching the phases: status/notification
     list, prompt-response view, terminal view (xterm.js via embedded
     WebView, or a native simplified view, user-selectable).
-- **Integrating with the existing synchronous app**: AMF's event loop
+- **Integrating with the existing synchronous app**: AIW's event loop
   (`main.rs::run_loop`) and `App` state are synchronous today. The
   remote server needs an async runtime (tokio + an HTTP/WS framework
   such as axum) running on its own thread(s), started and stopped when
@@ -125,7 +125,7 @@ explicitly:
   user is away" — if the remote server must be manually enabled, it may
   not be running at the moment an agent actually needs attention. This
   plan resolves it by splitting concerns: attention detection stays in
-  AMF's existing polling (`app/notifications.rs`) and runs whenever AMF
+  AIW's existing polling (`app/notifications.rs`) and runs whenever AIW
   itself is running, independent of the remote-control toggle; only the
   *interactive* remote-control server (pairing, WebSocket
   terminal/status access) is gated by the on/off toggle. Actual
@@ -143,7 +143,7 @@ explicitly:
 
 ## UI
 
-- **AMF desktop (ratatui)**:
+- **AIW desktop (ratatui)**:
   - A remote-access toggle (on/off) surfaced in settings or the
     leader-command menu, showing current state and connection mode
     (LAN/tunnel).
@@ -193,7 +193,7 @@ epic.
       tunnel indicator comes with the tunnel work in Epic 4/9).
 
 **Done (2026-09-14).** `src/remote_server.rs` runs the server on a
-dedicated `amf-remote-server` thread with its own tokio runtime and a
+dedicated `aiw-remote-server` thread with its own tokio runtime and a
 single `/health` route (real routes land with Epics 4/5/8/9). Shutdown
 is a tokio oneshot signal with graceful `axum::serve` teardown;
 lifecycle is reported back over a plain `std::sync::mpsc` channel
@@ -235,7 +235,7 @@ token_hash, paired_at, last_seen_at, revoked) with a UNIQUE index on
 `token_hash`. `src/db/remote_devices.rs` stores only the hashed token —
 minting and hashing a real token is Epic 4's job — and exposes
 create/find-by-id/find-by-token-hash/list-all/touch-last-seen/revoke,
-wrapped as `AmfDb` methods. Originally marked `#[allow(dead_code)]`
+wrapped as `AiwDb` methods. Originally marked `#[allow(dead_code)]`
 until Epic 4 called in; that allow is gone now that pairing, auth, and
 revoke use the module, and the two lookups only tests use
 (find-by-id/find-by-token-hash) are `#[cfg(test)]`. Web Push's tables are
@@ -273,8 +273,8 @@ account, TestFlight, code signing) is deliberately deferred, per the user.
 described below was deleted before merge rather than kept as dead code.
 
 **Done (2026-09-14), scaffold half.** `mobile/` is a Flutter project
-(`flutter create --platforms=android --org dev.agentmainframe
---project-name amf_companion mobile`), Android-only. Toolchain (Flutter
+(`flutter create --platforms=android --org dev.aiworkstation
+--project-name aiw_companion mobile`), Android-only. Toolchain (Flutter
 3.47.4 stable + Android SDK platform 36 / build-tools 34 & 36, no
 sudo/snap — extracted from the official tarballs into `~/dev/flutter`
 and `~/dev/android-sdk`, since this dev box has no root access in this
@@ -323,7 +323,7 @@ opens `AppMode::RemotePairing`, whose state *is* the pending pairing —
 there's no separate copy on `App`, so closing the dialog invalidates the
 code by construction rather than by a second cleanup step. The code is a
 6-digit number (`remote_server::generate_pairing_code`, `uuid`-backed —
-no new RNG dependency); the QR encodes `amf-pair://<addr>?code=<code>`
+no new RNG dependency); the QR encodes `aiw-pair://<addr>?code=<code>`
 via a new `src/qr.rs` (the `qrcode` crate, half-block Unicode rendering,
 the same approach sketched for the unrelated session-URL QR in
 `remote-control-qr-overlay-plan.md`, landing here first).
@@ -409,7 +409,7 @@ screens can be built against mocked data in parallel with those landing.
 - [x] Status/notification list screen (Phase 1 view). Done in the PWA,
       sorted by status within each project (2026-09-28).
 - [x] ~~Firebase Cloud Messaging~~ push notifications. Done as Web Push
-      with AMF's own VAPID key (2026-09-26/28), so no Firebase project.
+      with AIW's own VAPID key (2026-09-26/28), so no Firebase project.
 
 Verification: manual install/pairing on a real phone; confirm a
 notification triggered by a real agent question arrives. Neither done
@@ -510,12 +510,12 @@ connections.
 
 Found by using it on a real phone over Tailscale:
 
-- [x] Dead `$AMF_BIN` after a rebuild silenced every hook, so nothing
-      reached attention or push. Hooks now fall back to `amf` on `PATH`
+- [x] Dead `$AIW_BIN` after a rebuild silenced every hook, so nothing
+      reached attention or push. Hooks now fall back to `aiw` on `PATH`
       (#667).
 - [x] `Ctrl+Space C` in a session sent Claude's `/rc` instead of
-      toggling AMF's server, and `Q` did nothing there. Both now drive
-      AMF Remote from a session too, and the pairing dialog returns to
+      toggling AIW's server, and `Q` did nothing there. Both now drive
+      AIW Remote from a session too, and the pairing dialog returns to
       the session on close. The `/rc` toggle key was dropped.
 - [x] `Ctrl+Space Q` refused while the server was off. It now starts
       the server and opens the dialog once it's listening.
@@ -525,16 +525,16 @@ Found by using it on a real phone over Tailscale:
       stopped).
 - [x] A userspace `tailscaled` doesn't survive a WSL restart, so the
       tunnel silently disappears. The guide's WSL section now says so, and
-      both the pairing dialog's setup view and `amf doctor` report a
+      both the pairing dialog's setup view and `aiw doctor` report a
       daemon that isn't answering.
 - [x] Setup was hard for anyone but the author: copying the tailnet URL into
-      `config.json` by hand, and no guidance on locking it down. Now AMF
+      `config.json` by hand, and no guidance on locking it down. Now AIW
       detects Tailscale (`src/tailscale.rs`) and uses the address it serves.
       `t` in the pairing dialog runs `tailscale serve --bg`, and `s` shows
       setup steps ticked off from a live probe, with `c` copying an access
-      policy. `amf doctor` has a `remote-access` check.
+      policy. `aiw doctor` has a `remote-access` check.
       `remote_tailscale_cli`/`remote_tailscale_socket` cover non-standard
-      installs. An access policy can't be applied by AMF (it lives in the
+      installs. An access policy can't be applied by AIW (it lives in the
       admin console), so it's copy-paste plus a tag.
 - [x] The pairing dialog was 70% of the screen, so on a ~43-row terminal the
       QR filled it and clipped the code, the address and the keys. It now
@@ -542,14 +542,14 @@ Found by using it on a real phone over Tailscale:
       line makes the setup walkthrough easy to find.
 - [x] The setup walkthrough showed a WSL-only block, couldn't scroll to its
       end (it measured unwrapped lines), and told an already signed-in user
-      to run `tailscale up` when AMF simply couldn't see their CLI. It's now
+      to run `tailscale up` when AIW simply couldn't see their CLI. It's now
       platform-neutral and scrolls (keys, wheel, scrollbar), and steps it
       can't check say why and are worded "if you haven't yet".
-- [x] Everything showed green while no device could reach AMF: the laptop
+- [x] Everything showed green while no device could reach AIW: the laptop
       was tagged, the phone had been removed from the tailnet, and its app
       still said "connected". The laptop's `status --json` showed no peers
       and an empty packet filter. A served-but-isolated node is now a to-do
-      in the setup steps, a warning in the dialog, and a `warn` in `amf
+      in the setup steps, a warning in the dialog, and a `warn` in `aiw
       doctor`. The fix on the phone was logging out and back in.
 - [ ] Re-pairing leaves a new device row each time, and the phone's push
       subscription stays with the row it was made under. After today's
@@ -563,7 +563,7 @@ Found by using it on a real phone over Tailscale:
 ### PWA dashboard follow-up — collapsible projects
 
 **Implemented (2026-09-28), pending release.** Project headings on the
-AMF Remote dashboard now toggle their feature lists and show feature counts.
+AIW Remote dashboard now toggle their feature lists and show feature counts.
 Projects start expanded; each device remembers collapsed projects across
 status refreshes, navigation and reloads. The needs-attention list stays
 visible above the project groups.
@@ -607,7 +607,7 @@ acceptance test ignored), as did formatting and strict all-target Clippy.
 - Whether Phase 1 (Epics 1–7) ships to real usage on its own before
   Phases 2/3 exist, or nothing ships until all epics land, is
   unresolved and affects how "done" is judged per phase.
-- Whether the on/off toggle state persists across AMF restarts or
+- Whether the on/off toggle state persists across AIW restarts or
   always resets to off is unresolved.
 - Whether two phones can hold simultaneous full-terminal (Epic 9/10)
   access to the same session, in addition to the settled
@@ -632,11 +632,11 @@ acceptance test ignored), as did formatting and strict all-target Clippy.
   entirely for now (per the user), so only the Android half of this
   (Play Console account, signing, internal-testing track) is still
   open — see Epic 3.
-- **Resolved (2026-09-26): push uses Web Push with AMF's own VAPID
+- **Resolved (2026-09-26): push uses Web Push with AIW's own VAPID
   key, so none of this applies.** Firebase Cloud Messaging (Epic 6's push notifications) needed a
   Firebase project created and wired up (a new external-service
   dependency, `google-services.json` committed or generated per build,
-  a server-side key for AMF to send from) — not yet decided or
+  a server-side key for AIW to send from) — not yet decided or
   scoped; needs sign-off before Epic 6's push half starts.
 - The tunnel mechanism is resolved to "integrate with an existing tool"
   (Tailscale, ngrok, or cloudflared), but *which one* to document/support
@@ -645,11 +645,11 @@ acceptance test ignored), as did formatting and strict all-target Clippy.
 
 ## Reasoning / when to build
 
-Build when phone-based monitoring/steering of AMF sessions is a workflow
+Build when phone-based monitoring/steering of AIW sessions is a workflow
 actually wanted — the phased structure lets Phase 1 (read-only status +
 push) ship and prove value before committing to the higher-risk Phase 3
 terminal-streaming work. Epics 1–3 (P0) are worth starting even before
 full commitment to later phases, since they are foundational,
 independent of each other, and de-risk the two hardest parts of the
-plan early: introducing AMF's first async runtime, and the native-app
+plan early: introducing AIW's first async runtime, and the native-app
 distribution lead time.

@@ -208,7 +208,7 @@ impl App {
 
     /// Run a lifecycle hook script non-blocking.
     /// Expands leading `~/` to the home directory.
-    /// If `choice` is provided it is set as `AMF_HOOK_CHOICE`
+    /// If `choice` is provided it is set as `AIW_HOOK_CHOICE`
     /// in the child environment.
     pub fn run_lifecycle_hook(&self, script: &str, workdir: &Path, choice: Option<&str>) {
         let expanded = if script.starts_with("~/") {
@@ -226,7 +226,7 @@ impl App {
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::piped());
         if let Some(c) = choice {
-            cmd.env("AMF_HOOK_CHOICE", c);
+            cmd.env("AIW_HOOK_CHOICE", c);
         }
         let workdir = workdir.to_path_buf();
         match cmd.spawn() {
@@ -418,7 +418,7 @@ impl App {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
         if let Some(ref c) = choice {
-            cmd.env("AMF_HOOK_CHOICE", c);
+            cmd.env("AIW_HOOK_CHOICE", c);
         }
 
         if let Some((pi, fi)) = self.upsert_pending_worktree_feature(

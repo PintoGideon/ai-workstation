@@ -14,7 +14,7 @@ keybindings, learning-mode, review-and-pr-feedback, prompts-and-todos,
 custom-prompts, attention-and-limits, configuration) covers the features
 README leads with, but an audit against `src/` and `CLAUDE.md`'s feature
 notes turned up shipped, user-facing functionality with **no page, section,
-or mention anywhere on the site** — including two (`amf doctor`, the
+or mention anywhere on the site** — including two (`aiw doctor`, the
 automation CLI) that are already written up in README's Troubleshooting/
 Automation sections and simply never got a site page. A new user has no way
 to discover these except reading source or `CLAUDE.md`, neither of which is
@@ -29,10 +29,10 @@ dependency.
 
 | Epic | Priority | Needs | Summary |
 |---|---|---|---|
-| 1. Operational docs parity | P0 | — | Port `amf doctor`, the automation CLI, and the debug log from README into site pages |
+| 1. Operational docs parity | P0 | — | Port `aiw doctor`, the automation CLI, and the debug log from README into site pages |
 | 2. Attention & usage visibility | P0 | — | Document context-window tracking, token/usage tracking, and session summaries |
 | 3. Multi-harness capability matrix | P0 | — | New reference page: what Claude/Codex/OpenCode/Pi each support |
-| 4. Project config reference (`amf.json`) | P1 | — | Document the extension schema: presets, sessions, hooks, prompts, prompt overrides |
+| 4. Project config reference (`aiw.json`) | P1 | — | Document the extension schema: presets, sessions, hooks, prompts, prompt overrides |
 | 5. Session lifecycle extras | P1 | — | Bookmarks, saved-transcript resume, custom session icons, Fresh Context handoff |
 | 6. Plan-interview reference docs | P2 | — | `Ctrl+D` attach-docs flow, folded into core-concepts.md's Plan mode section |
 | 7. Niche/advanced features | P2 | — | Remote Control badge, steering prompt constraints, combined-batch fix-cost disclosure |
@@ -47,15 +47,15 @@ README, it just needs a home on the site. Landed as a new
 `troubleshooting.md` page rather than folding into `configuration.md`, to
 keep operational/support content separate from setup content.
 
-- [x] `amf doctor` — read-only health report (agent count vs. limit, editor
-      windows, memory/swap, orphaned `amf-*` tmux sessions/worktrees,
-      stopped-feature editors still running, legacy `.amf/config.json`
+- [x] `aiw doctor` — read-only health report (agent count vs. limit, editor
+      windows, memory/swap, orphaned `aiw-*` tmux sessions/worktrees,
+      stopped-feature editors still running, legacy `.aiw/config.json`
       projects), `--json` output, always exits `0`.
-- [x] Automation CLI (`amf automation create-project` /
+- [x] Automation CLI (`aiw automation create-project` /
       `create-feature` / `create-batch-features`) — links out to
       `docs/automation/README.md` on GitHub for the request templates
       rather than duplicating them, the way README does.
-- [x] Debug log — `D` on the dashboard, `~/.local/state/amf/debug.log`.
+- [x] Debug log — `D` on the dashboard, `~/.local/state/ai_workstation/debug.log`.
 - [x] "Agent not appearing at creation" tip. Nerd Font/icon fallback was
       **not** duplicated — `configuration.md` already documents
       `nerd_font: false`, so the new page cross-links it instead.
@@ -82,7 +82,7 @@ repro in
 These are UI elements a user sees on every session (context budget, usage
 sidebar, auto-generated titles) with zero explanatory text anywhere on the
 site today. Landed as two new sections in `attention-and-limits.md` (it
-already owns "what does AMF show me about my agents") rather than a new
+already owns "what does AIW show me about my agents") rather than a new
 page.
 
 - [x] Context-window tracking — the per-session context-budget indicator
@@ -150,9 +150,9 @@ Verification: `zola build`/`zola check` (v0.23.5) both pass, all cross-links
 `attention-and-limits.md`) resolve. Not yet spot-checked against a real
 session per harness — flagged in Open questions.
 
-### Epic 4 — Project config reference (`amf.json`) (P1)
+### Epic 4 — Project config reference (`aiw.json`) (P1)
 
-`configuration.md` names global/`amf.json` locations and the resource-guard
+`configuration.md` names global/`aiw.json` locations and the resource-guard
 keys but never describes what a project can actually declare —
 `extension.rs`'s schema for presets, custom sessions, hooks, plan-interview
 questions, and project-scope prompt overrides (the last of which
@@ -181,7 +181,7 @@ much for a clean append to `configuration.md`.
       doc comment on `merge_project_extension_config`
       (`src/extension.rs`), not re-derived — it already states the exact
       rule per field.
-- [x] Cross-linked from `custom-prompts.md`'s existing `amf.json`
+- [x] Cross-linked from `custom-prompts.md`'s existing `aiw.json`
       `prompt_overrides` example and from `configuration.md`'s wizard
       bullet list, instead of re-documenting either.
 
@@ -212,7 +212,7 @@ Added one pointer to `keybindings.md`'s "Where the rest live" list instead.
 - [x] Saved-transcript resume — dashboard/session `S` on a Claude, Codex,
       or OpenCode feature (`src/handlers/normal.rs`), which the code
       comment notes works even for a stopped feature and reaches
-      transcripts older than what AMF recorded. Confirmed Pi has no
+      transcripts older than what AIW recorded. Confirmed Pi has no
       picker (no `pi_session_picker` anywhere), consistent with the
       Epic 3 harness matrix.
 - [x] Fresh Context handoff (`src/app/handoff.rs`) — leader `Shift+F` opens
@@ -231,7 +231,7 @@ Added one pointer to `keybindings.md`'s "Where the rest live" list instead.
 
 Verification: `zola build`/`zola check` (v0.23.5) both pass — 14 pages, new
 page slots in at weight 37, all cross-links (including the Epic 2/3 back-
-references) resolve. Not driven against a live `amf` session — flagged in
+references) resolve. Not driven against a live `aiw` session — flagged in
 Open questions alongside Epic 3's.
 
 ### Epic 6 — Plan-interview reference docs (P2)
@@ -264,7 +264,7 @@ rather than a dedicated page each.
       section in `session-tools.md` rather than `keybindings.md`, to keep
       it with the rest of Epic 5's session-surface content. **Superseded
       (2026-09-28):** the `/rc` toggle is gone — in a session `Shift+C` now
-      toggles AMF's own remote-control server and `Shift+Q` opens pairing;
+      toggles AIW's own remote-control server and `Shift+Q` opens pairing;
       `c` / `Shift+O` are unchanged. `session-tools.md` documents the
       current keys.
 - [x] Steering prompt coaching — turned out to be more than "constraints
@@ -304,13 +304,13 @@ rules added to `site/sass/style.scss`) under `site/static/images/docs/`.
       `docs/screenshots/` corpus (learning-mode, todo-assignment-lifecycle,
       context-hint, sidebar-usage-limit, harness-aware-session-summary,
       agent-limits, plan-mode-review-gate, diff-viewer-file-tree,
-      pr-triage-amf-outbound-comments, pending-ai-review-triage) rather
-      than freshly captured — no `amf-screenshot` run was needed.
+      pr-triage-aiw-outbound-comments, pending-ai-review-triage) rather
+      than freshly captured — no `aiw-screenshot` run was needed.
 - [x] `installation.md`, `harnesses.md`, `configuration.md`,
       `custom-prompts.md`, `project-config.md`, and `troubleshooting.md`
       were left without images: they're reference/table/CLI-output pages,
       and no existing capture fits the config wizard, the prompt-override
-      manager, or `amf doctor` — those would need a fresh `amf-screenshot`
+      manager, or `aiw doctor` — those would need a fresh `aiw-screenshot`
       run, not a reuse.
 
 Verification: `zola build`/`zola check` (v0.23.6) both pass; the built HTML
@@ -332,12 +332,12 @@ content passes through unmodified) and the image count per page.
 - ~~**Screenshots.** Several of these features already have screenshots
   under `docs/screenshots/` (context-hint, sidebar-usage-limit,
   harness-aware-session-summary, agent-limits). None of the new pages use
-  images yet; worth reusing those via the `amf-screenshot` skill's gallery
+  images yet; worth reusing those via the `aiw-screenshot` skill's gallery
   rather than recapturing, where the existing ones are still current.~~
   Done — see "Screenshots pass" above.
 - **Keeping README and the site in sync going forward.** This audit exists
   because README grew ahead of the site, and by the end of it the site
-  covers several things (the harness matrix, the `amf.json` field
+  covers several things (the harness matrix, the `aiw.json` field
   reference, session tools) that README itself doesn't mention either. No
   process currently catches that drift in either direction — worth a
   follow-up note (maybe in `docs/development/checks.md`).
@@ -347,10 +347,10 @@ content passes through unmodified) and the image count per page.
 All 7 epics are now shipped. They were picked up in priority order:
 1–3 first (independent, quick, closed gaps in content real users hit
 immediately — troubleshooting, and UI elements visible in every session),
-then 4–5 (reference material for customizing AMF), then the smaller
+then 4–5 (reference material for customizing AIW), then the smaller
 6–7. Landing each turned up something the epic's original framing hadn't
 anticipated — a second pre-existing site-build bug (Epic 1), four more
-`amf.json` fields than scoped (Epic 4), an undocumented dashboard leader
+`aiw.json` fields than scoped (Epic 4), an undocumented dashboard leader
 menu (Epic 5), and a task-prompt coaching feature bigger than "constraints
 attachable to a prompt" (Epic 7) — which is the risk of writing docs from
 source rather than from watching a user get confused: source shows what

@@ -18,7 +18,7 @@
 // ---------------------------------------------------------------------------
 //
 // These eight keep a **single `{{interview_input}}` token** rather than one
-// token per field: an override edits the tuned instruction prose while AMF
+// token per field: an override edits the tuned instruction prose while AIW
 // still owns the JSON data section's shape. The six full-mode templates' prose
 // must stay byte-identical to the `plan_interview::*_PROMPT` constants — the
 // `plan_interview_defaults_stay_in_sync_with_the_tuned_prose` test enforces

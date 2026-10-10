@@ -634,7 +634,12 @@ fn draw_create_feature_branch_mode(
                 format!("   {} {:<10}", marker, m.display_name()),
                 name_style,
             ),
-            Span::styled(m.description(), desc_style),
+            // FORK: Gemini/Cursor word their modes differently.
+            Span::styled(
+                crate::fork::extra_agents::mode_description(&state.agent, m)
+                    .unwrap_or(m.description()),
+                desc_style,
+            ),
         ]));
     }
 

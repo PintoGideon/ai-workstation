@@ -114,16 +114,16 @@ it("drops a confirmation whose revision changed and says when the edit is gone",
   expect(responds()).toHaveLength(0);
 });
 
-it("asks before discarding unsent feedback and states OpenCode's semantics", async () => {
+it("asks before discarding unsent feedback and states the hook's semantics", async () => {
   vi.mocked(invoke).mockImplementation(async (command) => command === "supervised_edits_load" ? view([edit({
     kind: "change-reason",
-    effects: { approve: "a", reject: "r", cancel: "OpenCode treats cancel as a skip: the agent writes this change without recording a reason.", feedback_reaches_agent: false },
+    effects: { approve: "a", reject: "r", cancel: "Cancel is treated as a skip: the change is kept.", feedback_reaches_agent: false },
   })]) : []);
   const onClose = mount();
   await screen.findByText("-return subtotal;");
-  expect(screen.getByText(/OpenCode does not forward rejection feedback/)).toBeTruthy();
+  expect(screen.getByText(/This agent does not receive rejection feedback/)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Cancel edit" }));
-  expect(screen.getByText(/OpenCode treats cancel as a skip/)).toBeTruthy();
+  expect(screen.getByText(/Cancel is treated as a skip/)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Back" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Feedback for the agent" }), { target: { value: "draft" } });
   fireEvent.click(screen.getAllByRole("button", { name: "Close" })[0]);

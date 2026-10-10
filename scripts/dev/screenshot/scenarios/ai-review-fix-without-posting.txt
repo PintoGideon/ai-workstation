@@ -5,9 +5,9 @@
 # reads the PR's comments once through read-only `gh`; nothing is written to
 # GitHub and the scenario always cancels the fix dialog with Escape.
 #
-# Local run needs: export AMF_SCREENSHOT_PR_NUMBER=<n> GITHUB_REPOSITORY=owner/name
+# Local run needs: export AIW_SCREENSHOT_PR_NUMBER=<n> GITHUB_REPOSITORY=owner/name
 
-run:AMF_BIN="$AMF_BIN" "$SCRIPT_DIR/seed-ai-review-fixture.sh" >/dev/null
+run:AIW_BIN="$AIW_BIN" "$SCRIPT_DIR/seed-ai-review-fixture.sh" >/dev/null
 wait:400
 expect:f fix
 expect:B fix marked
@@ -23,7 +23,7 @@ shot:finding-marked
 key:B
 wait:5000
 expect:Inject combined fix for 1 comments
-expect_not:amf reply-draft
+expect_not:aiw reply-draft
 note:`B` hands the marked finding to PR Triage as a local comment and opens the combined-fix dialog. The prompt carries the finding but no reply-draft instruction, because there is no GitHub comment to answer.
 shot:combined-fix-dialog-no-reply-draft
 

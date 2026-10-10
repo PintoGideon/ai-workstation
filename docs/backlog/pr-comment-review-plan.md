@@ -7,19 +7,19 @@
   `src/app/view.rs`), compose box / prompt injection
   (`src/app/compose.rs`), prompt library injection seam
   ([prompt-library-plan.md](prompt-library-plan.md)), `gh` usage in
-  PR skills (`scripts/dev/amf/pr-info.sh`, `.claude/commands/amf/pr-*`),
+  PR skills (`scripts/dev/aiw/pr-info.sh`, `.claude/commands/aiw/pr-*`),
   SQLite store (`src/db/store.rs`), `ClaudeLauncher::run_headless`
   (`src/claude.rs`)
 
 ## Why / problem
 
 When a PR comes back from review (human reviewers **and** bots like
-CodeRabbit/Copilot), the user has to leave AMF, open GitHub, read each
+CodeRabbit/Copilot), the user has to leave AIW, open GitHub, read each
 comment, context-switch back into the agent session, paste the relevant
 bit, and repeat — often dozens of times per PR. It's tedious and it
 burns agent tokens because each round-trip re-establishes context.
 
-AMF already owns the agent session and the working tree. It should let
+AIW already owns the agent session and the working tree. It should let
 the user **triage every PR comment in one place** and, per comment,
 either (a) inject a tightly-scoped fix prompt into the live agent
 session, (b) post an AI-drafted reply (e.g. "done in `<sha>`" or "not
@@ -50,7 +50,7 @@ the agent is only paid for the work the user explicitly asks for.
   TUI, hydrate full bodies on demand**. Fix prompts carry **comment +
   GitHub-provided diff hunk + `file:line` only** — the agent opens the
   file itself if it needs more.
-- **Reply behavior:** AMF **posts replies to GitHub via `gh`**, but
+- **Reply behavior:** AIW **posts replies to GitHub via `gh`**, but
   always **AI-drafts then waits for user approval/edit before posting**.
   Thread *resolution* is an explicit, optional action — not automatic.
 - **Entry point:** **auto-detect the PR** for the selected feature's
@@ -129,7 +129,7 @@ also powers the optional "resolve thread" action.
 ### Preconditions: `gh` installed, authenticated, scoped
 
 Everything in this feature shells out to `gh`, so before we resolve a
-PR or fetch anything, AMF must verify the environment and **fail fast
+PR or fetch anything, AIW must verify the environment and **fail fast
 with an actionable message** rather than surfacing raw `gh` errors deep
 in the flow. Check, in order, the moment the user invokes the
 PR-review action (cheap, runs once per entry):
@@ -260,12 +260,12 @@ on GitHub. Bots shown inline (`@coderabbit`) with no special grouping.
 **Epic E keys** layer onto this same pane: `A` runs an AI review of the
 diff (its findings appear as draft `[ ]` items in this same list, triaged
 with the existing verbs), and `M` appends the selected comment's finding
-to `.amf/review-memory.md`. The lookback bootstrap (distill the memory
+to `.aiw/review-memory.md`. The lookback bootstrap (distill the memory
 from the last *N* PRs) is reached from the PR entry flow:
 
 ```text
 ┌─ Bootstrap review memory ────────────────────────────────────────────┐
-│ Distill common findings from recent PRs into .amf/review-memory.md.   │
+│ Distill common findings from recent PRs into .aiw/review-memory.md.   │
 │ Look back over:                                                       │
 │   ( ) 20 PRs     (•) 50 PRs     ( ) 100 PRs     ( ) all               │
 │                                                                       │
@@ -291,7 +291,7 @@ from the last *N* PRs) is reached from the PR entry flow:
 
 ```text
 ┌─ Inject fix into agent session ──────────────────────────────────────┐
-│ Will send to amf-prompt-composer ▸ claude:                            │
+│ Will send to aiw-prompt-composer ▸ claude:                            │
 │                                                                       │
 │ Address this PR review comment.                                       │
 │ File: src/app/sync.rs:42                                              │
@@ -308,9 +308,9 @@ from the last *N* PRs) is reached from the PR entry flow:
 ## Workflow
 
 1. From the dashboard, with a feature selected, press the PR-review key
-   → AMF resolves the PR via `gh pr view` on the branch (or prompts for
+   → AIW resolves the PR via `gh pr view` on the branch (or prompts for
    a number on manual override) and enters `PrReviewLoading`.
-2. AMF fetches (3 REST + 1 GraphQL), normalizes, strips bot
+2. AIW fetches (3 REST + 1 GraphQL), normalizes, strips bot
    boilerplate, dedups threads, caches by head SHA → `PrReview` view.
 3. User triages top-down. Per comment:
    - **f (fix):** assemble minimal prompt → confirm/edit → inject into
@@ -364,7 +364,7 @@ from the last *N* PRs) is reached from the PR entry flow:
       `src/handlers/pr_review.rs`, `src/app/pr_review.rs`, `src/app/state.rs`.
 - [x] Dashboard entry key: `G` auto-detects the branch's PR (runs
       preconditions → resolve → load) and is listed in help. When no open PR
-      is found for the branch, AMF opens a manual PR-number override prompt
+      is found for the branch, AIW opens a manual PR-number override prompt
       (`AppMode::PrNumberPrompt`): digit-only input, `Enter` resolves via
       `gh pr view <n>` and starts the fetch, resolve failures show inline so
       the user can correct and retry. The prompt is also reachable on demand
@@ -383,7 +383,7 @@ from the last *N* PRs) is reached from the PR entry flow:
       `src/db/migrations.rs`, `src/app/pr_review.rs`, `src/github.rs`,
       `src/handlers/pr_review.rs`, `src/ui/dialogs/pr_review.rs`.
 - **Acceptance:** open any PR for the current branch and read every
-  comment inside AMF, grouped and navigable, with zero agent tokens
+  comment inside AIW, grouped and navigable, with zero agent tokens
   spent and a cache hit on re-open.
 
 ### Epic B — Fix injection into an agent session
@@ -441,7 +441,7 @@ from the last *N* PRs) is reached from the PR entry flow:
       `src/app/mod.rs`, `src/handlers/pr_review.rs`, `src/ui/dialogs/pr_review.rs`.
 - **Acceptance:** select a comment, inject a scoped fix into the review
   session (default dedicated, or the live session by choice), watch it
-  work, mark done — without leaving AMF and without injecting any file
+  work, mark done — without leaving AIW and without injecting any file
   contents.
 
 ### Epic C — Replies & resolution (GitHub writes)
@@ -489,41 +489,41 @@ from the last *N* PRs) is reached from the PR entry flow:
       actionable `gh auth refresh -s repo` message. Unit-tested (mutation parse +
       GraphQL-error surfacing). → `src/github.rs`, `src/app/pr_review.rs`,
       `src/handlers/pr_review.rs`, `src/ui/dialogs/pr_review.rs`.
-- [x] **Tag AMF-templated (non-AI) replies with a "posted via AMF" footer
+- [x] **Tag AIW-templated (non-AI) replies with a "posted via AIW" footer
       (resolved open question — channel disclosure, not authorship).** The
       AI-attribution footer (Epic D) only covers genuinely AI-*generated*
       content (Epic E findings); the "Done in `<sha>`" and "not-needed"
       templates are the user's own words and were posting with no marker at
       all. Decided: mark the *channel* rather than authorship — a reader on
       GitHub should be able to tell a reply came through tooling even though
-      the words are the user's. A new `append_amf_attribution` (distinct
+      the words are the user's. A new `append_aiw_attribution` (distinct
       wording from `append_ai_attribution`, `src/app/pr_review.rs`) appends
-      `— posted via AMF` to the body `pr_review_post_reply` sends to GitHub;
+      `— posted via AIW` to the body `pr_review_post_reply` sends to GitHub;
       the locally-persisted `local_note` for a "not needed" reply stays the
-      unmarked text (it's AMF's own record, not something read on GitHub).
+      unmarked text (it's AIW's own record, not something read on GitHub).
       Applied at post time rather than folded into the editable seed — an
       empty "not needed" buffer starting with a footer already in it would
       be awkward to type into — so the reply dialog gained a
       token-preview-style disclosure line ("will post with a `— posted via
-      AMF` footer") between the editor and the key hints instead. Unit-tested
-      (`append_amf_attribution` wording/trimming; a render test proving the
+      AIW` footer") between the editor and the key hints instead. Unit-tested
+      (`append_aiw_attribution` wording/trimming; a render test proving the
       disclosure line appears in the dialog). → `src/app/pr_review.rs`,
       `src/ui/dialogs/pr_review.rs`.
 - [x] **Disclose how an AI-drafted reply was generated.** When the fix
       harness returns a reviewer-facing draft and the user posts it unchanged,
-      AMF now includes the harness, best-effort model name, estimated token
+      AIW now includes the harness, best-effort model name, estimated token
       usage, and estimated cost for that fix immediately above the existing
-      `— drafted by AI via AMF` footer. The confirmation dialog previews the
+      `— drafted by AI via AIW` footer. The confirmation dialog previews the
       same details before posting, wrapped so a long provider-qualified model
       name is readable rather than clipped. A harness that does not expose
       model or usage telemetry says `unreported` or `unavailable`, and editing
-      the draft still changes it to a user-authored AMF reply without the AI
+      the draft still changes it to a user-authored AIW reply without the AI
       provenance line. The stable final footer remains last, so refreshed
-      threads continue to recognize and collate AMF replies. →
+      threads continue to recognize and collate AIW replies. →
       `src/app/pr_review.rs`, `src/app/state.rs`,
       `src/token_tracking.rs`, `src/ui/dialogs/pr_review.rs`.
       **Provenance is pinned, not re-derived.** `ReplyDraftProvenance`
-      (harness, AMF session id, model snapshot, pre-fix usage baseline) is
+      (harness, AIW session id, model snapshot, pre-fix usage baseline) is
       captured at fix injection — the only moment the drafting session is
       unambiguous — and persisted with the draft as a JSON column
       (`MIGRATION_022`). Reading the pane's *current* fix target instead would
@@ -591,7 +591,7 @@ from the last *N* PRs) is reached from the PR entry flow:
 - [x] **Mark PR comment review as experimental in the UI.** The dashboard help,
       manual PR-number prompt, loading pane, review pane header, and status bar
       now label the PR comment-review flow as experimental, matching the way
-      AMF labels other still-refining workflows. →
+      AIW labels other still-refining workflows. →
       `src/ui/dialogs/help.rs`, `src/ui/dialogs/pr_review.rs`, `src/ui/status.rs`.
 - [x] **PR picker — list PRs to choose from, or enter a number.** A new
       `AppMode::PrPicker` (peer to `PrNumberPrompt`) shows a scrollable, full-screen
@@ -915,7 +915,7 @@ from the last *N* PRs) is reached from the PR entry flow:
       stripped, suggestion-fence stripped, leading `> ` lines stripped, a
       non-diff fence left byte-for-byte intact). → `src/app/pr_review.rs`.
 - [x] **Remove AI review usage stats when sending a PR comment for a fix.**
-      Single-comment and combined-batch prompts omit AMF's generated usage
+      Single-comment and combined-batch prompts omit AIW's generated usage
       summary, including reviews posted under a human GitHub account. Both
       the current collapsed summary and the older Markdown summary are
       recognized. Review feedback, attribution, file references, and diff
@@ -924,13 +924,13 @@ from the last *N* PRs) is reached from the PR entry flow:
       formats, unavailable metrics, and feedback or code examples discussing
       usage. → `src/app/pr_review/domain.rs`, `src/app/pr_review/tests.rs`,
       `CHANGELOG.md`.
-- [x] **AI attribution on AMF-posted comments (honesty — from real use).**
+- [x] **AI attribution on AIW-posted comments (honesty — from real use).**
       A new shared `append_ai_attribution` helper (`src/app/pr_review.rs`)
-      appends `— drafted by Claude via AMF` to AI-authored GitHub content —
+      appends `— drafted by Claude via AIW` to AI-authored GitHub content —
       wired into `build_ai_review`'s inline-comment bodies (Epic E `W` — "post
       as GitHub review"), which previously posted `f.body` verbatim with no
       attribution of their own. The top-level review summary already
-      self-identifies (`"AI review, via AMF."` as its opening line, unchanged),
+      self-identifies (`"AI review, via AIW."` as its opening line, unchanged),
       but each *inline* comment can surface on its own — e.g. GitHub's
       Files-changed view — without the summary in sight, so it needed its own
       marker. Hardcoded to "Claude" rather than a generic `<harness>` slot:
@@ -972,7 +972,7 @@ from the last *N* PRs) is reached from the PR entry flow:
 ### Epic E — AI code review & a learned review-findings memory
 
 Everything up to here triages comments *other people* (and bots) already
-left. This epic adds two coupled capabilities: **AMF generates its own
+left. This epic adds two coupled capabilities: **AIW generates its own
 review of the diff**, and it **remembers what review keeps catching** so
 each review starts smarter than the last. These are the first parts of
 the feature that knowingly spend agent tokens on *generation* (not just
@@ -988,11 +988,11 @@ first), and the reviewer's output (plus comments triaged in the pane)
 
 - [x] **Review-findings memory doc (committed markdown).** A
       version-controlled file at a conventional repo path (default
-      `.amf/review-memory.md`, configurable) that accumulates the team's
+      `.aiw/review-memory.md`, configurable) that accumulates the team's
       recurring code-review findings, grouped by category (concurrency,
       error handling, naming, tests, …). It lives in the repo so it's
       shared, diffable, and hand-editable, and so the AI reviewer can read
-      it directly as context. AMF owns *appends* (dedup-aware, grouped) but
+      it directly as context. AIW owns *appends* (dedup-aware, grouped) but
       never silently rewrites user prose. `review_memory_path(repo,
       configured)` resolves the doc path — a new `AppConfig::review_memory_path:
       Option<String>` overrides the default, relative overrides resolve
@@ -1142,10 +1142,10 @@ first), and the reviewer's output (plus comments triaged in the pane)
       empty string on miss) so the agent checks the team's known issues
       first — and a new `AppConfig::ai_review_skill: Option<String>` (e.g.
       `"review"`) optionally leads the prompt with an existing installed
-      Claude Code review skill/command as the primary methodology, since AMF
+      Claude Code review skill/command as the primary methodology, since AIW
       ships no bundled skill for reviewing a PR diff itself (checked: the
-      repo's own `ai-review.md` command reviews AMF's *tracked-change
-      history*, not a PR diff — unrelated); AMF still owns parsing the
+      repo's own `ai-review.md` command reviews AIW's *tracked-change
+      history*, not a PR diff — unrelated); AIW still owns parsing the
       findings back out either way. **Persistence:** draft findings persist
       in the existing `pr_review_cache` JSON blob (no new table — `PrReview`/
       `PrComment` were already `Serialize`/`Deserialize`), so a same-head-SHA
@@ -1230,7 +1230,7 @@ first), and the reviewer's output (plus comments triaged in the pane)
 
       **Fourth follow-up, same day — the actual root cause.** Neither of the
       above was it. Real-world use hit `claude headless command failed`
-      directly (not a silent 0-finding parse miss). Reproduced outside AMF:
+      directly (not a silent 0-finding parse miss). Reproduced outside AIW:
       `ClaudeLauncher::run_headless`/`spawn_headless` pass the prompt as a
       `-p <prompt>` `argv` element, and Linux caps any single argument at
       `MAX_ARG_STRLEN` (128 KiB, independent of the ~2 MiB total `ARG_MAX`) —
@@ -1328,7 +1328,7 @@ first), and the reviewer's output (plus comments triaged in the pane)
 
       **Eighth follow-up — surface `A` failures as toasts (from real use).** A
       failed background AI-review run called the shared `show_error`, which
-      stored the failure in AMF's dashboard status message. The result handler
+      stored the failure in AIW's dashboard status message. The result handler
       then restored the full-screen PR Triage pane, where that message is not
       rendered, so the user saw the run end without being able to read the
       error. AI-review worker failures now remain logged with their full detail
@@ -1360,7 +1360,7 @@ first), and the reviewer's output (plus comments triaged in the pane)
       deadlocks. Spawn, write, exit-status, and stderr failures name the chosen
       provider and continue through the existing PR Triage error-toast path.
       Since posted findings are no longer necessarily Claude-authored, their
-      attribution is now the accurate provider-neutral `drafted by AI via AMF`.
+      attribution is now the accurate provider-neutral `drafted by AI via AIW`.
       Focused tests cover every runner command, stdin delivery,
       provider-specific stderr, preferred-default picker state, remembered
       choice, and cancellation before spend. → `src/headless.rs`,
@@ -1383,7 +1383,7 @@ first), and the reviewer's output (plus comments triaged in the pane)
       comment's `path`/`line` doesn't land inside the PR's current diff —
       but `gh api`'s stderr for it is just the terse `Unprocessable Entity
       (HTTP 422)` line with no indication of *which* finding is the culprit,
-      and AMF was passing it straight through with no translation. Fixed
+      and AIW was passing it straight through with no translation. Fixed
       with a new `is_review_rejected_entity_error` check (sibling to the
       existing `is_missing_write_scope`, `src/github.rs`) that detects the
       422/"Unprocessable Entity" case and bails with an actionable message
@@ -1424,7 +1424,7 @@ first), and the reviewer's output (plus comments triaged in the pane)
       pre-computed line numbers) by mentally counting from the `@@ -a,b +c,d
       @@` hunk headers — an inherently error-prone arithmetic task, and a
       miscount reproduces identically on every re-run since it's not a
-      function of *when* the diff was fetched. AMF already had the exact
+      function of *when* the diff was fetched. AIW already had the exact
       signal for this: `run_ai_pr_review` matches each finding's `path:line`
       back into the fetched diff via `diff_hunk_for_line`, and a line that
       doesn't correspond to anything in the diff returns `None` — but
@@ -1469,7 +1469,7 @@ first), and the reviewer's output (plus comments triaged in the pane)
       it. `ExtensionConfig` (`src/extension.rs`) gains a
       `review_memory_path: Option<String>` field following the exact
       "project overrides global" shape `final_review_check_command` already
-      established: a project's `{repo}/.amf/config.json` value wins,
+      established: a project's `{repo}/.aiw/config.json` value wins,
       falling back to `merge_project_extension_config`'s global `base`. A
       new `App::configured_review_memory_path(repo)` (`src/app/mod.rs`)
       resolves that project-scoped `ExtensionConfig` value first, then
@@ -1532,11 +1532,11 @@ first), and the reviewer's output (plus comments triaged in the pane)
       shipped; what was undecided was *content* — whether a separate
       cross-project lessons file should be merged on top of each repo's doc,
       or per-repo stay strictly isolated. **Decided: merge one in.** Review
-      lessons split cleanly into house rules (this repo's `.amf/review-memory.md`,
+      lessons split cleanly into house rules (this repo's `.aiw/review-memory.md`,
       committed and shared) and personal habits that follow you between repos,
       and there was no home for the second kind — so they were either retyped
-      per repo or lost. AMF now keeps one at
-      `~/.config/amf/review-memory.md`, resolved by a new
+      per repo or lost. AIW now keeps one at
+      `~/.config/ai_workstation/review-memory.md`, resolved by a new
       `review_memory::global_review_memory_path` (relative overrides anchor to
       the config dir, absolute ones are used as-is, override key
       `AppConfig::global_review_memory_path` — global-only by nature, so
@@ -1592,7 +1592,7 @@ first), and the reviewer's output (plus comments triaged in the pane)
 ## Nice to have
 
 - [x] **BUG — support sequential/multiple PRs for the same feature branch.**
-      When a feature branch is reused for another PR, AMF can keep showing the
+      When a feature branch is reused for another PR, AIW can keep showing the
       previous closed PR instead of the current open one (observed here: the
       feature still reports closed PR #449 while work has moved to PR #450).
       Treat the PR number as changing feature state rather than a permanent
@@ -1732,7 +1732,7 @@ first), and the reviewer's output (plus comments triaged in the pane)
       `[dedicated ● working]` while that exact agent session is thinking or
       running a tool, and `[dedicated idle]` when it is waiting/finished; no
       badge is shown before the first `f` creates the session. The existing
-      hook/plugin messages already carry `amf_feature_session_id`, but AMF
+      hook/plugin messages already carry `aiw_feature_session_id`, but AIW
       previously discarded that precision after using it for token-source
       binding and retained only feature-level `tmux_session` activity. New
       per-feature-session thinking/tool sets preserve those IDs through IPC,
@@ -1759,8 +1759,8 @@ decision and implementation): the cross-project review-memory layer (Epic E
 "Cross-project (global) review-memory layer" — merged in, not isolated),
 which agent session runs fixes (Epic B,
 dedicated-session default), AI-authored content attribution (Epic D "AI
-attribution on AMF-posted comments"), templated-reply channel disclosure
-(Epic C "posted via AMF" footer), conversation-comment grouping (Epic D's
+attribution on AIW-posted comments"), templated-reply channel disclosure
+(Epic C "posted via AIW" footer), conversation-comment grouping (Epic D's
 `PrSortMode::Conversations`), resolve-without-reply behavior (shipped as-is
 — `R` stays independent of `r`), outdated-comment badging (shipped in
 Epic D's pane-clarity item), review-memory rot (Epic E "Prevent
@@ -1793,7 +1793,7 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       final write. If only the global doc has findings, `c` opens directly on
       it; selecting an empty doc is rejected before spending an agent pass.
 - [x] **Split AI Review into its own workflow (resolves the "does AI review
-      belong in this pane" open question).** AMF's own review of a PR's diff
+      belong in this pane" open question).** AIW's own review of a PR's diff
       (`A`/`W`) used to live inside PR Triage, converting each finding into a
       synthetic `PrComment` merged into the same list real GitHub comments
       live in — a fit that kept fighting the triage data model on every
@@ -1875,7 +1875,7 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       on PR #473 made a large Codex-backed review look stuck: the diff was
       roughly 386 KB / 95–100k estimated tokens, while `HeadlessRunner`
       buffered all output with `wait_with_output()` and the running pane could
-      only say "Reviewing diff…" until the process exited. Worse, closing AMF
+      only say "Reviewing diff…" until the process exited. Worse, closing AIW
       during that wait orphaned the ephemeral `codex exec` process and left no
       result to recover. Codex-backed AI reviews now opt into the CLI's
       structured `--json` event stream, drain it while the process is alive,
@@ -1889,7 +1889,7 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       polling, and the rendered running pane. Full suite green (1134 passed,
       1 ignored); `cargo check`, strict clippy, and formatting clean. Restart
       recovery remains separate follow-up work: an in-flight review still
-      belongs to the AMF process that launched it. → `src/headless.rs`,
+      belongs to the AIW process that launched it. → `src/headless.rs`,
       `src/app/ai_review.rs`, `src/app/state.rs`,
       `src/ui/dialogs/ai_review.rs`, `src/app/tests.rs`, `CHANGELOG.md`.
 
@@ -1927,7 +1927,7 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       A completed AI review now retains its effective harness and model,
       elapsed time, and independently optional input, output, cached, and
       provider-total token counts. `W` appends those values, plus the estimate
-      calculated from AMF's configured rates when input and output are both
+      calculated from AIW's configured rates when input and output are both
       known, to the one overall GitHub review body. Inline findings never carry
       the usage block. Each unavailable metric and cost is labelled explicitly,
       and failed or non-postable reviews create no separate status comment.
@@ -2039,7 +2039,7 @@ non-goal for v1 (GitHub `gh` only), not an open question.
     Done (local), Skip (local), and **"Resolve/Reopen thread on GitHub"** —
     the label names GitHub explicitly and the row renders in the theme's
     warning color, distinct from the two local-only rows above it, so the one
-    action that writes anywhere outside AMF doesn't read as just another local
+    action that writes anywhere outside AIW doesn't read as just another local
     toggle. Confirming dispatches into the existing `pr_review_mark_done`/
     `pr_review_skip`/`pr_review_toggle_resolve` unchanged — applied immediately,
     no further confirm step, matching the original single-key behavior since
@@ -2090,7 +2090,7 @@ non-goal for v1 (GitHub `gh` only), not an open question.
 
 - [x] **AI review result persistence (UX — visibility).** When running an AI
       review (`A`), the user could escape back to the pane, navigate away, or
-      close AMF entirely; returning to the PR later showed no indication of
+      close AIW entirely; returning to the PR later showed no indication of
       what happened — no visual marker that a review ran, no success/error
       signal, no "zero findings" message. The result was already cached in
       `pr_review_cache`, but nothing surfaced it. A new `PrReview::last_ai_review:
@@ -2345,14 +2345,14 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       posted `Done in <sha>` replies to all three threads, but the `<sha>` it
       named was the **original commit the comment was filed against**, not a
       commit that actually applied the fix — because the fix hadn't landed
-      yet when the reply went out. Nothing in AMF (or the reply itself)
+      yet when the reply went out. Nothing in AIW (or the reply itself)
       distinguished "reply posted" from "reply posted *and confirmed
       accurate*," and after the real fix commit landed, confirming that the
       threads were in fact resolved required shelling out to `gh api
       graphql` for `isOutdated`/`isResolved` by hand — the existing
       `[outdated]` chip (Epic D pane-clarity item, `normalize` in
       `src/app/pr_review.rs`) only reflects the state of *incoming* review
-      comments, not of AMF's own posted replies, and isn't re-checked after a
+      comments, not of AIW's own posted replies, and isn't re-checked after a
       reply goes out. Two gaps worth closing together: (1) the headless
       reply-posting path should hold off (or clearly caveat, the way the
       interactive `R` flow's `commit_for_done_reply` already caveats a
@@ -2362,35 +2362,35 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       headless or via `R` — the pane should show its post status (posted /
       failed, and later, once GitHub reprocesses it, outdated/resolved) next
       to the reply itself, so confirming a fix landed correctly is a glance
-      in AMF instead of a manual GraphQL query.
+      in AIW instead of a manual GraphQL query.
 
       **Scoped and shipped as two pieces, since the "headless path" that
-      posted the inaccurate reply isn't AMF code at all** — grep confirms
+      posted the inaccurate reply isn't AIW code at all** — grep confirms
       `Done in \`<sha>\`` is built in exactly one place
       (`PrComment`'s `R`-flow reply seeding, `src/app/pr_review.rs`), so the
       "headless/automated path" from the report is an agent working in a PR
       Triage / `pr-continue` session, using its own `gh`/bash access to post a
-      reply on its own initiative — outside any AMF-owned code path. (1)
-      `.claude/commands/amf/pr-continue.md`, the skill this repo already ships
+      reply on its own initiative — outside any AIW-owned code path. (1)
+      `.claude/commands/aiw/pr-continue.md`, the skill this repo already ships
       for "continue work on the PR by addressing review feedback," gained an
       explicit instruction not to post a "done" GitHub reply on its own
       initiative, and — if asked to reply — to reference a commit only after
       it's pushed and confirmed (`git show <sha> -- <path>`) to touch the
       comment's file, mirroring `commit_for_done_reply`'s own caveat logic
       rather than assuming `HEAD` addressed every open comment; it also points
-      at AMF's own PR Triage pane as the preferred reply-posting path, since
+      at AIW's own PR Triage pane as the preferred reply-posting path, since
       that one already derives and caveats the commit. (2) Because a
       headless-posted reply leaves **no local triage record** (it never went
-      through `pr_review_post_reply`), "failed" isn't a state AMF can observe
-      for it — there's no local attempt to have failed. What AMF *can* surface
+      through `pr_review_post_reply`), "failed" isn't a state AIW can observe
+      for it — there's no local attempt to have failed. What AIW *can* surface
       irrespective of who posted the reply: a new `PrComment::replies_in(&self,
       all: &[PrComment])` finds every already-fetched comment whose
       `in_reply_to` targets the selected one (GitHub inline replies always
       target the thread root directly, so this is a flat filter, not a chain
       walk), and the detail pane's new **Replies** section renders each one —
-      author, a `[via AMF]` chip when the reply carries the "posted via AMF"
-      channel-disclosure footer (`reply_posted_via_amf`, the only local signal
-      distinguishing AMF's own post from anyone else's) and, per reply, its
+      author, a `[via AIW]` chip when the reply carries the "posted via AIW"
+      channel-disclosure footer (`reply_posted_via_aiw`, the only local signal
+      distinguishing AIW's own post from anyone else's) and, per reply, its
       thread's live `[outdated]`/`[✓ resolved]` chips — right on the original
       comment. Previously this state only existed as a separate, easy-to-miss
       entry lower in the flat comment list; now confirming "did this thread
@@ -2398,13 +2398,13 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       glance at the comment you're already looking at, on every manual refresh
       (`r`), regardless of whether the reply came from `R`, `n`, or an agent's
       own `gh` call. Unit-tested (`replies_in` finds only same-thread replies;
-      `reply_posted_via_amf` on/off the footer; detail-pane render tests for no
-      section when there are no replies, the via-AMF chip appearing/not
+      `reply_posted_via_aiw` on/off the footer; detail-pane render tests for no
+      section when there are no replies, the via-AIW chip appearing/not
       appearing, and the outdated/resolved chips showing next to the reply). →
-      `.claude/commands/amf/pr-continue.md`, `src/app/pr_review.rs`,
+      `.claude/commands/aiw/pr-continue.md`, `src/app/pr_review.rs`,
       `src/ui/dialogs/pr_review.rs`.
 
-- [x] **Open PR Triage work in a new AMF feature with independently chosen
+- [x] **Open PR Triage work in a new AIW feature with independently chosen
       settings.** The current dedicated triage session may use a different
       harness, but it still inherits the source feature's vibe mode and launch
       flags. Add a `New feature…` fix-target option alongside the existing-live
@@ -2415,7 +2415,7 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       feature in SuperVibe mode and doing review triage in a new Vibeless
       feature.
 
-      Create an isolated worktree/tmux-backed AMF feature so worktree-local
+      Create an isolated worktree/tmux-backed AIW feature so worktree-local
       hooks and permissions for the triage feature do not mutate the source
       feature. Seed it from the PR head and retain an explicit link to the
       source PR and source feature, because Git cannot check out the same branch
@@ -2526,7 +2526,7 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       flow.** Extend the prompt injected by `f` (and each entry in `B`'s
       combined prompt) so the agent does two things in order: make and verify
       the requested change, then write a concise reviewer-facing reply that
-      explains what it changed. The agent must hand that text back to AMF as a
+      explains what it changed. The agent must hand that text back to AIW as a
       draft, not post it to GitHub itself. Capture the latest non-empty draft
       per `PR# + comment id` through a provider-neutral, machine-readable
       handoff (do not scrape free-form terminal output), and persist it in the
@@ -2550,8 +2550,8 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       **Shipped, 2026-07-20.** Every single or combined fix-confirm prompt now
       appends one correlated handoff command per comment. After making and
       validating the change, any built-in harness can pass its proposed reply
-      on stdin to the hidden `amf reply-draft` command; that command sends
-      structured IPC to AMF, so the TUI never scrapes agent terminal prose.
+      on stdin to the hidden `aiw reply-draft` command; that command sends
+      structured IPC to AIW, so the TUI never scrapes agent terminal prose.
       `ReplyDraftRequest` gives each comment a fresh UUID when the dialog is
       built and records the PR head that existed before the fix. Confirming the
       injection activates those ids in the new `pr_comment_reply_drafts`
@@ -2562,15 +2562,15 @@ non-goal for v1 (GitHub `gh` only), not an open question.
 
       `R` now loads the selected comment's captured draft before opening either
       reply kind. A captured draft opens post-ready in the existing editable
-      confirm view. Done drafts append `Done in <sha>` only when AMF finds a
+      confirm view. Done drafts append `Done in <sha>` only when AIW finds a
       commit after the recorded pre-fix head that touched the comment's file;
       this catches adjacent insertions without mislabeling the older commit
       that originally introduced an unchanged commented line. The handoff
       prompt tells the agent not to guess a hash.
       Without a draft, Done still uses `commit_for_done_reply` and Not needed
       still opens empty in edit mode. Successful posting consumes the stored
-      draft and uses the accurate `— drafted by AI via AMF` footer, while
-      non-agent templates retain `— posted via AMF`; both still require the
+      draft and uses the accurate `— drafted by AI via AIW` footer, while
+      non-agent templates retain `— posted via AIW`; both still require the
       user's explicit GitHub-write confirmation. Tests cover the CLI contract,
       single/batch prompt correlation, request replacement and stale-response
       rejection, IPC persistence, injection activation, draft preference for
@@ -2592,7 +2592,7 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       skipped, invalidated by a new head SHA, or otherwise no longer
       publishable. The indicator must be backed by the persisted
       `ai_review_cache`, not only in-memory background-job state, so it also
-      appears after leaving the pane or restarting AMF. It should be
+      appears after leaving the pane or restarting AIW. It should be
       actionable through PR Triage's existing `A` entry point, reopening the
       matching AI Review rather than starting a duplicate run. Do not show a
       pending badge for a zero-finding, failed, fully skipped, or fully
@@ -2601,9 +2601,9 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       The generation pass must also produce and persist a short overall
       summary of the full review (one to three useful sentences covering the
       main themes or risk), and `W` must use that as the GitHub review body
-      instead of the fixed `AI review, via AMF.` placeholder. Show the summary
+      instead of the fixed `AI review, via AIW.` placeholder. Show the summary
       in the existing editable post-confirm dialog so the user can revise it
-      before the GitHub write, and retain clear AI-via-AMF attribution without
+      before the GitHub write, and retain clear AI-via-AIW attribution without
       making the attribution itself the summary. Generate it in the same
       agent pass as the findings rather than spending a second review call;
       persist it beside the findings so reopening a pending review does not
@@ -2636,9 +2636,9 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       without regenerating them.
 
       The same headless pass now emits a one-to-three sentence summary before
-      its findings. AMF parses and persists that summary beside the findings,
+      its findings. AIW parses and persists that summary beside the findings,
       seeds the existing editable `W` confirmation with it, and adds separate
-      AI-via-AMF attribution to the final GitHub body. Summary-only clean
+      AI-via-AIW attribution to the final GitHub body. Summary-only clean
       reviews no longer look like parse failures; older/malformed cached
       output without a summary retains the legacy placeholder.
 
@@ -2716,21 +2716,21 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       `src/app/state.rs`, `src/ui/dialogs/ai_review.rs`, `src/app/tests.rs`,
       `docs/screenshots/ai-review-picker-back-navigation/`, `CHANGELOG.md`.
 
-- [x] **Hide or de-emphasize AMF's own follow-up replies in the PR Triage
+- [x] **Hide or de-emphasize AIW's own follow-up replies in the PR Triage
       list.** Replies posted by the `R` flow already end with the exact
-      `— posted via AMF` footer, and AI Review findings posted by AMF carry the
-      corresponding `— drafted by AI via AMF` footer. Use these durable markers
+      `— posted via AIW` footer, and AI Review findings posted by AIW carry the
+      corresponding `— drafted by AI via AIW` footer. Use these durable markers
       together with the reply's parent relationship to distinguish follow-up
       history from standalone findings after a refresh. An inline
       `Done in \`<sha>\`.`/not-needed reply should remain visible under its root
       comment's existing **Replies** section, but should not also appear as a
       normal actionable row, inflate the open-comment count, or be offered back
       to the agent as another fix.
-      For orphaned AMF follow-up replies whose parent row was not fetched,
+      For orphaned AIW follow-up replies whose parent row was not fetched,
       retain access in a muted/gray presentation rather than silently
       discarding them. Standalone comments, including AI Review findings posted
-      through AMF, remain normal actionable work. Match only AMF's exact reply
-      attribution footers so ordinary comments that merely mention AMF are not
+      through AIW, remain normal actionable work. Match only AIW's exact reply
+      attribution footers so ordinary comments that merely mention AIW are not
       hidden. Add normalization/filter/count and render coverage, including a
       refresh after posting through `R`, an AI Review-authored comment, and an
       unrelated human reply that must remain visible and actionable.
@@ -2741,17 +2741,17 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       and in its root comment's **Replies** section, but
       `PrReviewState::visible_indices` collates away the duplicate list row when
       that root is present. An orphaned follow-up remains visible with a muted
-      `[via AMF]` context-only treatment. Standalone findings — including those
+      `[via AIW]` context-only treatment. Standalone findings — including those
       posted by AI Review — retain the normal open count, fix, batch, reply,
       mark, and memory actions. Exact-marker matching leaves ordinary human
-      replies that merely mention AMF visible and actionable. Normalization,
+      replies that merely mention AIW visible and actionable. Normalization,
       refresh-shaped classification, orphan/filter/count, fix/batch, and
       list/detail render regressions cover the complete flow. Full suite green
       (1234 passed, 1 ignored); strict Clippy and formatting clean. →
       `src/app/ai_review.rs`,
       `src/app/pr_review.rs`, `src/app/state.rs`, `src/app/tests.rs`,
       `src/ui/dialogs/pr_review.rs`,
-      `docs/screenshots/pr-triage-amf-outbound-comments/`, `CHANGELOG.md`.
+      `docs/screenshots/pr-triage-aiw-outbound-comments/`, `CHANGELOG.md`.
 
 - [x] **Show in-progress AI Review generation on the dashboard's PR item.**
       While an AI Review is generating for a feature, append an `AI review`
@@ -2807,7 +2807,7 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       Unit-tested (helper output; `batch_id` round-trip + stickiness; sibling
       query; first-writer-wins cost; sibling-jump cycling; batched reply
       disclosure; AI-review correlation incl. the partial-batch case);
-      `cargo test -j2 --bin amf` 2393 passed, fmt + clippy clean. →
+      `cargo test -j2 --bin aiw` 2393 passed, fmt + clippy clean. →
       `src/db/migrations.rs`, `src/db/pr_comment_triage.rs`, `src/db/mod.rs`,
       `src/app/fix_cost.rs`, `src/app/pr_review.rs`, `src/app/ai_review.rs`,
       `src/handlers/pr_review.rs`, `src/ui/dialogs/pr_review.rs`,
@@ -2849,7 +2849,7 @@ non-goal for v1 (GitHub `gh` only), not an open question.
       (accessor round-trip; prompt shape incl. follow-up trimming;
       stuck-`running` reconcile on load; the four `a` actions; the read-only
       guard predicate per harness + that the investigate path never enters the
-      writable fix machinery). `cargo test -j 2 --bin amf` 2427 passed, `fmt` +
+      writable fix machinery). `cargo test -j 2 --bin aiw` 2427 passed, `fmt` +
       `clippy --all-targets` clean.
 
       **Shipped, 2026-09-02.**
@@ -2896,4 +2896,4 @@ agent, no writes) — a good first slice to ship and validate the fetch /
 normalize / strip pipeline before wiring in any agent or GitHub writes.
 The token discipline (metadata-first, minimal fix prompts, warm-session
 reuse, caching) is what makes high-volume review loops affordable and is
-the reason to do this in AMF rather than in the agent chat directly.
+the reason to do this in AIW rather than in the agent chat directly.

@@ -100,10 +100,10 @@ def click(text):
 def tauri(command, args=None):
     """Runs a Tauri command from the page and returns its JSON result."""
     evaluate(
-        f"window.__amfShot=undefined;window.__TAURI_INTERNALS__.invoke({json.dumps(command)},{json.dumps(args or {})}).then(v=>window.__amfShot={{ok:v}},e=>window.__amfShot={{err:e}})"
+        f"window.__aiwShot=undefined;window.__TAURI_INTERNALS__.invoke({json.dumps(command)},{json.dumps(args or {})}).then(v=>window.__aiwShot={{ok:v}},e=>window.__aiwShot={{err:e}})"
     )
-    wait("window.__amfShot!==undefined")
-    result = evaluate("window.__amfShot")
+    wait("window.__aiwShot!==undefined")
+    result = evaluate("window.__aiwShot")
     assert "err" not in result, result
     return result["ok"]
 
@@ -218,7 +218,7 @@ def open_changes():
 
 import os
 import sqlite3
-mode = os.environ["AMF_PROOF_MODE"]
+mode = os.environ["AIW_PROOF_MODE"]
 
 def choose_rust():
     choose_file("invoice.rs")
@@ -232,7 +232,7 @@ try:
     set_dark(True)
     (repo / "invoice.rs").write_text("// Round currency at the boundary.\npub fn rounded_total(subtotal: f64, tax_rate: f64) -> f64 {\n    let total = subtotal * (1.0 + tax_rate);\n    (total * 100.0).round() / 100.0\n}\n")
     install_parser("rust")
-    with sqlite3.connect(pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "amf/amf.db") as db:
+    with sqlite3.connect(pathlib.Path(os.environ["XDG_CONFIG_HOME"]) / "ai_workstation/aiw.db") as db:
         db.execute("UPDATE projects SET collapsed=0")
         db.execute("UPDATE features SET collapsed=0")
         db.execute("UPDATE store_meta SET value=CAST(value AS INTEGER)+1 WHERE key='store_version'")

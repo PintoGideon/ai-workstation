@@ -70,10 +70,8 @@ impl WorktreeManager {
 
     /// Create a new worktree for a branch
     pub fn create(repo: &Path, name: &str, branch: &str) -> Result<PathBuf> {
-        let worktree_dir = repo.join(".worktrees");
-        std::fs::create_dir_all(&worktree_dir)?;
-
-        let worktree_path = worktree_dir.join(name);
+        // FORK: worktrees live outside the repo (fork::worktree_paths).
+        let worktree_path = crate::fork::worktree_paths::new_worktree_path(repo, name);
 
         if worktree_path.exists() {
             bail!("Worktree path already exists: {}", worktree_path.display());
@@ -86,6 +84,20 @@ impl WorktreeManager {
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false);
+
+        // FORK: refuse a branch that is already checked out before creating
+        // anything on disk.
+        if branch_exists
+            && let Some(at) = crate::fork::worktree_paths::branch_checked_out_at(repo, branch)
+        {
+            bail!(
+                "{}",
+                crate::fork::worktree_paths::branch_in_use_message(branch, Some(&at))
+            );
+        }
+        if let Some(parent) = worktree_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
 
         let output = if branch_exists {
             Command::new("git")
@@ -109,6 +121,8 @@ impl WorktreeManager {
         };
 
         if !output.status.success() {
+            // FORK: leave no empty worktree folders behind.
+            crate::fork::worktree_paths::prune_empty_dirs(repo, &worktree_path);
             let stderr = String::from_utf8_lossy(&output.stderr);
             bail!("git worktree add failed: {}", stderr.trim());
         }
@@ -152,19 +166,23 @@ impl WorktreeManager {
             std::fs::write(&dest_settings, serde_json::to_string_pretty(&dest)? + "\n")?;
         }
 
+        // FORK: copy the git-ignored files (.env*) a fresh checkout needs.
+        crate::fork::worktree_prep::prepare_new_worktree(repo, &worktree_path);
+
         Ok(worktree_path)
     }
 
     /// Create a new worktree branched off a specific base branch/commit.
     /// Runs `git worktree add -b {new_branch} {path} {base}`.
     pub fn create_from(repo: &Path, name: &str, new_branch: &str, base: &str) -> Result<PathBuf> {
-        let worktree_dir = repo.join(".worktrees");
-        std::fs::create_dir_all(&worktree_dir)?;
-
-        let worktree_path = worktree_dir.join(name);
+        // FORK: worktrees live outside the repo (fork::worktree_paths).
+        let worktree_path = crate::fork::worktree_paths::new_worktree_path(repo, name);
 
         if worktree_path.exists() {
             bail!("Worktree path already exists: {}", worktree_path.display());
+        }
+        if let Some(parent) = worktree_path.parent() {
+            std::fs::create_dir_all(parent)?;
         }
 
         let output = Command::new("git")
@@ -181,6 +199,8 @@ impl WorktreeManager {
             .context("Failed to create worktree from base")?;
 
         if !output.status.success() {
+            // FORK: leave no empty worktree folders behind.
+            crate::fork::worktree_paths::prune_empty_dirs(repo, &worktree_path);
             let stderr = String::from_utf8_lossy(&output.stderr);
             bail!("git worktree add failed: {}", stderr.trim());
         }
@@ -221,6 +241,9 @@ impl WorktreeManager {
 
             std::fs::write(&dest_settings, serde_json::to_string_pretty(&dest)? + "\n")?;
         }
+
+        // FORK: copy the git-ignored files (.env*) a fresh checkout needs.
+        crate::fork::worktree_prep::prepare_new_worktree(repo, &worktree_path);
 
         Ok(worktree_path)
     }
@@ -295,6 +318,8 @@ impl WorktreeManager {
                 stderr.trim()
             );
         }
+        // FORK: drop now-empty app-owned worktree folders.
+        crate::fork::worktree_paths::prune_empty_dirs(repo, worktree_path);
 
         Ok(())
     }

@@ -267,7 +267,7 @@ impl App {
         match selected_actionable {
             Some(true) => {}
             Some(false) => {
-                self.message = Some("AMF follow-up replies are shown for context only".to_string());
+                self.message = Some("AIW follow-up replies are shown for context only".to_string());
                 return;
             }
             None => {
@@ -385,7 +385,7 @@ impl App {
             return;
         }
         if !comment.is_actionable() {
-            self.message = Some("AMF follow-up replies are shown for context only".to_string());
+            self.message = Some("AIW follow-up replies are shown for context only".to_string());
             return;
         }
         // A captured draft is the fixing agent's description of what it
@@ -560,9 +560,9 @@ impl App {
         }
 
         // The posted body carries AI authorship attribution for a captured
-        // agent draft and channel-only AMF attribution for a deterministic or
+        // agent draft and channel-only AIW attribution for a deterministic or
         // user-written reply. The local note stays unmarked because it is
-        // AMF's own record, not content read back from GitHub.
+        // AIW's own record, not content read back from GitHub.
         let posted_body =
             append_reply_attribution(&body, agent_drafted, generation_metadata.as_ref());
         let github = self.pr_review_work.github();
@@ -627,7 +627,7 @@ impl App {
         Ok(true)
     }
 
-    /// Record which session AMF is about to ask for a reply draft, at the one
+    /// Record which session AIW is about to ask for a reply draft, at the one
     /// moment the answer is unambiguous: the fix injection that resolved it.
     /// `None` for a non-agent window, which cannot produce a draft anyway.
     pub(crate) fn reply_draft_provenance(
@@ -640,9 +640,10 @@ impl App {
         let session = feature.sessions.get(si)?;
         let harness = match session.kind {
             SessionKind::Claude => "Claude",
-            SessionKind::Opencode => "Opencode",
             SessionKind::Codex => "Codex",
             SessionKind::Pi => "Pi",
+            SessionKind::Gemini => "Gemini", // FORK
+            SessionKind::Cursor => "Cursor", // FORK
             _ => return None,
         };
         Some(ReplyDraftProvenance {
@@ -677,21 +678,6 @@ impl App {
                     .flatten()
                     .and_then(|metadata| metadata.model)
             }),
-            SessionKind::Opencode => {
-                crate::app::opencode_storage::read_sidebar_data(&feature.workdir, source_id)
-                    .and_then(|sidebar| match (sidebar.provider, sidebar.model) {
-                        (Some(provider), Some(model))
-                            if !provider.trim().is_empty()
-                                && !provider.eq_ignore_ascii_case(model.trim()) =>
-                        {
-                            Some(format!("{}/{}", provider.trim(), model.trim()))
-                        }
-                        (_, Some(model)) if !model.trim().is_empty() => {
-                            Some(model.trim().to_string())
-                        }
-                        _ => None,
-                    })
-            }
             SessionKind::Codex => source_id
                 .and_then(|id| self.cached_codex_session_model(&feature.workdir, id))
                 .map(ToOwned::to_owned)
@@ -714,7 +700,7 @@ impl App {
         })
     }
 
-    /// Locate a session by its AMF id, anywhere in the store. Deliberately not
+    /// Locate a session by its AIW id, anywhere in the store. Deliberately not
     /// scoped to the pane's fix target: a draft's provenance names one specific
     /// session, and it must resolve to that session or to nothing.
     pub(super) fn feature_session_by_id(

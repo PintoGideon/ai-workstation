@@ -9,7 +9,7 @@ const view: ReviewView = {
   workflow_id: "review", revision: 4, target: { project_id: "project", feature_id: "feature" },
   feature_name: "Feature", branch: "feature", base_ref: "main", selected_path: "code.rs",
   general_feedback: "Overall saved", has_prior_review: true, error: null, save_error: null, applied_suggestions: [], history: null, summary: null, check_command: null, check: null, finish: null,
-  ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, question_running: false, questions: [], question_error: null, comment_draft: null, ready_comment: null, harnesses: ["claude", "codex", "opencode", "pi"], message: null },
+  ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, question_running: false, questions: [], question_error: null, comment_draft: null, ready_comment: null, harnesses: ["claude", "codex", "pi"], message: null },
   files: [{ diff: { path: "code.rs", old_path: null, status: "modified", additions: 1, deletions: 1, is_binary: false, patch: "",
     hunks: [{ header: "@@ -1,1 +1,1 @@", lines: [
       { kind: "removed", text: "-before", old_line: 1, new_line: null },
@@ -594,7 +594,7 @@ it("keeps a multiline question through pre-call cancellation, failed commands an
   expect(screen.getByRole("alertdialog", { name: "Discard unsaved review draft" })).toBeTruthy();
 });
 
-it.each(["claude", "codex", "opencode", "pi"])("asks selected source coordinates with %s and shows returned answers", async (harness) => {
+it.each(["claude", "codex", "pi"])("asks selected source coordinates with %s and shows returned answers", async (harness) => {
   const { onAct, update } = mount(noThreadsView);
   fireEvent.click(screen.getAllByRole("button", { name: "Select line 1" })[0]);
   fireEvent.click(screen.getByRole("button", { name: "Ask about selection" }));

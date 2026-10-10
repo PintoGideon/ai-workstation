@@ -16,7 +16,7 @@
 
 ## Why / problem
 
-AMF can show cumulative token usage and cost for Claude, Codex, and
+AIW can show cumulative token usage and cost for Claude, Codex, and
 opencode sessions, including a feature-level aggregate. That answers
 "what has this session spent?", but it does not yet help the user make
 the decisions that prevent avoidable usage:
@@ -24,38 +24,38 @@ the decisions that prevent avoidable usage:
 - Features and presets cannot select a model, reasoning effort, or
   provider variant. Every interactive session starts with whatever the
   harness currently considers its default.
-- The visible usage is primarily a lifetime total. AMF does not show
+- The visible usage is primarily a lifetime total. AIW does not show
   the latest turn, recent burn rate, cache effectiveness, or estimated
   current-context pressure, so a long-running session can become
   expensive without an early signal.
 - Session continuation is provider-dependent rather than a deliberate
-  AMF policy. Claude normally resumes its stored session, while normal
+  AIW policy. Claude normally resumes its stored session, while normal
   Codex and opencode restarts do not consistently resume their stored
   provider session. Neither path offers a clear "resume, compact, or
   start fresh with a handoff" choice.
 - Forking with context defaults on and exports the entire textual
   Claude transcript selected as "latest for this workdir". It is not
-  bound to the selected AMF session, has no size limit, does not work
+  bound to the selected AIW session, has no size limit, does not work
   for other harnesses, and is written to `.claude/context.md` without
   an explicit handoff to the newly launched agent.
 - Review Mode has the agent maintain `.claude/review-notes.md` batch by
   batch. Historically the expensive part was the per-batch *read* of that
   growing file and its context carry; that read is now removed (the agent
-  blind-appends — see §7), leaving only the writes, which AMF could still
+  blind-appends — see §7), leaving only the writes, which AIW could still
   derive from the diff plus on-demand walkthroughs.
-- Several small AMF helper jobs use a paid model. Session summaries
+- Several small AIW helper jobs use a paid model. Session summaries
   always invoke headless Claude even for another harness. Review
   walkthroughs and changeset overviews are cached only in the open
   viewer, so unchanged work can be regenerated after reopening.
 - Cost calculation uses one global pricing table whose defaults are
   Claude Sonnet prices. A mixed-model or mixed-provider workspace can
   therefore show a plausible-looking but incorrect dollar total.
-- AMF injects persistent instructions and six AMF skills into each
+- AIW injects persistent instructions and six AIW skills into each
   supported worktree. Even small always-visible descriptions and
   instructions compound when they are included in every turn.
 
-The goal of this plan is to move AMF from **usage accounting** to
-**usage management** while keeping control with the user. AMF should
+The goal of this plan is to move AIW from **usage accounting** to
+**usage management** while keeping control with the user. AIW should
 make the efficient path obvious, provide bounded one-key transitions
 when context gets large, and remove token-consuming work that can be
 done locally.
@@ -64,7 +64,7 @@ done locally.
 
 - **Measure before enforcing.** Usage warnings must be based on
   provider-specific data and clearly labeled as exact or estimated.
-- **Use native harness controls.** AMF should configure and invoke each
+- **Use native harness controls.** AIW should configure and invoke each
   harness's supported model, effort, compaction, and output-limit
   controls rather than inventing a second context implementation.
 - **Never destroy context silently.** Compaction and fresh-session
@@ -80,7 +80,7 @@ done locally.
   selectable profile, not a universal default. Users can escalate a
   difficult task without rebuilding the session.
 - **Keep telemetry local.** Usage history, budgets, and recommendations
-  stay in AMF's local SQLite store unless the user explicitly exports
+  stay in AIW's local SQLite store unless the user explicitly exports
   them.
 - **Do not regress startup.** Reuse incremental provider parsing from
   the usage and startup-performance work; do not add new recursive
@@ -120,7 +120,7 @@ Keep **requested configuration** separate from **observed model**.
 Users can change models inside a harness, so token readers should record
 the model reported by each provider event or transcript whenever
 available. The UI shows a mismatch when the observed model no longer
-matches the AMF profile.
+matches the AIW profile.
 
 Add a separate utility-inference profile. A one-line session summary
 should not silently inherit the expensive model selected for a difficult
@@ -168,7 +168,7 @@ behavior.
 ### 3. Context-pressure UI and budgets
 
 Add a compact context indicator to session rows and the selected-session
-sidebar. Prefer a percentage when AMF knows the observed model's context
+sidebar. Prefer a percentage when AIW knows the observed model's context
 window; otherwise show the estimated active token count and an
 "estimated" marker. The expanded view should include:
 
@@ -185,11 +185,11 @@ levels:
 - Context warning thresholds, such as 60%, 80%, and 95%.
 - Cumulative token or dollar warning thresholds.
 - Per-utility-call maximum input and output budgets.
-- Optional confirmation before AMF submits the next composer prompt
+- Optional confirmation before AIW submits the next composer prompt
   after a budget is exceeded.
 
 Warnings appear as a dashboard badge/toast and a modal when the user
-next enters or submits through AMF. AMF cannot reliably enforce a hard
+next enters or submits through AIW. AIW cannot reliably enforce a hard
 stop when the user types directly into an embedded harness pane, so the
 UI must call these **soft budgets**, not billing limits. Never kill a
 running process or interrupt an in-flight tool call solely for budget
@@ -213,7 +213,7 @@ viewing a session. Harness adapters expose capabilities such as
 actions are hidden rather than emulated badly.
 
 Compaction is user-triggered because it costs a summarization step and
-can discard details. AMF should preview the estimated context pressure,
+can discard details. AIW should preview the estimated context pressure,
 identify the provider action it will send, and preserve the existing
 session ID so the user can return if the compacted result is poor.
 
@@ -243,7 +243,7 @@ profile. Cap both source material and generated output, show the
 estimated utility cost before generation, and let the user edit the
 handoff before launching.
 
-Store handoffs in a gitignored `.amf/` or provider-neutral worktree
+Store handoffs in a gitignored `.aiw/` or provider-neutral worktree
 location rather than `.claude/`. Seed the new session's composer with a
 short explicit instruction to read the handoff; do not assume a harness
 will discover the file automatically.
@@ -254,7 +254,7 @@ explicit escape hatch with a visible size estimate and hard cap.
 
 ### 6. Token-aware utility inference and caching
 
-Route all AMF-owned headless calls through `HeadlessRunner` and attach a
+Route all AIW-owned headless calls through `HeadlessRunner` and attach a
 task class:
 
 - `summary`
@@ -296,8 +296,8 @@ cap accumulated Q&A by token size rather than characters alone.
 > — a standalone investigation of how to take the `.claude/review-notes.md`
 > read/rewrite cost off the primary agent. Its recommendation is to **start
 > with a one-line instruction change** (tell the agent to blind-append and never
-> read the file — the read is redundant with dedup AMF already runs every turn),
-> and only build a model-free AMF notes writer + opt-in headless enrichment pass
+> read the file — the read is redundant with dedup AIW already runs every turn),
+> and only build a model-free AIW notes writer + opt-in headless enrichment pass
 > if that proves insufficient. Two side findings: the "before every Edit or
 > Write" framing below is stale (the shipped `CLAUDE.local.md` block batches per
 > logical group), and Review Mode only reaches Claude today
@@ -308,13 +308,13 @@ cap accumulated Q&A by token size rather than characters alone.
 > (Option F). The per-batch read and its context carry — the dominant cost
 > terms — are gone; `archive_review_notes` still collapses to the newest note
 > per file after every turn, so blind-appended duplicates are harmless. Options
-> I (AMF-filtered changed-file list) and K (terser section format) and the
-> AMF-driven writer below remain deferred to Step 2, pending dogfood results.
+> I (AIW-filtered changed-file list) and K (terser section format) and the
+> AIW-driven writer below remain deferred to Step 2, pending dogfood results.
 
 Stop requiring a note before every Edit or Write in
 `ensure_review_claude_md`. Replace it with:
 
-- Local changed-file and diff metadata collected by AMF.
+- Local changed-file and diff metadata collected by AIW.
 - An optional single developer rationale per file or review round.
 - Existing on-demand walkthrough generation when the reviewer wants a
   semantic explanation and no rationale exists.
@@ -337,18 +337,18 @@ and deterministic warnings for:
 - Prompts that could reference `path:line`, a command, plan, TODO, or
   review comment instead of duplicating content.
 
-Integrate the indicator with AMF's composer, prompt-library injection,
+Integrate the indicator with AIW's composer, prompt-library injection,
 TODO launch, PR-comment fixes, and plan synthesis. Warnings are advisory
 and require no model call.
 
 Add an instruction-size audit in the debug/config view:
 
-- Measure AMF-owned blocks injected into `CLAUDE.local.md` or
+- Measure AIW-owned blocks injected into `CLAUDE.local.md` or
   `AGENTS.md`.
-- List installed AMF skill names and description sizes.
+- List installed AIW skill names and description sizes.
 - Shorten always-visible descriptions and move specialized guidance to
   on-demand/manual commands where each harness supports it.
-- Add snapshot tests that enforce size budgets for AMF-owned persistent
+- Add snapshot tests that enforce size budgets for AIW-owned persistent
   instructions.
 
 Expose provider-native tool-output caps and compaction/pruning settings
@@ -379,7 +379,7 @@ automatically change a feature's profile based on analytics.
 ### 10. AI ecosystem update checks and capability registry
 
 Models, effort controls, context windows, prices, CLI flags, usage-event
-schemas, and provider defaults change independently and frequently. AMF
+schemas, and provider defaults change independently and frequently. AIW
 needs an easy way to discover drift without requiring a maintainer to
 re-audit every harness manually or waiting for a broken session launch.
 
@@ -387,7 +387,7 @@ Add a provider capability registry with two layers:
 
 - **Shipped knowledge:** the model aliases, effort/variant values,
   context limits, pricing metadata, launch flags, compaction actions,
-  and transcript/event shapes known when the AMF release was built.
+  and transcript/event shapes known when the AIW release was built.
 - **Observed installation:** installed harness version, locally probed
   help/capability output, models visible to the user's configured
   account where a provider offers a safe listing command, and the last
@@ -404,7 +404,7 @@ CLI/doctor command. It should show, per harness:
 - Known context window and price metadata, including its source and
   freshness date.
 - Unknown flags, removed model aliases, new unrecognized effort values,
-  or provider event fields AMF is currently ignoring.
+  or provider event fields AIW is currently ignoring.
 - A copyable diagnostic report that omits credentials, prompts,
   transcript content, and other sensitive values.
 
@@ -412,19 +412,19 @@ Provide an explicit **Recheck AI capabilities** action. Local CLI/version
 and `--help` probes may run automatically after a detected binary version
 change, but model-catalog or documentation/network checks must be
 user-triggered, cached, and allowed to fail offline. Never make a network
-request or enumerate account models on every AMF startup.
+request or enumerate account models on every AIW startup.
 
 The registry should distinguish three states instead of treating support
 as a boolean:
 
-- `Known`: verified by AMF's shipped knowledge or a successful probe.
+- `Known`: verified by AIW's shipped knowledge or a successful probe.
 - `ObservedUnknown`: reported by the installed harness/provider but not
-  understood by this AMF version.
+  understood by this AIW version.
 - `Unavailable`: explicitly absent from the installed version/account.
 
 An unknown model or effort value should remain selectable through an
-advanced/custom field, with a warning, so AMF does not block a newly
-released capability while awaiting an AMF release. Conversely, AMF
+advanced/custom field, with a warning, so AIW does not block a newly
+released capability while awaiting an AIW release. Conversely, AIW
 should not silently rewrite a removed model alias or profile. Offer a
 previewed migration and preserve the previous configuration until the
 user accepts it.
@@ -447,7 +447,7 @@ assumed forever. At the time this plan was written (2026-07-17):
 | Resume exact session | Yes | Yes | Yes | Needs audit |
 | Native compaction/config | Yes | Yes | Yes | Unverified |
 | Local per-session usage source | Yes | Yes | Yes | No current integration |
-| AMF headless utility runner | Yes | Yes | Yes | Limited/unverified |
+| AIW headless utility runner | Yes | Yes | Yes | Limited/unverified |
 
 Keep the adapter capability-driven. A provider upgrade that removes or
 renames a flag should disable that control with a clear debug entry,
@@ -469,7 +469,7 @@ not prevent the session from launching.
 - [~] Remove the Review Mode instruction requiring a note before every
       edit and retain on-demand walkthrough behavior. _Step 1 done: the
       agent now blind-appends and never reads `.claude/review-notes.md`
-      (Option F). Removing the write requirement in favour of AMF-derived
+      (Option F). Removing the write requirement in favour of AIW-derived
       metadata is deferred to Step 2._
 - [ ] Add tests proving mixed models do not use a single default price,
       a summary can be generated without a headless call, and Review
@@ -478,7 +478,7 @@ not prevent the session from launching.
 Acceptance criteria:
 
 - Mixed-provider token counts remain visible, but dollar cost is shown
-  only when AMF has a matching price.
+  only when AIW has a matching price.
 - The dashboard can show the latest turn separately from lifetime use.
 - Routine session summaries consume no model tokens by default.
 - Enabling Review Mode no longer adds an agent-authored tool call before
@@ -596,7 +596,7 @@ Acceptance criteria:
 
 ### P4 — Utility inference and persistent caching
 
-- [ ] Inventory every AMF-owned headless call and assign a task class.
+- [ ] Inventory every AIW-owned headless call and assign a task class.
 - [ ] Route direct `ClaudeLauncher::run_headless` callers through
       `HeadlessRunner` or a local implementation.
 - [ ] Add per-task input/output budgets and preflight estimates.
@@ -610,7 +610,7 @@ Acceptance criteria:
 
 Acceptance criteria:
 
-- No AMF utility silently hardcodes Claude when a local or configured
+- No AIW utility silently hardcodes Claude when a local or configured
   harness path exists.
 - Reopening an unchanged review walkthrough or overview costs zero
   additional tokens.
@@ -621,9 +621,9 @@ Acceptance criteria:
 
 - [ ] Add local prompt-size estimates and large-paste/repeated-context
       warnings to the steering analyzer.
-- [ ] Integrate warnings with composer and AMF-generated prompt entry
+- [ ] Integrate warnings with composer and AIW-generated prompt entry
       points without blocking submission.
-- [ ] Audit and minimize AMF-owned always-loaded instructions.
+- [ ] Audit and minimize AIW-owned always-loaded instructions.
 - [ ] Audit skill descriptions and use provider-appropriate on-demand
       visibility where supported.
 - [ ] Add instruction/skill size budgets and regression tests.
@@ -633,9 +633,9 @@ Acceptance criteria:
 
 Acceptance criteria:
 
-- AMF can warn about an avoidable large prompt without making a model
+- AIW can warn about an avoidable large prompt without making a model
   call.
-- AMF-owned persistent instructions have tested size ceilings.
+- AIW-owned persistent instructions have tested size ceilings.
 - Output reduction never removes access to the full raw command output.
 
 ### P6 — Budgets and efficiency analytics
@@ -653,7 +653,7 @@ Acceptance criteria:
 Acceptance criteria:
 
 - Historical samples grow with usage changes, not every sync tick.
-- Users can identify the sessions and AMF utility tasks responsible for
+- Users can identify the sessions and AIW utility tasks responsible for
   recent usage.
 - Recommendations never change a profile or stop a session
   automatically.
@@ -677,7 +677,7 @@ expensive.
 Finish P2 and P3. Deliver deliberate resume/compact/fresh behavior and
 bounded structured handoffs across supported harnesses.
 
-### Slice 4 — AMF-owned inference discipline
+### Slice 4 — AIW-owned inference discipline
 
 Ship P4 and P5. Centralize utility calls, cache safe results, add prompt
 hygiene, and minimize persistent instruction/tool-output overhead.
@@ -689,22 +689,22 @@ which recommendations are useful rather than noisy.
 
 ## Success criteria
 
-- No AMF workflow includes a complete transcript by default.
-- No paid AMF utility call lacks an explicit model/profile and bounded
+- No AIW workflow includes a complete transcript by default.
+- No paid AIW utility call lacks an explicit model/profile and bounded
   input/output policy.
 - Repeating an unchanged cacheable utility action launches no model
   process.
-- Model-aware costs are correct or explicitly unknown; AMF never prices
+- Model-aware costs are correct or explicitly unknown; AIW never prices
   one provider as another silently.
 - Latest-turn/context pressure is visible separately from cumulative
   usage.
 - Review Mode no longer requires agent-authored prose before every edit.
 - New sessions can deliberately resume, compact, or start fresh with a
   bounded handoff across every harness that supports the action.
-- AMF exposes a cached compatibility report for installed harness
+- AIW exposes a cached compatibility report for installed harness
   versions, models, effort controls, context metadata, and unknown
   provider changes, with a user-triggered recheck action.
-- AMF adds no unbounded transcript scans or per-feature background
+- AIW adds no unbounded transcript scans or per-feature background
   workers to the normal refresh path.
 - After a dogfood baseline exists, release notes report measured changes
   in context size, utility cache hits, full-history resumes, and cost per
@@ -748,17 +748,17 @@ which recommendations are useful rather than noisy.
 - Where should provider/model price updates come from? The initial
   design should remain local/configurable rather than requiring network
   access at startup.
-- Which sources should AMF trust for model catalogs, effort values,
+- Which sources should AIW trust for model catalogs, effort values,
   context windows, and deprecation notices: installed CLI output,
-  provider APIs, official documentation metadata, or a versioned AMF
+  provider APIs, official documentation metadata, or a versioned AIW
   catalog? The report should display provenance rather than merge
   conflicting values silently.
-- Should budget state be per AMF `FeatureSession`, per provider session,
-  or both when multiple AMF windows intentionally resume the same
+- Should budget state be per AIW `FeatureSession`, per provider session,
+  or both when multiple AIW windows intentionally resume the same
   provider session?
-- How should AMF estimate active context for providers whose transcript
+- How should AIW estimate active context for providers whose transcript
   reports cumulative billing tokens but not the post-compaction context?
-- Which direct-pane prompt paths can AMF observe reliably enough to show
+- Which direct-pane prompt paths can AIW observe reliably enough to show
   a pre-submit budget warning without interfering with terminal input?
 - Should utility caches live in SQLite, a gitignored worktree cache, or
   both? SQLite is easier to prune; worktree-local storage is easier to
@@ -774,10 +774,10 @@ also remove concrete waste with little dependency on new UI.
 Then build profiles and context warnings before automatic suggestions.
 They give the user direct control and generate the trustworthy usage
 segments needed to evaluate later recommendations. Structured handoffs
-should follow closely: they are the safest way for AMF to help users
+should follow closely: they are the safest way for AIW to help users
 leave oversized contexts without discarding the work that matters.
 
 Analytics comes last. Its value depends on correct model attribution,
 per-turn deltas, explicit profiles, and observable handoff/cache events.
-Until those exist, AMF should avoid making confident claims about which
+Until those exist, AIW should avoid making confident claims about which
 workflow is "more efficient."

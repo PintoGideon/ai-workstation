@@ -12,7 +12,7 @@ import os
 import pathlib
 import sys
 
-state = pathlib.Path(os.environ["AMF_GUI_GH_STATE"])
+state = pathlib.Path(os.environ["AIW_GUI_GH_STATE"])
 args = sys.argv[1:]
 with (state / "calls.jsonl").open("a") as calls:
     calls.write(json.dumps(args) + "\n")
@@ -54,7 +54,7 @@ REVIEW_COMMENTS = [
     {
         "id": 7003, "path": "invoice.ts", "line": 9, "original_line": 9, "side": "RIGHT",
         "diff_hunk": HUNK, "user": user("demo-reviewer"), "in_reply_to_id": 7001,
-        "body": "Looking into it before changing anything.\n\n— posted via AMF",
+        "body": "Looking into it before changing anything.\n\n— posted via AIW",
     },
     {
         "id": 7002, "path": "invoice.ts", "line": 16, "original_line": 16, "side": "RIGHT",

@@ -5,7 +5,7 @@ import { Icon, Spinner, StatusDot } from "./ui";
  *  stopped on its own. TODOs have no terminal and never count. Pass the
  *  snapshot's `stopped_session_ids` to also count a session whose window is
  *  gone without being flagged (a tab held back by another tab's resume, or a
- *  window closed outside AMF). */
+ *  window closed outside AIW). */
 export function sessionRunning(
   feature: Feature,
   session: FeatureSession,

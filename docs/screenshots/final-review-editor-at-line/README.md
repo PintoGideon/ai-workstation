@@ -1,7 +1,7 @@
 # Open at the cursored line in `$EDITOR` (`E`)
 
-Captured from an isolated, throwaway AMF instance
-(`scripts/dev/screenshot/amf-capture.sh`, 160x44) against a scratch demo repo
+Captured from an isolated, throwaway AIW instance
+(`scripts/dev/screenshot/aiw-capture.sh`, 160x44) against a scratch demo repo
 whose `review-demo` branch hardens `src/auth.rs` — swapping a `==` token check
 for `subtle::ConstantTimeEq` and threading a `max_attempts` budget through the
 constructor — with a matching developer note in `.claude/review-notes.md`. The
@@ -31,7 +31,7 @@ resolve/reopen`.
 
 ## 3. `E` — the TUI suspends and vim opens at that line
 
-AMF tears down raw mode and the alternate screen and hands the terminal to
+AIW tears down raw mode and the alternate screen and hands the terminal to
 `$EDITOR`, which opens `src/auth.rs` with the cursor already on the line being
 reviewed. vim's statusline reads `line 16 of 26` — the new-side line number of
 the cursored diff line, not the diff-relative one. Because the review cursor
@@ -48,7 +48,7 @@ position, and the same scroll offset. This frame is **byte-identical** to frame
 2 — the capture files compare equal — so nothing about the review was disturbed
 by the round trip.
 
-Had the file actually been edited, AMF would have noticed the changed
+Had the file actually been edited, AIW would have noticed the changed
 size/mtime and reloaded the diff through the ordinary refresh path (which
 re-anchors comments), rather than leaving annotations on hunks that had moved.
 

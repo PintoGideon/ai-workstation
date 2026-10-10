@@ -7,7 +7,6 @@ use crate::context_tracking::{
 use crate::project::SessionKind;
 use crate::token_tracking::SessionTokenUsage;
 use chrono::{DateTime, TimeZone, Utc};
-use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
@@ -67,33 +66,34 @@ struct ModelLimitKey {
 
 pub struct SessionContextCollector {
     home_dir: Option<PathBuf>,
-    data_dir: Option<PathBuf>,
-    cache_dir: Option<PathBuf>,
     model_limits: HashMap<ModelLimitKey, Option<u64>>,
     allow_model_commands: bool,
+    // FORK: incremental transcript reads; the sweep re-read whole files every 5 s.
+    claude_scans: crate::fork::line_fold::LineFoldCache<ClaudeScan>,
+    codex_scans: crate::fork::line_fold::LineFoldCache<CodexScan>,
 }
 
 impl Default for SessionContextCollector {
     fn default() -> Self {
         Self {
             home_dir: dirs::home_dir(),
-            data_dir: dirs::data_dir(),
-            cache_dir: dirs::cache_dir(),
             model_limits: HashMap::new(),
             allow_model_commands: true,
+            claude_scans: Default::default(), // FORK
+            codex_scans: Default::default(),
         }
     }
 }
 
 impl SessionContextCollector {
     #[cfg(test)]
-    pub(crate) fn with_roots(home: &Path, data: &Path, cache: &Path) -> Self {
+    pub(crate) fn with_home(home: &Path) -> Self {
         Self {
             home_dir: Some(home.to_path_buf()),
-            data_dir: Some(data.to_path_buf()),
-            cache_dir: Some(cache.to_path_buf()),
             model_limits: HashMap::new(),
             allow_model_commands: false,
+            claude_scans: Default::default(), // FORK
+            codex_scans: Default::default(),
         }
     }
 
@@ -134,7 +134,9 @@ impl SessionContextCollector {
             return self.fallback(target, FallbackFormula::Claude);
         };
 
-        match parse_claude_transcript(&transcript, target) {
+        // FORK: incremental read of the transcript (same result as a full read).
+        let scan = self.claude_scans.fold(&transcript, claude_scan_line);
+        match scan.and_then(|scan| claude_scan_result(scan, target)) {
             Some(result) => result,
             None => self.fallback_or(
                 target,
@@ -169,7 +171,9 @@ impl SessionContextCollector {
             return self.fallback(target, FallbackFormula::Codex);
         };
 
-        match parse_codex_rollout(&rollout, target) {
+        // FORK: incremental read of the rollout (same result as a full read).
+        let scan = self.codex_scans.fold(&rollout, codex_scan_line);
+        match scan.and_then(|scan| codex_scan_result(scan, target)) {
             Some(result) => result,
             None => self.fallback_or(
                 target,
@@ -177,74 +181,6 @@ impl SessionContextCollector {
                 ContextUnavailableReason::MalformedTelemetry,
             ),
         }
-    }
-
-    fn collect_opencode(
-        &mut self,
-        target: &ContextCollectionTarget<'_>,
-    ) -> ContextCollectionResult {
-        let record = self
-            .data_dir
-            .as_deref()
-            .and_then(|data| read_opencode_sqlite(data, target))
-            .or_else(|| {
-                self.data_dir
-                    .as_deref()
-                    .and_then(|data| read_opencode_legacy(data, target))
-            });
-
-        let Some(mut record) = record else {
-            return self.fallback(target, FallbackFormula::Opencode);
-        };
-        if record.awaiting_post_reset {
-            return ContextCollectionResult::ResetPending {
-                conversation_id: record
-                    .conversation_id
-                    .or_else(|| target.conversation_id.map(str::to_string)),
-                event: record.last_reset.unwrap_or(ContextResetEvent {
-                    reason: ContextResetReason::Compaction,
-                    detected_at: target.collected_at,
-                }),
-            };
-        }
-        let Some(used_tokens) = record.used_tokens else {
-            return self.fallback_or(
-                target,
-                FallbackFormula::Opencode,
-                ContextUnavailableReason::MalformedTelemetry,
-            );
-        };
-        let provider = record
-            .provider_id
-            .take()
-            .or_else(|| target.provider_id.map(str::to_string));
-        let model = record
-            .model_id
-            .take()
-            .or_else(|| target.model_id.map(str::to_string));
-        let context_limit = target.fallback_context_limit.or_else(|| {
-            provider
-                .as_deref()
-                .zip(model.as_deref())
-                .and_then(|(provider, model)| self.opencode_model_limit(provider, model))
-        });
-        let provenance = if record.direct_limit.is_some() {
-            ContextProvenance::Direct
-        } else {
-            ContextProvenance::Estimated
-        };
-
-        ContextCollectionResult::Collected(make_sample(
-            used_tokens,
-            record.direct_limit.or(context_limit),
-            provenance,
-            record.sampled_at.unwrap_or(target.collected_at),
-            target.collected_at,
-            record
-                .conversation_id
-                .or_else(|| target.conversation_id.map(str::to_string)),
-            record.last_reset,
-        ))
     }
 
     fn collect_pi(&mut self, target: &ContextCollectionTarget<'_>) -> ContextCollectionResult {
@@ -354,9 +290,8 @@ impl SessionContextCollector {
                 .saturating_add(usage.cache_read_tokens)
                 .saturating_add(usage.cache_write_tokens),
             // Codex cached input is a subset of input and must not be added
-            // twice. Existing AMF usage is cumulative, hence Estimated.
+            // twice. Existing AIW usage is cumulative, hence Estimated.
             FallbackFormula::Codex => usage.input_tokens,
-            FallbackFormula::Opencode => usage.total_tokens,
         };
         let context_limit = target.fallback_context_limit.or(match formula {
             FallbackFormula::Claude => Some(CLAUDE_DEFAULT_CONTEXT_LIMIT),
@@ -372,29 +307,6 @@ impl SessionContextCollector {
             target.conversation_id.map(str::to_string),
             None,
         ))
-    }
-
-    fn opencode_model_limit(&mut self, provider: &str, model: &str) -> Option<u64> {
-        let key = ModelLimitKey {
-            harness: "opencode",
-            provider: provider.to_string(),
-            model: model.to_string(),
-        };
-        if let Some(limit) = self.model_limits.get(&key) {
-            return *limit;
-        }
-
-        let limit = self
-            .home_dir
-            .as_deref()
-            .and_then(|home| read_opencode_config_limit(home, provider, model))
-            .or_else(|| {
-                self.cache_dir
-                    .as_deref()
-                    .and_then(|cache| read_opencode_catalog_limit(cache, provider, model))
-            });
-        self.model_limits.insert(key, limit);
-        limit
     }
 
     fn pi_model_limit(&mut self, provider: &str, model: &str) -> Option<u64> {
@@ -425,7 +337,6 @@ impl ContextCollector for SessionContextCollector {
         match target.session_kind {
             SessionKind::Claude => self.collect_claude(&target),
             SessionKind::Codex => self.collect_codex(&target),
-            SessionKind::Opencode => self.collect_opencode(&target),
             SessionKind::Pi => self.collect_pi(&target),
             _ => ContextCollectionResult::Unavailable(
                 ContextUnavailableReason::UnsupportedSessionKind,
@@ -438,13 +349,11 @@ impl ContextCollector for SessionContextCollector {
 enum FallbackFormula {
     Claude,
     Codex,
-    Opencode,
 }
 
 #[derive(Default)]
 struct ArtifactContextRecord {
     used_tokens: Option<u64>,
-    direct_limit: Option<u64>,
     provider_id: Option<String>,
     model_id: Option<String>,
     conversation_id: Option<String>,
@@ -518,49 +427,73 @@ fn claude_runtime_is_post_reset(payload: &Value) -> bool {
         .is_some_and(Value::is_null)
 }
 
+/// FORK: what a Claude transcript says, independent of when it is read:
+/// timestamps stay `None` where a line had none (filled with the collection
+/// time only when the result is built), so it can be folded incrementally.
+#[derive(Debug, Clone, Default)]
+struct ClaudeScan {
+    latest: Option<(u64, Option<DateTime<Utc>>, Option<String>)>,
+    last_reset: Option<(ContextResetReason, Option<DateTime<Utc>>)>,
+}
+
+fn claude_scan_line(scan: &mut ClaudeScan, line: &str) {
+    let Ok(value) = serde_json::from_str::<Value>(line) else {
+        return;
+    };
+    let timestamp = json_timestamp(&value, "timestamp");
+    let subtype = value.get("subtype").and_then(Value::as_str);
+    if matches!(subtype, Some("compact_boundary" | "microcompact_boundary")) {
+        let reason = if subtype == Some("microcompact_boundary") {
+            ContextResetReason::Summarization
+        } else {
+            ContextResetReason::Compaction
+        };
+        scan.last_reset = Some((reason, timestamp));
+    }
+    if value.get("type").and_then(Value::as_str) != Some("assistant") {
+        return;
+    }
+    let Some(usage) = value.pointer("/message/usage") else {
+        return;
+    };
+    let Some(input) = json_u64(usage, "input_tokens") else {
+        return;
+    };
+    let used = input
+        .saturating_add(json_u64(usage, "cache_read_input_tokens").unwrap_or(0))
+        .saturating_add(json_u64(usage, "cache_creation_input_tokens").unwrap_or(0));
+    let conversation = value
+        .get("sessionId")
+        .or_else(|| value.get("session_id"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    scan.latest = Some((used, timestamp, conversation));
+}
+
+#[cfg(test)]
 fn parse_claude_transcript(
     path: &Path,
     target: &ContextCollectionTarget<'_>,
 ) -> Option<ContextCollectionResult> {
     let content = fs::read_to_string(path).ok()?;
-    let mut latest: Option<(u64, DateTime<Utc>, Option<String>)> = None;
-    let mut last_reset = None;
-
+    let mut scan = ClaudeScan::default();
     for line in content.lines() {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-        let timestamp = json_timestamp(&value, "timestamp").unwrap_or(target.collected_at);
-        let subtype = value.get("subtype").and_then(Value::as_str);
-        if matches!(subtype, Some("compact_boundary" | "microcompact_boundary")) {
-            last_reset = Some(ContextResetEvent {
-                reason: if subtype == Some("microcompact_boundary") {
-                    ContextResetReason::Summarization
-                } else {
-                    ContextResetReason::Compaction
-                },
-                detected_at: timestamp,
-            });
-        }
-        if value.get("type").and_then(Value::as_str) != Some("assistant") {
-            continue;
-        }
-        let Some(usage) = value.pointer("/message/usage") else {
-            continue;
-        };
-        let Some(input) = json_u64(usage, "input_tokens") else {
-            continue;
-        };
-        let used = input
-            .saturating_add(json_u64(usage, "cache_read_input_tokens").unwrap_or(0))
-            .saturating_add(json_u64(usage, "cache_creation_input_tokens").unwrap_or(0));
-        let conversation = value
-            .get("sessionId")
-            .or_else(|| value.get("session_id"))
-            .and_then(Value::as_str)
-            .map(str::to_string);
-        latest = Some((used, timestamp, conversation));
+        claude_scan_line(&mut scan, line);
     }
+    claude_scan_result(scan, target)
+}
+
+fn claude_scan_result(
+    scan: ClaudeScan,
+    target: &ContextCollectionTarget<'_>,
+) -> Option<ContextCollectionResult> {
+    let latest = scan
+        .latest
+        .map(|(used, at, conversation)| (used, at.unwrap_or(target.collected_at), conversation));
+    let last_reset = scan.last_reset.map(|(reason, at)| ContextResetEvent {
+        reason,
+        detected_at: at.unwrap_or(target.collected_at),
+    });
 
     if let Some(event) = last_reset.as_ref()
         && latest
@@ -624,58 +557,85 @@ fn codex_runtime_sample(
     ))
 }
 
+/// FORK: what a Codex rollout says, independent of when it is read (see
+/// [`ClaudeScan`]).
+#[derive(Debug, Clone, Default)]
+struct CodexScan {
+    /// The last `session_meta` id; the target's id applies when there is none.
+    meta_id: Option<String>,
+    latest: Option<(u64, u64, Option<DateTime<Utc>>)>,
+    /// `Some(timestamp)` once a compaction was seen.
+    last_reset: Option<Option<DateTime<Utc>>>,
+}
+
+fn codex_scan_line(scan: &mut CodexScan, line: &str) {
+    let Ok(value) = serde_json::from_str::<Value>(line) else {
+        return;
+    };
+    let event_type = value.get("type").and_then(Value::as_str);
+    let payload_type = value.pointer("/payload/type").and_then(Value::as_str);
+    let timestamp = json_timestamp(&value, "timestamp");
+    if event_type == Some("session_meta")
+        && let Some(id) = value
+            .pointer("/payload/id")
+            .or_else(|| value.pointer("/payload/session_id"))
+            .and_then(Value::as_str)
+    {
+        scan.meta_id = Some(id.to_string());
+    }
+    if event_type == Some("compacted") || payload_type == Some("context_compacted") {
+        scan.last_reset = Some(timestamp);
+    }
+    if event_type != Some("event_msg") || payload_type != Some("token_count") {
+        return;
+    }
+    let Some(info) = value.pointer("/payload/info") else {
+        return;
+    };
+    let Some(last) = info.get("last_token_usage") else {
+        return;
+    };
+    let Some(used) = json_u64(last, "total_tokens").or_else(|| {
+        Some(
+            json_u64(last, "input_tokens")?
+                .saturating_add(json_u64(last, "output_tokens").unwrap_or(0)),
+        )
+    }) else {
+        return;
+    };
+    let Some(limit) = json_u64(info, "model_context_window") else {
+        return;
+    };
+    scan.latest = Some((used, limit, timestamp));
+}
+
+#[cfg(test)]
 fn parse_codex_rollout(
     path: &Path,
     target: &ContextCollectionTarget<'_>,
 ) -> Option<ContextCollectionResult> {
     let content = fs::read_to_string(path).ok()?;
-    let mut conversation_id = target.conversation_id.map(str::to_string);
-    let mut latest: Option<(u64, u64, DateTime<Utc>)> = None;
-    let mut last_reset = None;
-
+    let mut scan = CodexScan::default();
     for line in content.lines() {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-        let event_type = value.get("type").and_then(Value::as_str);
-        let payload_type = value.pointer("/payload/type").and_then(Value::as_str);
-        let timestamp = json_timestamp(&value, "timestamp").unwrap_or(target.collected_at);
-        if event_type == Some("session_meta") {
-            conversation_id = value
-                .pointer("/payload/id")
-                .or_else(|| value.pointer("/payload/session_id"))
-                .and_then(Value::as_str)
-                .map(str::to_string)
-                .or(conversation_id);
-        }
-        if event_type == Some("compacted") || payload_type == Some("context_compacted") {
-            last_reset = Some(ContextResetEvent {
-                reason: ContextResetReason::Compaction,
-                detected_at: timestamp,
-            });
-        }
-        if event_type != Some("event_msg") || payload_type != Some("token_count") {
-            continue;
-        }
-        let Some(info) = value.pointer("/payload/info") else {
-            continue;
-        };
-        let Some(last) = info.get("last_token_usage") else {
-            continue;
-        };
-        let Some(used) = json_u64(last, "total_tokens").or_else(|| {
-            Some(
-                json_u64(last, "input_tokens")?
-                    .saturating_add(json_u64(last, "output_tokens").unwrap_or(0)),
-            )
-        }) else {
-            continue;
-        };
-        let Some(limit) = json_u64(info, "model_context_window") else {
-            continue;
-        };
-        latest = Some((used, limit, timestamp));
+        codex_scan_line(&mut scan, line);
     }
+    codex_scan_result(scan, target)
+}
+
+fn codex_scan_result(
+    scan: CodexScan,
+    target: &ContextCollectionTarget<'_>,
+) -> Option<ContextCollectionResult> {
+    let conversation_id = scan
+        .meta_id
+        .or_else(|| target.conversation_id.map(str::to_string));
+    let latest = scan
+        .latest
+        .map(|(used, limit, at)| (used, limit, at.unwrap_or(target.collected_at)));
+    let last_reset = scan.last_reset.map(|at| ContextResetEvent {
+        reason: ContextResetReason::Compaction,
+        detected_at: at.unwrap_or(target.collected_at),
+    });
 
     if let Some(event) = last_reset.as_ref()
         && latest
@@ -728,236 +688,6 @@ fn pi_runtime_is_post_reset(payload: &Value) -> bool {
     let data = payload.get("data").unwrap_or(payload);
     data.pointer("/contextUsage/tokens")
         .is_some_and(Value::is_null)
-}
-
-fn read_opencode_sqlite(
-    data_dir: &Path,
-    target: &ContextCollectionTarget<'_>,
-) -> Option<ArtifactContextRecord> {
-    let db_path = data_dir.join("opencode").join("opencode.db");
-    let conn = Connection::open_with_flags(
-        db_path,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )
-    .ok()?;
-    let workdir = target.workdir.to_string_lossy();
-    let session_id = if let Some(id) = target.conversation_id {
-        conn.query_row(
-            "SELECT id FROM session WHERE id = ?1 AND directory = ?2",
-            params![id, workdir.as_ref()],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()
-        .ok()??
-    } else {
-        conn.query_row(
-            "SELECT id FROM session WHERE directory = ?1 AND time_archived IS NULL ORDER BY time_updated DESC LIMIT 1",
-            params![workdir.as_ref()],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()
-        .ok()??
-    };
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT data, time_updated FROM message WHERE session_id = ?1 ORDER BY time_updated ASC",
-        )
-        .ok()?;
-    let rows = stmt
-        .query_map(params![&session_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-        })
-        .ok()?;
-    let mut record = ArtifactContextRecord {
-        conversation_id: Some(session_id.clone()),
-        ..ArtifactContextRecord::default()
-    };
-    let mut last_usage_millis = None;
-    let mut last_reset_millis = None;
-
-    for row in rows.flatten() {
-        let Ok(value) = serde_json::from_str::<Value>(&row.0) else {
-            continue;
-        };
-        if value.get("role").and_then(Value::as_str) != Some("assistant") {
-            continue;
-        }
-        if value.get("summary").and_then(Value::as_bool) == Some(true) {
-            last_reset_millis = Some(row.1);
-            record.last_reset = Some(ContextResetEvent {
-                reason: ContextResetReason::Compaction,
-                detected_at: millis_timestamp(row.1).unwrap_or(target.collected_at),
-            });
-            continue;
-        }
-        if value.get("error").is_some_and(|error| !error.is_null()) {
-            continue;
-        }
-        let Some(tokens) = value.get("tokens") else {
-            continue;
-        };
-        let Some(used) = opencode_context_tokens(tokens) else {
-            continue;
-        };
-        record.used_tokens = Some(used);
-        record.provider_id = value
-            .get("providerID")
-            .and_then(Value::as_str)
-            .map(str::to_string);
-        record.model_id = value
-            .get("modelID")
-            .and_then(Value::as_str)
-            .map(str::to_string);
-        record.sampled_at = millis_timestamp(row.1);
-        last_usage_millis = Some(row.1);
-    }
-    record.awaiting_post_reset = last_reset_millis
-        .zip(last_usage_millis)
-        .is_some_and(|(reset, usage)| reset >= usage)
-        || (last_reset_millis.is_some() && last_usage_millis.is_none());
-    Some(record)
-}
-
-fn read_opencode_legacy(
-    data_dir: &Path,
-    target: &ContextCollectionTarget<'_>,
-) -> Option<ArtifactContextRecord> {
-    let storage = data_dir.join("opencode").join("storage");
-    let session_root = storage.join("session");
-    let sessions = walk_files_with_extension(&session_root, "json");
-    let mut selected: Option<(String, i64)> = None;
-    for path in sessions {
-        let Ok(value) = read_json(&path) else {
-            continue;
-        };
-        let Some(id) = value.get("id").and_then(Value::as_str) else {
-            continue;
-        };
-        if target.conversation_id.is_some_and(|wanted| wanted != id) {
-            continue;
-        }
-        if value.get("directory").and_then(Value::as_str)
-            != Some(target.workdir.to_string_lossy().as_ref())
-        {
-            continue;
-        }
-        let updated = value
-            .pointer("/time/updated")
-            .and_then(Value::as_i64)
-            .unwrap_or(0);
-        if selected
-            .as_ref()
-            .is_none_or(|(_, current)| updated > *current)
-        {
-            selected = Some((id.to_string(), updated));
-        }
-    }
-    let (session_id, _) = selected?;
-    let message_root = storage.join("message").join(&session_id);
-    let mut messages = walk_files_with_extension(&message_root, "json");
-    messages.sort_by_key(|path| modified_millis(path).unwrap_or(0));
-    let mut record = ArtifactContextRecord {
-        conversation_id: Some(session_id.clone()),
-        ..ArtifactContextRecord::default()
-    };
-    let mut latest_message_id = None;
-    let mut last_usage_millis = None;
-    let mut last_reset_millis = None;
-    for path in messages {
-        let Ok(value) = read_json(&path) else {
-            continue;
-        };
-        if value.get("role").and_then(Value::as_str) != Some("assistant") {
-            continue;
-        }
-        let message_millis = value
-            .pointer("/time/completed")
-            .or_else(|| value.pointer("/time/created"))
-            .and_then(Value::as_i64)
-            .or_else(|| modified_millis(&path));
-        if value.get("summary").and_then(Value::as_bool) == Some(true) {
-            let detected_at = message_millis
-                .and_then(millis_timestamp)
-                .unwrap_or(target.collected_at);
-            last_reset_millis = message_millis;
-            record.last_reset = Some(ContextResetEvent {
-                reason: ContextResetReason::Compaction,
-                detected_at,
-            });
-            continue;
-        }
-        if value.get("error").is_some_and(|error| !error.is_null()) {
-            continue;
-        }
-        if let Some(tokens) = value.get("tokens")
-            && let Some(used) = opencode_context_tokens(tokens)
-        {
-            record.used_tokens = Some(used);
-            record.sampled_at = message_millis.and_then(millis_timestamp);
-            last_usage_millis = message_millis;
-            record.provider_id = value
-                .get("providerID")
-                .and_then(Value::as_str)
-                .map(str::to_string);
-            record.model_id = value
-                .get("modelID")
-                .and_then(Value::as_str)
-                .map(str::to_string);
-        }
-        latest_message_id = path
-            .file_stem()
-            .and_then(|name| name.to_str())
-            .map(str::to_string);
-    }
-    if record.used_tokens.is_none()
-        && let Some(message_id) = latest_message_id
-    {
-        let mut parts = walk_files_with_extension(&storage.join("part").join(message_id), "json");
-        parts.sort_by_key(|path| modified_millis(path).unwrap_or(0));
-        for path in parts {
-            let Ok(value) = read_json(&path) else {
-                continue;
-            };
-            if value.get("type").and_then(Value::as_str) == Some("step-finish")
-                && let Some(used) = value.get("tokens").and_then(opencode_context_tokens)
-            {
-                record.used_tokens = Some(used);
-                let sampled_millis = modified_millis(&path);
-                record.sampled_at = sampled_millis.and_then(millis_timestamp);
-                last_usage_millis = sampled_millis;
-            }
-        }
-    }
-    record.awaiting_post_reset = last_reset_millis
-        .zip(last_usage_millis)
-        .is_some_and(|(reset, usage)| reset >= usage)
-        || (last_reset_millis.is_some() && last_usage_millis.is_none());
-    Some(record)
-}
-
-fn opencode_context_tokens(tokens: &Value) -> Option<u64> {
-    if let Some(total) = json_u64(tokens, "total")
-        && total > 0
-    {
-        return Some(total);
-    }
-    Some(
-        json_u64(tokens, "input")?
-            .saturating_add(json_u64(tokens, "output").unwrap_or(0))
-            .saturating_add(
-                tokens
-                    .pointer("/cache/read")
-                    .and_then(value_u64)
-                    .unwrap_or(0),
-            )
-            .saturating_add(
-                tokens
-                    .pointer("/cache/write")
-                    .and_then(value_u64)
-                    .unwrap_or(0),
-            ),
-    )
 }
 
 fn parse_pi_session(
@@ -1067,12 +797,13 @@ fn find_pi_session(
     let root = home.join(".pi").join("agent").join("sessions");
     let mut selected: Option<(PathBuf, u64, i64)> = None;
     for path in walk_files_with_extension(&root, "jsonl") {
-        let Ok(content) = fs::read_to_string(&path) else {
+        // FORK: read up to the header line only, not the whole session file.
+        let Some(lines) = crate::fork::line_fold::file_lines(&path) else {
             continue;
         };
-        let Some(header) = content
-            .lines()
-            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        let Some(header) = lines
+            .map_while(Result::ok)
+            .filter_map(|line| serde_json::from_str::<Value>(&line).ok())
             .find(|value| value.get("type").and_then(Value::as_str) == Some("session"))
         else {
             continue;
@@ -1111,12 +842,13 @@ fn find_codex_rollout(home: &Path, workdir: &Path, id: Option<&str>) -> Option<P
     let root = home.join(".codex").join("sessions");
     let mut selected: Option<(PathBuf, i64)> = None;
     for path in walk_files_with_extension(&root, "jsonl") {
-        let Ok(content) = fs::read_to_string(&path) else {
+        // FORK: read up to the `session_meta` line only, not the whole rollout.
+        let Some(lines) = crate::fork::line_fold::file_lines(&path) else {
             continue;
         };
         let mut matched = false;
-        for line in content.lines() {
-            let Ok(value) = serde_json::from_str::<Value>(line) else {
+        for line in lines.map_while(Result::ok) {
+            let Ok(value) = serde_json::from_str::<Value>(&line) else {
                 continue;
             };
             if value.get("type").and_then(Value::as_str) != Some("session_meta") {
@@ -1143,38 +875,6 @@ fn find_codex_rollout(home: &Path, workdir: &Path, id: Option<&str>) -> Option<P
         }
     }
     selected.map(|(path, _)| path)
-}
-
-fn read_opencode_config_limit(home: &Path, provider: &str, model: &str) -> Option<u64> {
-    let config_dir = home.join(".config").join("opencode");
-    for name in ["opencode.json", "opencode.jsonc"] {
-        let Ok(value) = read_json(&config_dir.join(name)) else {
-            continue;
-        };
-        if let Some(limit) = value
-            .pointer(&format!(
-                "/provider/{}/{}/{}",
-                escape_json_pointer(provider),
-                "models",
-                escape_json_pointer(model)
-            ))
-            .and_then(|model| model.pointer("/limit/context"))
-            .and_then(value_u64)
-        {
-            return Some(limit);
-        }
-    }
-    None
-}
-
-fn read_opencode_catalog_limit(cache: &Path, provider: &str, model: &str) -> Option<u64> {
-    let value = read_json(&cache.join("opencode").join("models.json")).ok()?;
-    value
-        .get(provider)?
-        .get("models")?
-        .get(model)?
-        .pointer("/limit/context")
-        .and_then(value_u64)
 }
 
 fn read_pi_custom_model_limit(home: &Path, provider: &str, model: &str) -> Option<u64> {
@@ -1344,7 +1044,7 @@ mod tests {
     }
 
     fn collector(roots: &TempDir) -> SessionContextCollector {
-        SessionContextCollector::with_roots(roots.path(), roots.path(), roots.path())
+        SessionContextCollector::with_home(roots.path())
     }
 
     fn write(path: &Path, content: &str) {
@@ -1461,60 +1161,6 @@ mod tests {
     }
 
     #[test]
-    fn opencode_sqlite_uses_latest_assistant_and_cached_model_limit() {
-        let roots = TempDir::new().unwrap();
-        let workdir = roots.path().join("repo");
-        let db_path = roots.path().join("opencode/opencode.db");
-        fs::create_dir_all(db_path.parent().unwrap()).unwrap();
-        let conn = Connection::open(&db_path).unwrap();
-        conn.execute_batch(
-            "CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT NOT NULL, time_updated INTEGER NOT NULL, time_archived INTEGER);
-             CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL);",
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO session VALUES (?1, ?2, 1, NULL)",
-            params!["open-1", workdir.to_string_lossy()],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO message VALUES ('m1', 'open-1', 1000, ?1)",
-            params![
-                serde_json::json!({
-                    "role": "assistant",
-                    "providerID": "anthropic",
-                    "modelID": "claude-test",
-                    "tokens": {"input": 10, "output": 5, "cache": {"read": 74_985, "write": 0}}
-                })
-                .to_string()
-            ],
-        )
-        .unwrap();
-        write(
-            &roots.path().join("opencode/models.json"),
-            &serde_json::json!({
-                "anthropic": {"models": {"claude-test": {"limit": {"context": 100_000}}}}
-            })
-            .to_string(),
-        );
-        let kind = SessionKind::Opencode;
-        let ContextCollectionResult::Collected(sample) =
-            collector(&roots).collect(target(&kind, &workdir, Some("open-1")))
-        else {
-            panic!("expected OpenCode sample");
-        };
-        assert_eq!(sample.used_tokens, 75_000);
-        assert_eq!(sample.context_limit, Some(100_000));
-        assert_eq!(sample.provenance, ContextProvenance::Estimated);
-        assert_eq!(
-            calculate_context_snapshot(sample, ContextThresholds::default())
-                .unwrap()
-                .band,
-            ContextBand::Warning
-        );
-    }
-
-    #[test]
     fn pi_session_uses_latest_usage_and_custom_model_limit() {
         let roots = TempDir::new().unwrap();
         let workdir = roots.path().join("repo");
@@ -1626,60 +1272,6 @@ mod tests {
     }
 
     #[test]
-    fn legacy_opencode_summary_is_an_explicit_pending_reset() {
-        let roots = TempDir::new().unwrap();
-        let workdir = roots.path().join("repo");
-        let storage = roots.path().join("opencode/storage");
-        write(
-            &storage.join("session/project/open-legacy.json"),
-            &serde_json::json!({
-                "id": "open-legacy",
-                "directory": workdir,
-                "time": {"updated": 2_000}
-            })
-            .to_string(),
-        );
-        write(
-            &storage.join("message/open-legacy/m1.json"),
-            &serde_json::json!({
-                "id": "m1",
-                "role": "assistant",
-                "providerID": "test",
-                "modelID": "model",
-                "time": {"completed": 1_000},
-                "tokens": {"input": 90_000, "output": 0, "cache": {"read": 0, "write": 0}}
-            })
-            .to_string(),
-        );
-        write(
-            &storage.join("message/open-legacy/m2.json"),
-            &serde_json::json!({
-                "id": "m2",
-                "role": "assistant",
-                "summary": true,
-                "time": {"completed": 2_000}
-            })
-            .to_string(),
-        );
-
-        let kind = SessionKind::Opencode;
-        assert!(matches!(
-            collector(&roots).collect(target(
-                &kind,
-                &workdir,
-                Some("open-legacy")
-            )),
-            ContextCollectionResult::ResetPending {
-                conversation_id: Some(id),
-                event: ContextResetEvent {
-                    reason: ContextResetReason::Compaction,
-                    ..
-                },
-            } if id == "open-legacy"
-        ));
-    }
-
-    #[test]
     fn trailing_claude_and_codex_compactions_hide_pre_reset_usage() {
         let roots = TempDir::new().unwrap();
         let workdir = roots.path().join("repo");
@@ -1714,5 +1306,120 @@ mod tests {
             collector(&roots).collect(target(&SessionKind::Codex, &workdir, Some("codex-reset"))),
             ContextCollectionResult::ResetPending { .. }
         ));
+    }
+}
+
+// FORK: the incremental transcript reads must give what a whole-file read gives.
+#[cfg(test)]
+mod fork_incremental_tests {
+    use super::*;
+    use std::io::Write;
+
+    fn target(collected_at: DateTime<Utc>) -> ContextCollectionTarget<'static> {
+        ContextCollectionTarget {
+            session_kind: &SessionKind::Claude,
+            workdir: Path::new("/tmp/aiw-incremental"),
+            conversation_id: Some("target-conversation"),
+            excluded_conversation_ids: &[],
+            session_created_at: collected_at,
+            provider_id: None,
+            model_id: None,
+            runtime_payload: None,
+            fallback_usage: None,
+            fallback_context_limit: None,
+            collected_at,
+        }
+    }
+
+    fn append_and_compare<S: Clone + Default>(
+        lines: &[&str],
+        fold: fn(&mut S, &str),
+        result: fn(S, &ContextCollectionTarget<'_>) -> Option<ContextCollectionResult>,
+        whole: fn(&Path, &ContextCollectionTarget<'_>) -> Option<ContextCollectionResult>,
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.jsonl");
+        let mut file = std::fs::File::create(&path).unwrap();
+        let mut cache = crate::fork::line_fold::LineFoldCache::<S>::default();
+        let mut sweep = Utc.with_ymd_and_hms(2026, 10, 10, 12, 0, 0).unwrap();
+        for line in lines {
+            // Each line lands in two writes, so some sweeps see half a line.
+            let (head, tail) = line.split_at(line.len() / 2);
+            for part in [head.to_string(), format!("{tail}\n")] {
+                file.write_all(part.as_bytes()).unwrap();
+                file.flush().unwrap();
+                sweep += chrono::Duration::seconds(5);
+                let target = target(sweep);
+                let incremental = cache.fold(&path, fold).and_then(|s| result(s, &target));
+                assert_eq!(incremental, whole(&path, &target), "after {part:?}");
+            }
+        }
+    }
+
+    /// `cargo +1.99.0 test --release --locked sweep_cost_bench -- --ignored --nocapture`
+    #[test]
+    #[ignore = "timing benchmark"]
+    fn sweep_cost_bench() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.jsonl");
+        let line = r#"{"type":"assistant","sessionId":"s1","timestamp":"2026-10-10T11:00:01Z","message":{"model":"claude-x","content":[{"type":"text","text":"lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua"}],"usage":{"input_tokens":10,"cache_read_input_tokens":5}}}"#;
+        let mut content = String::new();
+        while content.len() < 10 * 1024 * 1024 {
+            content.push_str(line);
+            content.push('\n');
+        }
+        std::fs::write(&path, &content).unwrap();
+        let target = target(Utc::now());
+        let started = std::time::Instant::now();
+        let whole = parse_claude_transcript(&path, &target);
+        let whole_time = started.elapsed();
+        let mut cache = crate::fork::line_fold::LineFoldCache::<ClaudeScan>::default();
+        let _ = cache.fold(&path, claude_scan_line);
+        let started = std::time::Instant::now();
+        let again = cache
+            .fold(&path, claude_scan_line)
+            .and_then(|scan| claude_scan_result(scan, &target));
+        let again_time = started.elapsed();
+        assert_eq!(whole, again);
+        println!(
+            "10 MB Claude transcript, one sweep: whole-file parse {:.1} ms, incremental (unchanged) {:.3} ms",
+            whole_time.as_secs_f64() * 1e3,
+            again_time.as_secs_f64() * 1e3
+        );
+    }
+
+    #[test]
+    fn claude_transcript_incremental_matches_whole_file() {
+        append_and_compare(
+            &[
+                r#"{"type":"user","timestamp":"2026-10-10T11:00:00Z"}"#,
+                r#"{"type":"assistant","sessionId":"s1","timestamp":"2026-10-10T11:00:01Z","message":{"usage":{"input_tokens":10,"cache_read_input_tokens":5}}}"#,
+                r#"{"type":"assistant","message":{"usage":{"input_tokens":20,"cache_creation_input_tokens":7}}}"#,
+                r#"{"type":"system","subtype":"compact_boundary","timestamp":"2026-10-10T11:05:00Z"}"#,
+                r#"not json"#,
+                r#"{"type":"assistant","session_id":"s2","timestamp":"2026-10-10T11:06:00Z","message":{"usage":{"input_tokens":3}}}"#,
+                r#"{"type":"system","subtype":"microcompact_boundary"}"#,
+            ],
+            claude_scan_line,
+            claude_scan_result,
+            parse_claude_transcript,
+        );
+    }
+
+    #[test]
+    fn codex_rollout_incremental_matches_whole_file() {
+        append_and_compare(
+            &[
+                r#"{"type":"session_meta","payload":{"id":"codex-1"}}"#,
+                r#"{"type":"event_msg","timestamp":"2026-10-10T11:00:00Z","payload":{"type":"token_count","info":{"last_token_usage":{"total_tokens":100},"model_context_window":1000}}}"#,
+                r#"{"type":"compacted","timestamp":"2026-10-10T11:01:00Z"}"#,
+                r#"{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":40,"output_tokens":2},"model_context_window":1000}}}"#,
+                r#"{"type":"session_meta","payload":{"session_id":"codex-2"}}"#,
+                r#"{"type":"event_msg","payload":{"type":"context_compacted"}}"#,
+            ],
+            codex_scan_line,
+            codex_scan_result,
+            parse_codex_rollout,
+        );
     }
 }

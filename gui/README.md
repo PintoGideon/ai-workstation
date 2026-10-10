@@ -1,29 +1,22 @@
-# AMF GUI development preview
+# AIW GUI development preview
 
-This is the Tauri desktop interface for AMF. The `amf` terminal interface
+This is the Tauri desktop interface for AIW. The `aiw` terminal interface
 remains available and uses the same project database and tmux sessions.
 
-## Install a release build
+## Install
 
-Each AMF release on GitHub includes GUI builds for x86_64 and aarch64 Linux,
-and for Apple Silicon Macs, next to the `amf` downloads. They carry the same version number as `amf`.
-Pick the file for your machine's architecture: `x86_64-unknown-linux-gnu`
-for Intel and AMD, `aarch64-unknown-linux-gnu` for ARM64.
+AIW publishes no release bundles: build the GUI from this fork (see
+[Run from source](#run-from-source), or `npm ci && npm run tauri build` in
+`gui/` for a `.deb` / `.AppImage` / `.dmg` under `target/release/bundle/`).
+The product is called **AI Workstation**; the executable is `aiw-gui`.
 
-- **Debian/Ubuntu:** download the `.deb`, for example
-  `amf-gui-x86_64-unknown-linux-gnu.deb`, and install it with
-  `sudo apt install ./amf-gui-x86_64-unknown-linux-gnu.deb`, which also
-  installs `tmux`. Launch it from your applications menu or run `amf-gui`.
-- **Other distributions:** download the `.AppImage` for your architecture, run
-  `chmod +x` on it, and run it. Install `tmux` yourself.
-
-Either way, the harness CLIs you use (`claude`, `codex`, `opencode`, `pi`) must
+Either way, the harness CLIs you use (`claude`, `codex`, `gemini`, `agent`, `pi`) must
 be on `PATH`. For a Mac, follow [macOS](#macos) below; on Windows, follow
 [Windows (WSL2)](#windows-wsl2).
 
 ## macOS
 
-Releases include `amf-gui-aarch64-apple-darwin.dmg` for Apple Silicon Macs
+Releases include `aiw-gui-aarch64-apple-darwin.dmg` for Apple Silicon Macs
 (M1 and later). There is no Intel Mac build; build from source on an Intel Mac.
 
 The maintainer doesn't currently have a Mac available to set up and test Apple
@@ -33,11 +26,11 @@ verified"** warning. Developer ID signing and notarization remain pending.
 
 1. **Install `tmux`,** for example with `brew install tmux`, and install the
    agent CLIs you use.
-2. **Open the `.dmg` and drag AMF GUI into Applications.**
+2. **Open the `.dmg` and drag AIW GUI into Applications.**
 3. **Approve it the first time.** The app is not signed with an Apple
    Developer ID yet, so macOS blocks the first launch with a warning that it
    can't verify the app. Close the warning, open **System Settings → Privacy &
-   Security**, scroll down and click **Open Anyway** next to AMF GUI, then
+   Security**, scroll down and click **Open Anyway** next to AIW GUI, then
    confirm. macOS remembers this, so later launches open normally.
 
    On a company-managed Mac, **Open Anyway** may be unavailable. See
@@ -49,11 +42,11 @@ Apps opened from Finder, the Dock or Spotlight don't inherit your shell's
 for its `PATH`. As long as `tmux` and your agent CLIs work in a new terminal
 window, the GUI will find them. If your shell's startup files take longer than
 three seconds, the GUI gives up and keeps the system `PATH`; launch it from a
-terminal with `open -a "AMF GUI"` instead.
+terminal with `open -a "AIW GUI"` instead.
 
 ### Build locally without a Developer ID
 
-You can build and run AMF on your own Mac without a Developer ID certificate or
+You can build and run AIW on your own Mac without a Developer ID certificate or
 a paid Apple Developer account. A local build normally avoids the downloaded-app
 quarantine involved in that warning. Standard Git clients don't normally
 quarantine their checkouts; see
@@ -71,17 +64,17 @@ If the command line tools aren't installed, run:
 xcode-select --install
 ```
 
-Clone AMF with Git onto the Mac. From the repository root, build and launch a
+Clone AIW with Git onto the Mac. From the repository root, build and launch a
 standalone executable:
 
 ```sh
 cd gui
 npm ci
 npm run tauri -- build --no-bundle --ci
-../target/release/amf-gui
+../target/release/aiw-gui
 ```
 
-The executable is `target/release/amf-gui` at the repository root. Run it again
+The executable is `target/release/aiw-gui` at the repository root. Run it again
 from a terminal whenever you want to open the GUI; `tmux` and your agent CLIs
 must remain on `PATH`.
 
@@ -94,7 +87,7 @@ npm run tauri dev
 
 ## Windows (WSL2)
 
-There is no native Windows build. AMF runs every agent session in tmux, and
+There is no native Windows build. AIW runs every agent session in tmux, and
 tmux doesn't run on Windows, so the GUI runs as a Linux app inside WSL2 and
 opens as a normal window through WSLg.
 
@@ -115,31 +108,31 @@ Store version of WSL.
    so the `.deb` ends up in the Linux file system. On an ARM PC, use
    `aarch64-unknown-linux-gnu` in place of `x86_64-unknown-linux-gnu`.
 
-   ```sh
-   curl -LO https://github.com/eldridgerdev/agent-mainframe/releases/latest/download/amf-gui-x86_64-unknown-linux-gnu.deb
-   ```
+   AIW publishes no release bundles; build the `.deb` from this fork with
+   `cd gui && npm ci && npm run tauri build -- --bundles deb` (see "Run from
+   source" below) and copy it into the Ubuntu file system.
 
 3. **Install it.** This also installs `tmux` and the GUI's runtime libraries:
 
    ```sh
    sudo apt update
-   sudo apt install ./amf-gui-x86_64-unknown-linux-gnu.deb
+   sudo apt install ./aiw-gui-x86_64-unknown-linux-gnu.deb
    ```
 
 4. **Install your agent CLIs inside Ubuntu.** Install `claude`, `codex`,
-   `opencode` or `pi` in Ubuntu the same way as on Linux. A CLI installed on the
+   `gemini`, `agent` or `pi` in Ubuntu the same way as on Linux. A CLI installed on the
    Windows side isn't visible to the GUI.
 
 5. **Keep your repositories in the Linux file system,** for example under
    `~/code`, rather than under `/mnt/c`. Git and agents are much slower across
    the Windows boundary, and worktrees are created next to the repository.
 
-6. **Start the GUI.** Run `amf-gui` in the Ubuntu terminal. WSLg usually also
-   adds an **AMF GUI** entry to the Windows Start menu, marked with your distro's
+6. **Start the GUI.** Run `aiw-gui` in the Ubuntu terminal. WSLg usually also
+   adds an **AIW GUI** entry to the Windows Start menu, marked with your distro's
    name.
 
-The GUI and `amf` share one database inside WSL (`~/.config/amf/amf.db`), so if
-you also use `amf` there, both see the same projects and sessions. The GUI's
+The GUI and `aiw` share one database inside WSL (`~/.config/ai_workstation/aiw.db`), so if
+you also use `aiw` there, both see the same projects and sessions. The GUI's
 terminal includes the icon fonts agent status lines use, so you don't need a
 Nerd Font installed in WSL.
 
@@ -160,7 +153,7 @@ npm run tauri dev
 
 For a standalone release-mode binary without an installer, run
 `npm run tauri -- build --no-bundle --ci`. The executable is
-`target/release/amf-gui` at the repository root. This build still needs
+`target/release/aiw-gui` at the repository root. This build still needs
 `tmux` and the harness CLIs available at runtime.
 
 On Windows, build from source inside WSL2 the same way, after step 1 of
@@ -168,31 +161,31 @@ On Windows, build from source inside WSL2 the same way, after step 1 of
 
 ## Current coverage
 
-The [workflow inventory](../docs/backlog/amf-gui-workflow-inventory.md) labels
+The [workflow inventory](../docs/backlog/aiw-gui-workflow-inventory.md) labels
 each available, limited, and planned GUI workflow. The GUI currently supports
-project and feature creation, additional Claude, Codex, OpenCode, Pi, terminal,
+project and feature creation, additional Claude, Codex, Pi, Gemini, Cursor, terminal,
 Neovim, VS Code, TODOs and configured custom sessions, session terminals, TODO
 lists and agent starts,
 Full and Quick Plan interviews, and Learning with persisted Q&A and an explicit
 editing-agent handoff, plus standalone Git diffs, supervised edits, saved prompt browsing,
 dormant-feature stops and a first PR Triage slice, with syntax highlighting in
-diffs, reviews and the Learning reader. Continue to use `amf` for workflows
+diffs, reviews and the Learning reader. Continue to use `aiw` for workflows
 marked Planned.
 
-Both interfaces read the existing `~/.config/amf/amf.db`. The GUI checks for
+Both interfaces read the existing `~/.config/ai_workstation/aiw.db`. The GUI checks for
 external workspace and TODO changes every two seconds. Each feature page has
 one tab per session; leaving a session's tab detaches the GUI's view and leaves
 the tmux agent session running, while Stop ends the feature session. Agent
-starts that hit AMF's resource warning ask for explicit approval.
+starts that hit AIW's resource warning ask for explicit approval.
 
 Agent tabs also have a right-hand **Claude Sidebar**, **Codex Sidebar**,
-**Opencode Sidebar** or **Pi Sidebar**. Sections follow the TUI's order:
+**Pi Sidebar**, **Gemini Sidebar** or **Cursor Sidebar**. Sections follow the TUI's order:
 Status, Usage, Context, Plan, Issue, PR Triage, Work, Summary, Prompt, Todos
-and Active TODO (OpenCode puts Summary last). Empty sections are omitted;
+and Active TODO. Empty sections are omitted;
 usage windows exist only for supported accounts, and the plan placeholder
 matches the TUI. **Open** reads the current plan, **View** expands the last
 prompt and **Reuse** appends it to the unsent composer draft. **Complete**
-confirms completion of the session's linked AMF TODO. **Triage** and **Review**
+confirms completion of the session's linked AIW TODO. **Triage** and **Review**
 open their existing workflows.
 
 The header's hide button leaves a **Sidebar** rail to restore the panel.
@@ -269,7 +262,7 @@ has arrived below. **PageUp**, **PageDown**, **Home** and **End** then scroll
 the history. **Jump to latest**, **Esc**, **Shift+End**, scrolling back to the
 bottom or typing returns to the live view. Scrolling never sends keys to the
 agent and doesn't use tmux copy-mode, so a TUI viewing the same session is
-unaffected. Full-screen programs that use the mouse, such as OpenCode and
+unaffected. Full-screen programs that use the mouse, such as
 Neovim, receive the wheel and scroll their own view. Other full-screen programs
 keep no scrollback here, so use their own keys.
 
@@ -287,22 +280,22 @@ leaves existing composer drafts intact. Create/edit/delete/export templates and
 editable prompt overrides have their own manager (below). Native desktop
 interaction and macOS runtime validation for this library increment remain open.
 
-Open **Prompt overrides** in workspace navigation to change the prompts AMF
+Open **Prompt overrides** in workspace navigation to change the prompts AIW
 sends for headless AI calls (plan interviews, Final Review walkthroughs and
 questions, AI PR review, review memory, Learning answers and session
 summaries). It is separate from the prompt library: library templates are text
-you insert into an agent draft, while overrides replace AMF's own built-in
+you insert into an agent draft, while overrides replace AIW's own built-in
 prompts. Choose a context (global, a project, or a feature) and the harness to
 preview. Each prompt shows the layer in effect, its placeholders, effective
 template, built-in default and every stored override. **New override…** or
-**Edit** opens a local editor; choose **This feature** (stored in AMF's
-database for that checkout), **This project (amf.json)** (committed with the
+**Edit** opens a local editor; choose **This feature** (stored in AIW's
+database for that checkout), **This project (aiw.json)** (committed with the
 repo) or **Global**, and a shared or harness-specific template, then **Save
 override**. **Clear…** removes exactly one stored override after confirmation.
 Escape, switching prompts or contexts ask before discarding unsaved text. The
 list refreshes while open. If the TUI, another window or a hand edit changes
 that prompt's overrides, saving is blocked until you choose **Reload current
-version**, which keeps your text. A malformed `amf.json` is reported and never
+version**, which keeps your text. A malformed `aiw.json` is reported and never
 overwritten. A pending Final Review or planning AI call offers **Edit prompt**,
 which opens the manager on that prompt. The call keeps waiting and uses your
 saved override when you continue, though its preview still shows the earlier
@@ -315,20 +308,20 @@ It also lists everything else the TUI's session picker offers:
 
 - **VS Code** opens the worktree with `code --new-window`, as the TUI does, and
   is greyed out when `code` isn't on `PATH`. The feature's **VS Code** tab lists
-  the windows AMF launched. AMF closes the ones it opened when the feature
-  stops, or when you choose **Close windows AMF opened**. A window VS Code
-  handed to an instance AMF didn't start is never closed.
+  the windows AIW launched. AIW closes the ones it opened when the feature
+  stops, or when you choose **Close windows AIW opened**. A window VS Code
+  handed to an instance AIW didn't start is never closed.
 - **TODOs** adds the feature's TODOs session; the list itself is always on the
   TODOs tab.
-- **Configured sessions** come from the project's `amf.json` (merged with your
+- **Configured sessions** come from the project's `aiw.json` (merged with your
   global config). Each shows its icon, description, command, working
   directory, pre-check, on-stop command and whether it opens on create. If the
   `pre_check` fails, the dialog shows its output and nothing is created.
   Sessions with `autolaunch` open their tab straight away; others are added
   without switching tabs.
 If tmux exits unexpectedly, the GUI shows the affected features as stopped.
-Start a feature to recreate its tmux session; when a saved Claude, Codex, or
-OpenCode session is available, the GUI offers to resume it, start fresh, or
+Start a feature to recreate its tmux session; when a saved Claude or Codex
+session is available, the GUI offers to resume it, start fresh, or
 choose another saved session.
 
 **Delete feature** asks what to do with unfinished worktree TODOs. If the feature
@@ -341,7 +334,7 @@ drops a project list hosted by it, matching the TUI.
 When a project's worktree setup asks for an option, **New feature** and the
 TODO's new-feature form show that choice before creation. Choose an option to
 continue; a failed lookup offers **Retry**. The configured script receives the
-choice through `AMF_HOOK_CHOICE`. This works with direct starts, Full and Quick
+choice through `AIW_HOOK_CHOICE`. This works with direct starts, Full and Quick
 Plan, and TODO planning. Setup runs before the interview opens; cancelling the
 interview keeps the worktree and its setup changes, without saving a plan or
 launching an agent. A failed setup still allows planning to continue and shows
@@ -355,7 +348,7 @@ repository. Codex always uses its read-only repository sandbox. Reading and
 asking questions do not open an editing session. **Open editing agent** starts
 an agent only when explicitly selected, asks for resource approval when needed,
 and opens an editable prompt that you can review before sending. Closing
-Learning leaves pending answers running while AMF stays open. Unsent questions
+Learning leaves pending answers running while AIW stays open. Unsent questions
 are preserved across refreshes and require explicit discard on close.
 
 Learning also offers starter questions, hunk selection, keeping an answer as an
@@ -399,14 +392,14 @@ review drops approvals whose patch changed meanwhile; **Reload
 saved review** adopts progress changed in another interface. Edit a given review
 in one interface at a time; detected external saves block edits until reload.
 **Generate walkthrough**, **Changeset overview** and **AI co-review file** reuse
-AMF's Claude review tools. Each new call offers a prompt preview and requires
+AIW's Claude review tools. Each new call offers a prompt preview and requires
 **Continue AI call**; cancelling runs nothing. Walkthroughs are cached for files
 without developer notes, and co-review findings stay AI drafts until **Accept AI
 draft** or **Dismiss AI draft**. Accepting a draft uses the same verdict rules
 and saved progress as a human line comment.
 
 **Ask about file** or **Ask about selection** opens a local question draft.
-Choose an allowed Claude, Codex, OpenCode or Pi harness, then ask explicitly.
+Choose an allowed Claude, Codex or Pi harness, then ask explicitly.
 The answering harness reads the repository and reviewed diff; follow-ups include
 earlier answers for the current review version. Questions, answers and AI notes
 stay in memory while this review is open; pause/reopen retains verdicts/comments,
@@ -493,8 +486,8 @@ Remaining native interactions and macOS validation are open.
 
 ### Supervised edits
 
-A Vibeless agent's hook holds each file change until AMF answers it. When no
-AMF TUI is running, the hook leaves the request on disk and the GUI picks it up:
+A Vibeless agent's hook holds each file change until AIW answers it. When no
+AIW TUI is running, the hook leaves the request on disk and the GUI picks it up:
 the feature gets a count in navigation and its oldest waiting edit opens in a
 popup over the current page or agent tab. Other dialogs and unsent form input
 or agent drafts defer opening; the sidebar explains the delay, and an arrival
@@ -516,11 +509,11 @@ default and does not change TUI configuration. The panel lists waiting edits wit
 hook's captured diff, the agent's stated reason when it gives one, and layout
 and context controls. **Approve edit**, **Reject edit** (with optional
 feedback, up to 200 characters) and **Cancel edit** each need a second,
-explicit confirmation that states what the agent will do; OpenCode, for
-example, does not forward rejection feedback and treats cancel as a skip.
+explicit confirmation that states what the agent will do. Codex's
+`change-reason` requests are answered from the TUI only.
 Answers name the reviewed revision, so an edit that changed, was answered in
 another window, or whose agent stopped waiting is refused rather than answered
-twice. Closing with unsent feedback asks before discarding it. AMF never writes
+twice. Closing with unsent feedback asks before discarding it. AIW never writes
 the source itself; the agent does, after reading an approval.
 
 A running TUI receives these requests over its socket and answers them there;
@@ -533,7 +526,7 @@ offline input against an isolated database and checkout.
 Open **Appearance** in the projects sidebar to select a theme. The desktop
 follows the TUI's configured theme by default, checking for changes every three
 seconds. The TUI's Default theme uses the GUI's system appearance. Choosing
-Light, Dark, Follow system, a TUI catalog theme (AMF, Dracula, Nord, Catppuccin
+Light, Dark, Follow system, a TUI catalog theme (Classic, Dracula, Nord, Catppuccin
 and Gruvbox variants), or a custom theme creates an independent GUI preference.
 **Follow TUI theme** clears that override. GUI choices never write the TUI's
 `config.json`; they are saved in the desktop webview's local storage, shared
@@ -550,8 +543,8 @@ appearance retains its existing colors. Catalog themes map the TUI palette
 onto desktop surfaces, syntax roles and terminal ANSI colors. Switching applies
 live without resetting terminal history, attachments or composer drafts.
 
-Custom themes are JSON files in `gui-themes/` inside AMF’s configuration
-directory, normally `~/.config/amf/gui-themes/` on Linux/WSL. Appearance displays
+Custom themes are JSON files in `gui-themes/` inside AIW’s configuration
+directory, normally `~/.config/ai_workstation/gui-themes/` on Linux/WSL. Appearance displays
 the actual directory, including macOS and legacy-config resolution. Files reload
 within three seconds. Create the directory if needed and save, for example,
 `ocean.json`:
@@ -606,7 +599,7 @@ using private Git/SQLite/tmux fixtures and an offline terminal stand-in.
 Diffs, Final Review and the Learning reader colour source code with the TUI's
 own tree-sitter parsers, so both interfaces agree on each file's language
 (extension, special file name or shebang) and share one parser install under
-`~/.config/amf/tree-sitter`. Each diff line is coloured with its whole file as
+`~/.config/ai_workstation/tree-sitter`. Each diff line is coloured with its whole file as
 context, so a changed line inside a multi-line string or block comment is
 classified correctly even when the hunk does not show where it opened. Added,
 removed and selected rows keep their backgrounds, and line numbers, selection
@@ -616,7 +609,7 @@ The file header names the language, or says why a file is plain text: no
 supported language, a parser that is not installed or needs repair, or a file
 too large to highlight (over 10,000 lines or 1 MiB, or past a 4 MiB budget
 for one change set). Binary files stay plain. **Install … parser** does what
-the TUI's syntax picker (`i`) does: after you confirm, AMF clones the grammar
+the TUI's syntax picker (`i`) does: after you confirm, AIW clones the grammar
 from GitHub and compiles it with `cc`; the view reloads with colours when it
 finishes. Highlight colours are `--syn-*` CSS tokens in `src/syntax.css`, with
 light and dark values that keep 4.5:1 contrast on every code background.
@@ -647,7 +640,7 @@ processes on a private tmux server.
 of them), marks the branch's own PR, and opens any PR from the list or by number.
 Comments load through the same `gh` fetch and normalization as the TUI's PR
 Triage: inline comments with their windowed diff context, review summaries,
-conversation and bot comments, review-thread resolution, and AMF's own follow-up
+conversation and bot comments, review-thread resolution, and AIW's own follow-up
 replies collated under the comment they answer. Hide resolved threads, change the
 sort, and mark comments done or skipped locally. **Investigate…** runs the shared
 read-only investigation (with an optional hypothesis, then follow-ups) on an
@@ -655,8 +648,8 @@ allowed harness: a pre-call notice shows the exact prompt and nothing runs until
 **Continue AI call**. If the PR changed after the preview, the call is refused and
 the updated prompt is shown instead. **Reply: fixed**, **Reply: not needed** and
 **Reply with findings** open a local draft; **Review reply…** shows the exact body
-(with AMF's attribution) and destination, and only **Post reply to GitHub** writes.
-**Resolve thread…**/**Reopen thread…** also ask first. Before writing, AMF re-reads
+(with AIW's attribution) and destination, and only **Post reply to GitHub** writes.
+**Resolve thread…**/**Reopen thread…** also ask first. Before writing, AIW re-reads
 the PR head and the thread on GitHub and refuses stale targets, keeping your
 draft. **Fix agent** selects an existing agent session on this feature (including
 stopped sessions). **Prepare fix…** builds the TUI's comment fix prompt, including
@@ -675,7 +668,7 @@ handoff preserving an existing composer draft.
 
 ### Debug log
 
-Open **Debug log** in workspace navigation to read the latest 1,000 AMF log
+Open **Debug log** in workspace navigation to read the latest 1,000 AIW log
 entries, oldest first. The viewer combines shared SQLite history (including
 TUI writes) with this GUI process's pending entries. **Refresh log** loads new
 entries without reopening; level and context/message filters apply within
@@ -683,7 +676,7 @@ that recent window. Failed refreshes label any retained results as the previous
 load. Reading and filtering do not clear logs or change running sessions.
 When no database is available, the viewer states that it shows only local
 process history. File-only background-thread messages remain in
-`~/.local/state/amf/debug.log`; this viewer uses the same database reader as
+`~/.local/state/ai_workstation/debug.log`; this viewer uses the same database reader as
 TUI startup rather than parsing that file. Broader settings remain pending.
 
 Native WSLg proof for this viewer is reproducible with
@@ -707,7 +700,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 
 The release workflow (`.github/workflows/release.yml`) builds the `.deb` and
 AppImage for x86_64 and aarch64 Linux and the `.dmg` for Apple Silicon from
-each version tag. If a GUI build fails, the `amf` release is still published.
+each version tag. If a GUI build fails, the `aiw` release is still published.
 The macOS build is ad-hoc signed, not signed with a Developer ID or notarized.
 Developer ID signing, notarization, Intel Mac builds and in-app updates remain
 packaging work.

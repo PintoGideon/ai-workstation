@@ -1,6 +1,6 @@
 # Handing an accepted plan to a running session
 
-Captured from an isolated AMF instance against a throwaway repository, using
+Captured from an isolated AIW instance against a throwaway repository, using
 `scripts/dev/screenshot/scenarios/plan-interview-live-handoff.txt`. The
 scenario seeds a project and one feature — which launches a real claude
 session, exactly what the handoff needs — then accepts an on-demand plan for
@@ -44,7 +44,7 @@ session is simply not typed into.
 `y` opens the running session and seeds its composer with the same kickoff
 prompt a freshly launched session gets: **seeded, not sent**. The session may
 be mid-task, so when the prompt lands stays the user's call — the same contract
-every other compose seed in AMF has.
+every other compose seed in AIW has.
 
 The pane behind the composer shows Claude Code's first-run trust prompt, which
 is an artifact of the throwaway worktree the capture creates, not of the

@@ -586,7 +586,7 @@ mod tests {
             state.return_to_view = Some(crate::app::ViewState::new(
                 "my-project".to_string(),
                 "my-feature".to_string(),
-                "amf-my-feature".to_string(),
+                "aiw-my-feature".to_string(),
                 "claude".to_string(),
                 "Claude".to_string(),
                 crate::project::SessionKind::Claude,

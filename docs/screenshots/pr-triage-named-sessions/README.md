@@ -12,6 +12,6 @@ injected, making the destination explicit.
 ![Fix confirmation naming the dedicated session](fix-confirm-named-session.png)
 
 These frames were captured at 120×40 against read-only fixture PR #343 with
-the isolated `scripts/dev/screenshot/amf-capture.sh` harness. The scenario
+the isolated `scripts/dev/screenshot/aiw-capture.sh` harness. The scenario
 stopped before prompt injection, so it launched no triage agent and performed
 no GitHub write.

@@ -1,6 +1,6 @@
 # Plan-mode preset and batch interplay
 
-Captured from an isolated AMF instance with
+Captured from an isolated AIW instance with
 `scripts/dev/screenshot/scenarios/plan-mode-preset-batch.txt`. The scenario
 walks to the final batch settings screen, captures it, and exits without
 creating any features.

@@ -10,7 +10,7 @@ export interface DecisionEffects {
   approve: string;
   reject: string;
   cancel: string;
-  /** OpenCode blocks a rejected write but does not forward the feedback. */
+  /** False when the agent's hook blocks a rejected write without forwarding the feedback. */
   feedback_reaches_agent: boolean;
 }
 

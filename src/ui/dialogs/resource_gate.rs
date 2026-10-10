@@ -145,7 +145,7 @@ fn over_limit_lines<'a>(over: &OverLimit, theme: &Theme) -> Vec<Line<'a>> {
     ]
 }
 
-/// Names the editor windows AMF knows are open, under the memory figure.
+/// Names the editor windows AIW knows are open, under the memory figure.
 ///
 /// They are deliberately *not* counted as agents — one language server can
 /// outweigh five harnesses, so a single count could never price both — but

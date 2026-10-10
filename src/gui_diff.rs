@@ -219,7 +219,7 @@ pub(crate) fn file_view_budgeted(
 pub(crate) mod tests {
     use super::*;
     use crate::app::{App, AppMode};
-    use crate::db::AmfDb;
+    use crate::db::AiwDb;
     use crate::gui_contract::GuiErrorKind;
     use crate::project::{AgentKind, Feature, Project, ProjectStatus, ProjectStore, VibeMode};
     use crate::traits::{MockTmuxOps, MockWorktreeOps};
@@ -287,7 +287,7 @@ pub(crate) mod tests {
         project.features.push(feature);
         let mut store = ProjectStore::empty();
         store.projects.push(project);
-        let db = AmfDb::open(&dir.path().join("amf.db")).unwrap();
+        let db = AiwDb::open(&dir.path().join("aiw.db")).unwrap();
         db.save_store(&store).unwrap();
         let (_, version) = db.load_store_versioned().unwrap();
         let mut app = App::new_for_test(
@@ -517,7 +517,7 @@ pub(crate) mod tests {
                 .kind,
             GuiErrorKind::NotFound
         );
-        let other = AmfDb::open(&dir.path().join("amf.db")).unwrap();
+        let other = AiwDb::open(&dir.path().join("aiw.db")).unwrap();
         let mut store = other.load_store().unwrap();
         store.projects[0].features.clear();
         other.save_store(&store).unwrap();

@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     app::PlanInterviewState,
-    db::AmfDb,
+    db::AiwDb,
     model_options::{Availability, ModelCapability},
     project::{Feature, Project, ProjectStore, SessionKind, VibeMode},
     traits::{MockTmuxOps, MockWorktreeOps},
@@ -92,7 +92,7 @@ fn fixture(tmux: MockTmuxOps) -> (App, tempfile::TempDir) {
     store.available_harnesses = vec![AgentKind::Codex];
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
     app.store_path = dir.path().join("store.json");
-    app.db = Some(AmfDb::open(&dir.path().join("db")).unwrap());
+    app.db = Some(AiwDb::open(&dir.path().join("db")).unwrap());
     app.config.max_concurrent_agents = 0;
     app.config.low_memory_warn_mb = 0;
     let prepared = PreparedFeatureLaunch {
@@ -161,7 +161,7 @@ fn session_answer(input: &RunInput) -> Result<String> {
     answer(input)
 }
 fn change_plan_during_session_analysis(input: &RunInput) -> Result<String> {
-    std::fs::write(input.workdir.join("AMF_PLAN.md"), "Revised task")?;
+    std::fs::write(input.workdir.join("AIW_PLAN.md"), "Revised task")?;
     answer(input)
 }
 fn poll(app: &mut App) {
@@ -263,7 +263,7 @@ fn changed_task_conversation_or_deleted_target_prevents_prepared_update() {
         wait_for_prepared(&app);
         match change {
             "plan" => std::fs::write(
-                app.store.projects[0].repo.join("AMF_PLAN.md"),
+                app.store.projects[0].repo.join("AIW_PLAN.md"),
                 "Changed task",
             )
             .unwrap(),
@@ -491,7 +491,7 @@ fn plan_changes_beyond_prompt_limit_and_expired_research_prevent_live_applicatio
         if !expired {
             app.cancel_model_analysis();
             std::fs::write(
-                app.store.projects[0].repo.join("AMF_PLAN.md"),
+                app.store.projects[0].repo.join("AIW_PLAN.md"),
                 "x".repeat(25_000),
             )
             .unwrap();
@@ -504,7 +504,7 @@ fn plan_changes_beyond_prompt_limit_and_expired_research_prevent_live_applicatio
             app.model_analysis_work.now = || "2026-11-01T12:00:00Z".parse().unwrap();
         } else {
             std::fs::write(
-                app.store.projects[0].repo.join("AMF_PLAN.md"),
+                app.store.projects[0].repo.join("AIW_PLAN.md"),
                 format!("{}changed", "x".repeat(25_000)),
             )
             .unwrap();
@@ -520,7 +520,7 @@ fn plan_changes_beyond_prompt_limit_and_expired_research_prevent_live_applicatio
 fn dashboard_session_advice_uses_effective_plan_and_cannot_change_running_harness() {
     let (mut app, _dir) = session_fixture(SessionKind::Codex);
     std::fs::write(
-        app.store.projects[0].repo.join("AMF_PLAN.md"),
+        app.store.projects[0].repo.join("AIW_PLAN.md"),
         "Validate Unicode boundaries before parsing.",
     )
     .unwrap();
@@ -641,7 +641,7 @@ fn non_agent_sessions_are_rejected_and_unverified_harnesses_are_insufficient() {
 fn session_plan_edit_during_analysis_rejects_stale_advice() {
     let (mut app, _dir) = session_fixture(SessionKind::Codex);
     std::fs::write(
-        app.store.projects[0].repo.join("AMF_PLAN.md"),
+        app.store.projects[0].repo.join("AIW_PLAN.md"),
         "Original task",
     )
     .unwrap();
@@ -842,7 +842,7 @@ fn analyzer_prompt_obeys_all_override_layers_and_validates_winning_template() {
         .unwrap();
     assert_eq!(resolve(&app), ("global".into(), PromptSource::Global));
     std::fs::write(
-        target.repo.join("amf.json"),
+        target.repo.join("aiw.json"),
         serde_json::json!({"prompt_overrides":{id.as_str():{"template":"project"}}}).to_string(),
     )
     .unwrap();
@@ -1139,7 +1139,7 @@ fn changed_plan_file_during_launch_validation_does_not_start_an_agent() {
     app.complete_plan_interview_with_resource_approval(true)
         .unwrap();
     std::fs::write(
-        target.workdir.join("AMF_PLAN.md"),
+        target.workdir.join("AIW_PLAN.md"),
         "externally changed plan",
     )
     .unwrap();
@@ -1250,7 +1250,7 @@ fn existing_full_and_quick_plan_review_offer_view_only_implementation_advice() {
         assert!(
             matches!(&app.mode, AppMode::PlanInterview(s) if s.pending_launch.is_none() && s.synthesized_plan.as_ref().unwrap().contains("Reviewed task:"))
         );
-        assert!(!app.store.projects[0].repo.join("AMF_PLAN.md").exists());
+        assert!(!app.store.projects[0].repo.join("AIW_PLAN.md").exists());
         assert_eq!(app.store.projects[0].features[0].sessions.len(), 1);
     }
 }
@@ -1265,7 +1265,7 @@ fn host_todo_plan_advice_keeps_the_existing_plan_and_reservation_untouched() {
     }
     let db = app.db.as_ref().unwrap();
     let before = db.find_todo_by_id(&origin.todo_id).unwrap().unwrap();
-    let plan = app.store.projects[0].repo.join("AMF_PLAN.md");
+    let plan = app.store.projects[0].repo.join("AIW_PLAN.md");
     std::fs::write(&plan, "Existing feature plan").unwrap();
     app.open_model_analysis().unwrap();
     poll(&mut app);

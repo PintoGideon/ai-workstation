@@ -10,7 +10,7 @@
 # recorded in *this* operator's own `~/.codex/config.toml`. A bare CI
 # runner or a fresh install has no such file, so this scenario would show
 # empty presets there instead. Local-only reference/demo scenario — do NOT
-# point `amf-publish-screenshots`/`publish-pages.sh` at this one; use
+# point `aiw-publish-screenshots`/`publish-pages.sh` at this one; use
 # `codex-model-picker-no-presets-note.txt`, which is deterministic and
 # reproduces the same way everywhere.
 #
@@ -18,7 +18,7 @@
 # review run) — every navigation past the model picker backs out with Esc.
 #
 # Run with:
-#   ./amf-capture.sh --scenario scenarios/codex-model-picker.txt --keep
+#   ./aiw-capture.sh --scenario scenarios/codex-model-picker.txt --keep
 
 shot:dashboard
 
@@ -43,7 +43,7 @@ wait:500
 # Seed a completed AI Review pane deterministically (no live agent call, no
 # GitHub write) so `A` reopens the harness/model picker chain against real
 # state instead of an empty one.
-run:AMF_BIN="$AMF_BIN" "$SCRIPT_DIR/seed-ai-review-fixture.sh" >/dev/null
+run:AIW_BIN="$AIW_BIN" "$SCRIPT_DIR/seed-ai-review-fixture.sh" >/dev/null
 wait:300
 note:A previously-completed AI Review pane, seeded without spending agent tokens, is the starting point for reopening the picker chain.
 shot:completed-ai-review
