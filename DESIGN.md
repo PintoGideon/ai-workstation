@@ -256,6 +256,7 @@ drawing fails the suite.
 | before (upstream look) | 390–430 µs | 410–460 µs | 7.17 M |
 | after (G11) | 360–375 µs | 387–435 µs | 6.76 M (−5.7 %) |
 | ratatui 0.30 (same code, 3 runs each side) | 340–367 → 372–373 µs | 357–396 → 398–403 µs | not measured |
+| polish pass (§12.4, 3 idle runs each side) | 360–363 → 357–361 µs | 384–401 → 375–384 µs | not measured |
 
 The ratatui 0.30 row (2026-10-10, `chore: upgrade to ratatui 0.30 …`): three back-to-back runs on each side of the
 upgrade on the same machine; the before runs spread 340–367 µs and the after runs sit at 372 µs, so the difference
@@ -268,6 +269,9 @@ ratatui's own buffer reset/diff (computing each cell's display width); AIW's own
 G11 changes pay for themselves by dropping two redundant whole-screen passes: the full-screen `Clear` in
 `dashboard::draw` / split view (`Terminal::draw` already hands over a reset buffer), a `getcwd` per frame (cached),
 a `Theme` clone per frame in the list, and a `$HOME` lookup per row (cached).
+
+The polish-pass row (2026-10-10): the `…` fitting of every list row, the footer's hint cutting and the toast
+placement cost nothing measurable — both sides sit at 360 µs on the same idle machine.
 
 ### 12.3 Performance and obsolete-code pass (2026-10-10)
 
@@ -325,6 +329,38 @@ summaries). Busy pane = a spinner-like line rewritten every 100 ms.
   Upstream's planning docs under `docs/backlog/` and `CHANGELOG.md` keep their history.
 - Kept on purpose: upstream items marked "exercised only by unit tests" or "ahead of its UI" (removing them would
   delete tests, not dead features), and struct fields that are deserialized but not yet shown.
+
+### 12.4 Spacing and truncation polish (2026-10-10)
+
+Findings from an end-to-end run at 80×24, 120×40 and 200×60 with three projects and some twenty sessions, and
+what changed (`src/ui/fork_text.rs` holds the shared text fitting; everything else is a small `FORK:` touch):
+
+- **`…` everywhere a line is cut.** Project, feature and session rows (`fork_text::fit_line`, width-aware so an
+  emoji never spills over the border), the footer's selection line (which now also stops short of the usage
+  readout), the help body, the theme picker's legend and the hook dialog's command/script preview. Footer and
+  split-view hints are dropped a whole `key label` at a time and end in `…` (`fit_hints`), never `V pendi`.
+- **Footer padding.** The footer's inside carries the same one column of padding as the list (`Padding`), so
+  `Created project 'x'` and the selection line start one cell in like every row above them. A footer squeezed
+  to two rows (40×10) draws no usage readout rather than painting it over its own border.
+- **Toasts** are placed by the caller: on the dashboard they stack inside the list panel (one cell in from its
+  border), elsewhere in the screen corner as before; rounded like the panels. The "stale dialog corner" seen in
+  the e2e captures was a toast's bottom border sitting on the footer's message row, not a drawing residue —
+  `closing_a_dialog_leaves_no_border_residue_on_the_dashboard` draws four dialogs and then the dashboard into
+  one `TestBackend` and finds none.
+- **Status glyphs** on a feature row are the header pills' (`⚠` needs you, `✓` finished) and the row's fallback
+  rolls up its sessions: `●` while any session runs, `■` stopped, `○` otherwise — a feature no longer shows
+  `○` over `●` sessions. The bare ` ?` after the session count is gone (the glyph already says it).
+- **Narrow rows.** The agent view's right-hand badges have priority: the long direct-input hint shortens to
+  `[leader+e: compose]` and whatever header text would run under the badges is elided with `…`. The dashboard
+  header's attention badge falls back to `[N | <leader i>]` when the full one would be cut, and to none at all
+  below that; the list's totals title gives way before it would overwrite ` Projects `.
+- **Dialogs.** The New Project path field scrolls (`…` + the tail, cursor in view) with the browse hint on its
+  own row; the hook-approval dialog wraps paths after `/` with a hanging indent (`wrap_path`); the help overlay
+  wraps descriptions itself with a hanging indent under a key column that shrinks on a narrow panel.
+- **Lists and flows.** Features list in creation order (oldest first); an empty dashboard offers only `N`, `?`
+  and `q`; a clean feature delete closes its dialog on its own and toasts (an error still waits for Enter);
+  `i` with nothing pending writes "Nothing needs you" to the footer.
+- Split view skips any tile rect that is not inside the frame (a stale layout from a resize).
 
 ## 13. Delivery order
 
