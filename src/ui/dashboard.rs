@@ -830,17 +830,21 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         pills,
         &app.theme,
     );
-    super::list::draw(frame, app, chunks[1]);
+    // FORK: workspace layout (sidebar + live pane) when it is on and fits.
+    if !super::fork_workspace::draw(frame, app, chunks[1]) {
+        super::list::draw(frame, app, chunks[1]);
+    }
     super::status::draw(frame, app, chunks[2]);
 
     if app.leader_active {
-        super::pane::draw_command_menu(
-            frame,
-            frame.area(),
-            " Ctrl+Space commands ",
-            DASHBOARD_LEADER_COMMANDS,
-            &app.theme,
-        );
+        // FORK: with the workspace pane focused the leader menu is the
+        // view's, since those are the commands that apply.
+        let (title, commands) = if app.workspace_pane_focused() {
+            (" Ctrl+Space (pane) ", super::pane::LEADER_COMMANDS)
+        } else {
+            (" Ctrl+Space commands ", DASHBOARD_LEADER_COMMANDS)
+        };
+        super::pane::draw_command_menu(frame, frame.area(), title, commands, &app.theme);
     }
 
     if let AppMode::ModelAnalysis(state) = &app.mode {

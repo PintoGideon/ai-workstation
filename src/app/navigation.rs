@@ -10,6 +10,10 @@ impl App {
     }
 
     pub(crate) fn visible_item_height(&self, item: &VisibleItem) -> usize {
+        // FORK: the workspace sidebar has its own second-line rule.
+        if self.workspace_active() {
+            return self.workspace_item_height(item);
+        }
         match item {
             VisibleItem::Session(pi, fi, si) => self
                 .store

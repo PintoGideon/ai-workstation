@@ -23,6 +23,7 @@ mod fork_render_memo; // FORK: per-frame dialog values (DESIGN.md §12.3)
 pub(crate) mod fork_split; // FORK: split view (DESIGN.md §4.1)
 #[cfg(test)]
 mod fork_view_bench; // FORK: view refresh cost (DESIGN.md §12.3)
+pub(crate) mod fork_workspace; // FORK: workspace layout (DESIGN.md §15)
 pub(crate) mod github_workflow;
 mod handoff;
 mod hooks;
@@ -1004,6 +1005,8 @@ pub struct App {
     pub pane_content: String,
     // FORK: split view state that outlives `AppMode::SplitView` (zoom stash).
     pub fork_split: fork_split::SplitRuntime,
+    /// FORK: workspace layout (sidebar + live pane) runtime, DESIGN.md §15.
+    pub fork_workspace: fork_workspace::WorkspaceRuntime,
     /// FORK: ids of sessions whose finished turn has been looked at (their
     /// `✓` is dim). Not persisted; a new finished event clears the id.
     pub finished_seen: std::collections::HashSet<String>,
@@ -1524,6 +1527,8 @@ impl App {
             }
         }
 
+        self.fork_workspace.signature().hash(&mut hasher); // FORK: workspace layout
+
         if let AppMode::Viewing(view) = &self.mode {
             view.project_name.hash(&mut hasher);
             view.feature_name.hash(&mut hasher);
@@ -1622,6 +1627,9 @@ impl App {
         let view = match &self.mode {
             AppMode::Viewing(view) => view,
             AppMode::Compose(state) => &state.view,
+            // FORK: the workspace layout's live pane is the one capture
+            // target while the dashboard shows it.
+            AppMode::Normal => return self.workspace_snapshot_target(),
             _ => return None,
         };
 
@@ -2614,9 +2622,10 @@ impl App {
             toasts: Vec::new(),
             should_quit: false,
             pane_content: String::new(),
-            fork_split: Default::default(), // FORK: split view
+            fork_split: Default::default(),     // FORK: split view
+            fork_workspace: Default::default(), // FORK: workspace layout
             finished_seen: std::collections::HashSet::new(), // FORK: badges
-            badge_ages: Default::default(), // FORK: badges
+            badge_ages: Default::default(),     // FORK: badges
             fork_render_memo: Default::default(), // FORK: render memo
             pane_lines: Vec::new(),
             pane_content_cols: 0,
@@ -2877,9 +2886,10 @@ impl App {
             toasts: Vec::new(),
             should_quit: false,
             pane_content: String::new(),
-            fork_split: Default::default(), // FORK: split view
+            fork_split: Default::default(),     // FORK: split view
+            fork_workspace: Default::default(), // FORK: workspace layout
             finished_seen: std::collections::HashSet::new(), // FORK: badges
-            badge_ages: Default::default(), // FORK: badges
+            badge_ages: Default::default(),     // FORK: badges
             fork_render_memo: Default::default(), // FORK: render memo
             pane_lines: Vec::new(),
             pane_content_cols: 0,

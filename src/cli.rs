@@ -1401,7 +1401,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         // pane-refresh paths must stay active while composing too.
         let pane_live = is_viewing
             || matches!(app.mode, app::AppMode::Compose(_))
-            || matches!(app.mode, app::AppMode::SplitView(_)); // FORK: split view tiles are live panes
+            || matches!(app.mode, app::AppMode::SplitView(_)) // FORK: split view tiles are live panes
+            || app.workspace_pane_live(); // FORK: the workspace layout's live pane
         let animating = app.has_visible_animation();
 
         // FORK: `mut` — a resize event below updates it, so the split-view
@@ -1689,6 +1690,10 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                 deadlines.register(
                     activated_at + Duration::from_secs(app.config.leader_timeout_seconds.max(1)),
                 );
+            }
+            // FORK: the workspace pane follows the selection after a debounce.
+            if let Some(due) = app.workspace_debounce_due() {
+                deadlines.register(due);
             }
             // The view-mode resize check is not fd-driven (libc::poll cannot
             // observe SIGWINCH), so keep its worst-case latency at 250ms;
@@ -2170,26 +2175,42 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         if app.fork_split.take_view_resize_invalidation() {
             last_resize = None;
         }
-        // FORK: badges keep their ages (DESIGN.md §15).
+        // FORK: badges keep their ages; the workspace pane follows the
+        // selection (debounced).
         app.refresh_badge_ages();
+        force_redraw |= app.workspace_tick();
 
-        let live_view_for_sizing = match &app.mode {
-            app::AppMode::Viewing(view) => Some(view.clone()),
-            app::AppMode::Compose(state) => Some(state.view.clone()),
+        // FORK: the workspace layout's live pane is sized and captured
+        // exactly like the single view, at the pane's inner size.
+        let live_view_for_sizing: Option<(String, String, u16, u16)> = match &app.mode {
+            app::AppMode::Viewing(view) => Some((
+                view.session.clone(),
+                view.window.clone(),
+                ui::viewing_main_width(view, size.width),
+                size.height.saturating_sub(1),
+            )),
+            app::AppMode::Compose(state) => Some((
+                state.view.session.clone(),
+                state.view.window.clone(),
+                ui::viewing_main_width(&state.view, size.width),
+                size.height.saturating_sub(1),
+            )),
+            app::AppMode::Normal => app.workspace_capture_geometry(size.width, size.height),
             _ => None,
         };
-        if let Some(view) = live_view_for_sizing.as_ref() {
+        if let Some((view_session, view_window, content_cols, content_rows)) =
+            live_view_for_sizing.as_ref()
+        {
             // The view content area is the full terminal minus the
             // 1-row header (see ui/pane.rs); the pane, the vt100
             // parser, and the rendered area must all share these
             // dimensions or captured output reflows incorrectly.
-            let content_rows = size.height.saturating_sub(1);
-            let content_cols = ui::viewing_main_width(view, size.width);
+            let (content_cols, content_rows) = (*content_cols, *content_rows);
             let current_resize = (
                 content_cols,
                 content_rows,
-                view.session.clone(),
-                view.window.clone(),
+                view_session.clone(),
+                view_window.clone(),
             );
 
             let mut dims_applied = last_resize.as_ref() == Some(&current_resize);
@@ -2199,12 +2220,12 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                 // changed (mid-drag) so the agent pane gets a single
                 // SIGWINCH once the viewport settles.
                 let same_target = last_resize.as_ref().is_some_and(|(_, _, session, window)| {
-                    session == &view.session && window == &view.window
+                    session == view_session && window == view_window
                 });
                 if !same_target || viewport_stable_since.elapsed() >= VIEWPORT_RESIZE_DEBOUNCE {
                     let _ = TmuxManager::resize_pane(
-                        &view.session,
-                        &view.window,
+                        view_session,
+                        view_window,
                         content_cols,
                         content_rows,
                     );

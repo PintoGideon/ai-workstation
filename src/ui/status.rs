@@ -82,6 +82,8 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         };
 
     let keybinds = match &app.mode {
+        // FORK: workspace layout — hints for the focused half.
+        AppMode::Normal if app.workspace_active() => super::fork_workspace::footer_hints(app),
         AppMode::Normal => {
             let on_session = matches!(app.selection, Selection::Session(_, _, _));
             let on_feature = matches!(app.selection, Selection::Feature(_, _));

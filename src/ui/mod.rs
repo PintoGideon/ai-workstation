@@ -3,6 +3,7 @@ mod dialogs;
 pub(crate) mod fork_chrome; // FORK: G11 dashboard chrome
 mod fork_split; // FORK: split view
 pub(crate) mod fork_text; // FORK: `…` fitting, hint cutting, path wrapping
+pub(crate) mod fork_workspace; // FORK: workspace layout (DESIGN.md §15)
 pub mod header;
 pub(crate) mod list;
 pub mod pane;
@@ -28,6 +29,15 @@ pub(crate) use pane::viewing_main_width;
 pub(crate) use toast::draw_toasts;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
+    // FORK: the workspace layout decides by the terminal width; keep the
+    // viewport the main loop records in step with the frame being drawn
+    // (tests draw without the loop).
+    let area = frame.area();
+    if (app.viewport_cols, app.viewport_total_rows) != (area.width, area.height) {
+        app.viewport_cols = area.width;
+        app.viewport_total_rows = area.height;
+        app.viewport_rows = area.height.saturating_sub(3);
+    }
     // FORK: split view draws the whole screen itself.
     if matches!(app.mode, crate::app::AppMode::SplitView(_)) {
         fork_split::draw(frame, app);

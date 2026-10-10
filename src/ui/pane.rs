@@ -14,7 +14,8 @@ use crate::context_tracking::ContextBand;
 use crate::project::{SessionKind, VibeMode};
 use crate::theme::Theme;
 
-const LEADER_COMMANDS: &[(&str, &str)] = &[
+pub(crate) const LEADER_COMMANDS: &[(&str, &str)] = &[
+    // FORK: shared with the workspace pane
     ("q", "Exit view"),
     ("t / T", "Next / prev session"),
     ("w", "Session switcher"),
