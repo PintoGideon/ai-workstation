@@ -134,36 +134,47 @@ fn discover_with_deadline(
         Instant::now() < deadline,
         "Claude discovery timed out; retry when ready"
     );
-    let child = Command::new(binary)
-        .args([
-            "-p",
-            "--input-format",
-            "stream-json",
-            "--output-format",
-            "stream-json",
-            "--verbose",
-            "--no-chrome",
-            "--disable-slash-commands",
-            "--permission-mode",
-            "dontAsk",
-            "--tools",
-            "",
-            "--strict-mcp-config",
-            "--mcp-config",
-            "{\"mcpServers\":{}}",
-            "--no-session-persistence",
-            "--settings",
-            "{\"disableAllHooks\":true}",
-            "--effort",
-            "high",
-        ])
-        .current_dir(workdir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .process_group(0)
-        .spawn()
-        .context("Claude capability discovery failed")?;
+    // FORK: a just-written binary (an update, or a file a sibling process still
+    // holds open across fork) fails with ETXTBSY for a moment; retry briefly.
+    let mut attempts = 0;
+    let child = loop {
+        let spawned = Command::new(binary)
+            .args([
+                "-p",
+                "--input-format",
+                "stream-json",
+                "--output-format",
+                "stream-json",
+                "--verbose",
+                "--no-chrome",
+                "--disable-slash-commands",
+                "--permission-mode",
+                "dontAsk",
+                "--tools",
+                "",
+                "--strict-mcp-config",
+                "--mcp-config",
+                "{\"mcpServers\":{}}",
+                "--no-session-persistence",
+                "--settings",
+                "{\"disableAllHooks\":true}",
+                "--effort",
+                "high",
+            ])
+            .current_dir(workdir)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .process_group(0)
+            .spawn();
+        match spawned {
+            Err(err) if err.kind() == std::io::ErrorKind::ExecutableFileBusy && attempts < 20 => {
+                attempts += 1;
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            result => break result.context("Claude capability discovery failed")?,
+        }
+    };
     let mut probe = Probe(child, false);
     let stdin = probe
         .0
