@@ -39,17 +39,27 @@ const MAX_SLUG_LEN: usize = 48;
 
 /// FORK: `slugify_component`, capped at [`MAX_SLUG_LEN`] characters with no
 /// dangling `-`. Names up to the cap are unchanged, so every existing
-/// session keeps its name.
+/// session keeps its name. A longer name keeps its head and ends in a hash
+/// of the whole slug, so two names sharing their first 48 characters still
+/// get distinct tmux sessions and worktree folders (the duplicate check
+/// compares full names).
 fn capped_slug(s: &str) -> String {
     let slug = slugify_component(s);
     if slug.chars().count() <= MAX_SLUG_LEN {
         return slug;
     }
-    slug.chars()
-        .take(MAX_SLUG_LEN)
+    // FNV-1a: stable across Rust releases, unlike `DefaultHasher`.
+    let hash = slug.bytes().fold(0x811c_9dc5_u32, |h, b| {
+        (h ^ u32::from(b)).wrapping_mul(0x0100_0193)
+    });
+    let suffix = format!("-{hash:08x}");
+    let head: String = slug
+        .chars()
+        .take(MAX_SLUG_LEN - suffix.len())
         .collect::<String>()
         .trim_end_matches('-')
-        .to_string()
+        .to_string();
+    format!("{head}{suffix}")
 }
 
 pub fn tmux_session_name(project_name: &str, feature_name: &str) -> String {
@@ -1727,9 +1737,23 @@ mod tests {
         let worktree = super::worktree_name(&long, &long);
         assert!(worktree.len() <= 2 * super::MAX_SLUG_LEN + 1, "{worktree}");
 
-        // A cut landing on a separator leaves no dangling dash.
-        let dashed = format!("{}-tail", "z".repeat(super::MAX_SLUG_LEN - 1));
-        assert!(!super::tmux_session_name("p", &dashed).ends_with('-'));
+        // A cut landing on a separator leaves no doubled dash.
+        let dashed = format!("{}-tail", "z".repeat(super::MAX_SLUG_LEN - 10));
+        assert!(!super::tmux_session_name("p", &dashed).contains("--"));
+
+        // Names that only differ past the cap stay distinct.
+        let prefix = "implement-the-new-authentication-flow-for-the-public-api";
+        let v1 = super::tmux_session_name("proj", &format!("{prefix}-v1"));
+        let v2 = super::tmux_session_name("proj", &format!("{prefix}-v2"));
+        assert_ne!(v1, v2);
+        assert_eq!(
+            v1,
+            super::tmux_session_name("proj", &format!("{prefix}-v1"))
+        );
+        assert_ne!(
+            super::worktree_name("proj", &format!("{prefix}-v1")),
+            super::worktree_name("proj", &format!("{prefix}-v2"))
+        );
 
         // Short names are untouched, so existing sessions keep their names.
         assert_eq!(
