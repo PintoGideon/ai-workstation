@@ -457,7 +457,10 @@ fn run_first_run_migration() -> Result<()> {
 
 /// FORK: what `aiw -V` prints.
 pub(crate) fn version_line() -> String {
-    format!("AI Workstation (aiw) {}", env!("CARGO_PKG_VERSION"))
+    match option_env!("AIW_GIT_SHA") {
+        Some(sha) => format!("AI Workstation (aiw) {} ({sha})", env!("CARGO_PKG_VERSION")),
+        None => format!("AI Workstation (aiw) {}", env!("CARGO_PKG_VERSION")),
+    }
 }
 
 pub fn run() -> Result<()> {
@@ -2494,10 +2497,15 @@ mod tests {
 
     #[test]
     fn version_line_names_ai_workstation_and_the_aiw_command() {
-        assert_eq!(
-            super::version_line(),
-            format!("AI Workstation (aiw) {}", env!("CARGO_PKG_VERSION"))
-        );
+        let line = super::version_line();
+        assert!(line.starts_with(&format!(
+            "AI Workstation (aiw) {}",
+            env!("CARGO_PKG_VERSION")
+        )));
+        // A git checkout stamps the commit after the version.
+        if let Some(sha) = option_env!("AIW_GIT_SHA") {
+            assert!(line.ends_with(&format!("({sha})")));
+        }
         // The binary is `aiw`, and clap knows it by that name.
         assert_eq!(
             <super::Cli as clap::CommandFactory>::command().get_name(),

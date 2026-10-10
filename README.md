@@ -83,7 +83,7 @@ rustup toolchain install 1.99.0
 cd ~/ai_workstation                                # your clone of this fork
 git switch ai-workstation                          # the branch with the AIW work
 cargo +1.99.0 install --path . --locked --force    # installs `aiw` into ~/.cargo/bin
-aiw -V                                             # AI Workstation (aiw) 0.49.0
+aiw -V                                             # AI Workstation (aiw) 0.49.0 (<commit>)
 ```
 
 Make sure `~/.cargo/bin` is in your `PATH`.
