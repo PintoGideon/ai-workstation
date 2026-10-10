@@ -286,3 +286,59 @@ fn restarting_an_exited_agent_relaunches_it_in_its_live_window() {
     assert!(!claude.stopped);
     assert!(!app.session_is_exited(&claude.id));
 }
+
+// ── the session on screen ────────────────────────────────────────────────────
+
+#[test]
+fn the_viewed_session_losing_its_window_returns_to_the_dashboard() {
+    let mut app = app_with(
+        vec![
+            session(SessionKind::Claude, "claude"),
+            session(SessionKind::Terminal, "terminal"),
+        ],
+        &[(FEATURE, "terminal", "bash")],
+    );
+    app.mode = AppMode::Viewing(view_state_for("my-project", "my-feat"));
+
+    assert!(app.reconcile_vanished_windows());
+
+    assert!(matches!(app.mode, AppMode::Normal));
+    assert_eq!(
+        listed(&app),
+        vec![("claude".into(), true), ("terminal".into(), false)]
+    );
+    assert!(
+        app.message
+            .as_deref()
+            .is_some_and(|m| m.contains("window is gone")),
+        "{:?}",
+        app.message
+    );
+}
+
+#[test]
+fn the_viewed_session_stays_open_while_its_window_lives() {
+    let mut app = app_with(
+        vec![session(SessionKind::Claude, "claude")],
+        &[(FEATURE, "claude", "claude")],
+    );
+    app.mode = AppMode::Viewing(view_state_for("my-project", "my-feat"));
+
+    assert!(!app.reconcile_vanished_windows());
+    assert!(matches!(app.mode, AppMode::Viewing(_)));
+}
+
+#[test]
+fn the_viewed_feature_losing_its_whole_tmux_session_also_leaves_the_view() {
+    let mut app = app_with(
+        vec![session(SessionKind::Claude, "claude")],
+        &[("aiw-other", "x", "bash")],
+    );
+    app.mode = AppMode::Viewing(view_state_for("my-project", "my-feat"));
+
+    assert!(app.reconcile_vanished_windows());
+
+    assert!(matches!(app.mode, AppMode::Normal));
+    // Feature-level recovery owns the session rows in this case.
+    assert_eq!(listed(&app), vec![("claude".into(), false)]);
+}

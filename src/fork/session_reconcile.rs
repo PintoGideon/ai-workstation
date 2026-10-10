@@ -20,8 +20,9 @@
 //! Nothing is touched when tmux can't be reached, when the feature itself is
 //! stopped or its tmux session is gone (AIW's feature-level recovery handles
 //! that), or for sessions created in the last few seconds (their window may
-//! not exist yet, or the agent may still be starting), or for the session
-//! currently open on screen.
+//! not exist yet, or the agent may still be starting). The session open on
+//! screen is handled last: when its window turns out to be gone the view is
+//! left for the dashboard with a message, instead of showing a dead frame.
 //!
 //! One `tmux list-panes -a` per sweep answers both questions.
 
@@ -36,6 +37,10 @@ const CREATION_GRACE_SECS: i64 = 10;
 
 /// Status shown on a session whose agent exited but whose shell survived.
 pub(crate) const EXITED_STATUS: &str = "exited";
+
+/// What leaving the view says when the viewed window is gone.
+pub(crate) const VIEWED_WINDOW_GONE: &str =
+    "That session's tmux window is gone — returned to the dashboard";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Fix {
@@ -118,8 +123,8 @@ impl App {
                     }
                     let key = (feature.tmux_session.clone(), session.tmux_window.clone());
                     let Some(command) = commands.get(&key) else {
-                        // The window is gone. The one on screen is left
-                        // alone: the view owns it.
+                        // The window is gone. The one on screen is handled
+                        // below, after the list is settled.
                         if viewing.as_ref() == Some(&key) {
                             continue;
                         }
@@ -138,7 +143,31 @@ impl App {
             }
         }
 
-        if fixes.is_empty() {
+        // The viewed session: its window is gone (or its whole tmux session
+        // is), so the pane on screen is a dead frame. Mark it like any other
+        // vanished agent and go back to the dashboard.
+        let mut leave_view = false;
+        if let Some(key) = &viewing
+            && !commands.contains_key(key)
+        {
+            leave_view = true;
+            if live_sessions.contains(key.0.as_str())
+                && let Some((pi, fi, si)) = self.session_indices_for_window(&key.0, &key.1)
+                && let Some(session) = self
+                    .store
+                    .projects
+                    .get(pi)
+                    .and_then(|p| p.features.get(fi))
+                    .and_then(|f| f.sessions.get(si))
+                && session.kind.is_tmux_backed()
+                && !session.stopped
+                && session.kind != SessionKind::Terminal
+            {
+                fixes.push((pi, fi, si, Fix::MarkStopped));
+            }
+        }
+
+        if fixes.is_empty() && !leave_view {
             return false;
         }
 
@@ -154,6 +183,14 @@ impl App {
                     self.selection = selection_after_removal(&self.selection, pi, fi, si);
                 }
             }
+        }
+        if leave_view {
+            if matches!(self.mode, AppMode::Compose(_)) {
+                self.cancel_compose();
+            }
+            self.exit_view();
+            self.message = Some(VIEWED_WINDOW_GONE.to_string());
+            self.log_info("reconcile", VIEWED_WINDOW_GONE.to_string());
         }
         if let Err(err) = self.save() {
             self.message = Some(format!("Could not save session list: {err}"));
@@ -196,6 +233,33 @@ impl App {
             "reconcile",
             format!("{label} in {feature_name} exited; its shell is still open (■ exited)"),
         );
+    }
+
+    /// `(project, feature, session)` indices of the session shown in tmux
+    /// window `window` of `tmux_session`.
+    fn session_indices_for_window(
+        &self,
+        tmux_session: &str,
+        window: &str,
+    ) -> Option<(usize, usize, usize)> {
+        self.store
+            .projects
+            .iter()
+            .enumerate()
+            .find_map(|(pi, project)| {
+                project
+                    .features
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, f)| f.tmux_session == tmux_session)
+                    .find_map(|(fi, feature)| {
+                        feature
+                            .sessions
+                            .iter()
+                            .position(|s| s.tmux_window == window)
+                            .map(|si| (pi, fi, si))
+                    })
+            })
     }
 
     /// Whether session `id` is marked exited (agent gone, shell alive).
