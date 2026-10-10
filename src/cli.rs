@@ -462,6 +462,18 @@ pub fn run() -> Result<()> {
         return Ok(());
     }
 
+    // FORK: the control-mode setting also selects the tmux socket (`tmux.sock`
+    // vs `managed-tmux.sock`). Only the TUI path applied it, so `doctor`,
+    // `grid` and `automation` looked at a server nobody used and reported
+    // "0 agents running" / found no sessions. Read-only: `read_config` never
+    // writes config.json.
+    if matches!(
+        cli.command,
+        Some(Commands::Doctor { .. } | Commands::Grid { .. } | Commands::Automation { .. })
+    ) {
+        TmuxManager::configure_control_mode(app::setup::read_config().tmux_control_mode);
+    }
+
     if let Some(Commands::Doctor { json }) = cli.command {
         return run_doctor(json);
     }
