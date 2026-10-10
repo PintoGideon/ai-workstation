@@ -369,6 +369,19 @@ impl App {
             );
         }
 
+        // PR comment investigations too: plain-TEXT `project_id`, no FK, so
+        // the rows would otherwise outlive the project they belong to.
+        let investigation_cleanup_err = match (&self.db, &project_id) {
+            (Some(db), Some(pid)) => db.delete_pr_investigations_for_project(pid).err(),
+            _ => None,
+        };
+        if let (Some(e), Some(pid)) = (investigation_cleanup_err, &project_id) {
+            self.log_warn(
+                "pr_review",
+                format!("failed to delete PR investigations for project {pid}: {e}"),
+            );
+        }
+
         // Unsent-prompt rows are keyed by workdir, not project or feature id,
         // matching how they're filed and recalled; clean up each deleted
         // feature's checkout so a later, unrelated feature can't inherit a
