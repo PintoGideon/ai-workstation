@@ -93,6 +93,18 @@ pub const EVENTS: &[(&str, &[Step], Option<&str>)] = &[
         None,
     ),
     ("sessionEnd", &[("thinking-stop.sh", &[])], None),
+    // FORK(P5): the badge's subagent count. `subagentStart` is a permission
+    // hook (invalid output blocks), so the entry answers `allow` itself.
+    (
+        "subagentStart",
+        &[("subagent.sh", &["start", "cursor"])],
+        Some(r#"{"permission":"allow"}"#),
+    ),
+    (
+        "subagentStop",
+        &[("subagent.sh", &["stop", "cursor"])],
+        None,
+    ),
     // FORK(P6): the dashboard answers the prompt; the script prints
     // `permission` allow/deny, or `ask` when nobody answered.
     (

@@ -23,6 +23,7 @@ Commands typed into the REPL (deterministic, scriptable):
            continuation the hook hands back (a queued follow-up) is printed as
            `followup: <text>` and run as the next turn
   /work    emit prompt-submit + tool-start and stay "working"
+  /sub N   start N subagents (SubagentStart), keep them 4 s, stop them, end the turn
   /tool    emit tool-start then tool-stop
   /crash   exit 1
   /spam    print 2000 lines as fast as possible
@@ -508,6 +509,31 @@ def main():
             answer = "Finished the task."
             out(f"⏺ {answer}")
             finish_turn(rest or "(previous)", answer)
+        elif cmd == "/sub":
+            try:
+                n = int(rest or "2")
+            except ValueError:
+                n = 2
+            ev("prompt", {"prompt": f"spawn {n} subagents"})
+            out("⠋ thinking…")
+            starts = {"claude": "SubagentStart", "codex": "SubagentStart", "cursor-agent": "subagentStart"}
+            stops = {"claude": "SubagentStop", "codex": "SubagentStop", "cursor-agent": "subagentStop"}
+            ids = [f"agent-{uuid.uuid4().hex[:6]}" for _ in range(n)]
+            for agent_id in ids:
+                if NAME in starts:
+                    fire_collect(starts[NAME], {"agent_id": agent_id, "agent_type": "Explore",
+                                                "subagent_id": agent_id, "subagent_type": "Explore",
+                                                "task": "look around"})
+            out(f"⏺ {n} subagents running")
+            time.sleep(4)
+            for agent_id in ids:
+                if NAME in stops:
+                    fire_collect(stops[NAME], {"agent_id": agent_id, "agent_type": "Explore",
+                                               "subagent_id": agent_id, "subagent_type": "Explore",
+                                               "status": "completed", "stop_hook_active": False,
+                                               "last_assistant_message": "found it"})
+            out("⏺ subagents done")
+            finish_turn(f"spawn {n} subagents", "Subagents finished.")
         elif cmd == "/work":
             ev("prompt", {"prompt": rest or "work"})
             out("⠋ thinking…")

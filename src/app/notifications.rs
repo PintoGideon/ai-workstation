@@ -870,6 +870,9 @@ impl App {
         if self.handle_followup_take_message(&raw) {
             return;
         }
+        if self.handle_subagent_message(&raw) {
+            return;
+        }
         if msg_type == crate::fork::ipc_reply::ABANDONED_TYPE {
             if let Some(id) = raw.get("request_id").and_then(|v| v.as_str()) {
                 self.handle_reply_abandoned(id);
@@ -1148,6 +1151,7 @@ impl App {
             if let Some(feature_session_id) = msg.aiw_feature_session_id.as_ref() {
                 self.ipc_thinking_feature_sessions
                     .remove(feature_session_id);
+                self.clear_subagents(feature_session_id); // FORK: P5
             }
             if let Some(sid) = msg.session_id {
                 self.ipc_thinking_sessions.remove(&sid);

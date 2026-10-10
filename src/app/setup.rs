@@ -19,6 +19,7 @@ const SET_SESSION_STATUS_SH: &str = include_str!("../../scripts/set-session-stat
 const PERMISSION_REQUEST_SH: &str = include_str!("../../scripts/permission-request.sh");
 const STATUS_LINE_SH: &str = include_str!("../../scripts/status-line.sh");
 const STOP_HOOK_SH: &str = include_str!("../../scripts/stop-hook.sh");
+const SUBAGENT_SH: &str = include_str!("../../scripts/subagent.sh");
 const CUSTOM_DIFF_REVIEW_SH: &str =
     include_str!("../../plugins/diff-review/scripts/custom-diff-review.sh");
 
@@ -78,6 +79,7 @@ const CLAUDE_MANAGED_SCRIPT_NAMES: &[&str] = &[
     // FORK: DESIGN.md §16
     "permission-request.sh",
     "stop-hook.sh",
+    "subagent.sh",
 ];
 
 #[derive(Default)]
@@ -650,6 +652,7 @@ pub fn ensure_notify_scripts() {
     );
     write_executable_if_changed(&claude_hooks_dir.join("status-line.sh"), STATUS_LINE_SH);
     write_executable_if_changed(&claude_hooks_dir.join("stop-hook.sh"), STOP_HOOK_SH);
+    write_executable_if_changed(&claude_hooks_dir.join("subagent.sh"), SUBAGENT_SH);
     write_executable_if_changed(
         &config_dir.join("codex-diff-review.sh"),
         CODEX_DIFF_REVIEW_SH,
@@ -1054,6 +1057,7 @@ pub fn ensure_notification_hooks(
     let attention_path = hooks_dir.join("attention.sh");
     let permission_request_path = hooks_dir.join("permission-request.sh"); // FORK
     let stop_hook_path = hooks_dir.join("stop-hook.sh"); // FORK
+    let subagent_path = hooks_dir.join("subagent.sh"); // FORK
 
     let wants_diff_review = matches!(mode, VibeMode::Vibeless);
     let diff_review_cmd = if wants_diff_review {
@@ -1152,6 +1156,18 @@ pub fn ensure_notification_hooks(
             ]
         }),
     );
+
+    // FORK: SubagentStart / SubagentStop — the badge's subagent count (P5).
+    for (event, arg) in [("SubagentStart", "start"), ("SubagentStop", "stop")] {
+        push_claude_hook_entry(
+            &mut settings,
+            event,
+            serde_json::json!({
+                "matcher": "",
+                "hooks": [claude_exec_hook_with_timeout(&subagent_path, &[arg, "claude"], 10)]
+            }),
+        );
+    }
 
     // FORK: PermissionRequest — the dashboard answers the prompt (P6).
     push_claude_hook_entry(

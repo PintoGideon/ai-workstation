@@ -25,6 +25,7 @@ pub(crate) mod fork_launch; // FORK: launch-time arguments from the store (DESIG
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6, DESIGN.md §16)
 mod fork_render_memo; // FORK: per-frame dialog values (DESIGN.md §12.3)
 pub(crate) mod fork_split; // FORK: split view (DESIGN.md §4.1)
+pub(crate) mod fork_subagents; // FORK: subagent counts per session (P5, DESIGN.md §16)
 pub(crate) mod fork_telemetry; // FORK: per-session context and cost (P4, DESIGN.md §16)
 #[cfg(test)]
 mod fork_view_bench; // FORK: view refresh cost (DESIGN.md §12.3)
@@ -1273,6 +1274,8 @@ pub struct App {
     pub(crate) fork_telemetry: fork_telemetry::TelemetryRuntime,
     /// FORK: queued follow-ups per session id, mirroring `aiw_followups` (P7).
     pub followups: fork_followups::FollowupQueues,
+    /// FORK: subagents running under each feature session (P5).
+    pub subagent_counts: HashMap<String, usize>,
     /// FORK: ids for queued items when no database is open (negative).
     pub(crate) followup_memory_id: i64,
     pub ipc_tool_sessions: std::collections::HashSet<String>,
@@ -2734,7 +2737,8 @@ impl App {
             pending_permissions: Vec::new(), // FORK: P6
             telemetry: HashMap::new(),       // FORK: P4
             fork_telemetry: Default::default(),
-            followups: HashMap::new(), // FORK: P7
+            followups: HashMap::new(),       // FORK: P7
+            subagent_counts: HashMap::new(), // FORK: P5
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
@@ -3005,7 +3009,8 @@ impl App {
             pending_permissions: Vec::new(), // FORK: P6
             telemetry: HashMap::new(),       // FORK: P4
             fork_telemetry: Default::default(),
-            followups: HashMap::new(), // FORK: P7
+            followups: HashMap::new(),       // FORK: P7
+            subagent_counts: HashMap::new(), // FORK: P5
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),

@@ -179,6 +179,40 @@ pub fn run_stop_hook(harness: &str) {
     }
 }
 
+/// `aiw subagent --event start|stop --harness <h>`: fire-and-forget (P5).
+pub fn run_subagent(event: &str, harness: &str) {
+    let event = event.trim();
+    if !matches!(event, "start" | "stop") {
+        return;
+    }
+    let payload = stdin_json();
+    let env = HookEnv::from_process_env();
+    let mut message = serde_json::Map::new();
+    message.insert(
+        "type".into(),
+        Value::String(crate::app::fork_subagents::SUBAGENT_TYPE.into()),
+    );
+    message.insert("event".into(), Value::String(event.into()));
+    message.insert("harness".into(), Value::String(harness.trim().into()));
+    for (from, to) in [
+        ("session_id", "session_id"),
+        ("conversation_id", "session_id"),
+        ("cwd", "cwd"),
+        ("agent_id", "agent_id"),
+        ("agent_type", "agent_type"),
+        ("subagent_id", "agent_id"),
+        ("subagent_type", "agent_type"),
+    ] {
+        if let Some(value) = payload.get(from) {
+            message.insert(to.into(), value.clone());
+        }
+    }
+    identity_fields(&env, &mut message);
+    if let Ok(line) = serde_json::to_string(&Value::Object(message)) {
+        let _ = crate::ipc::send(&crate::ipc::socket_path(), &line);
+    }
+}
+
 /// `aiw permission-request --harness <h> [--event <e>]`.
 pub fn run_permission_request(harness: &str, event: Option<&str>) {
     let Some(harness) = Harness::parse(harness) else {

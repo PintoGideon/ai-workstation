@@ -333,6 +333,11 @@ select_row 'ws-1' >/dev/null; keys j; sleep 0.4; keys e; wait_for 'Queue a follo
 aiw_quit; aiw_start 200 60; wait_for '╭ Sessions' 8; select_row 'ws-1' >/dev/null; keys j; sleep 0.6
 cap | grep '▎' | grep -q '1 queued'; check "queue: a queued follow-up survives an AIW restart" $?
 keys e; wait_for 'Queue a follow-up' 3; keys Tab; sleep 0.2; keys d; sleep 0.3; keys Escape; sleep 0.3
+# P5: subagent starts and stops count on the working badge
+keys Tab; sleep 0.3; keys -l '/sub 2'; keys Enter
+wait_for '2 subagents' 8; check "sub: two SubagentStart hooks → row says 2 subagents" $?
+wait_gone '2 subagents' 12; check "sub: SubagentStop hooks and the turn's end clear the count" $?
+keys C-q; sleep 0.4
 
 aiw_quit; doctor_clean; check "doctor clean after the adversarial run" $?
 

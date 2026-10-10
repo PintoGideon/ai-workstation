@@ -38,6 +38,9 @@ pub const EVENTS: &[(&str, &[Step])] = &[
     ),
     // A queued follow-up becomes the next turn (P7).
     ("Stop", &[("stop-hook.sh", &["codex"])]),
+    // The badge's subagent count (P5).
+    ("SubagentStart", &[("subagent.sh", &["start", "codex"])]),
+    ("SubagentStop", &[("subagent.sh", &["stop", "codex"])]),
 ];
 
 fn timeout_for(event: &str) -> u64 {
