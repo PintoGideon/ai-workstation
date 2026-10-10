@@ -26,6 +26,11 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
                 app.message = None;
                 return Ok(());
             }
+            // FORK: Ctrl+Q is "back to the dashboard" in every view, so one
+            // press too many used to fall through to the plain `q` arm below
+            // and quit AIW without confirmation. On the dashboard it is a
+            // no-op; `q` / `Esc` still quit.
+            KeyCode::Char('q') => return Ok(()),
             _ => {}
         }
     }
@@ -455,6 +460,30 @@ fn handle_normal_leader_key(app: &mut App, key: KeyEvent) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // FORK: a stray Ctrl+Q (the "leave the view" key) on the dashboard must
+    // not quit; only `q` / `Esc` do.
+    #[test]
+    fn ctrl_q_on_the_dashboard_does_not_quit() {
+        use crate::traits::{MockTmuxOps, MockWorktreeOps};
+        let mut app = App::new_for_test(
+            crate::project::ProjectStore::empty(),
+            Box::new(MockTmuxOps::new()),
+            Box::new(MockWorktreeOps::new()),
+        );
+        handle_normal_key(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL),
+        )
+        .unwrap();
+        assert!(!app.should_quit);
+        handle_normal_key(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE),
+        )
+        .unwrap();
+        assert!(app.should_quit);
+    }
 
     // ── default_key_for_action ────────────────────────────────
 
