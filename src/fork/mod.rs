@@ -43,6 +43,7 @@ pub(crate) mod hook_cli; // the `aiw` subcommands hook scripts call (DESIGN.md �
 pub mod instance_lock; // one TUI per config dir (flock on aiw.lock)
 pub(crate) mod ipc_rebind; // re-bind the IPC socket if its file vanishes
 pub(crate) mod ipc_reply; // requests that wait for the app's answer (DESIGN.md §16)
+pub mod launch; // what AIW adds to an agent's command line (DESIGN.md §16)
 pub(crate) mod line_fold; // incremental JSONL reads for the status sweep (DESIGN.md §12.3)
 pub mod migrate; // first-run copy of an AMF setup (DESIGN.md §11)
 pub(crate) mod notices; // toasts raised off the main thread (hooks, worktree prep)
@@ -50,6 +51,7 @@ pub(crate) mod paths;
 pub mod permissions; // P6: permission approvals from the dashboard (DESIGN.md §16)
 pub(crate) mod ports;
 pub(crate) mod quit_confirm; // `q` asks first when agents run and `confirm_quit` is on
+pub mod telemetry; // P4: per-session context and cost, read locally (DESIGN.md §16)
 pub(crate) mod worktree_paths;
 pub(crate) mod worktree_prep;
 pub(crate) mod worktree_repair; // recreate a checkout that vanished on disk

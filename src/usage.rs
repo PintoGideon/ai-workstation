@@ -429,6 +429,38 @@ impl UsageManager {
         self.data.lock().unwrap().clone()
     }
 
+    /// FORK(P4): Claude's own `rate_limits` (from its status line, over IPC)
+    /// fill the 5-hour / 7-day windows the OAuth call used to; nothing here
+    /// touches the network.
+    pub(crate) fn set_claude_rate_limits(&self, limits: &serde_json::Value) {
+        let window = |name: &str| -> (Option<f64>, Option<String>) {
+            let Some(window) = limits.get(name) else {
+                return (None, None);
+            };
+            let pct = window
+                .get("used_percentage")
+                .and_then(|v| v.as_f64())
+                .filter(|v| v.is_finite());
+            let resets = window
+                .get("resets_at")
+                .and_then(|v| v.as_f64())
+                .and_then(|v| format_unix_reset(v as i64));
+            (pct, resets)
+        };
+        let (five_hour_pct, five_hour_resets) = window("five_hour");
+        let (seven_day_pct, seven_day_resets) = window("seven_day");
+        let mut data = self.data.lock().unwrap();
+        if five_hour_pct.is_some() {
+            data.claude.five_hour_pct = five_hour_pct;
+            data.claude.five_hour_resets = five_hour_resets;
+        }
+        if seven_day_pct.is_some() {
+            data.claude.seven_day_pct = seven_day_pct;
+            data.claude.seven_day_resets = seven_day_resets;
+        }
+        data.claude.last_error = None;
+    }
+
     /// Seed the cached windows, as a refresh would.
     #[cfg(test)]
     pub(crate) fn set_data_for_test(&self, data: UsageData) {

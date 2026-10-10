@@ -278,6 +278,7 @@ impl App {
         }
 
         let repo = self.store.projects[pi].repo.clone();
+        let launch_project_name = self.store.projects[pi].name.clone(); // FORK: launch context
         let viewport = self.view_pane_viewport();
         // Resolve before the mutable borrow of `feature` below.
         let rc_allowed = self.remote_control_allowed();
@@ -374,6 +375,22 @@ impl App {
                     } else {
                         None
                     };
+                    // FORK: the launch context (DESIGN.md §16).
+                    let launch_ctx = crate::fork::launch::LaunchContext {
+                        project_name: launch_project_name.clone(),
+                        feature_name: feature.name.clone(),
+                        branch: feature.branch.clone(),
+                        workdir: feature.workdir.clone(),
+                        repo: repo.clone(),
+                        feature_session_id: session.id.clone(),
+                        mode: feature.mode.clone(),
+                        is_worktree: feature.is_worktree,
+                    };
+                    let codex_args = crate::fork::launch::codex_launch_args(
+                        &launch_ctx,
+                        &self.config.aiw,
+                        codex_args,
+                    );
                     self.tmux.launch_codex(
                         &feature.tmux_session,
                         &session.tmux_window,
@@ -393,6 +410,22 @@ impl App {
                             None
                         },
                     });
+                    // FORK: --settings and the launch context (DESIGN.md §16).
+                    let launch_ctx = crate::fork::launch::LaunchContext {
+                        project_name: launch_project_name.clone(),
+                        feature_name: feature.name.clone(),
+                        branch: feature.branch.clone(),
+                        workdir: feature.workdir.clone(),
+                        repo: repo.clone(),
+                        feature_session_id: session.id.clone(),
+                        mode: feature.mode.clone(),
+                        is_worktree: feature.is_worktree,
+                    };
+                    let extra_args = crate::fork::launch::claude_launch_args(
+                        &launch_ctx,
+                        &self.config.aiw,
+                        extra_args,
+                    );
                     self.tmux.launch_claude(
                         &feature.tmux_session,
                         &session.tmux_window,

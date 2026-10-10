@@ -6,6 +6,8 @@ on a PATH prefix. It behaves like an interactive REPL and fires the hooks AIW
 installs into the checkout exactly the way the real CLIs do:
 
 - claude       reads `.claude/settings.local.json`  (hooks.<Event>[].hooks[].command + args)
+               and the file given with `--settings` (hooks merged in, `statusLine` run
+               after every answer with a realistic status JSON)
 - codex        takes `-c notify=[...]` and runs that argv with the JSON payload appended,
                and reads `.codex/hooks.json`       (hooks.<Event>[].hooks[].command)
 - gemini       reads `.gemini/settings.json`        (hooks.<Event>[].hooks[].command)
@@ -76,6 +78,7 @@ log("args", {"ts": time.time(), "cwd": CWD, "args": ARGS, "env": {
 
 resume_id = None
 notify_argv = []
+settings_file = None
 it = iter(range(len(ARGS)))
 i = 0
 while i < len(ARGS):
@@ -86,6 +89,10 @@ while i < len(ARGS):
         continue
     if NAME == "codex" and a == "resume" and i + 1 < len(ARGS):
         resume_id = ARGS[i + 1]
+        i += 2
+        continue
+    if a == "--settings" and i + 1 < len(ARGS):
+        settings_file = ARGS[i + 1]
         i += 2
         continue
     if a == "-c" and i + 1 < len(ARGS):
@@ -165,20 +172,30 @@ def read_json(path):
         return None
 
 
+def claude_settings_sources():
+    """Claude merges hook entries across settings levels: the project's local
+    file and the `--settings` file both count."""
+    sources = [read_json(os.path.join(CWD, ".claude", "settings.local.json")) or {}]
+    if settings_file:
+        sources.append(read_json(settings_file) or {})
+    return sources
+
+
 def hook_commands(event):
     """[(command string, run-with-shell)] configured for `event` in the checkout."""
     if NAME == "claude":
-        cfg = read_json(os.path.join(CWD, ".claude", "settings.local.json")) or {}
         cmds = []
-        for group in (cfg.get("hooks") or {}).get(event, []) or []:
-            for h in group.get("hooks", []) or []:
-                if h.get("type", "command") != "command":
-                    continue
-                cmd = h.get("command", "")
-                args = h.get("args") or []
-                if args:
-                    cmd = cmd + " " + " ".join(shlex.quote(str(a)) for a in args)
-                cmds.append(cmd)
+        for cfg in claude_settings_sources():
+            for group in (cfg.get("hooks") or {}).get(event, []) or []:
+                for h in group.get("hooks", []) or []:
+                    if h.get("type", "command") != "command":
+                        continue
+                    cmd = h.get("command", "")
+                    args = h.get("args") or []
+                    if args:
+                        cmd = cmd + " " + " ".join(shlex.quote(str(a)) for a in args)
+                    if cmd not in cmds:  # the same handler in two files runs once
+                        cmds.append(cmd)
         return cmds
     if NAME == "codex":
         cfg = read_json(os.path.join(CWD, ".codex", "hooks.json")) or {}
@@ -200,6 +217,45 @@ def hook_commands(event):
         cfg = read_json(os.path.join(CWD, ".cursor", "hooks.json")) or {}
         return [h["command"] for h in (cfg.get("hooks") or {}).get(event, []) or [] if h.get("command")]
     return []
+
+
+STATUS_TURNS = [0]
+
+
+def status_line_command():
+    for cfg in reversed(claude_settings_sources()):
+        line = cfg.get("statusLine") or {}
+        if line.get("type") == "command" and line.get("command"):
+            return line["command"]
+    return None
+
+
+def run_status_line():
+    """What Claude does after every assistant message: pipe the status JSON to
+    the statusLine command and show its first line in the footer."""
+    if NAME != "claude":
+        return
+    cmd = status_line_command()
+    if not cmd:
+        return
+    STATUS_TURNS[0] += 1
+    status = {
+        "session_id": SESSION_ID, "cwd": CWD, "transcript_path": transcript_path(), "version": "2.1.300",
+        "model": {"id": "fake-model-1", "display_name": "Fake 1"},
+        "workspace": {"current_dir": CWD, "project_dir": CWD},
+        "context_window": {"total_input_tokens": 84000, "total_output_tokens": 6000,
+                           "context_window_size": 200000, "used_percentage": 42, "remaining_percentage": 58,
+                           "current_usage": {"input_tokens": 4000, "output_tokens": 500,
+                                             "cache_creation_input_tokens": 0, "cache_read_input_tokens": 80000}},
+        "cost": {"total_cost_usd": 0.84, "total_duration_ms": 12000, "total_api_duration_ms": 9000,
+                 "total_lines_added": 61, "total_lines_removed": 3},
+        "rate_limits": {"five_hour": {"used_percentage": 12, "resets_at": int(time.time()) + 3600},
+                        "seven_day": {"used_percentage": 30, "resets_at": int(time.time()) + 86400}},
+    }
+    rec = run_hook(cmd, json.dumps(status), "statusLine")
+    first = (rec.get("stdout") or "").strip().splitlines()
+    if first:
+        out(f"[status] {first[0]}")
 
 
 def base_payload(event):
@@ -375,6 +431,7 @@ def normal_turn(prompt):
     answer = f"Done: handled '{prompt}' ({NAME})."
     out(f"⏺ {answer}")
     record_turn(prompt, answer)
+    run_status_line()
     ev("stop", {"prompt": prompt, "answer": answer, "stop_hook_active": False, "status": "completed"})
 
 

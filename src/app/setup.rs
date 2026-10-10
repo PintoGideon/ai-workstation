@@ -17,6 +17,7 @@ const CODEX_DIFF_REVIEW_SH: &str = include_str!("../../scripts/codex-diff-review
 const SET_SESSION_STATUS_SH: &str = include_str!("../../scripts/set-session-status.sh");
 // FORK: hook-driven productivity scripts (DESIGN.md §16).
 const PERMISSION_REQUEST_SH: &str = include_str!("../../scripts/permission-request.sh");
+const STATUS_LINE_SH: &str = include_str!("../../scripts/status-line.sh");
 const CUSTOM_DIFF_REVIEW_SH: &str =
     include_str!("../../plugins/diff-review/scripts/custom-diff-review.sh");
 
@@ -645,6 +646,7 @@ pub fn ensure_notify_scripts() {
         &claude_hooks_dir.join("permission-request.sh"),
         PERMISSION_REQUEST_SH,
     );
+    write_executable_if_changed(&claude_hooks_dir.join("status-line.sh"), STATUS_LINE_SH);
     write_executable_if_changed(
         &config_dir.join("codex-diff-review.sh"),
         CODEX_DIFF_REVIEW_SH,

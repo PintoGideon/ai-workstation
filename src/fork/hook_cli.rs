@@ -90,6 +90,51 @@ pub fn permission_output(harness: Harness, answer: Option<&Value>) -> Option<Str
     permissions::decision_json(harness, behavior, message)
 }
 
+/// `aiw status-line`: Claude's status JSON on stdin → the dashboard, and one
+/// line for Claude's footer (or the user's own status line, run as is).
+pub fn run_status_line() {
+    let status = stdin_json();
+    let telemetry = super::telemetry::parse_claude_status(&status);
+    let env = HookEnv::from_process_env();
+    let message = super::telemetry::status_line_message(&env, &status, &telemetry);
+    if let Ok(line) = serde_json::to_string(&message) {
+        let _ = crate::ipc::send(&crate::ipc::socket_path(), &line);
+    }
+    if let Some(output) = run_user_status_line(&status) {
+        print!("{output}");
+        return;
+    }
+    println!("{}", super::telemetry::footer_line(&telemetry));
+}
+
+/// The user's own `statusLine` command from `$CLAUDE_CONFIG_DIR/settings.json`
+/// (default `~/.claude/settings.json`), run with the same JSON; its output
+/// is what Claude's footer shows. Read-only; nothing is written there.
+fn run_user_status_line(status: &Value) -> Option<String> {
+    use std::io::Write;
+    let config_dir = std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(std::path::PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+        .or_else(|| dirs::home_dir().map(|h| h.join(".claude")))?;
+    let command = super::telemetry::user_status_line_command(&config_dir.join("settings.json"))?;
+    let mut child = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(&command)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(status.to_string().as_bytes());
+    }
+    let output = child.wait_with_output().ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
 /// `aiw permission-request --harness <h> [--event <e>]`.
 pub fn run_permission_request(harness: &str, event: Option<&str>) {
     let Some(harness) = Harness::parse(harness) else {

@@ -302,6 +302,13 @@ wait_for 'permission: prompt' 20; check "perm: no answer within permission_wait_
 keys C-q; sleep 0.5
 grep -q '"allowed Bash' "$XDG_STATE_HOME/ai_workstation/debug.log" 2>/dev/null || grep -qE 'permission.*allowed' "$XDG_STATE_HOME/ai_workstation/debug.log"; check "perm: decisions are in the debug log" $?
 no_panic; check "perm: no panic" $?
+# P4: the status line passed with --settings reports context and cost
+keys Tab; sleep 0.3; keys -l 'hello ctx'; keys Enter
+wait_for '\[status\] Fake 1 · ctx 42%' 8; check "ctx: statusLine from --settings → aiw status-line prints the footer line" $?
+keys C-q; sleep 0.8
+cap | grep '▎' | head -1 | grep -q '42%'; check "ctx: the sidebar row shows 42% context" $?
+tail -1 "$S/log/claude.args" | grep -q '"--settings"'; check "ctx: Claude was launched with --settings <file>" $?
+
 aiw_quit; doctor_clean; check "doctor clean after the adversarial run" $?
 
 echo "=== Part 3: AMF migration cases"

@@ -447,7 +447,8 @@ fn complete_running_hook_clears_pending_state_and_starts_feature() {
                     && window == "claude"
                     && !feature_session_id.is_empty()
                     && resume_id.is_none()
-                    && extra_args.is_empty()
+                    // FORK: the only extra argument is `--settings <file>` (DESIGN.md §16).
+                    && crate::fork::launch::only_settings_flag(extra_args)
             },
         )
         .times(1)

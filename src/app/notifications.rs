@@ -864,6 +864,9 @@ impl App {
         if self.handle_permission_request_message(&raw) {
             return;
         }
+        if self.handle_status_line_message(&raw) {
+            return;
+        }
         if msg_type == crate::fork::ipc_reply::ABANDONED_TYPE {
             if let Some(id) = raw.get("request_id").and_then(|v| v.as_str()) {
                 self.handle_reply_abandoned(id);

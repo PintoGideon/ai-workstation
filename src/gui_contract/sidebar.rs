@@ -121,6 +121,23 @@ pub struct SidebarSession {
     /// `icon_nerd` glyph, which needs a Nerd Font to render.
     pub icon: Option<String>,
     pub icon_nerd: Option<String>,
+    /// FORK(P4): what the harness reported about itself — model, context
+    /// use, cost — read locally (status line, rollout, chat file).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub telemetry: Option<SidebarTelemetry>,
+}
+
+/// FORK(P4): the per-session numbers for the GUI.
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+pub struct SidebarTelemetry {
+    pub model: Option<String>,
+    pub context_pct: Option<u8>,
+    pub context_band: Option<SidebarContextBand>,
+    /// `42% ctx` or `12.3k tokens`.
+    pub context_label: Option<String>,
+    pub cost_usd: Option<f64>,
+    pub lines_added: Option<u64>,
+    pub lines_removed: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -300,6 +317,19 @@ pub(crate) fn project_sidebar(app: &App, projects: &[Project]) -> SidebarSnapsho
                     SidebarSession {
                         status_text: session.status_text.clone(),
                         context,
+                        telemetry: app.telemetry.get(&session.id).map(|t| SidebarTelemetry {
+                            model: t.model.clone(),
+                            context_pct: app
+                                .session_context_percent(&session.id)
+                                .map(|(pct, _)| pct),
+                            context_band: app
+                                .session_context_percent(&session.id)
+                                .map(|(_, band)| band.into()),
+                            context_label: app.session_context_label(&session.id),
+                            cost_usd: t.cost_usd,
+                            lines_added: t.lines_added,
+                            lines_removed: t.lines_removed,
+                        }),
                         icon: custom.and_then(|config| config.icon.clone()),
                         icon_nerd: custom.and_then(|config| {
                             config

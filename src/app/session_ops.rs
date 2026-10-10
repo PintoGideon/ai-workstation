@@ -1468,6 +1468,8 @@ impl App {
         } else {
             extra_args
         };
+        // FORK: --settings (status line, hooks) and the launch context (DESIGN.md §16).
+        let extra_args = self.fork_launch_args(&agent, &tmux_session, &session_id, extra_args);
         self.tmux.create_window(&tmux_session, &window, &workdir)?;
         match agent {
             AgentKind::Claude => {
@@ -1480,6 +1482,8 @@ impl App {
                     false,
                     crate::codex_config::launch_override_args(&workdir, &mode),
                 )?;
+                let codex_args =
+                    self.fork_launch_args(&agent, &tmux_session, &session_id, codex_args); // FORK
                 self.tmux
                     .launch_codex(&tmux_session, &window, &session_id, None, codex_args)?;
             }
@@ -1753,13 +1757,11 @@ impl App {
         }
         match agent {
             AgentKind::Claude => {
-                self.tmux.launch_claude(
-                    tmux_session,
-                    window,
-                    session_id,
-                    resume_id,
-                    self.screenshot_launch_args(session_id, true, extra_args)?,
-                )?;
+                let args = self.screenshot_launch_args(session_id, true, extra_args)?;
+                // FORK: --settings and the launch context (DESIGN.md §16).
+                let args = self.fork_launch_args(agent, tmux_session, session_id, args);
+                self.tmux
+                    .launch_claude(tmux_session, window, session_id, resume_id, args)?;
             }
             AgentKind::Codex => {
                 let codex_args = self.screenshot_launch_args(
@@ -1767,6 +1769,7 @@ impl App {
                     false,
                     crate::codex_config::launch_override_args(workdir, mode),
                 )?;
+                let codex_args = self.fork_launch_args(agent, tmux_session, session_id, codex_args); // FORK
                 self.tmux
                     .launch_codex(tmux_session, window, session_id, resume_id, codex_args)?;
             }

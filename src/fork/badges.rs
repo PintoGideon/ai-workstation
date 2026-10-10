@@ -110,9 +110,27 @@ pub struct SessionBadge {
     /// the permission subject, the question, the status line of a working
     /// agent. Never invented.
     pub detail: Option<String>,
+    /// Context used, as a percentage of the window, when the harness or the
+    /// collector reported it (P4).
+    pub context: Option<u8>,
+    /// Subagents the session has running (P5 hooks; cleared at the turn's end).
+    pub subagents: usize,
+    /// Follow-ups queued for the session (P7).
+    pub queued: usize,
 }
 
 impl SessionBadge {
+    pub fn new(kind: BadgeKind, since: DateTime<Utc>, detail: Option<String>) -> Self {
+        Self {
+            kind,
+            since,
+            detail,
+            context: None,
+            subagents: 0,
+            queued: 0,
+        }
+    }
+
     pub fn glyph(&self) -> &'static str {
         self.kind.glyph()
     }
@@ -130,14 +148,26 @@ impl SessionBadge {
         compact_elapsed((now - self.since).num_seconds())
     }
 
-    /// Short reason text for a second sidebar line or a tile title.
+    /// Short reason text for a second sidebar line or a tile title:
+    /// `working 6m · 42% ctx · 2 subagents · Edit src/auth.rs · ⏭ 2 queued`.
     pub fn label(&self, now: DateTime<Utc>) -> String {
-        match self.kind {
+        let mut label = match self.kind {
             BadgeKind::NeedsYou => self.detail.clone().unwrap_or_else(|| "needs you".into()),
-            BadgeKind::Working => match &self.detail {
-                Some(detail) => format!("working {} · {detail}", self.age(now)),
-                None => format!("working {}", self.age(now)),
-            },
+            BadgeKind::Working => {
+                let mut parts = vec![format!("working {}", self.age(now))];
+                if let Some(pct) = self.context {
+                    parts.push(format!("{pct}% ctx"));
+                }
+                match self.subagents {
+                    0 => {}
+                    1 => parts.push("1 subagent".into()),
+                    n => parts.push(format!("{n} subagents")),
+                }
+                if let Some(detail) = &self.detail {
+                    parts.push(detail.clone());
+                }
+                parts.join(" · ")
+            }
             BadgeKind::FinishedUnread | BadgeKind::FinishedRead => {
                 format!("done · {}", self.age(now))
             }
@@ -147,7 +177,11 @@ impl SessionBadge {
                 Some(detail) => detail.clone(),
                 None => "idle".into(),
             },
+        };
+        if self.queued > 0 && !matches!(self.kind, BadgeKind::Stopped | BadgeKind::Exited) {
+            label.push_str(&format!(" · ⏭ {} queued", self.queued));
         }
+        label
     }
 
     fn stronger(self, other: SessionBadge) -> SessionBadge {
@@ -355,10 +389,14 @@ pub fn session_badge(
     let feature = &app.store.projects[pi].features[fi];
     let session = &feature.sessions[si];
     let fallback_since = |kind: BadgeKind| app.badge_ages.lookup(&session.id, kind).unwrap_or(now);
-    let badge = |kind: BadgeKind, detail: Option<String>| SessionBadge {
-        kind,
-        since: fallback_since(kind),
-        detail,
+    let badge = |kind: BadgeKind, detail: Option<String>| {
+        SessionBadge::new(kind, fallback_since(kind), detail)
+    };
+    // What the session reported about itself (P4 context) decorates whatever
+    // state it is in.
+    let decorate = |mut badge: SessionBadge| {
+        badge.context = app.session_context_percent(&session.id).map(|(pct, _)| pct);
+        badge
     };
 
     if !session.kind.is_tmux_backed() {
@@ -383,32 +421,30 @@ pub fn session_badge(
     if let Some(record) = app.attention_for(&feature.tmux_session)
         && signal_applies(feature, Some(&record.agent), session)
     {
-        return match record.state {
-            AttentionState::Question | AttentionState::Waiting => SessionBadge {
-                kind: BadgeKind::NeedsYou,
-                since: record.since,
-                detail: attention_detail(record),
-            },
-            AttentionState::CompletedAwaitingReview => SessionBadge {
-                kind: if app.finished_seen.contains(&session.id) {
+        return decorate(match record.state {
+            AttentionState::Question | AttentionState::Waiting => {
+                SessionBadge::new(BadgeKind::NeedsYou, record.since, attention_detail(record))
+            }
+            AttentionState::CompletedAwaitingReview => SessionBadge::new(
+                if app.finished_seen.contains(&session.id) {
                     BadgeKind::FinishedRead
                 } else {
                     BadgeKind::FinishedUnread
                 },
-                since: record.since,
-                detail: None,
-            },
-        };
+                record.since,
+                None,
+            ),
+        });
     }
     if session_working(app, feature, session) {
-        return badge(BadgeKind::Working, session.status_text.clone());
+        return decorate(badge(BadgeKind::Working, session.status_text.clone()));
     }
     if let Some(detail) = feature_pending_detail(app, feature)
         && signal_applies(feature, None, session)
     {
-        return badge(BadgeKind::NeedsYou, Some(detail));
+        return decorate(badge(BadgeKind::NeedsYou, Some(detail)));
     }
-    badge(BadgeKind::Idle, None)
+    decorate(badge(BadgeKind::Idle, None))
 }
 
 /// A feature's roll-up: its most pressing agent session, or the feature's
@@ -416,19 +452,11 @@ pub fn session_badge(
 /// feature whose agent window is gone, a feature marked ready).
 pub fn feature_badge(app: &App, pi: usize, fi: usize, now: DateTime<Utc>) -> SessionBadge {
     let feature = &app.store.projects[pi].features[fi];
-    let stopped = SessionBadge {
-        kind: BadgeKind::Stopped,
-        since: feature.last_accessed,
-        detail: None,
-    };
+    let stopped = SessionBadge::new(BadgeKind::Stopped, feature.last_accessed, None);
     if feature.status == ProjectStatus::Stopped {
         return stopped;
     }
-    let mut best = SessionBadge {
-        kind: BadgeKind::Idle,
-        since: feature.last_accessed,
-        detail: None,
-    };
+    let mut best = SessionBadge::new(BadgeKind::Idle, feature.last_accessed, None);
     let mut any_agent = false;
     for si in 0..feature.sessions.len() {
         if !feature.sessions[si].kind.is_agent_harness() {
@@ -444,31 +472,23 @@ pub fn feature_badge(app: &App, pi: usize, fi: usize, now: DateTime<Utc>) -> Ses
                 AttentionState::Question | AttentionState::Waiting => BadgeKind::NeedsYou,
                 AttentionState::CompletedAwaitingReview => BadgeKind::FinishedRead,
             };
-            best = best.stronger(SessionBadge {
+            best = best.stronger(SessionBadge::new(
                 kind,
-                since: record.since,
-                detail: attention_detail(record),
-            });
+                record.since,
+                attention_detail(record),
+            ));
         } else if app.thinking_features.contains(&feature.tmux_session) {
-            best = best.stronger(SessionBadge {
-                kind: BadgeKind::Working,
-                since: now,
-                detail: None,
-            });
+            best = best.stronger(SessionBadge::new(BadgeKind::Working, now, None));
         } else if let Some(detail) = feature_pending_detail(app, feature) {
-            best = best.stronger(SessionBadge {
-                kind: BadgeKind::NeedsYou,
-                since: now,
-                detail: Some(detail),
-            });
+            best = best.stronger(SessionBadge::new(BadgeKind::NeedsYou, now, Some(detail)));
         }
     }
     if feature.ready {
-        best = best.stronger(SessionBadge {
-            kind: BadgeKind::FinishedRead,
-            since: feature.last_accessed,
-            detail: Some("ready".into()),
-        });
+        best = best.stronger(SessionBadge::new(
+            BadgeKind::FinishedRead,
+            feature.last_accessed,
+            Some("ready".into()),
+        ));
     }
     best
 }

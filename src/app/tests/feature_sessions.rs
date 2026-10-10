@@ -1250,7 +1250,8 @@ fn restore_claude_session_resizes_window_before_launch_when_viewport_known() {
                     && window == "claude"
                     && !feature_session_id.is_empty()
                     && resume_id.as_deref() == Some("claude-session-123")
-                    && extra_args.is_empty()
+                    // FORK: the only extra argument is `--settings <file>` (DESIGN.md §16).
+                    && crate::fork::launch::only_settings_flag(extra_args)
             },
         )
         .returning(|_, _, _, _, _| Ok(()));
@@ -1876,7 +1877,8 @@ fn create_feature_session_name_enter_creates_and_starts_feature() {
                     && window == "claude"
                     && !feature_session_id.is_empty()
                     && resume_id.is_none()
-                    && extra_args.is_empty()
+                    // FORK: the only extra argument is `--settings <file>` (DESIGN.md §16).
+                    && crate::fork::launch::only_settings_flag(extra_args)
             },
         )
         .times(1)

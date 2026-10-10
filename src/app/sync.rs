@@ -185,6 +185,8 @@ struct SessionStatusJob {
     claude_session_id: Option<String>,
     context_conversation_id: Option<String>,
     custom_status_text: Option<String>,
+    /// FORK: Claude's status-line JSON for this session (P4), a direct sample.
+    runtime_payload: Option<serde_json::Value>,
 }
 
 enum SourceAction {
@@ -214,6 +216,7 @@ fn collect_jobs(
     store: &crate::project::ProjectStore,
     db: Option<&crate::db::AiwDb>,
     context_states: &HashMap<String, SessionContextState>,
+    runtime_payloads: &HashMap<String, serde_json::Value>, // FORK: P4
 ) -> Vec<SessionStatusJob> {
     store
         .projects
@@ -237,6 +240,7 @@ fn collect_jobs(
                     } else {
                         None
                     },
+                    runtime_payload: runtime_payloads.get(&session.id).cloned(), // FORK: P4
                 })
             })
         })
@@ -288,7 +292,7 @@ fn run_jobs(
                     session_created_at: job.created_at,
                     provider_id: None,
                     model_id: None,
-                    runtime_payload: None,
+                    runtime_payload: job.runtime_payload.as_ref(), // FORK: P4
                     fallback_usage: None,
                     fallback_context_limit: context_limit_override,
                     collected_at: context_checked_at,
@@ -417,7 +421,7 @@ fn run_jobs(
             session_created_at: job.created_at,
             provider_id: None,
             model_id: None,
-            runtime_payload: None,
+            runtime_payload: job.runtime_payload.as_ref(), // FORK: P4
             fallback_usage: token_usage.as_ref(),
             fallback_context_limit: context_limit_override,
             collected_at: context_checked_at,
@@ -1056,7 +1060,12 @@ impl App {
     /// preserved; it is swapped back in when `poll_session_status_bg` applies
     /// the results.
     pub fn sync_session_status_background(&mut self) {
-        let jobs = collect_jobs(&self.store, self.db.as_ref(), &self.context_states);
+        let jobs = collect_jobs(
+            &self.store,
+            self.db.as_ref(),
+            &self.context_states,
+            &self.claude_runtime_payloads(), // FORK: P4
+        );
         let pricing = self.config.token_pricing.clone();
         let context_limit_override = self.config.context_window_override;
         let tracker = std::mem::take(&mut self.token_tracker);
@@ -1175,7 +1184,12 @@ impl App {
 
     #[allow(dead_code)] // exercised only by unit tests
     pub(crate) fn sync_session_status_with_tracker(&mut self, tracker: &mut SessionTokenTracker) {
-        let jobs = collect_jobs(&self.store, self.db.as_ref(), &self.context_states);
+        let jobs = collect_jobs(
+            &self.store,
+            self.db.as_ref(),
+            &self.context_states,
+            &self.claude_runtime_payloads(), // FORK: P4
+        );
         let owned_tracker = std::mem::take(tracker);
         let context_collector = std::mem::take(&mut self.context_collector);
         let pricing = self.config.token_pricing.clone();

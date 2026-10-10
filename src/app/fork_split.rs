@@ -520,11 +520,7 @@ impl App {
     /// whose session is gone reads as stopped.
     pub fn split_tile_status(&self, tile: &SplitTile) -> SessionBadge {
         self.session_badge_for_window(&tile.session, &tile.window)
-            .unwrap_or_else(|| SessionBadge {
-                kind: BadgeKind::Stopped,
-                since: chrono::Utc::now(),
-                detail: None,
-            })
+            .unwrap_or_else(|| SessionBadge::new(BadgeKind::Stopped, chrono::Utc::now(), None))
     }
 
     /// The terminal was resized (see [`SplitViewState::note_resize`]).

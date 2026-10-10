@@ -182,6 +182,10 @@ enum Commands {
         #[arg(long)]
         event: Option<String>,
     },
+    /// Claude's status line: send the status JSON on stdin to the dashboard
+    /// and print one short line for Claude's footer.
+    #[command(name = "status-line", hide = true)]
+    StatusLine,
     /// Write a custom session status into the AIW database.
     /// Used by hook scripts for custom sessions.
     #[command(name = "set-status", hide = true)]
@@ -516,6 +520,7 @@ pub fn run() -> Result<()> {
                 | Commands::HookField { .. }
                 | Commands::NotifyWait { .. }
                 | Commands::PermissionRequest { .. } // FORK: hook commands skip it too
+                | Commands::StatusLine
         )
     ) {
         run_first_run_migration()?;
@@ -524,6 +529,10 @@ pub fn run() -> Result<()> {
     // FORK: hook commands (DESIGN.md §16); never fail the agent's turn.
     if let Some(Commands::PermissionRequest { harness, event }) = &cli.command {
         crate::fork::hook_cli::run_permission_request(harness, event.as_deref());
+        return Ok(());
+    }
+    if let Some(Commands::StatusLine) = &cli.command {
+        crate::fork::hook_cli::run_status_line();
         return Ok(());
     }
 
@@ -1590,6 +1599,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         if app.active_pr_bg.is_some() && app.poll_active_pr_bg() {
             force_redraw = true;
         }
+        // FORK: P4 telemetry sweep results.
+        force_redraw |= app.poll_telemetry_bg();
 
         if app.pr_review_work.fetch_pending() && app.poll_pr_review_bg() {
             force_redraw = true;
@@ -2069,6 +2080,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             app.reconcile_missing_project_dirs();
             // FORK: re-bind the IPC socket if its file was removed under us.
             crate::fork::ipc_rebind::rebind_if_vanished(app);
+            // FORK: Codex / Gemini context and cost, read in the background (P4).
+            app.telemetry_tick();
             // Kick off a background refresh only when the previous one has
             // finished; results are applied each tick via poll_session_status_bg.
             if app.session_status_bg.is_none() {

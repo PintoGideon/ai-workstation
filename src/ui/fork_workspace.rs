@@ -20,6 +20,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::app::fork_workspace::{FALLBACK_NOTE, WorkspaceFocus, layout};
 use crate::app::{App, Selection, VisibleItem};
+use crate::context_tracking::ContextBand;
 use crate::fork::badges::{self, BadgeCounts, BadgeKind, SessionBadge};
 use crate::theme::Theme;
 
@@ -275,11 +276,23 @@ fn sidebar_item_lines(
                 Span::styled(" ", text),
                 Span::styled(session.label.clone(), label_style),
             ];
-            let right = if compact || matches!(badge.kind, BadgeKind::Idle | BadgeKind::Stopped) {
-                Vec::new()
-            } else {
-                vec![Span::styled(badge.age(now), dim)]
-            };
+            let mut right = Vec::new();
+            // P4: context use, toned by the configured thresholds.
+            if !compact
+                && !matches!(badge.kind, BadgeKind::Stopped | BadgeKind::Exited)
+                && let Some((pct, band)) = app.session_context_percent(&session.id)
+            {
+                right.push(Span::styled(
+                    format!("{pct}%"),
+                    context_style(band, theme, dim),
+                ));
+            }
+            if !compact && !matches!(badge.kind, BadgeKind::Idle | BadgeKind::Stopped) {
+                if !right.is_empty() {
+                    right.push(Span::raw(" "));
+                }
+                right.push(Span::styled(badge.age(now), dim));
+            }
             let mut lines = vec![fit_line(with_right(left, right, row_width), row_width)];
             if !compact && (selected || badge.kind.needs_you()) {
                 let reason_style = if badge.kind.needs_you() {
@@ -297,6 +310,18 @@ fn sidebar_item_lines(
             }
             lines
         }
+    }
+}
+
+/// The context percentage's style: dim while normal, the warning / danger
+/// tone past the thresholds.
+fn context_style(band: ContextBand, theme: &Theme, dim: Style) -> Style {
+    match band {
+        ContextBand::Normal => dim,
+        ContextBand::Warning => Style::default().fg(theme.warning.to_color()),
+        ContextBand::Critical => Style::default()
+            .fg(theme.danger.to_color())
+            .add_modifier(Modifier::BOLD),
     }
 }
 
@@ -358,11 +383,7 @@ fn draw_pane(frame: &mut Frame, app: &App, area: Rect) {
 
     let badge = app
         .session_badge_for_window(&live.session, &live.window)
-        .unwrap_or(SessionBadge {
-            kind: BadgeKind::Stopped,
-            since: now,
-            detail: None,
-        });
+        .unwrap_or_else(|| SessionBadge::new(BadgeKind::Stopped, now, None));
     let name_style = if focused {
         Style::default()
             .fg(theme.text.to_color())
@@ -652,6 +673,37 @@ mod tests {
             buffer[(119, y)].style().fg,
             Some(app.theme.status_waiting.to_color()),
             "pane border takes the needs-you tone"
+        );
+    }
+
+    #[test]
+    fn rows_show_the_context_percentage_in_the_thresholds_tone() {
+        let mut app = workspace(120, 40);
+        app.selection = Selection::Session(0, 0, 0);
+        let id = app.store.projects[0].features[0].sessions[0].id.clone();
+        assert!(app.handle_status_line_message(&serde_json::json!({
+            "type": "status_line", "aiw_feature_session_id": id, "context_used_pct": 88
+        })));
+        settle(&mut app);
+        let screen = rows(&mut app, 120, 40);
+        let row = screen
+            .iter()
+            .find(|row| row.contains("▎") && row.contains("claude"))
+            .unwrap()
+            .clone();
+        assert!(row.contains("88%"), "{row}");
+        let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
+        terminal
+            .draw(|frame| crate::ui::draw(frame, &mut app))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let y = screen.iter().position(|r| r == &row).unwrap() as u16;
+        // A cell per char: count chars, not bytes, up to the percentage.
+        let x = row[..row.find("88%").unwrap()].chars().count() as u16;
+        assert_eq!(
+            buffer[(x, y)].style().fg,
+            Some(app.theme.danger.to_color()),
+            "88% is past the critical threshold"
         );
     }
 

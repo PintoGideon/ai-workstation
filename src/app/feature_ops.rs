@@ -1190,6 +1190,7 @@ impl App {
         }
 
         let repo = self.store.projects[pi].repo.clone();
+        let launch_project_name = self.store.projects[pi].name.clone(); // FORK: launch context
         let viewport = self.view_pane_viewport();
         let (agent, mode) = match self.store.projects.get(pi).and_then(|p| p.features.get(fi)) {
             Some(feature) => (feature.agent.clone(), feature.mode.clone()),
@@ -1393,6 +1394,17 @@ impl App {
                     launched_agent_sessions += 1;
                     let resume_id =
                         resume_override.unwrap_or_else(|| session.claude_session_id.clone());
+                    // FORK: --settings and the launch context (DESIGN.md §16).
+                    let launch_ctx = crate::fork::launch::LaunchContext {
+                        project_name: launch_project_name.clone(),
+                        feature_name: feature.name.clone(),
+                        branch: feature.branch.clone(),
+                        workdir: feature.workdir.clone(),
+                        repo: repo.clone(),
+                        feature_session_id: session.id.clone(),
+                        mode: feature.mode.clone(),
+                        is_worktree: feature.is_worktree,
+                    };
                     self.tmux.launch_claude(
                         &feature.tmux_session,
                         &session.tmux_window,
@@ -1401,11 +1413,16 @@ impl App {
                         {
                             let mut args = extra_args.clone();
                             args.extend(analyzer_args.clone());
-                            if let Some(owner) = screenshot_owners.get(&session.id) {
+                            let args = if let Some(owner) = screenshot_owners.get(&session.id) {
                                 super::screenshots::launch_args(owner, true, args)?
                             } else {
                                 args
-                            }
+                            };
+                            crate::fork::launch::claude_launch_args(
+                                &launch_ctx,
+                                &self.config.aiw,
+                                args,
+                            )
                         },
                     )?;
                 }
@@ -1437,15 +1454,34 @@ impl App {
                             &cmd,
                         )?;
                     }
+                    // FORK: the launch context (DESIGN.md §16).
+                    let launch_ctx = crate::fork::launch::LaunchContext {
+                        project_name: launch_project_name.clone(),
+                        feature_name: feature.name.clone(),
+                        branch: feature.branch.clone(),
+                        workdir: feature.workdir.clone(),
+                        repo: repo.clone(),
+                        feature_session_id: session.id.clone(),
+                        mode: feature.mode.clone(),
+                        is_worktree: feature.is_worktree,
+                    };
                     self.tmux.launch_codex(
                         &feature.tmux_session,
                         &session.tmux_window,
                         &session.id,
                         resume_override.flatten(),
-                        if let Some(owner) = screenshot_owners.get(&session.id) {
-                            super::screenshots::launch_args(owner, false, codex_args)?
-                        } else {
-                            codex_args
+                        {
+                            let codex_args = if let Some(owner) = screenshot_owners.get(&session.id)
+                            {
+                                super::screenshots::launch_args(owner, false, codex_args)?
+                            } else {
+                                codex_args
+                            };
+                            crate::fork::launch::codex_launch_args(
+                                &launch_ctx,
+                                &self.config.aiw,
+                                codex_args,
+                            )
                         },
                     )?;
                 }
