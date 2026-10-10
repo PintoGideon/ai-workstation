@@ -176,6 +176,16 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 }
                 spans.extend(vec![Span::styled("q", key_style()), Span::raw(" quit")]);
                 Line::from(spans)
+            } else if app.store.projects.is_empty() {
+                // FORK: G11 — only what applies before the first project.
+                Line::from(vec![
+                    Span::styled(" N", key_style()),
+                    Span::raw(" project  "),
+                    Span::styled("?", key_style()),
+                    Span::raw(" help  "),
+                    Span::styled("q", key_style()),
+                    Span::raw(" quit"),
+                ])
             } else {
                 let mut spans = filter_spans;
                 spans.extend(vec![
@@ -1043,7 +1053,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 let project = &app.store.projects[*pi];
                 Line::from(vec![
                     Span::styled(
-                        format!(" {}", project.name),
+                        project.name.clone(),
                         Style::default()
                             .fg(theme.project_title.to_color())
                             .add_modifier(Modifier::BOLD),
@@ -1067,7 +1077,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 };
                 Line::from(vec![
                     Span::styled(
-                        format!(" {}", feature.name),
+                        feature.name.clone(),
                         Style::default()
                             .fg(theme.feature_title.to_color())
                             .add_modifier(Modifier::BOLD),
@@ -1100,7 +1110,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 };
                 Line::from(vec![
                     Span::styled(
-                        format!(" {} ({})", session.label, kind_label),
+                        format!("{} ({})", session.label, kind_label),
                         Style::default()
                             .fg(theme.text.to_color())
                             .add_modifier(Modifier::BOLD),
@@ -1118,7 +1128,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                     app.store.projects.iter().map(|p| p.features.len()).sum();
                 Line::from(Span::styled(
                     format!(
-                        " {} project{}, {} feature{}",
+                        "{} project{}, {} feature{}",
                         project_count,
                         if project_count == 1 { "" } else { "s" },
                         feature_count,
@@ -1132,7 +1142,9 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
 
     // FORK: G11 rounded panel with the contextual key hints in its bottom
     // border. The panel is three rows tall, so its single inner row only ever
-    // showed the message line and the hints below it were clipped away.
+    // showed the message line and the hints below it were clipped away. The
+    // inside carries one column of padding like the list; hints that do not
+    // fit are dropped whole (never cut mid-word) and end in `…`.
     let mut keybinds = keybinds.style(hint_style());
     if !keybinds.spans.is_empty() {
         if !keybinds.spans[0].content.starts_with(' ') {
@@ -1140,14 +1152,25 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         }
         keybinds.spans.push(Span::raw(" "));
     }
-    let block = super::fork_chrome::plain_panel(theme).title_bottom(keybinds);
+    let key = key_style();
+    let keybinds = super::fork_text::fit_hints(
+        keybinds,
+        usize::from(area.width.saturating_sub(2)),
+        |span| span.style == key,
+    );
+    let block = super::fork_chrome::plain_panel(theme)
+        .padding(ratatui::widgets::Padding::horizontal(1))
+        .title_bottom(keybinds);
     let inner = block.inner(area);
-
-    let status = Paragraph::new(message_line).block(block);
-    frame.render_widget(status, area);
+    frame.render_widget(block, area);
+    if inner.height == 0 || inner.width == 0 {
+        return;
+    }
 
     // Feedback needs the full line; usage otherwise paints over its right edge.
     if app.message.is_some() {
+        let message_line = super::fork_text::fit_line(message_line, usize::from(inner.width));
+        frame.render_widget(Paragraph::new(message_line), inner);
         return;
     }
 
@@ -1257,6 +1280,18 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         .sum();
     let max_right_width = inner.width.saturating_sub(1);
     let right_width = right_width.min(max_right_width);
+    // The selection line stops short of the usage instead of running under it.
+    let left_width = inner
+        .width
+        .saturating_sub(right_width + u16::from(right_width > 0));
+    let message_line = super::fork_text::fit_line(message_line, usize::from(left_width));
+    frame.render_widget(
+        Paragraph::new(message_line),
+        Rect {
+            width: left_width,
+            ..inner
+        },
+    );
     if right_width == 0 {
         return;
     }
