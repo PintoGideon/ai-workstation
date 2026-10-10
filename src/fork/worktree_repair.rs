@@ -43,12 +43,50 @@ pub(crate) enum Checkout {
     Unsafe(Vec<String>),
 }
 
-/// What state `feature`'s checkout is in.
-pub(crate) fn inspect(feature: &Feature) -> Checkout {
-    if !feature.is_worktree {
+/// What state `feature`'s checkout is in. A checkout has "vanished" only
+/// when git still has it registered (`git worktree list`) and the folder is
+/// gone: that is what `rm -rf` leaves behind, and what `recreate` prunes and
+/// adds again. A path git never knew (or already pruned) is left alone.
+pub(crate) fn inspect(feature: &Feature, repo: &Path) -> Checkout {
+    if !feature.is_worktree || !repo.join(".git").exists() {
         return Checkout::Intact;
     }
-    inspect_dir(&feature.workdir)
+    match inspect_dir(&feature.workdir) {
+        Checkout::Intact => Checkout::Intact,
+        state if registered(repo, &feature.workdir) => state,
+        _ => Checkout::Intact,
+    }
+}
+
+/// Whether git lists `workdir` as one of `repo`'s worktrees. git prints the
+/// path as registered (resolved), while AIW's may go through a symlink, so
+/// both are compared through their (existing) parent folder.
+fn registered(repo: &Path, workdir: &Path) -> bool {
+    let Ok(output) = std::process::Command::new("git")
+        .args(["worktree", "list", "--porcelain"])
+        .current_dir(repo)
+        .output()
+    else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let wanted = resolved(workdir);
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| line.strip_prefix("worktree "))
+        .any(|path| resolved(Path::new(path)) == wanted)
+}
+
+/// `path` with its parent canonicalized (the path itself may not exist).
+fn resolved(path: &Path) -> PathBuf {
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => std::fs::canonicalize(parent)
+            .map(|p| p.join(name))
+            .unwrap_or_else(|_| path.to_path_buf()),
+        _ => path.to_path_buf(),
+    }
 }
 
 pub(crate) fn inspect_dir(workdir: &Path) -> Checkout {
@@ -127,8 +165,66 @@ mod tests {
     #[test]
     fn a_repo_dir_feature_is_never_inspected() {
         let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".git")).unwrap();
         let feature = feature_at(tmp.path().join("gone"), false);
-        assert_eq!(inspect(&feature), Checkout::Intact);
+        assert_eq!(inspect(&feature, tmp.path()), Checkout::Intact);
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {:?}", out.stderr);
+    }
+
+    #[test]
+    fn only_a_registered_worktree_of_a_real_repository_counts_as_vanished() {
+        let tmp = tempfile::tempdir().unwrap();
+        let feature = feature_at(tmp.path().join("gone"), true);
+        // No `.git` in the repository folder: nothing to recreate from.
+        assert_eq!(inspect(&feature, tmp.path()), Checkout::Intact);
+
+        let repo = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        git(&repo, &["init", "-q", "-b", "main"]);
+        git(
+            &repo,
+            &[
+                "-c",
+                "user.email=t@x",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "base",
+            ],
+        );
+        // A path git never registered is left alone.
+        assert_eq!(inspect(&feature, &repo), Checkout::Intact);
+
+        let wt = tmp.path().join("wt");
+        git(
+            &repo,
+            &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "hx-12"],
+        );
+        let feature = feature_at(wt.clone(), true);
+        assert_eq!(inspect(&feature, &repo), Checkout::Intact);
+        std::fs::remove_dir_all(&wt).unwrap();
+        assert_eq!(
+            inspect(&feature, &repo),
+            Checkout::Missing,
+            "registered but gone"
+        );
+        git(&repo, &["worktree", "prune"]);
+        assert_eq!(
+            inspect(&feature, &repo),
+            Checkout::Intact,
+            "pruned: nothing to recreate"
+        );
     }
 
     #[test]

@@ -379,9 +379,21 @@ fn port_block_is_reserved_for_the_session_and_released_on_delete() {
 /// agent into a folder holding only AIW's helper files).
 #[test]
 fn starting_a_feature_whose_worktree_vanished_recreates_it_first() {
-    let repo = TempDir::new().unwrap();
+    let repo = init_repo();
     let parent = TempDir::new().unwrap();
-    let gone = parent.path().join("vanished"); // never created
+    let gone = parent.path().join("vanished");
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            "-q",
+            gone.to_str().unwrap(),
+            "-b",
+            "wt-feat",
+        ],
+    );
+    std::fs::remove_dir_all(&gone).unwrap(); // registered with git, folder gone
     let mut store = store_with_repo(repo.path().to_path_buf());
     let mut feature = crate::project::Feature::new_for_project(
         "safety",

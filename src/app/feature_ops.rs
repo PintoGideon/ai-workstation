@@ -1197,7 +1197,7 @@ impl App {
         if !already_running {
             use crate::fork::worktree_repair::{self, Checkout};
             let feature = &self.store.projects[pi].features[fi];
-            match worktree_repair::inspect(feature) {
+            match worktree_repair::inspect(feature, &repo) {
                 Checkout::Intact => {}
                 Checkout::Unsafe(foreign) => worktree_repair::refuse(feature, &foreign)?,
                 Checkout::Missing => {
