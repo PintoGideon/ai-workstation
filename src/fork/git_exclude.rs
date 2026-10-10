@@ -23,10 +23,15 @@ pub fn ensure_excluded(checkout: &Path, patterns: &[&str]) -> std::io::Result<()
         return Ok(());
     };
     // Unit tests must never touch a real repository's exclude file (a test
-    // pointed at the source checkout would otherwise edit it).
+    // pointed at the source checkout would otherwise edit it). Both sides are
+    // resolved: git reports a linked worktree's common dir with symlinks
+    // resolved, and macOS's temp dir `/var/folders/…` is `/private/var/…`.
     #[cfg(test)]
-    if !common_dir.starts_with(std::env::temp_dir()) {
-        return Ok(());
+    {
+        let resolve = |p: PathBuf| p.canonicalize().unwrap_or(p);
+        if !resolve(common_dir.clone()).starts_with(resolve(std::env::temp_dir())) {
+            return Ok(());
+        }
     }
     ensure_excluded_in(&common_dir, patterns)
 }
