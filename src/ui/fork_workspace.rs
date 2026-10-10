@@ -44,7 +44,13 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) -> bool {
         app.fork_workspace.pane_rect = None;
         return false;
     };
-    app.fork_workspace.fallback_noted = false;
+    if app.fork_workspace.fallback_noted {
+        app.fork_workspace.fallback_noted = false;
+        // The note was for the narrow window; it is over.
+        if app.message.as_deref() == Some(FALLBACK_NOTE) {
+            app.message = None;
+        }
+    }
     // Everything stays inside the frame, whatever the tick laid out.
     let frame_area = frame.area();
     if frame_area.intersection(layout.sidebar) != layout.sidebar
@@ -584,8 +590,13 @@ mod tests {
         app.message = None;
         rows(&mut app, 60, 24);
         assert_eq!(app.message, None, "not repeated while still narrow");
+        app.message = Some(FALLBACK_NOTE.to_string());
         app.viewport_cols = 120;
         rows(&mut app, 120, 40);
+        assert_eq!(
+            app.message, None,
+            "the note goes when the layout fits again"
+        );
         app.viewport_cols = 60;
         rows(&mut app, 60, 24);
         assert_eq!(

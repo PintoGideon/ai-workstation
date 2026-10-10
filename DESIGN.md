@@ -451,6 +451,9 @@ Decisions:
   `⛔`), and a per-session IPC marker narrows "working" to that window. A feature's roll-up is its most pressing
   agent session (needs you > working > finished unread > exited > finished read > idle > stopped), plus `ready`
   as a read `✓`.
+- **A pending input nothing explained** (`input-request`, a diff review, a change reason) lights every agent
+  session of its feature, except a generic session wait while the feature has an attention record: that is the
+  same stop seen through the older signal, which the needs-you list already folds into one row.
 - **Counts cannot disagree.** The header pills are `badges::total_counts` — every project's `⚠n ●n ✓n` summed
   — and each project row shows its own counts. A feature counts once, under its roll-up (a feature that is
   both working and asking counts as needing you).

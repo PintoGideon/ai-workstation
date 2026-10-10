@@ -282,14 +282,18 @@ fn signal_applies(feature: &Feature, agent: Option<&AgentKind>, session: &Featur
     !feature.sessions.iter().any(|s| s.kind == kind)
 }
 
+/// A pending input nothing explained. A generic session wait is the same
+/// stop the feature's attention record describes (the needs-you list folds
+/// the two into one row), so it adds nothing while a record exists.
 fn feature_pending_detail(app: &App, feature: &Feature) -> Option<String> {
     if !app.is_feature_waiting_for_input(&feature.name) {
         return None;
     }
-    let input = app
-        .pending_inputs
-        .iter()
-        .find(|input| input.feature_name.as_deref() == Some(feature.name.as_str()))?;
+    let explained = app.attention_for(&feature.tmux_session).is_some();
+    let input = app.pending_inputs.iter().find(|input| {
+        input.feature_name.as_deref() == Some(feature.name.as_str())
+            && !(explained && input.is_session_wait())
+    })?;
     let message = input.message.trim();
     let kind = match input.notification_type.as_str() {
         "input-request" | "stop" => "input",
@@ -833,6 +837,39 @@ mod tests {
         );
         assert_eq!(session_badge(&app, 0, 0, 1, now).kind, BadgeKind::NeedsYou);
         assert_eq!(feature_badge(&app, 0, 0, now).kind, BadgeKind::NeedsYou);
+    }
+
+    #[test]
+    fn a_session_wait_explained_by_the_record_lights_no_other_session() {
+        let mut app = app_with(&[SessionKind::Claude, SessionKind::Codex]);
+        let now = Utc::now();
+        // Claude's permission prompt arrives twice: as the attention record
+        // and as the older generic "input-request" for the feature.
+        app.record_attention(
+            "aiw-hx-12",
+            &AgentKind::Claude,
+            AttentionState::Question,
+            AttentionSource::Hook,
+        );
+        app.pending_inputs.push(crate::app::PendingInput {
+            feature_name: Some("hx-12".into()),
+            project_name: Some("RS".into()),
+            notification_type: "input-request".into(),
+            message: "Claude needs your permission to use Bash".into(),
+            ..Default::default()
+        });
+        assert_eq!(session_badge(&app, 0, 0, 0, now).kind, BadgeKind::NeedsYou);
+        assert_eq!(session_badge(&app, 0, 0, 1, now).kind, BadgeKind::Idle);
+        // A diff review is separate work and still counts.
+        app.pending_inputs.push(crate::app::PendingInput {
+            feature_name: Some("hx-12".into()),
+            project_name: Some("RS".into()),
+            notification_type: "diff-review".into(),
+            ..Default::default()
+        });
+        let codex = session_badge(&app, 0, 0, 1, now);
+        assert_eq!(codex.kind, BadgeKind::NeedsYou);
+        assert_eq!(codex.label(now), "diff review");
     }
 
     #[test]
