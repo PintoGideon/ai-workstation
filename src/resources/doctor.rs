@@ -363,19 +363,28 @@ fn check_orphan_sessions(inputs: &Inputs<'_>) -> Finding {
     .with_advice("these still hold agent processes: tmux kill-session -t <name>")
 }
 
+/// FORK: `git worktree list` reports canonical paths while a feature's
+/// `workdir` is whatever AIW built from `$HOME`/the data dir, so with a
+/// symlink anywhere in between (a linked home, `/tmp` on macOS, a sandbox)
+/// every live worktree showed up as an orphan. Compare resolved paths; a
+/// path that no longer exists compares as written.
+fn canonical(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
 fn check_orphan_worktrees(inputs: &Inputs<'_>) -> Finding {
-    let known: HashSet<&Path> = inputs
+    let known: HashSet<PathBuf> = inputs
         .store
         .projects
         .iter()
         .flat_map(|project| project.features.iter())
-        .map(|feature| feature.workdir.as_path())
+        .map(|feature| canonical(&feature.workdir))
         .collect();
 
     let orphans: Vec<String> = inputs
         .worktrees
         .iter()
-        .filter(|path| !known.contains(path.as_path()))
+        .filter(|path| !known.contains(&canonical(path)))
         .map(|path| path.display().to_string())
         .collect();
 
@@ -876,6 +885,29 @@ mod tests {
         let worktrees = finding(&report, "worktrees");
         assert_eq!(worktrees.severity, Severity::Notice);
         assert_eq!(worktrees.detail, vec!["/tmp/left-behind"]);
+    }
+
+    // FORK: a feature's workdir reached through a symlink (a linked home, a
+    // sandbox) is the same worktree git lists by its real path.
+    #[cfg(unix)]
+    #[test]
+    fn a_worktree_known_through_a_symlink_is_not_an_orphan() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real = tmp.path().join("real");
+        std::fs::create_dir_all(real.join("alpha")).unwrap();
+        let link = tmp.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        let mut fixture = Fixture::new();
+        let mut feature = feature("alpha", ProjectStatus::Idle);
+        feature.workdir = link.join("alpha");
+        fixture.store = store(vec![feature]);
+        // What `git worktree list` reports: the resolved path.
+        fixture.worktrees = vec![real.join("alpha")];
+
+        let report = fixture.run(&|_| false);
+        let worktrees = finding(&report, "worktrees");
+        assert_eq!(worktrees.severity, Severity::Ok, "{:?}", worktrees.detail);
     }
 
     #[test]
