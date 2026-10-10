@@ -1985,6 +1985,21 @@ impl App {
         Ok(())
     }
 
+    /// FORK: the TUI's poll — a clean finish needs no keypress: the dialog
+    /// closes itself and a toast says so; only an error stays up to be
+    /// acknowledged. (The GUI contract polls and completes on its own.)
+    pub fn poll_deleting_feature_and_finish(&mut self) -> Result<()> {
+        self.poll_deleting_feature()?;
+        if let AppMode::DeletingFeatureInProgress(state) = &self.mode
+            && state.stage == DeleteStage::Completed
+            && state.child.is_none()
+            && state.error.is_none()
+        {
+            self.complete_deleting_feature()?;
+        }
+        Ok(())
+    }
+
     pub fn complete_deleting_feature(&mut self) -> Result<()> {
         let (
             project_name,
@@ -2086,6 +2101,7 @@ impl App {
 
         self.mode = AppMode::Normal;
         self.message = Some(format!("Deleted feature '{}'", feature_name));
+        self.push_toast_success(format!("Deleted feature '{feature_name}'")); // FORK
         Ok(())
     }
 

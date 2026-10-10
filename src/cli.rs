@@ -1402,7 +1402,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         }
 
         if matches!(app.mode, app::AppMode::DeletingFeatureInProgress(_))
-            && let Err(e) = app.poll_deleting_feature()
+            && let Err(e) = app.poll_deleting_feature_and_finish()
+        // FORK: no keypress after a clean delete
         {
             app.show_error(e);
         }
