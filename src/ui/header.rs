@@ -91,6 +91,49 @@ pub fn badge_text(attention: AttentionCounts, pending_count: usize) -> Option<St
     Some(format!("  [{} | <leader i>]", body.join(", ")))
 }
 
+/// FORK: the badge for a row too narrow for [`badge_text`]: just the total
+/// and the key, so a small terminal still shows that work is waiting and
+/// how to reach it. `None` when there is nothing to count.
+pub fn badge_text_compact(attention: AttentionCounts, pending_count: usize) -> Option<String> {
+    let total = attention.0 + attention.1 + attention.2 + pending_count;
+    (total > 0).then(|| format!("  [{total} | <leader i>]"))
+}
+
+/// FORK: [`badge_text_compact`] as spans, styled like the full badge.
+fn badge_spans_compact(
+    attention: AttentionCounts,
+    pending_count: usize,
+    theme: &Theme,
+) -> Vec<Span<'static>> {
+    let total = attention.0 + attention.1 + attention.2 + pending_count;
+    if total == 0 {
+        return Vec::new();
+    }
+    let muted = Style::default().fg(theme.text_muted.to_color());
+    let urgent = attention.0 > 0 || pending_count > 0;
+    let count_style = if urgent {
+        Style::default()
+            .fg(theme.status_waiting.to_color())
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+            .fg(theme.success.to_color())
+            .add_modifier(Modifier::BOLD)
+    };
+    vec![
+        Span::styled("  [", muted),
+        Span::styled(total.to_string(), count_style),
+        Span::styled(" | ", muted),
+        Span::styled(
+            "<leader i>",
+            Style::default()
+                .fg(theme.warning.to_color())
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("]", muted),
+    ]
+}
+
 /// The badge breakdown, as coloured spans.
 fn badge_spans(counts: AttentionCounts, pending_count: usize, theme: &Theme) -> Vec<Span<'static>> {
     let segments = badge_segments(counts, pending_count);
@@ -185,6 +228,9 @@ struct TitleLayout {
     /// FORK: columns the status pills occupy (right-aligned in the title
     /// region), or `None` when there are none or no room for them.
     pills: Option<Range<u16>>,
+    /// FORK: the badge shown is [`badge_text_compact`], because the full
+    /// one would not fit whole.
+    badge_compact: bool,
 }
 
 /// Lay out the header title so the badge survives a narrow terminal.
@@ -210,8 +256,21 @@ fn layout_title(
         .sum();
     let fixed = fixed_head.saturating_add(sep.chars().count() as u16);
     // The badge is ASCII-only, so byte length is its rendered width.
-    let badge = badge_text(attention, pending_count);
-    let badge_width = badge.as_ref().map_or(0, |b| b.len() as u16);
+    let mut badge = badge_text(attention, pending_count);
+    let mut badge_width = badge.as_ref().map_or(0, |b| b.len() as u16);
+    // FORK: a badge that cannot be shown whole next to the name and version
+    // falls back to its compact form (and to none at all) rather than being
+    // cut to `[1 to`, which says nothing.
+    let mut badge_compact = false;
+    if badge_width > title_width.saturating_sub(fixed_head) {
+        badge = badge_text_compact(attention, pending_count);
+        badge_width = badge.as_ref().map_or(0, |b| b.len() as u16);
+        badge_compact = true;
+        if badge_width > title_width.saturating_sub(fixed_head) {
+            badge = None;
+            badge_width = 0;
+        }
+    }
 
     // FORK: the pills sit right-aligned in the title region, but only when
     // the name, version and whole badge still fit beside them: the badge is
@@ -250,6 +309,7 @@ fn layout_title(
         prefix: [name, ver, sep, shown_cwd],
         badge,
         pills,
+        badge_compact,
     }
 }
 
@@ -307,7 +367,11 @@ pub fn draw(
     // Only when `layout_title` found room for it, so what is drawn and what
     // `badge_hit_columns` reports as clickable cannot disagree.
     if layout.badge.is_some() {
-        title_spans.extend(badge_spans(attention, pending_count, theme));
+        title_spans.extend(if layout.badge_compact {
+            badge_spans_compact(attention, pending_count, theme) // FORK
+        } else {
+            badge_spans(attention, pending_count, theme)
+        });
     }
 
     // FORK: the pills, right-aligned in the columns `layout_title` gave them.
@@ -436,6 +500,70 @@ mod tests {
                 "width {width}: help hint was overwritten: {rendered:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_very_narrow_header_shows_the_compact_badge_whole_or_none_at_all() {
+        let theme = Theme::default();
+        let cwd = "/home/dev/code/ai-workstation";
+        for width in 10..70u16 {
+            let backend = TestBackend::new(width, 3);
+            let mut terminal = Terminal::new(backend).unwrap();
+            terminal
+                .draw(|frame| {
+                    draw(
+                        frame,
+                        Rect::new(0, 0, width, 3),
+                        cwd,
+                        "0.37.0",
+                        0,
+                        (1, 1, 0),
+                        None,
+                        &theme,
+                    )
+                })
+                .expect("draw");
+            let rendered = row(&terminal, 1);
+            let whole = rendered.contains("[1 question, 1 to review | <leader i>]");
+            let compact = rendered.contains("[2 | <leader i>]");
+            assert!(
+                !rendered.contains('[') || whole || compact,
+                "width {width}: a cut badge: {rendered:?}"
+            );
+            if rendered.contains('[') {
+                let columns =
+                    badge_hit_columns(Rect::new(0, 0, width, 3), cwd, "0.37.0", (1, 1, 0), 0, None)
+                        .expect("a drawn badge is clickable");
+                let under: String = rendered
+                    .chars()
+                    .skip(columns.start as usize)
+                    .take((columns.end - columns.start) as usize)
+                    .collect();
+                assert!(under.ends_with("<leader i>]"), "width {width}: {under:?}");
+            }
+        }
+        // 60 columns: room for the compact badge, not the full one.
+        let backend = TestBackend::new(60, 3);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| {
+                draw(
+                    frame,
+                    Rect::new(0, 0, 60, 3),
+                    cwd,
+                    "0.37.0",
+                    0,
+                    (1, 1, 0),
+                    None,
+                    &theme,
+                )
+            })
+            .expect("draw");
+        assert!(
+            row(&terminal, 1).contains("[2 | <leader i>]"),
+            "{}",
+            row(&terminal, 1)
+        );
     }
 
     #[test]
