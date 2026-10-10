@@ -7,7 +7,7 @@ mod claude_session_picker;
 mod claude_sessions;
 mod codex_live;
 mod codex_session_picker;
-mod codex_sessions;
+pub(crate) mod codex_sessions;
 pub mod commands;
 mod compose;
 mod config_wizard;

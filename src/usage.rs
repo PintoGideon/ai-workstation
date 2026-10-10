@@ -1118,28 +1118,9 @@ fn rate_limits_from_codex_line(
 }
 
 fn codex_sessions_root() -> Option<std::path::PathBuf> {
-    let from_dirs = dirs::home_dir().map(|h| h.join(".codex").join("sessions"));
-    if from_dirs.as_ref().is_some_and(|p| p.exists()) {
-        return from_dirs;
-    }
-
-    let from_env = std::env::var("HOME")
-        .ok()
-        .map(std::path::PathBuf::from)
-        .map(|h| h.join(".codex").join("sessions"));
-    if from_env.as_ref().is_some_and(|p| p.exists()) {
-        return from_env;
-    }
-
-    let from_user_home = std::env::var("USER")
-        .ok()
-        .map(|u| std::path::PathBuf::from("/home").join(u))
-        .map(|h| h.join(".codex").join("sessions"));
-    if from_user_home.as_ref().is_some_and(|p| p.exists()) {
-        return from_user_home;
-    }
-
-    from_dirs.or(from_env).or(from_user_home)
+    // FORK: one resolver for every Codex reader; never guessed from `$USER`
+    // (a sandboxed or shared `$HOME` must not fall through to another folder).
+    crate::app::codex_sessions::codex_sessions_root()
 }
 
 fn is_real_dir(path: &Path) -> bool {

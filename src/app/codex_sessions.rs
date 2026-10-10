@@ -678,7 +678,7 @@ fn parse_timestamp(timestamp: &str) -> Option<i64> {
         .map(|dt| dt.with_timezone(&Utc).timestamp())
 }
 
-fn codex_sessions_root() -> Option<PathBuf> {
+pub(crate) fn codex_sessions_root() -> Option<PathBuf> {
     codex_sessions_root_in(
         dirs::home_dir(),
         std::env::var_os("HOME").map(PathBuf::from),
