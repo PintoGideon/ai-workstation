@@ -14,31 +14,8 @@ license = "MIT"
 readme = "README.md"
 keywords = ["tui", "tmux", "agents", "claude", "worktree"]
 categories = ["command-line-utilities", "development-tools"]
-# Keep the packaged .crate under crates.io's 10MB compressed hard cap (an
-# oversized upload gets rejected with a 413 that their CDN mangles into an
-# opaque 503 — see docs/backlog/crate-package-size-plan.md). Everything
-# excluded here is dev tooling / docs with no `include_str!`/`include_bytes!`
-# reference from src/; docs/tsx-syntax-test.tsx and docs/syntax-tests/ are
-# kept because src/highlight and src/ui/dialogs/diff.rs embed them.
-exclude = [
-    "/.agents",
-    "/.claude",
-    "/.codex",
-    "/docker",
-    "/examples",
-    "/site",
-    "/docs/automation",
-    "/docs/backlog",
-    "/docs/batched-review.md",
-    "/docs/context-usage-telemetry.md",
-    "/docs/development",
-    "/docs/docker-no-tmux.md",
-    "/docs/final-review-subagent-notes-investigation.md",
-    "/docs/repository-cleanup-audit.md",
-    "/docs/screenshots",
-    "/docs/usability-review.md",
-    "/gui",
-]
+# A private fork: never published to crates.io.
+publish = false
 
 [lib]
 name = "ai_workstation"
@@ -89,8 +66,8 @@ notify = "8.2.0"
 # Data-URL encoding for local screenshot evidence (`src/screenshot_evidence.rs`).
 base64ct = { version = "1", features = ["alloc"] }
 # Sec-WebSocket-Accept check for the local Codex control-socket handshake
-# (`src/app/model_analysis/session_control.rs`, which speaks WebSocket framing
-# itself over the `codex app-server proxy` stdio pipe — no network).
+# (`src/app/model_analysis/local_ws.rs`, which speaks WebSocket framing itself
+# over the `codex app-server proxy` stdio pipe — no network).
 sha1 = "0.10"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 url = "2"
@@ -100,4 +77,3 @@ url = "2"
 # Codex control-socket client. Not linked into the binaries.
 tungstenite = "0.29"
 mockall = "0.13"
-pretty_assertions = "1"

@@ -131,9 +131,8 @@ and system Python's GTK introspection, `websocket` and `Xlib` modules. The helpe
 installs these in the capture-only CI job, builds the frontend and GUI, then
 cleans up its own GUI and Vite process groups. `HOME` stays unchanged; both AIW
 configuration/state directories are private. Port 1420 must be free. The TUI
-setup frame remains internal, and only native PNG frames reach the gallery.
-Publish this scenario with the same `publish-pages.sh --strict` path as TUI
-proof; no extra seed files are needed.
+setup frame remains internal, and only native PNG frames are the deliverable;
+no extra seed files are needed.
 
 The manual Final Review scenario reuses the same isolated native GUI fixture.
 Its seven frames cover the stopped-feature entry, notes and saved line threads,
@@ -205,98 +204,6 @@ unless PNG rendering was requested explicitly. A run's scratch root and its
 default output directory are removed on exit; pass `--keep` or use an explicit
 `--out-dir` when captures must survive teardown. The driver always tears down
 its isolated tmux session.
-
-## Publish private browser-viewable evidence to a PR
-
-For agent-driven publication, use the repository publisher after the branch and
-scenario have been pushed:
-
-```bash
-scripts/dev/screenshot/publish-pages.sh \
-    --pr <number> \
-    --scenario scripts/dev/screenshot/scenarios/<scenario>.txt \
-    --summary "One sentence explaining the complete flow under review" \
-    --ref <pushed-branch>
-```
-
-Add `--gif` when an animation is wanted and `--geometry 160x44` when the
-scenario needs another fixed size. The invoking agent needs an authenticated
-`gh` CLI session with permission to dispatch Actions and edit the PR, and — for
-the deploy step, which now runs locally — `CLOUDFLARE_API_TOKEN` in the
-environment, `CLOUDFLARE_ACCOUNT_ID` set, and `wrangler` on `PATH` (or `npx`).
-The owner keeps the token in `~/.secrets/cf-aiw-pages.env`; the
-`aiw-publish-screenshots` shell wrapper sources that file and calls
-`publish-pages.sh`, so prefer the wrapper (or `source` the file yourself).
-`wrangler login` also satisfies the check but is unreliable here — use the
-token. The scenario must exist on the pushed ref; screenshots never need to be
-committed.
-
-The workflow must already be present on the repository's default branch before
-the command can dispatch it; the capture itself may target any pushed ref.
-
-The command dispatches `.github/workflows/aiw-screenshot-artifact.yml`, which
-is **capture-only**: one unprivileged job builds AIW on an isolated runner,
-runs `aiw-capture.sh`, renders PNGs, and uploads them as a 14-day internal
-artifact. It holds no deployment credentials and there is no environment gate.
-
-`publish-pages.sh` then waits for that run, downloads its artifact with
-`gh run download`, runs `build_static_gallery.py` to produce a script-free
-`index.html` (images inlined as `data:` URIs) plus a `_headers` file with a
-`default-src 'none'` Content-Security-Policy, and deploys that directory to the
-Cloudflare Pages preview branch `pr-<number>` with `wrangler pages deploy` —
-all on the local machine. The Pages credentials never enter CI. Safety rests on
-the split itself: the deploy step only ever handles rendered images, never the
-requested ref's code.
-
-The internal capture artifact contains:
-
-- numbered `.ansi` captures and escape-free `.txt` assertion twins;
-- rendered PNG frames and, when requested, `capture.gif`;
-- `capture-metadata.json`; and
-- a self-contained `gallery.html` with images embedded in the HTML.
-
-After the deploy, the publisher replaces only the PR body region between
-`<!-- aiw:screenshots:start -->` and `<!-- aiw:screenshots:end -->` with the
-stable private Pages URL. In the Pages project, enable **Settings > General >
-Enable access policy** before publishing evidence; raw ANSI/text captures remain
-in the internal artifact. Repeated runs update the same branch alias while
-preserving all other PR body content.
-
-To make the index useful without downloading anything, add a `note:` step
-immediately before every `shot:` in the scenario. The note is a concise,
-reviewer-facing sentence describing the visible state and what it proves. The
-required `--summary` describes the overall flow. Pages renders the summary and
-an ordered walkthrough with each note under **What this proves**.
-
-Capture, authentication, workflow, artifact, download, gallery-build, deploy,
-and PR-body failures print an actionable `warning:` and return success by
-default so a larger PR workflow can continue. Pass `--strict` when the caller
-needs a nonzero exit status instead.
-
-### Deployment safeguards
-
-Only the GitHub account `eldridgerdev` may execute the capture workflow (the
-`if: github.actor == 'eldridgerdev'` gate on the job), and all dispatches share
-one concurrency group so a burst just queues one Rust build at a time. Agents
-must use that account's authenticated `gh` session.
-
-The Cloudflare Pages deploy runs on the operator's machine, from
-`publish-pages.sh`. Provide a Pages-scoped `CLOUDFLARE_API_TOKEN` — the owner
-keeps it in `~/.secrets/cf-aiw-pages.env`, and the `aiw-publish-screenshots`
-shell wrapper sources that file before invoking the script — and set
-`CLOUDFLARE_ACCOUNT_ID` (an identifier, not a secret). `wrangler login` (OAuth,
-nothing stored by us) also passes the check, but it is unreliable on this box;
-prefer the token. There is no `screenshot-pages` GitHub environment and no
-per-run approval: no Cloudflare credential is ever stored in GitHub, and the
-deploy step only ever sees rendered images downloaded from the capture
-artifact — it never checks out or executes the captured ref. If auth or
-`wrangler` is missing, the script warns and stops before dispatching a capture
-it could not publish.
-
-The runner installs the Codex CLI so a fresh scratch instance can pass AIW's
-harness setup for UI-only scenarios. Scenarios that launch an agent still need
-the corresponding provider credentials and harness-specific setup available
-to the workflow.
 
 ## Scenario format
 

@@ -87,7 +87,7 @@ python3 scripts/dev/screenshot/render_ansi.py <capture>.ansi \
 
 Match `--cols` and `--rows` to the capture geometry. Pass `--gif` to the driver only when the user asks for a GIF or animation; the driver then renders the frames and assembles the GIF itself.
 
-## Publish and deliver
+## Verify and deliver
 
 If the scenario's `expect:`/`expect_not:` assertions are in place, a clean
 `aiw-capture.sh` exit already means every one of them held — a nonzero exit
@@ -100,83 +100,7 @@ or two representative PNGs to check layout, clipping, and color. A scenario
 with no `expect:`/`expect_not:` at all cannot be trusted on its `note:` text
 alone — verify its `.txt` twins by hand before treating it as evidence.
 
-When the branch and scenario are pushed and the user wants the proof attached to
-an **open** PR, run the repository's agent-driven publisher. The deploy step
-runs locally and needs `CLOUDFLARE_ACCOUNT_ID` set (it is, in the owner's
-shell), `wrangler` (or `npx`) available, and a `CLOUDFLARE_API_TOKEN` in the
-environment.
-
-**If the local capture used `--seed`/`--seed-feature`/`--config`, pass the
-identical files to the publisher too.** The remote capture workflow starts
-from a blank scratch instance exactly like the local one does; it has no
-memory of what was seeded locally. Omitting this is exactly how a scenario
-written and verified against seeded state ran for real against an empty
-dashboard, with every keypress meant for the feature-under-test's UI
-instead falling through to unrelated dashboard-level keybindings —
-`expect:`/`expect_not:` now fails that run loudly rather than letting it
-publish silently wrong, but passing the right seed files is what makes the
-run correct in the first place.
-
-**Do not run `wrangler login` — it is unreliable here, and you must not mint a
-token yourself.** The token is a Pages-scoped API token the repository owner
-keeps in `~/.secrets/cf-aiw-pages.env`; the `aiw-publish-screenshots` shell
-function sources that file and `exec`s `publish-pages.sh`. Invoke it through the
-wrapper, or source the file first, so the run is non-interactive:
-
-```bash
-aiw-publish-screenshots \
-  --pr <number> \
-  --scenario scripts/dev/screenshot/scenarios/<scenario>.txt \
-  --summary "One sentence explaining the complete flow under review" \
-  --ref <pushed-branch> \
-  --seed scripts/dev/screenshot/scenarios/<seed-project>.json \
-  --seed-feature scripts/dev/screenshot/scenarios/<seed-feature>.json \
-  --strict
-
-# equivalently, from a non-login shell:
-( set -a; . ~/.secrets/cf-aiw-pages.env; set +a
-  scripts/dev/screenshot/publish-pages.sh --pr <number> \
-    --scenario scripts/dev/screenshot/scenarios/<scenario>.txt \
-    --summary "..." --ref <pushed-branch> \
-    --seed scripts/dev/screenshot/scenarios/<seed-project>.json \
-    --seed-feature scripts/dev/screenshot/scenarios/<seed-feature>.json \
-    --strict )
-```
-
-Omit `--seed`/`--seed-feature` only when the scenario genuinely needs no
-pre-existing project or feature.
-
-If `publish-pages.sh` still reports missing Cloudflare auth after that (the
-secrets file is absent or the token is unset), surface the warning and stop.
-If it reports the capture workflow did not succeed, that is very likely an
-`expect:`/`expect_not:` failure or a missing seed file — open the linked
-Actions run's log, which names the exact shot and assertion, rather than
-retrying blind.
-
-Add `--gif` only when the user asks for animation. The command dispatches the
-isolated **capture-only** workflow, then locally downloads the rendered frames,
-builds a script-free CSP-locked gallery, deploys it to Cloudflare Pages with
-`wrangler`, and replaces only the PR body section between
-`<!-- aiw:screenshots:start -->` and `<!-- aiw:screenshots:end -->`. The
-Pages gallery is restricted by Cloudflare Access; raw ANSI/text captures remain
-in a 14-day internal artifact and screenshots are never committed to the branch.
-The gallery index displays the flow summary first, followed by ordered frames
-with their `note:` explanation under **What this proves**.
-
-Publication is a real external write and must be explicitly requested. The
-publisher accepts only the `eldridgerdev` GitHub identity; it rejects another
-`gh` login before dispatching, and serializes capture dispatches. There is no
-`screenshot-pages` environment or per-run approval: the Cloudflare token stays
-on the local machine and never enters CI, and the deploy step only handles
-rendered images, never the captured ref's code. If capture, deploy, or the PR
-update does not finish, report the actionable warning and do not claim that the
-PR has visual proof.
-
-Return the publication result as the primary result:
-
-- Link the PR and private Cloudflare Pages gallery.
-- Report any warning the command printed; do not expose artifact URLs or
-  raw ANSI/text captures in the PR.
-- If no PR publication was requested, link every local PNG or GIF in story order and give each one a short caption describing what it proves.
+This fork has no PR screenshot publisher. Link every local PNG or GIF in
+story order and give each one a short caption describing what it proves.
 
 Do not claim the UI is proven when the text assertions or representative visual inspection fail. Fix the scenario or implementation and rerun the capture first.

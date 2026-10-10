@@ -9,8 +9,8 @@ publish = false
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# Path dependency on the existing TUI package's library target: see
-# AIW_PLAN.md's package-layout decision. This intentionally pulls in
+# Path dependency on the existing TUI package's library target. This
+# intentionally pulls in
 # ratatui/crossterm/vt100 the GUI does not use yet rather than forcing an
 # upfront presentation-free core-crate split.
 ai-workstation = { path = "../.." }

@@ -99,21 +99,9 @@ debug log with level ERROR.
   `cleanup_global_hooks()` actively removes any
   previously-injected global entries.
 
-## Screenshot proof publication
+## Screenshot proof
 
 Use the repository `aiw-screenshot` skill only when the user explicitly asks
-for visual proof. When the user also explicitly asks to publish that proof to
-an open PR, use `scripts/dev/screenshot/publish-pages.sh --strict` after the
-ref and scenario are pushed. The publisher requires the `eldridgerdev` GitHub
-identity and writes only the marked PR-body region. It dispatches the isolated
-capture workflow (the only job that checks out the ref), then downloads that
-run's rendered frames and deploys the private Cloudflare Pages gallery from the
-local machine — so it needs `CLOUDFLARE_API_TOKEN` in the environment (the owner
-keeps it in `~/.secrets/cf-aiw-pages.env`, sourced by the
-`aiw-publish-screenshots` shell wrapper; don't run `wrangler login`, it is
-unreliable here), `CLOUDFLARE_ACCOUNT_ID` set, plus `wrangler` (or
-`npx`). There is no `screenshot-pages`
-environment or per-run approval: the Pages credentials never enter CI, and the
-capture-vs-deploy split keeps that safe. Do not claim publication succeeded
-until the command does. Raw ANSI/text captures and Actions artifact URLs are
-internal and must not be placed in the PR.
+for visual proof. Captures are local (`scripts/dev/screenshot/aiw-capture.sh`,
+rendered with `render_ansi.py` / `assemble_gif.py`); this fork has no PR
+screenshot publisher, so deliver the PNGs/GIF as files.
