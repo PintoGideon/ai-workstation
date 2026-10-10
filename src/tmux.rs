@@ -1836,21 +1836,34 @@ impl TmuxManager {
             .unwrap_or_default()
     }
 
-    /// FORK: `(session, window, pane_current_command)` for every pane on the
-    /// server, in one call. See [`crate::traits::TmuxOps::pane_commands`].
-    pub fn pane_commands() -> Vec<(String, String, String)> {
-        Self::command()
+    /// FORK: every pane on the server, in one call. See
+    /// [`crate::traits::TmuxOps::pane_commands`]. Whether a pane's shell has
+    /// children is asked of `ps` (once) only when some pane sits at a shell.
+    pub fn pane_commands() -> Vec<PaneCommand> {
+        let mut panes = Self::command()
             .args([
                 "list-panes",
                 "-a",
                 "-F",
-                "#{session_name}\t#{window_name}\t#{pane_current_command}",
+                "#{session_name}\t#{window_name}\t#{pane_id}\t#{pane_pid}\t#{pane_current_command}",
             ])
             .output()
             .ok()
             .filter(|o| o.status.success())
             .map(|o| parse_pane_commands(&String::from_utf8_lossy(&o.stdout)))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        let at_shell = |p: &PaneCommand| crate::fork::session_reconcile::is_plain_shell(&p.command);
+        if panes.iter().any(at_shell) {
+            let processes = crate::resources::procs::list_processes();
+            // No `ps`: "cannot tell", never "nothing runs".
+            if !processes.is_empty() {
+                let parents: HashSet<i64> = processes.iter().map(|p| p.ppid).collect();
+                for pane in panes.iter_mut().filter(|p| at_shell(p)) {
+                    pane.shell_has_children = pane.pid.map(|pid| parents.contains(&pid));
+                }
+            }
+        }
+        panes
     }
 
     /// Whether a specific window is still present in a tmux session.
@@ -1966,6 +1979,16 @@ impl TmuxManager {
             &["select-window", "-t", &target],
             "Failed to select tmux window",
             "tmux select-window failed",
+        )
+    }
+
+    /// FORK: make pane `pane_id` (`%N`) its window's active pane, so keys
+    /// sent to the window land in it.
+    pub fn select_pane(pane_id: &str) -> Result<()> {
+        Self::run(
+            &["select-pane", "-t", pane_id],
+            "Failed to select tmux pane",
+            "tmux select-pane failed",
         )
     }
 
@@ -2542,17 +2565,56 @@ fn parse_pane_list(raw: &str) -> Vec<(String, String, i64)> {
         .collect()
 }
 
-/// FORK: parse tab-separated `session\twindow\tcommand` rows. A row without
-/// a command is kept with an empty one: the window is still live, we just
-/// don't know what runs in it (and an empty command never reads as a shell).
-fn parse_pane_commands(raw: &str) -> Vec<(String, String, String)> {
+/// FORK: one pane, as the exited-agent sweep sees it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PaneCommand {
+    pub session: String,
+    pub window: String,
+    /// tmux's `%N` pane id. Ids only grow, so a window's lowest is the pane
+    /// it was created with — where AIW launched the agent.
+    pub pane_id: String,
+    /// The pane's own process (its shell), when tmux reported one.
+    pub pid: Option<i64>,
+    /// tmux's `#{pane_current_command}`: the foreground process.
+    pub command: String,
+    /// Whether the pane's shell has child processes; `None` when not known
+    /// (not at a shell, or `ps` could not answer). A shell in the
+    /// foreground with a child is still running something: a harness
+    /// started without `exec`, or one that is itself an `sh` script.
+    pub shell_has_children: Option<bool>,
+}
+
+impl PaneCommand {
+    /// The numeric part of [`Self::pane_id`], for ordering.
+    pub fn pane_number(&self) -> u64 {
+        self.pane_id
+            .trim_start_matches('%')
+            .parse()
+            .unwrap_or(u64::MAX)
+    }
+}
+
+/// FORK: parse tab-separated `session\twindow\tpane_id\tpane_pid\tcommand`
+/// rows. A row without a command is kept with an empty one: the window is
+/// still live, we just don't know what runs in it (and an empty command
+/// never reads as a shell).
+fn parse_pane_commands(raw: &str) -> Vec<PaneCommand> {
     raw.lines()
         .filter_map(|line| {
             let mut parts = line.split('\t');
             let session = parts.next()?.to_string();
             let window = parts.next()?.to_string();
+            let pane_id = parts.next().unwrap_or_default().trim().to_string();
+            let pid = parts.next().and_then(|p| p.trim().parse().ok());
             let command = parts.next().unwrap_or_default().trim().to_string();
-            Some((session, window, command))
+            Some(PaneCommand {
+                session,
+                window,
+                pane_id,
+                pid,
+                command,
+                shell_has_children: None,
+            })
         })
         .collect()
 }
@@ -2584,8 +2646,12 @@ impl TmuxOps for TmuxManager {
         TmuxManager::list_panes()
     }
 
-    fn pane_commands(&self) -> Vec<(String, String, String)> {
+    fn pane_commands(&self) -> Vec<PaneCommand> {
         TmuxManager::pane_commands()
+    }
+
+    fn select_pane(&self, pane_id: &str) -> Result<()> {
+        TmuxManager::select_pane(pane_id)
     }
 
     fn create_session_with_window(
@@ -3313,25 +3379,30 @@ mod tests {
 
     #[test]
     fn parse_pane_commands_keeps_rows_without_a_command() {
-        let raw =
-            "aiw-alpha\tclaude\tclaude\naiw-alpha\tterminal\tbash\naiw-beta\tcodex\n\ngarbage\n";
+        let raw = "aiw-alpha\tclaude\t%1\t100\tclaude\naiw-alpha\tterminal\t%7\t200\tbash\naiw-beta\tcodex\t%3\n\ngarbage\n";
 
+        let parsed = super::parse_pane_commands(raw);
+        let rows: Vec<(&str, &str, &str, Option<i64>, &str)> = parsed
+            .iter()
+            .map(|p| {
+                (
+                    p.session.as_str(),
+                    p.window.as_str(),
+                    p.pane_id.as_str(),
+                    p.pid,
+                    p.command.as_str(),
+                )
+            })
+            .collect();
         assert_eq!(
-            super::parse_pane_commands(raw),
+            rows,
             vec![
-                (
-                    "aiw-alpha".to_string(),
-                    "claude".to_string(),
-                    "claude".to_string()
-                ),
-                (
-                    "aiw-alpha".to_string(),
-                    "terminal".to_string(),
-                    "bash".to_string()
-                ),
-                ("aiw-beta".to_string(), "codex".to_string(), String::new()),
+                ("aiw-alpha", "claude", "%1", Some(100), "claude"),
+                ("aiw-alpha", "terminal", "%7", Some(200), "bash"),
+                ("aiw-beta", "codex", "%3", None, ""),
             ]
         );
+        assert_eq!(parsed[1].pane_number(), 7);
     }
 
     #[test]

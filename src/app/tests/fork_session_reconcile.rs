@@ -4,8 +4,9 @@
 use super::support::*;
 use crate::app::attention::{AttentionSource, AttentionState};
 use crate::app::*;
-use crate::fork::session_reconcile::{EXITED_STATUS, selection_after_removal};
+use crate::fork::session_reconcile::{EXITED_STATUS, is_plain_shell, selection_after_removal};
 use crate::project::{AgentKind, FeatureSession, SessionKind};
+use crate::tmux::PaneCommand;
 use crate::traits::{MockTmuxOps, MockWorktreeOps};
 
 fn session(kind: SessionKind, window: &str) -> FeatureSession {
@@ -15,23 +16,43 @@ fn session(kind: SessionKind, window: &str) -> FeatureSession {
     s
 }
 
-/// `panes`: `(session, window, pane_current_command)`; a window not listed
-/// is gone.
+/// `panes`: `(session, window, pane_current_command)`, in creation order
+/// (pane ids `%1`, `%2`, …); a window not listed is gone. A pane at a shell
+/// has no children: nothing runs under it.
 fn app_with(sessions: Vec<FeatureSession>, panes: &[(&str, &str, &str)]) -> App {
     app_with_tmux(sessions, panes, MockTmuxOps::new())
+}
+
+fn panes_from(panes: &[(&str, &str, &str)]) -> Vec<PaneCommand> {
+    panes
+        .iter()
+        .enumerate()
+        .map(|(i, (s, w, c))| PaneCommand {
+            session: s.to_string(),
+            window: w.to_string(),
+            pane_id: format!("%{}", i + 1),
+            pid: Some(1000 + i as i64),
+            command: c.to_string(),
+            shell_has_children: is_plain_shell(c).then_some(false),
+        })
+        .collect()
 }
 
 fn app_with_tmux(
     sessions: Vec<FeatureSession>,
     panes: &[(&str, &str, &str)],
+    tmux: MockTmuxOps,
+) -> App {
+    app_with_panes(sessions, panes_from(panes), tmux)
+}
+
+fn app_with_panes(
+    sessions: Vec<FeatureSession>,
+    list: Vec<PaneCommand>,
     mut tmux: MockTmuxOps,
 ) -> App {
     let mut store = store_with_feature(ProjectStatus::Active);
     store.projects[0].features[0].sessions = sessions;
-    let list: Vec<(String, String, String)> = panes
-        .iter()
-        .map(|(s, w, c)| (s.to_string(), w.to_string(), c.to_string()))
-        .collect();
     tmux.expect_pane_commands().returning(move || list.clone());
     App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()))
 }
@@ -222,13 +243,48 @@ fn a_feature_with_another_agent_still_running_keeps_its_attention() {
 }
 
 #[test]
-fn a_split_agent_window_is_running_while_any_pane_is() {
+fn a_split_agent_window_is_judged_by_its_original_pane() {
+    // The agent runs in the pane the window was created with; a shell the
+    // user split off beside it is not an exit.
     let mut app = app_with(
         vec![session(SessionKind::Claude, "claude")],
-        &[(FEATURE, "claude", "bash"), (FEATURE, "claude", "claude")],
+        &[(FEATURE, "claude", "claude"), (FEATURE, "claude", "bash")],
     );
     assert!(!app.reconcile_vanished_windows());
     assert!(app.exited_sessions.is_empty());
+
+    // …and `htop` in that other pane does not hide the agent exiting.
+    let mut app = app_with(
+        vec![session(SessionKind::Claude, "claude")],
+        &[(FEATURE, "claude", "bash"), (FEATURE, "claude", "htop")],
+    );
+    assert!(app.reconcile_vanished_windows());
+    assert_eq!(listed(&app), vec![("claude".into(), true)]);
+}
+
+#[test]
+fn a_shell_in_the_foreground_with_a_child_is_a_running_agent() {
+    // An agent launched before agents were `exec`ed (`sh script` → claude),
+    // or a harness that is itself an `sh` script: tmux reports `sh`, but
+    // the pane's shell still has a child, so the agent is up.
+    let mut panes = panes_from(&[(FEATURE, "claude", "sh"), (FEATURE, "codex", "bash")]);
+    panes[0].shell_has_children = Some(true);
+    // `ps` could not answer: never conclude "exited" from that.
+    panes[1].shell_has_children = None;
+    let mut app = app_with_panes(
+        vec![
+            session(SessionKind::Claude, "claude"),
+            session(SessionKind::Codex, "codex"),
+        ],
+        panes,
+        MockTmuxOps::new(),
+    );
+    assert!(!app.reconcile_vanished_windows());
+    assert!(app.exited_sessions.is_empty());
+    assert_eq!(
+        listed(&app),
+        vec![("claude".into(), false), ("codex".into(), false)]
+    );
 }
 
 #[test]
@@ -291,6 +347,109 @@ fn restarting_an_exited_agent_relaunches_it_in_its_live_window() {
     let claude = &app.store.projects[0].features[0].sessions[0];
     assert!(!claude.stopped);
     assert!(!app.session_is_exited(&claude.id));
+}
+
+#[test]
+fn an_exited_agent_is_still_exited_after_aiw_restarts() {
+    // Saved state: stopped, with the "exited" marker lost with the process.
+    let mut exited = session(SessionKind::Claude, "claude");
+    exited.stopped = true;
+    let mut tmux = MockTmuxOps::new();
+    tmux.expect_session_exists().returning(|_| true);
+    tmux.expect_window_exists().returning(|_, _| true);
+    tmux.expect_launch_claude()
+        .times(1)
+        .returning(|_, _, _, _, _| Ok(()));
+    let mut app = app_with_tmux(vec![exited], &[(FEATURE, "claude", "bash")], tmux);
+    assert!(app.exited_sessions.is_empty());
+
+    // The first sweep restores the marker…
+    assert!(app.reconcile_vanished_windows());
+    let id = app.store.projects[0].features[0].sessions[0].id.clone();
+    assert!(app.session_is_exited(&id));
+    assert_eq!(
+        app.store.projects[0].features[0].sessions[0]
+            .status_text
+            .as_deref(),
+        Some(EXITED_STATUS)
+    );
+    assert!(!app.reconcile_vanished_windows());
+
+    // …and one restart relaunches it.
+    assert!(
+        app.restart_stopped_session_window_unchecked(0, 0, 0)
+            .unwrap()
+    );
+    assert!(!app.store.projects[0].features[0].sessions[0].stopped);
+}
+
+#[test]
+fn a_restart_relaunches_without_waiting_for_the_sweep() {
+    // Restart pressed before any sweep ran since AIW started.
+    let mut exited = session(SessionKind::Claude, "claude");
+    exited.stopped = true;
+    let mut tmux = MockTmuxOps::new();
+    tmux.expect_session_exists().returning(|_| true);
+    tmux.expect_window_exists().returning(|_, _| true);
+    tmux.expect_launch_claude()
+        .times(1)
+        .returning(|_, _, _, _, _| Ok(()));
+    let mut app = app_with_tmux(vec![exited], &[(FEATURE, "claude", "zsh")], tmux);
+    assert!(
+        app.restart_stopped_session_window_unchecked(0, 0, 0)
+            .unwrap()
+    );
+}
+
+#[test]
+fn a_restart_never_types_into_an_agent_that_is_running_again() {
+    // Marked exited, then the user started the agent again by hand.
+    let mut tmux = MockTmuxOps::new();
+    tmux.expect_session_exists().returning(|_| true);
+    tmux.expect_window_exists().returning(|_, _| true);
+    tmux.expect_launch_claude().times(0);
+    let mut app = app_with_tmux(
+        vec![session(SessionKind::Claude, "claude")],
+        &[(FEATURE, "claude", "claude")],
+        tmux,
+    );
+    let id = app.store.projects[0].features[0].sessions[0].id.clone();
+    app.store.projects[0].features[0].sessions[0].stopped = true;
+    app.exited_sessions.insert(id.clone());
+
+    assert!(
+        !app.restart_stopped_session_window_unchecked(0, 0, 0)
+            .unwrap()
+    );
+    assert!(!app.store.projects[0].features[0].sessions[0].stopped);
+    assert!(!app.session_is_exited(&id));
+}
+
+#[test]
+fn a_restart_in_a_split_window_selects_the_agent_pane_first() {
+    let mut tmux = MockTmuxOps::new();
+    tmux.expect_session_exists().returning(|_| true);
+    tmux.expect_window_exists().returning(|_, _| true);
+    let mut seq = mockall::Sequence::new();
+    tmux.expect_select_pane()
+        .times(1)
+        .in_sequence(&mut seq)
+        .withf(|pane| pane == "%1")
+        .returning(|_| Ok(()));
+    tmux.expect_launch_claude()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_, _, _, _, _| Ok(()));
+    let mut app = app_with_tmux(
+        vec![session(SessionKind::Claude, "claude")],
+        &[(FEATURE, "claude", "bash"), (FEATURE, "claude", "htop")],
+        tmux,
+    );
+    assert!(app.reconcile_vanished_windows());
+    assert!(
+        app.restart_stopped_session_window_unchecked(0, 0, 0)
+            .unwrap()
+    );
 }
 
 // ── the session on screen ────────────────────────────────────────────────────

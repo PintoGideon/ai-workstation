@@ -2193,9 +2193,20 @@ impl App {
             return Ok(false);
         }
         // FORK: an agent that exited while its pane's shell survived is
-        // launched again into that same window.
-        let exited_in_place = self.exited_sessions.contains(&session.id);
-        if self.tmux.window_exists(&tmux_session, &session.tmux_window) && !exited_in_place {
+        // launched again into that same pane. Asked of tmux now rather than
+        // trusted from the last sweep's marker (lost when AIW restarts, and
+        // stale if the agent was started again by hand): typing a launch
+        // command into a running agent is the one thing to never do.
+        let window_exists = self.tmux.window_exists(&tmux_session, &session.tmux_window);
+        let exited_pane = if window_exists
+            && session.kind.is_agent_harness()
+            && (session.stopped || self.exited_sessions.contains(&session.id))
+        {
+            self.exited_agent_pane(&tmux_session, &session.tmux_window)
+        } else {
+            None
+        };
+        if window_exists && exited_pane.is_none() {
             // Up after all (recreated from outside AIW): the flag is what is
             // stale, not the window.
             if session.stopped {
@@ -2204,8 +2215,12 @@ impl App {
             }
             return Ok(false);
         }
-        let reuse_window =
-            exited_in_place && self.tmux.window_exists(&tmux_session, &session.tmux_window);
+        if let Some(agent_pane) = exited_pane.as_ref().filter(|p| p.split) {
+            // Keys sent to the window go to its active pane, which in a split
+            // window may be the user's other pane.
+            self.tmux.select_pane(&agent_pane.pane.pane_id)?;
+        }
+        let reuse_window = exited_pane.is_some();
 
         if let Some(agent) = agent_for_session_kind(&session.kind) {
             let use_rc = remote_control && self.remote_control_allowed();

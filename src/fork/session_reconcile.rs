@@ -12,10 +12,16 @@
 //! - any other session (agents, editors, custom commands) is marked **stopped**
 //!   (shown as ■), so opening it restarts it — agents resume their conversation
 //!   through AIW's existing stopped-session flow;
-//! - an **agent** window that is still there but whose foreground process is
-//!   the pane's plain shell (the agent crashed or was quit) is marked
-//!   **exited**: ■ with an "exited" status, no "finished" attention, and `c`
-//!   or `S` launch the agent again into the same window.
+//! - an **agent** window that is still there but whose agent pane (the
+//!   window's original pane) is back at its shell — the shell in the
+//!   foreground *and* with no child processes — is marked **exited**: ■ with
+//!   an "exited" status, no "finished" attention, and `c` or `S` launch the
+//!   agent again into that pane. Requiring no children keeps a harness that
+//!   runs as a child of `sh` (one started before agents were `exec`ed, or
+//!   one that is a shell script) from reading as exited; looking only at
+//!   the original pane keeps a split pane running `htop` from hiding an
+//!   exit. An exited agent that is still exited after AIW restarts is
+//!   marked again on the first sweep.
 //!
 //! Nothing is touched when tmux can't be reached, when the feature itself is
 //! stopped or its tmux session is gone (AIW's feature-level recovery handles
@@ -30,6 +36,7 @@ use std::collections::HashMap;
 
 use crate::app::{App, AppMode, Selection};
 use crate::project::{ProjectStatus, SessionKind};
+use crate::tmux::PaneCommand;
 
 /// Sessions younger than this are left alone: their window may still be
 /// being created, or their agent still starting up at the shell.
@@ -47,6 +54,45 @@ enum Fix {
     Remove,
     MarkStopped,
     MarkExited,
+    /// Already stopped (and its window still at the shell), but not known
+    /// to be exited: AIW restarted since. Restore the marker.
+    RestoreExited,
+}
+
+/// FORK: a window's agent pane: the pane the window was created with (the
+/// lowest pane id), where AIW launched the agent.
+#[derive(Debug, Clone)]
+pub(crate) struct AgentPane {
+    pub(crate) pane: PaneCommand,
+    /// Whether the window has other panes (the user split it).
+    pub(crate) split: bool,
+}
+
+impl AgentPane {
+    /// The agent in this pane has exited and left its shell idle.
+    pub(crate) fn agent_exited(&self) -> bool {
+        is_plain_shell(&self.pane.command) && self.pane.shell_has_children == Some(false)
+    }
+}
+
+/// Group panes by `(session, window)`, keeping each window's agent pane.
+pub(crate) fn agent_panes(panes: Vec<PaneCommand>) -> HashMap<(String, String), AgentPane> {
+    let mut windows: HashMap<(String, String), AgentPane> = HashMap::new();
+    for pane in panes {
+        let key = (pane.session.clone(), pane.window.clone());
+        match windows.get_mut(&key) {
+            None => {
+                windows.insert(key, AgentPane { pane, split: false });
+            }
+            Some(window) => {
+                window.split = true;
+                if pane.pane_number() < window.pane.pane_number() {
+                    window.pane = pane;
+                }
+            }
+        }
+    }
+    windows
 }
 
 /// Whether `command` (tmux's `pane_current_command`) is a plain shell, i.e.
@@ -87,14 +133,7 @@ impl App {
         if panes.is_empty() {
             return false;
         }
-        let mut commands: HashMap<(String, String), String> = HashMap::new();
-        for (session, window, command) in panes {
-            // A split window counts as busy when any of its panes is.
-            let entry = commands.entry((session, window)).or_default();
-            if entry.is_empty() || (is_plain_shell(entry) && !is_plain_shell(&command)) {
-                *entry = command;
-            }
-        }
+        let commands = agent_panes(panes);
 
         let viewing = match &self.mode {
             AppMode::Viewing(view) => Some((view.session.clone(), view.window.clone())),
@@ -116,14 +155,23 @@ impl App {
                     continue;
                 }
                 for (si, session) in feature.sessions.iter().enumerate() {
-                    if !session.kind.is_tmux_backed()
-                        || session.stopped
-                        || session.created_at >= cutoff
-                    {
+                    if !session.kind.is_tmux_backed() || session.created_at >= cutoff {
                         continue;
                     }
                     let key = (feature.tmux_session.clone(), session.tmux_window.clone());
-                    let Some(command) = commands.get(&key) else {
+                    if session.stopped {
+                        // The in-memory marker does not survive a restart of
+                        // AIW; the stopped flag does. Without the marker a
+                        // restart would take the window for "up after all".
+                        if session.kind.is_agent_harness()
+                            && !self.exited_sessions.contains(&session.id)
+                            && commands.get(&key).is_some_and(AgentPane::agent_exited)
+                        {
+                            fixes.push((pi, fi, si, Fix::RestoreExited));
+                        }
+                        continue;
+                    }
+                    let Some(window) = commands.get(&key) else {
                         // The window is gone. The one on screen is handled
                         // below, after the list is settled.
                         if viewing.as_ref() == Some(&key) {
@@ -137,7 +185,7 @@ impl App {
                         fixes.push((pi, fi, si, fix));
                         continue;
                     };
-                    if session.kind.is_agent_harness() && is_plain_shell(command) {
+                    if session.kind.is_agent_harness() && window.agent_exited() {
                         fixes.push((pi, fi, si, Fix::MarkExited));
                     }
                 }
@@ -178,6 +226,11 @@ impl App {
             match fix {
                 Fix::MarkStopped => self.set_session_stopped(pi, fi, si, true),
                 Fix::MarkExited => self.mark_session_exited(pi, fi, si),
+                Fix::RestoreExited => {
+                    let session = &mut self.store.projects[pi].features[fi].sessions[si];
+                    session.status_text = Some(EXITED_STATUS.to_string());
+                    self.exited_sessions.insert(session.id.clone());
+                }
                 Fix::Remove => {
                     self.store.projects[pi].features[fi].sessions.remove(si);
                     self.selection = selection_after_removal(&self.selection, pi, fi, si);
@@ -260,6 +313,15 @@ impl App {
                             .map(|si| (pi, fi, si))
                     })
             })
+    }
+
+    /// FORK: the agent pane of `tmux_session:window` when its agent has
+    /// exited and left the shell idle, asked of tmux now. `None` when the
+    /// agent is running, the window is gone, or it cannot be told.
+    pub(crate) fn exited_agent_pane(&self, tmux_session: &str, window: &str) -> Option<AgentPane> {
+        agent_panes(self.tmux.pane_commands())
+            .remove(&(tmux_session.to_string(), window.to_string()))
+            .filter(AgentPane::agent_exited)
     }
 
     /// Whether session `id` is marked exited (agent gone, shell alive).
