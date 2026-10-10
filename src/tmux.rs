@@ -389,14 +389,19 @@ impl TmuxRuntime {
             })
             .unwrap_or_else(|| OsString::from("tmux"));
 
+        // FORK: AIW always runs its own tmux server (README: "it runs its own
+        // private tmux server, so it works the same from a plain shell or from
+        // inside your own tmux"). Upstream adopted the ambient server from
+        // `$TMUX` here, which put `aiw-*` sessions on the user's server when
+        // started inside tmux and on the private one otherwise — the same
+        // features showed as stopped in one and running in the other, and tmux
+        // resolved AIW's missing targets against the user's current window.
+        // `AIW_TMUX_SOCKET` still overrides everything.
+        let _ = tmux_env;
         let (socket, manages_private_socket) = if let Some(socket) = socket_override {
             (Some(socket), false)
         } else if using_dedicated_socket {
             (Some(Self::dedicated_socket_path()), true)
-        } else if let Some(socket) = tmux_env.and_then(Self::socket_from_tmux_env) {
-            (Some(socket), false)
-        } else if using_existing_tmux {
-            (None, false)
         } else {
             (Some(Self::private_socket_path()), true)
         };
@@ -2966,6 +2971,21 @@ mod tests {
             Some("managed-tmux.sock")
         );
         assert!(runtime.manages_private_socket);
+    }
+
+    // FORK: started inside the user's tmux, AIW still runs its own server.
+    #[test]
+    fn inside_another_tmux_still_uses_the_private_socket() {
+        let runtime =
+            TmuxRuntime::detect_from_env(Some("/tmp/ambient-tmux.sock,1,0"), None, None, false);
+        let socket = runtime.socket.as_ref().unwrap();
+
+        assert_eq!(
+            socket.file_name().and_then(|name| name.to_str()),
+            Some("tmux.sock")
+        );
+        assert!(runtime.manages_private_socket);
+        assert!(!runtime.owns_tmux_env_client(Some("/tmp/ambient-tmux.sock,1,0")));
     }
 
     #[test]
