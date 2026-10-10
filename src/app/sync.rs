@@ -181,7 +181,6 @@ struct SessionStatusJob {
     workdir: PathBuf,
     created_at: chrono::DateTime<chrono::Utc>,
     existing_source: Option<TokenUsageSource>,
-    #[allow(dead_code)] // set during job construction, not read yet
     existing_source_match: Option<TokenUsageSourceMatch>,
     claude_session_id: Option<String>,
     context_conversation_id: Option<String>,

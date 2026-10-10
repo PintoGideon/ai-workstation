@@ -1884,7 +1884,6 @@ let files = list_repo_files(workdir)?;
 
     fn state() -> LearningViewState {
         let mut state = LearningViewState::new(
-            "proj-1".to_string(),
             0,
             0,
             "aiw".to_string(),

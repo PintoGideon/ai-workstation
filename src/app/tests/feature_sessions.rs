@@ -551,7 +551,6 @@ fn app_in_creating_feature_mode(
         preset_index: 0,
         task_prompt: String::new(),
         prompt_analysis: analyze_prompt(""),
-        prepared_launch: None,
     };
     let mut app = App::new_for_test(
         store,
@@ -1116,7 +1115,6 @@ fn startup_prompt_overlay_test(agent: AgentKind, expected_window: &'static str) 
         preset_index: 0,
         task_prompt: String::new(),
         prompt_analysis: analyze_prompt(""),
-        prepared_launch: None,
     });
 
     app.finish_feature_launch(PreparedFeatureLaunch {
@@ -1933,7 +1931,6 @@ fn create_feature_session_name_enter_creates_and_starts_feature() {
         preset_index: 0,
         task_prompt: String::new(),
         prompt_analysis: analyze_prompt(""),
-        prepared_launch: None,
     });
 
     crate::handlers::handle_create_feature_key(&mut app, KeyCode::Enter).unwrap();

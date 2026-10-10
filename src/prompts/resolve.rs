@@ -123,6 +123,7 @@ pub struct PromptLayers<'a> {
 impl<'a> PromptLayers<'a> {
     /// No overrides — resolution returns the built-in default. Used by tests
     /// and by any call site with neither a database nor project config.
+    #[cfg(test)]
     pub fn none() -> Self {
         Self::default()
     }
@@ -168,6 +169,7 @@ pub fn resolve_template_layered<'a>(
 
 /// Resolve the effective template for `id`/`harness` across `layers` and
 /// interpolate `ctx` into it.
+#[cfg(test)]
 pub fn resolve_prompt_layered(
     id: PromptId,
     harness: &AgentKind,
@@ -181,6 +183,7 @@ pub fn resolve_prompt_layered(
 /// Return the built-in default template for `id` under `harness`, with `ctx`
 /// interpolated and **no** override layers consulted. Convenience for tests
 /// and for the rare call site that has no `App` to source overrides from.
+#[cfg(test)]
 pub fn resolve_prompt(id: PromptId, harness: &AgentKind, ctx: &PromptContext) -> String {
     resolve_prompt_layered(id, harness, ctx, &PromptLayers::none())
 }

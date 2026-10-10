@@ -10,11 +10,6 @@
 //! [`WorktreeManager`]: crate::worktree::WorktreeManager
 //! [`ClaudeLauncher`]: crate::claude::ClaudeLauncher
 
-// This is a reusable layer landed ahead of its first consumer (the PR
-// comment-review UI). Until that wires in, the public API is exercised only by
-// unit tests.
-#![allow(dead_code)]
-
 use anyhow::{Context, Result, bail};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -191,6 +186,7 @@ impl PrRevisions {
     /// The [`PrRef`] that [`GhCli::create_review`] posts against, pinned to
     /// this snapshot's head. A review posted through it lands on exactly the
     /// commit that was reviewed.
+    #[allow(dead_code)] // exercised only by unit tests
     pub fn pr_ref(&self) -> PrRef {
         PrRef {
             number: self.pr.number,
@@ -457,14 +453,11 @@ struct CreatedPrReviewResponse {
 
 /// Refs needed to reconstruct a PR's diff locally (`GhCli::pr_diff_local`).
 /// The PR head is fetched by its `pull/<n>/head` ref, so only the base branch
-/// name is load-bearing here; the rest is kept for context/logging parity with
-/// the other PR-view calls.
+/// name is needed here.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PrDiffRefs {
     base_ref_name: String,
-    head_ref_name: String,
-    head_ref_oid: String,
 }
 
 impl GhCli {
@@ -666,13 +659,7 @@ impl GhCli {
     fn pr_diff_local(workdir: &Path, number: u32) -> Result<String> {
         let json = Self::gh_stdout(
             workdir,
-            &[
-                "pr",
-                "view",
-                &number.to_string(),
-                "--json",
-                "baseRefName,headRefName,headRefOid",
-            ],
+            &["pr", "view", &number.to_string(), "--json", "baseRefName"],
         )?;
         let refs: PrDiffRefs = serde_json::from_str(&json)
             .context("Failed to parse `gh pr view` output for the local diff fallback.")?;

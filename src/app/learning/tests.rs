@@ -133,7 +133,6 @@ fn learning(app: &App) -> &LearningViewState {
 
 fn state_with_content(lines: &[&str]) -> LearningViewState {
     let mut state = LearningViewState::new(
-        "proj-1".to_string(),
         0,
         0,
         "aiw".to_string(),

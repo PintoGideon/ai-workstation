@@ -319,9 +319,7 @@ mod tests {
         app.mode = AppMode::DiffReviewPrompt(DiffReviewState {
             session_id: "sess-1".to_string(),
             workdir: workdir.to_path_buf(),
-            file_path: workdir.join("src/main.rs").display().to_string(),
             relative_path: "src/main.rs".to_string(),
-            change_id: "chg-1".to_string(),
             tool: "edit".to_string(),
             old_snippet: "old".to_string(),
             new_snippet: "new".to_string(),

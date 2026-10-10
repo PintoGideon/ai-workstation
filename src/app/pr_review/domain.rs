@@ -945,18 +945,13 @@ impl PrComment {
     /// single biggest token lever (plan token principle #3). The `diff_hunk` is
     /// free: GitHub returns it per inline comment, so including it costs no
     /// extra fetch.
-    pub fn fix_prompt(&self) -> String {
-        self.fix_prompt_with_note(false)
-    }
-
-    /// Like [`fix_prompt`], but when `file_already_touched` is true — another
-    /// comment on the same file was already fixed (or is currently being
-    /// fixed) elsewhere in this triage session — appends [`STALE_HUNK_NOTE`].
-    /// GitHub's `diff_hunk` reflects the file as it stood when the PR was
-    /// fetched; an earlier fix in the same file can already have moved lines
-    /// or content the hunk above still shows unchanged.
     ///
-    /// [`fix_prompt`]: Self::fix_prompt
+    /// When `file_already_touched` is true — another comment on the same file
+    /// was already fixed (or is currently being fixed) elsewhere in this
+    /// triage session — appends [`STALE_HUNK_NOTE`]. GitHub's `diff_hunk`
+    /// reflects the file as it stood when the PR was fetched; an earlier fix
+    /// in the same file can already have moved lines or content the hunk
+    /// above still shows unchanged.
     pub fn fix_prompt_with_note(&self, file_already_touched: bool) -> String {
         let mut out = format!(
             "Address this PR review comment.\n{}",

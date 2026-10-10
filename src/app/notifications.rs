@@ -591,9 +591,7 @@ impl App {
         self.mode = AppMode::DiffReviewPrompt(DiffReviewState {
             session_id: input.session_id.clone(),
             workdir: PathBuf::from(&input.cwd),
-            file_path: input.target_file_path.clone().unwrap_or_default(),
             relative_path: input.relative_path.clone().unwrap_or_default(),
-            change_id: input.change_id.clone().unwrap_or_default(),
             tool: input.tool.clone().unwrap_or_default(),
             old_snippet: input.old_snippet.clone().unwrap_or_default(),
             new_snippet: input.new_snippet.clone().unwrap_or_default(),

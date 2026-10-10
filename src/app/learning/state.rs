@@ -6,7 +6,6 @@ use std::path::PathBuf;
 // (`docs/backlog/learning-mode-plan.md`), so this state is written before
 // anything reads it. The `dead_code` allows through the end of
 // `LearningViewState` come off in Epic 6.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BrowseScope {
     /// Every file in the project's working tree (git-tracked plus untracked
@@ -16,7 +15,6 @@ pub enum BrowseScope {
     BranchChanges,
 }
 
-#[allow(dead_code)]
 impl BrowseScope {
     /// Spelled-out description — the header says what the scope *is* rather
     /// than relying on the user knowing AIW's vocabulary.
@@ -38,7 +36,6 @@ impl BrowseScope {
 /// What a Learning Mode question is asked *about*. Persisted as an
 /// `anchor_kind` string plus an optional line range (see [`LearningAnchor::kind_str`]
 /// and [`LearningAnchor::from_parts`]).
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LearningAnchor {
     /// The repository as a whole — used by the orientation ("give me a tour")
@@ -54,7 +51,6 @@ pub enum LearningAnchor {
     Lines { start: usize, end: usize },
 }
 
-#[allow(dead_code)]
 impl LearningAnchor {
     /// Stable string stored in `learning_qa.anchor_kind`.
     pub fn kind_str(self) -> &'static str {
@@ -156,7 +152,6 @@ pub enum LearningAnchorLoss {
     Ambiguous,
 }
 
-#[allow(dead_code)]
 impl LearningAnchorDrift {
     /// Compact marker for the Q&A history row.
     pub fn marker(self) -> &'static str {
@@ -218,7 +213,6 @@ pub enum LearningQaIntent {
     Action,
 }
 
-#[allow(dead_code)]
 impl LearningQaIntent {
     /// Stable string stored in `learning_qa.intent`.
     pub fn as_str(self) -> &'static str {
@@ -271,7 +265,6 @@ pub enum LearningLevel {
     Familiar,
 }
 
-#[allow(dead_code)]
 impl LearningLevel {
     /// Stable string stored in `learning_sessions.level` / `learning_qa.level`.
     pub fn as_str(self) -> &'static str {
@@ -307,7 +300,6 @@ pub enum LearningRunMode {
     DeepDive,
 }
 
-#[allow(dead_code)]
 impl LearningRunMode {
     /// Stable string stored in `learning_qa.run_mode`.
     pub fn as_str(self) -> &'static str {
@@ -364,7 +356,6 @@ pub enum LearningQaStatus {
     Failed,
 }
 
-#[allow(dead_code)]
 impl LearningQaStatus {
     /// Stable string stored in `learning_qa.status`.
     pub fn as_str(self) -> &'static str {
@@ -498,7 +489,6 @@ pub struct LearningSession {
 }
 
 /// Which group a file-list row belongs to.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LearningListGroup {
     /// The pinned orientation group shown at the top of repo-tree scope until
@@ -509,7 +499,6 @@ pub enum LearningListGroup {
 }
 
 /// One row in Learning Mode's file list.
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LearningListEntry {
     /// Collapsible header for the `Start here` group.
@@ -547,7 +536,6 @@ pub enum LearningListEntry {
     },
 }
 
-#[allow(dead_code)]
 impl LearningListEntry {
     /// The repo-relative path this row loads, if it loads one. Deliberately
     /// `None` for a directory: this is what the content pane and the anchor
@@ -589,13 +577,13 @@ impl LearningListEntry {
     /// Whether the cursor can rest here (group headers are skipped by
     /// navigation only when collapsed — they stay selectable so the group can
     /// be expanded again).
+    #[allow(dead_code)] // exercised only by unit tests
     pub fn is_file(&self) -> bool {
         matches!(self, LearningListEntry::File { .. })
     }
 }
 
 /// Which pane has focus in the Learning Mode overlay.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LearningFocus {
     FileList,
@@ -607,7 +595,6 @@ pub enum LearningFocus {
 /// `crate::app::learning::STARTER_QUESTIONS`, filtered to the ones that make
 /// sense for the current anchor. Picking one fills the prompt so it can still
 /// be edited before it's asked.
-#[allow(dead_code)]
 pub struct LearningStarterPicker {
     pub indices: Vec<usize>,
     pub selected: usize,
@@ -615,7 +602,6 @@ pub struct LearningStarterPicker {
 
 /// Which harness answers questions from here on. Pre-selected when the
 /// overlay opens, so this only exists while the user is actively changing it.
-#[allow(dead_code)]
 pub struct LearningHarnessPicker {
     pub harnesses: Vec<AgentKind>,
     pub selected: usize,
@@ -623,7 +609,6 @@ pub struct LearningHarnessPicker {
 
 /// An open question prompt. The same editor serves both intents and
 /// follow-ups; the title bar shows the resolved anchor and chosen intent.
-#[allow(dead_code)]
 pub struct LearningQuestionEditor {
     pub editor: TextEditor,
     pub intent: LearningQaIntent,
@@ -649,7 +634,6 @@ pub struct LearningQuestionEditor {
 /// Nothing is written until it is confirmed: the seeded title is a guess, and
 /// this mode's audience is the least likely to notice a wrong one going in
 /// behind their back.
-#[allow(dead_code)]
 pub struct LearningActionEditor {
     /// The Q&A row the item is being made from.
     pub qa_id: String,
@@ -672,10 +656,7 @@ pub struct LearningActionEditor {
 /// State for the Learning Mode overlay (`AppMode::Learning`) — a read-only
 /// file browser over a project, with an agent answering questions about
 /// whatever the cursor is on. Nothing in this mode writes to the repository.
-#[allow(dead_code)]
 pub struct LearningViewState {
-    /// Project being studied.
-    pub project_id: String,
     /// Project / feature indices the overlay was opened from, used to resolve
     /// the feature for escalation and to restore dashboard selection on close.
     pub pi: usize,
@@ -778,7 +759,6 @@ pub struct LearningViewState {
     pub notice_qa_id: Option<String>,
 }
 
-#[allow(dead_code)]
 impl LearningViewState {
     /// How many answers are still generating — shown in the header so a slow
     /// run reads as progress rather than a hang.

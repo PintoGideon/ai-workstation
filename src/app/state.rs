@@ -1700,7 +1700,6 @@ pub enum AppMode {
     Todos(TodoViewState),
     /// Read-only Learning Mode overlay: browse the project and ask an agent
     /// about what you're looking at (`crate::app::learning`).
-    #[allow(dead_code)] // Entered by the plan's Epic 4 dashboard key.
     Learning(Box<LearningViewState>),
     TodoQuickCapture(TodoQuickCaptureState),
     /// Collect the user's instruction before starting a fresh-context agent
@@ -1723,7 +1722,6 @@ pub enum AppMode {
     ConfirmTodoReferenceCompletion(TodoReferenceCompletionState),
     CreatingProject(CreateProjectState),
     CreatingFeature(CreateFeatureState),
-    #[allow(dead_code)] // Entered by the next Epic 1 feature-launch integration.
     PlanInterview(PlanInterviewState),
     ModelAnalysis(Box<super::model_analysis::State>),
     DeletingProject(String),
@@ -1771,7 +1769,6 @@ pub enum AppMode {
     /// The PR picker's Review tab (see [`PrReviewListState`]).
     PrReviewList(Box<PrReviewListState>),
     /// Browse open issues for the selected project's canonical GitHub repo.
-    #[allow(dead_code)] // Constructed by the issue-fixer dashboard entrypoint.
     IssueBrowser(crate::app::issue_fixer::IssueBrowserState),
     /// Configure the feature and editable prompt for the selected issue.
     IssueSetup(crate::app::issue_fixer::IssueSetupState),
@@ -2006,28 +2003,14 @@ pub struct ConfigWizardFieldEditor {
     pub sync_scroll_to_cursor: bool,
 }
 
-#[derive(Debug, Clone)]
-#[allow(dead_code)] // summary-prefetch payload, populated but not read back yet
-pub struct PendingSummary {
-    pub tmux_session: String,
-    pub workdir: PathBuf,
-    pub agent: crate::project::AgentKind,
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct SummaryState {
-    #[allow(dead_code)] // populated but not read back yet
-    pub pending: Vec<PendingSummary>,
-    #[allow(dead_code)] // populated but not read back yet
-    pub last_status: std::collections::HashMap<String, crate::project::ProjectStatus>,
     pub generating: std::collections::HashSet<String>,
 }
 
 impl SummaryState {
     pub fn new() -> Self {
         Self {
-            pending: Vec::new(),
-            last_status: std::collections::HashMap::new(),
             generating: std::collections::HashSet::new(),
         }
     }
@@ -2609,8 +2592,6 @@ pub struct CreateFeatureState {
     pub preset_index: usize,
     pub task_prompt: String,
     pub prompt_analysis: PromptAnalysis,
-    #[allow(dead_code)] // populated but not read yet
-    pub prepared_launch: Option<PreparedFeatureLaunch>,
 }
 
 impl CreateFeatureState {
@@ -2667,7 +2648,6 @@ impl CreateFeatureState {
             preset_index: 0,
             task_prompt: String::new(),
             prompt_analysis: crate::app::analyze_prompt(""),
-            prepared_launch: None,
         }
     }
 

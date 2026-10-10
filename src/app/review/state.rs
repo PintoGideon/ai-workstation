@@ -1428,11 +1428,7 @@ pub struct AwaitingReviewFix {
 pub struct DiffReviewState {
     pub session_id: String,
     pub workdir: PathBuf,
-    #[allow(dead_code)] // populated but not read yet
-    pub file_path: String,
     pub relative_path: String,
-    #[allow(dead_code)] // populated but not read yet
-    pub change_id: String,
     pub tool: String,
     pub old_snippet: String,
     pub new_snippet: String,

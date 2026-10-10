@@ -5,10 +5,6 @@
 //! token-saving transforms (bot-boilerplate stripping, one-line snippets,
 //! thread-resolution merge). See `docs/backlog/pr-comment-review-plan.md`.
 
-// Some helpers (token estimate for the confirm dialog, the loading-state probe)
-// are consumed by later epics; keep them until those land.
-#![allow(dead_code)]
-
 mod actions;
 mod domain;
 mod fetch;

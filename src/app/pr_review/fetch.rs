@@ -731,11 +731,6 @@ impl App {
         });
     }
 
-    /// Whether a PR comment fetch is in flight.
-    pub fn pr_review_loading(&self) -> bool {
-        matches!(self.mode, AppMode::PrReviewLoading(_))
-    }
-
     /// Poll the background PR fetch. On completion, transition to the review
     /// pane (or report the error and return to the dashboard). Returns `true`
     /// when state changed and a redraw is warranted.

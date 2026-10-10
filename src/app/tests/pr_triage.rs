@@ -1571,9 +1571,9 @@ fn open_review_memory_compact_confirm_reads_doc_and_opens() {
         current_user: None,
     });
 
-    assert!(!app.review_memory_compact_confirming());
+    assert!(!matches!(app.mode, AppMode::ReviewMemoryCompactConfirm(_)));
     app.open_review_memory_compact_confirm();
-    assert!(app.review_memory_compact_confirming());
+    assert!(matches!(app.mode, AppMode::ReviewMemoryCompactConfirm(_)));
 
     match &app.mode {
         AppMode::ReviewMemoryCompactConfirm(state) => {
@@ -1821,7 +1821,7 @@ fn open_review_memory_compact_confirm_bails_when_doc_missing() {
 
     app.open_review_memory_compact_confirm();
 
-    assert!(!app.review_memory_compact_confirming());
+    assert!(!matches!(app.mode, AppMode::ReviewMemoryCompactConfirm(_)));
     assert!(app.message.is_some());
 }
 
@@ -1845,11 +1845,11 @@ fn review_memory_compact_confirm_cancel_closes_the_overlay() {
             prior_mode,
         },
     ));
-    assert!(app.review_memory_compact_confirming());
+    assert!(matches!(app.mode, AppMode::ReviewMemoryCompactConfirm(_)));
 
     app.review_memory_compact_confirm_cancel();
 
-    assert!(!app.review_memory_compact_confirming());
+    assert!(!matches!(app.mode, AppMode::ReviewMemoryCompactConfirm(_)));
     assert!(matches!(app.mode, AppMode::PrPicker(_)));
 }
 
@@ -4047,7 +4047,10 @@ fn pr_review_open_fix_confirm_seeds_editor_from_selection() {
     assert_eq!(app.pr_review_fix_editing(), Some(false));
     let confirm = pr_review_fix_confirm(&app);
     let expected = match &app.mode {
-        AppMode::PrReview(state) => state.selected_comment().unwrap().fix_prompt(),
+        AppMode::PrReview(state) => state
+            .selected_comment()
+            .unwrap()
+            .fix_prompt_with_note(false),
         _ => unreachable!(),
     };
     assert!(confirm.editor.text().starts_with(&expected));
@@ -9335,7 +9338,7 @@ fn tui_comment_fetch_failure_still_returns_to_the_dashboard() {
         .set_github_for_test(std::sync::Arc::new(fake.clone()));
     let pr = fake.pr_ref(9);
     app.start_pr_review_fetch(std::path::PathBuf::from("/tmp/wd"), pr);
-    assert!(app.pr_review_loading());
+    assert!(matches!(app.mode, AppMode::PrReviewLoading(_)));
     let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while !app.poll_pr_review_bg() {
         assert!(std::time::Instant::now() < until, "fetch never finished");

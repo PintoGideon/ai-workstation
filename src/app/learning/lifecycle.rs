@@ -14,7 +14,6 @@ impl LearningViewState {
     /// nothing loaded yet.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        project_id: String,
         pi: usize,
         fi: usize,
         project_name: String,
@@ -26,7 +25,6 @@ impl LearningViewState {
         session_id: String,
     ) -> Self {
         Self {
-            project_id,
             pi,
             fi,
             project_name,
@@ -163,7 +161,6 @@ impl App {
         let session_persisted = !session_id.is_empty();
 
         let mut state = LearningViewState::new(
-            project_id,
             pi,
             fi,
             project_name,

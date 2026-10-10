@@ -451,7 +451,7 @@ fn inline_comment(body: &str, is_bot: bool) -> PrComment {
 #[test]
 fn fix_prompt_includes_file_line_comment_and_hunk() {
     let c = inline_comment("Guard this behind the lock.", false);
-    let prompt = c.fix_prompt();
+    let prompt = c.fix_prompt_with_note(false);
     assert!(prompt.starts_with("Address this PR review comment."));
     assert!(prompt.contains("File: src/app/sync.rs:42"));
     assert!(prompt.contains("Comment (@alice): Guard this behind the lock."));
@@ -472,7 +472,7 @@ fn fix_prompt_omits_hunk_for_file_level_comment() {
     assert_eq!(c.prompt_hunk(), None);
     assert!(c.hunk_suppressed());
 
-    let prompt = c.fix_prompt();
+    let prompt = c.fix_prompt_with_note(false);
     assert!(prompt.contains("File: src/app/sync.rs  (comment on the whole file)"));
     assert!(!prompt.contains("Diff hunk:"));
     assert!(!prompt.contains("+ a"));
@@ -495,12 +495,12 @@ fn whole_file_sized_hunk_is_dropped_but_ordinary_ones_are_kept() {
     c.diff_hunk = hunk_of(93);
     assert!(c.prompt_hunk().is_some());
     assert!(!c.hunk_suppressed());
-    assert!(c.fix_prompt().contains("Diff hunk:"));
+    assert!(c.fix_prompt_with_note(false).contains("Diff hunk:"));
 
     // Only a pathological, whole-file-sized hunk trips the backstop.
     c.diff_hunk = hunk_of(WHOLE_FILE_HUNK_LINES + 1);
     assert_eq!(c.prompt_hunk(), None);
-    let prompt = c.fix_prompt();
+    let prompt = c.fix_prompt_with_note(false);
     // Still line-anchored, so the pointer keeps its line — only the wall of
     // diff is dropped, and not as a "whole file" comment.
     assert!(prompt.contains("File: src/app/sync.rs:42"));
@@ -554,7 +554,7 @@ fn combined_fix_prompt_drops_whole_file_hunks() {
 #[test]
 fn fix_prompt_strips_bot_boilerplate() {
     let c = inline_comment("<details>noise</details>Real point.", true);
-    let prompt = c.fix_prompt();
+    let prompt = c.fix_prompt_with_note(false);
     assert!(prompt.contains("Comment (@alice): Real point."));
     assert!(!prompt.contains("<details>"));
 }
@@ -600,8 +600,8 @@ fn single_and_combined_fix_prompts_omit_posted_review_usage() {
             };
             let all = [comment.clone(), summary.clone()];
             for prompt in [
-                comment.fix_prompt(),
-                summary.fix_prompt(),
+                comment.fix_prompt_with_note(false),
+                summary.fix_prompt_with_note(false),
                 combined_fix_prompt(&[&comment, &summary], &all),
             ] {
                 assert!(prompt.contains(feedback));
@@ -610,8 +610,16 @@ fn single_and_combined_fix_prompts_omit_posted_review_usage() {
                 assert!(!prompt.contains("review-model"));
                 assert!(!prompt.contains("$0.10"));
             }
-            assert!(comment.fix_prompt().contains("File: src/app/sync.rs:42"));
-            assert!(comment.fix_prompt().contains("+ self.sync();"));
+            assert!(
+                comment
+                    .fix_prompt_with_note(false)
+                    .contains("File: src/app/sync.rs:42")
+            );
+            assert!(
+                comment
+                    .fix_prompt_with_note(false)
+                    .contains("+ self.sync();")
+            );
             // The fetched comment and other consumers retain the full body.
             assert_eq!(comment.body, body);
             if !is_bot {
@@ -626,8 +634,8 @@ fn fix_prompt_omits_unavailable_review_usage_without_a_footer() {
     let usage = crate::app::ai_review::AiReviewAttribution::default().usage_summary();
     let comment = inline_comment(&format!("Please add a test.\n\n{usage}\n"), false);
     assert_eq!(
-        comment.fix_prompt(),
-        inline_comment("Please add a test.", false).fix_prompt()
+        comment.fix_prompt_with_note(false),
+        inline_comment("Please add a test.", false).fix_prompt_with_note(false)
     );
 }
 
@@ -641,7 +649,11 @@ fn fix_prompt_preserves_feedback_about_usage() {
         format!("Preserve this example:\n\n```markdown\n{usage}\n```"),
         format!("Preserve this example:\n\n```markdown\n\n{usage}\n\n```"),
     ] {
-        assert!(inline_comment(&body, false).fix_prompt().contains(&body));
+        assert!(
+            inline_comment(&body, false)
+                .fix_prompt_with_note(false)
+                .contains(&body)
+        );
     }
 }
 
@@ -768,7 +780,7 @@ fn fix_prompt_with_note_appends_staleness_warning_only_when_asked() {
     let c = inline_comment("Guard this behind the lock.", false);
 
     let plain = c.fix_prompt_with_note(false);
-    assert_eq!(plain, c.fix_prompt());
+    assert_eq!(plain, c.fix_prompt_with_note(false));
     assert!(!plain.contains("already addressed"));
 
     let noted = c.fix_prompt_with_note(true);
@@ -1160,7 +1172,7 @@ fn fix_prompt_marks_outdated_and_omits_missing_pieces() {
     let mut c = inline_comment("Still relevant?", false);
     c.outdated = true;
     c.diff_hunk = None;
-    let prompt = c.fix_prompt();
+    let prompt = c.fix_prompt_with_note(false);
     assert!(prompt.contains("(comment is on a line that has since changed)"));
     assert!(!prompt.contains("Diff hunk:"));
 
@@ -1168,7 +1180,7 @@ fn fix_prompt_marks_outdated_and_omits_missing_pieces() {
     c.path = None;
     c.line = None;
     c.outdated = false;
-    let prompt = c.fix_prompt();
+    let prompt = c.fix_prompt_with_note(false);
     assert!(!prompt.contains("File:"));
     assert!(prompt.contains("Comment (@alice): Still relevant?"));
 }

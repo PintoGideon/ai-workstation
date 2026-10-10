@@ -17,21 +17,14 @@
 //! A full map of prompt IDs → placeholder sets → call sites lives in
 //! `docs/backlog/editable-prompts-call-site-inventory.md`.
 
-// Registry metadata (titles, summaries, placeholder lists, per-harness
-// variant hook) is consumed by `resolve_prompt` and the manager overlay,
-// added in later tasks of this feature.
-#![allow(dead_code)]
-
 mod defaults;
 pub mod project;
 mod resolve;
 
-// Used by the headless call sites once they are refactored onto the registry
-// (task 7) and by the test suite today.
-#[allow(unused_imports)]
+#[cfg(test)]
+pub use resolve::resolve_prompt;
 pub use resolve::{
-    PromptContext, PromptLayers, PromptSource, render_template, resolve_prompt,
-    resolve_prompt_layered, resolve_template_layered,
+    PromptContext, PromptLayers, PromptSource, render_template, resolve_template_layered,
 };
 
 use crate::project::AgentKind;
@@ -210,6 +203,7 @@ impl PromptSpec {
 }
 
 /// Every registry entry. Indexed by [`spec`]; iterate for the manager list.
+#[allow(dead_code)] // exercised only by unit tests
 pub fn all_specs() -> &'static [PromptSpec] {
     &SPECS
 }

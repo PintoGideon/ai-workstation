@@ -1245,7 +1245,6 @@ fn normalize_patch_path(path: &str) -> Option<String> {
 /// here — which also keeps `target/`, `node_modules/`, and friends out of the
 /// list for free. Deleted-but-still-tracked paths are filtered out, since a
 /// browser can't open a file that isn't on disk.
-#[allow(dead_code)] // Consumed by Learning Mode's repo-tree scope (Epic 2).
 pub fn list_repo_files(workdir: &Path) -> Result<Vec<String>> {
     let stdout = git_capture(
         workdir,

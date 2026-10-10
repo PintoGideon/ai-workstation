@@ -1127,11 +1127,6 @@ impl App {
         }
     }
 
-    /// Whether the compact confirm overlay is currently open.
-    pub fn review_memory_compact_confirming(&self) -> bool {
-        matches!(&self.mode, AppMode::ReviewMemoryCompactConfirm(_))
-    }
-
     /// Close the overlay without running anything, restoring whichever
     /// screen it was opened from.
     pub fn review_memory_compact_confirm_cancel(&mut self) {

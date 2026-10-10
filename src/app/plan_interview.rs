@@ -3480,7 +3480,6 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::markdown::{preferred_plan_markdown_path, read_plan_preview};
     use crate::plan_interview::{PlanQuestionKind, QuestionSource};
 
     fn free_text_question(id: &str, text: &str) -> PlanQuestion {
@@ -3683,7 +3682,7 @@ mod tests {
     }
 
     #[test]
-    fn non_worktree_plan_write_is_the_plan_sidebar_reads() {
+    fn non_worktree_plan_write_lands_in_the_repo_root() {
         let repo = TempDir::new().unwrap();
         let expected_plan = repo.path().join("AIW_PLAN.md");
 
@@ -3695,14 +3694,9 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            preferred_plan_markdown_path(repo.path(), Some(repo.path())),
-            Some(expected_plan.clone())
+            fs::read_to_string(&expected_plan).unwrap(),
+            "# Plan: first feature\n\n## Feature brief\n\nShip it.\n"
         );
-        assert_eq!(
-            read_plan_preview(repo.path(), Some(repo.path())).as_deref(),
-            Some("Plan: first feature\nFeature brief\nShip it.")
-        );
-        assert!(expected_plan.is_file());
         assert!(!repo.path().join(".claude/plan.md").exists());
         assert!(!repo.path().join("PLAN.md").exists());
         assert!(!repo.path().join("plan.md").exists());
