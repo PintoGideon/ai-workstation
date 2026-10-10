@@ -12,6 +12,8 @@ users, not embedded in the binary.
   [`docs/docker-no-tmux.md`](../../docs/docker-no-tmux.md))
 - `test-thinking.sh` — manually pulse the "thinking" sentinel for a
   tmux session to test dashboard detection without a real agent
+- `e2e/` — sandboxed end-to-end run of the TUI against fake agent CLIs
+  (`e2e/run.sh`; see [development checks](../../docs/development/checks.md))
 - `aiw/pr-checks.sh`, `aiw/pr-info.sh` — PR context helpers used by
   the `aiw:pr-*` Claude Code skills
 

@@ -110,6 +110,33 @@ advisory ID, rationale, owner, tracking issue and expiry in `.cargo/audit.toml`
 and these notes; review it on every scheduled finding and remove it when fixed
 or expired. Do not silence all warnings or use a blanket ignore.
 
+## End-to-end run (fake agents, sandboxed)
+
+`scripts/dev/e2e/run.sh` drives the release `aiw` binary through tmux against
+five fake agent CLIs (`claude`, `codex`, `gemini`, `cursor-agent`, `pi`) that
+behave like interactive REPLs and fire the hooks AIW installs into the checkout
+(`.claude/settings.local.json`, Codex `-c notify=…`, `.gemini/settings.json`,
+`.cursor/hooks.json`) with realistic payloads. Typed commands make them
+deterministic: `/ask` (permission request), `/done`, `/work`, `/tool`,
+`/crash`, `/spam`, `/wide`, `/slow`, `/exit`.
+
+```sh
+cargo +1.99.0 build --release --locked
+scripts/dev/e2e/run.sh            # sandbox in /tmp/aiw-e2e-$USER, prints PASS/FAIL
+```
+
+Everything the run writes stays under the sandbox (`HOME` and `XDG_*` point at
+it; it must be a short path because tmux and IPC sockets live under it). It
+walks the README quick start (first run, projects, features with every agent,
+sessions, hooks → header pills and `i`, split view with resizes, rename, stop/
+start, resume, delete, quit/relaunch, `doctor`), then adversarial cases (killed
+windows, deleted worktrees, corrupt `aiw.json`, ghost hooks, removed IPC
+socket, odd names, random keys, small terminals) and the AMF migration cases
+(`migration.sh`: plain, locked database, no database, OpenCode-only). Text
+captures for UI review are left in `<sandbox>/captures`. The pieces are
+reusable on their own: `setup-sandbox.sh` builds the sandbox, `lib.sh` has the
+tmux driver helpers (`aiw_start`, `keys`, `cap`, `wait_for`, `snap`, …).
+
 ## Verification status
 
 Final local validation on 2026-09-08 passed all 2,512 tests (22.82s, no failures
