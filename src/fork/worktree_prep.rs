@@ -25,6 +25,10 @@ pub(crate) struct PrepReport {
     pub copied: Vec<PathBuf>,
     pub skipped_existing: Vec<PathBuf>,
     pub rejected: Vec<PathBuf>,
+    /// `.worktreeinclude` exists but could not be read (permissions, a
+    /// directory by that name, bad encoding): the config patterns were used
+    /// instead. Worth telling the user, since the file is there for a reason.
+    pub include_error: Option<String>,
 }
 
 /// Run after a worktree is created: copy the included files from the source
@@ -34,6 +38,15 @@ pub(crate) fn prepare_new_worktree(source: &Path, dest: &Path) {
     let patterns = super::config::current().worktree_include;
     match copy_included_files(source, dest, &patterns) {
         Ok(report) => {
+            if let Some(err) = &report.include_error {
+                super::notices::warn(
+                    "worktree",
+                    format!(
+                        "{INCLUDE_FILE} in {} could not be read: {err}; the configured worktree_include patterns were used instead",
+                        source.display()
+                    ),
+                );
+            }
             if !report.copied.is_empty() || !report.rejected.is_empty() {
                 crate::debug::log_to_file(
                     crate::debug::LogLevel::Info,
@@ -69,7 +82,9 @@ pub(crate) fn copy_included_files(
     config_patterns: &[String],
 ) -> std::io::Result<PrepReport> {
     let mut report = PrepReport::default();
-    let candidates = included_ignored_files(source, config_patterns)?;
+    let (patterns, include_error) = include_patterns(source, config_patterns);
+    report.include_error = include_error;
+    let candidates = included_ignored_files(source, &patterns)?;
     if candidates.is_empty() {
         return Ok(report);
     }
@@ -122,30 +137,34 @@ pub(crate) fn copy_included_files(
 }
 
 /// Patterns to use: `.worktreeinclude` lines when that file exists, else the
-/// config patterns.
-fn include_patterns(source: &Path, config_patterns: &[String]) -> Vec<String> {
-    match std::fs::read_to_string(source.join(INCLUDE_FILE)) {
-        Ok(content) => content
-            .lines()
-            .map(str::trim_end)
-            .filter(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
-            .map(ToOwned::to_owned)
-            .collect(),
-        Err(_) => config_patterns
+/// config patterns. The second half is the read error when the file is
+/// there but unreadable (a missing file is the normal case and not one).
+fn include_patterns(source: &Path, config_patterns: &[String]) -> (Vec<String>, Option<String>) {
+    let from_config = || {
+        config_patterns
             .iter()
             .map(|p| p.trim().to_string())
             .filter(|p| !p.is_empty())
-            .collect(),
+            .collect::<Vec<_>>()
+    };
+    match std::fs::read_to_string(source.join(INCLUDE_FILE)) {
+        Ok(content) => (
+            content
+                .lines()
+                .map(str::trim_end)
+                .filter(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
+                .map(ToOwned::to_owned)
+                .collect(),
+            None,
+        ),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => (from_config(), None),
+        Err(err) => (from_config(), Some(err.to_string())),
     }
 }
 
-/// Untracked files in `source` that match the include patterns *and* are
-/// ignored by the checkout's own ignore rules, as repo-relative paths.
-fn included_ignored_files(
-    source: &Path,
-    config_patterns: &[String],
-) -> std::io::Result<Vec<PathBuf>> {
-    let patterns = include_patterns(source, config_patterns);
+/// Untracked files in `source` that match `patterns` *and* are ignored by
+/// the checkout's own ignore rules, as repo-relative paths.
+fn included_ignored_files(source: &Path, patterns: &[String]) -> std::io::Result<Vec<PathBuf>> {
     if patterns.is_empty() {
         return Ok(Vec::new());
     }
@@ -155,7 +174,7 @@ fn included_ignored_files(
     let mut list = Command::new("git");
     list.args(["ls-files", "-z", "--others", "--ignored"])
         .current_dir(source);
-    for pattern in &patterns {
+    for pattern in patterns {
         list.arg(format!("--exclude={pattern}"));
     }
     let output = list.output()?;
@@ -340,6 +359,28 @@ mod tests {
         let report = copy_included_files(&repo, &wt, &defaults()).unwrap();
         assert!(report.copied.is_empty());
         assert!(!wt.join("notes.txt").exists());
+    }
+
+    #[test]
+    fn an_unreadable_worktreeinclude_is_reported_and_the_config_patterns_used() {
+        let (_tmp, repo, wt) = fixture();
+        std::fs::write(repo.join(".env"), "A=1\n").unwrap();
+        // A directory by that name: exists, cannot be read as a file.
+        std::fs::create_dir(repo.join(".worktreeinclude")).unwrap();
+
+        let report = copy_included_files(&repo, &wt, &defaults()).unwrap();
+
+        let err = report
+            .include_error
+            .as_deref()
+            .expect("read error reported");
+        assert!(!err.is_empty());
+        assert_eq!(report.copied, vec![PathBuf::from(".env")]);
+
+        // A missing file is the normal case, not an error.
+        std::fs::remove_dir(repo.join(".worktreeinclude")).unwrap();
+        let report = copy_included_files(&repo, &wt, &defaults()).unwrap();
+        assert!(report.include_error.is_none());
     }
 
     #[test]

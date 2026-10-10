@@ -87,7 +87,7 @@ impl App {
 
         let mut state = CreateBatchFeaturesState::with_workspace(workspace_path);
         let repo = PathBuf::from(&state.workspace_path);
-        self.active_extension = self.extension_for_repo(&repo);
+        self.active_extension = self.load_extension_for_repo(&repo); // FORK: reports a broken aiw.json
         let (agent, agent_index) = self.normalize_agent_for_repo(&repo, &state.agent);
         state.agent = agent;
         state.agent_index = agent_index;

@@ -1405,6 +1405,11 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         if app.tick_toasts() {
             force_redraw = true;
         }
+        // FORK: warnings raised off the main thread (hook exit codes,
+        // worktree preparation) become toasts here.
+        if app.drain_fork_notices() {
+            force_redraw = true;
+        }
 
         if matches!(app.mode, app::AppMode::RunningHook(_))
             && let Err(e) = app.poll_running_hook()

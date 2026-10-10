@@ -36,6 +36,7 @@ pub mod instance_lock; // one TUI per config dir (flock on aiw.lock)
 pub(crate) mod ipc_rebind; // re-bind the IPC socket if its file vanishes
 pub(crate) mod line_fold; // incremental JSONL reads for the status sweep (DESIGN.md §12.3)
 pub mod migrate; // first-run copy of an AMF setup (DESIGN.md §11)
+pub(crate) mod notices; // toasts raised off the main thread (hooks, worktree prep)
 pub(crate) mod paths;
 pub(crate) mod ports;
 pub(crate) mod worktree_paths;

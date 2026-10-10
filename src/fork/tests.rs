@@ -427,3 +427,62 @@ fn starting_a_feature_whose_worktree_vanished_recreates_it_first() {
         .unwrap_err();
     assert!(err.to_string().contains("boom"), "{err}");
 }
+
+// ── a broken aiw.json is announced once per project load ─────────────────────
+
+#[test]
+fn a_broken_aiw_json_is_announced_once_per_project_load_and_again_when_it_changes() {
+    use crate::app::Selection;
+
+    let tmp = TempDir::new().unwrap();
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::write(
+        repo.join("aiw.json"),
+        "{ \"lifecycle_hooks\": { \"on_start\": ",
+    )
+    .unwrap();
+    let mut app = App::new_for_test(
+        store_with_repo(repo.clone()),
+        Box::new(MockTmuxOps::new()),
+        Box::new(MockWorktreeOps::new()),
+    );
+    app.selection = Selection::Project(0);
+
+    app.reload_extension_config();
+    assert_eq!(app.toasts.len(), 1);
+    let first = app.toasts[0].message.clone();
+    assert!(
+        first.starts_with("aiw.json in safety is invalid: "),
+        "{first}"
+    );
+    assert!(first.contains("line 1"), "{first}");
+    assert!(first.ends_with("hooks and custom sessions are disabled until fixed"));
+    assert!(app.active_extension.lifecycle_hooks.on_start.is_none());
+
+    // Reloading on every selection change must not nag.
+    app.reload_extension_config();
+    app.reload_extension_config();
+    assert_eq!(app.toasts.len(), 1);
+
+    // A different error is news again.
+    std::fs::write(repo.join("aiw.json"), "{\n\n  [").unwrap();
+    app.reload_extension_config();
+    assert_eq!(app.toasts.len(), 2);
+    assert!(
+        app.toasts[1].message.contains("line 3"),
+        "{}",
+        app.toasts[1].message
+    );
+
+    // Fixed: forgotten, so breaking it later is reported afresh.
+    std::fs::write(
+        repo.join("aiw.json"),
+        r#"{"lifecycle_hooks":{"on_start":"true"}}"#,
+    )
+    .unwrap();
+    app.reload_extension_config();
+    assert!(app.reported_config_errors.is_empty());
+    assert!(app.active_extension.lifecycle_hooks.on_start.is_some());
+    assert_eq!(app.toasts.len(), 2);
+}

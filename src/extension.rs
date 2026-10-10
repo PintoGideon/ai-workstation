@@ -507,15 +507,70 @@ pub fn write_project_config(dir: &Path, json: &str) -> anyhow::Result<PathBuf> {
 /// - plan_questions: project appends; ID collision → project wins
 /// - skip_builtin_questions: project overrides global when explicitly set
 pub fn merge_project_extension_config(base: &ExtensionConfig, repo: &Path) -> ExtensionConfig {
-    let project: ExtensionConfig = if let Some(project_path) = resolve_project_config_path(repo) {
-        std::fs::read_to_string(&project_path)
-            .ok()
-            .and_then(|s| serde_json::from_str::<ExtensionConfig>(&s).ok())
-            .unwrap_or_default()
-    } else {
+    merge_project_extension_config_checked(base, repo).0
+}
+
+/// FORK: why a project config could not be used. Until the file is fixed the
+/// project runs on the global config alone: no hooks, no custom sessions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectConfigError {
+    pub path: PathBuf,
+    /// serde's message, which ends in `at line N column M` for syntax
+    /// errors, or the I/O error text.
+    pub detail: String,
+}
+
+impl ProjectConfigError {
+    /// The one-line warning shown for `project` (its display name).
+    pub fn user_message(&self, project: &str) -> String {
+        let file = self
+            .path
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "aiw.json".to_string());
+        format!(
+            "{file} in {project} is invalid: {}; hooks and custom sessions are disabled until fixed",
+            self.detail
+        )
+    }
+}
+
+/// FORK: read `repo`'s project config: `Ok(None)` when there is none,
+/// `Err` when there is one that cannot be read or parsed.
+pub fn read_project_extension_config(
+    repo: &Path,
+) -> Result<Option<ExtensionConfig>, ProjectConfigError> {
+    let Some(path) = resolve_project_config_path(repo) else {
+        return Ok(None);
+    };
+    let raw = std::fs::read_to_string(&path).map_err(|err| ProjectConfigError {
+        path: path.clone(),
+        detail: err.to_string(),
+    })?;
+    serde_json::from_str::<ExtensionConfig>(&raw)
+        .map(Some)
+        .map_err(|err| ProjectConfigError {
+            path,
+            detail: err.to_string(),
+        })
+}
+
+/// [`merge_project_extension_config`], also returning why the project's own
+/// config was ignored, when it was. FORK: callers that can talk to the user
+/// surface the error instead of silently running without hooks.
+pub fn merge_project_extension_config_checked(
+    base: &ExtensionConfig,
+    repo: &Path,
+) -> (ExtensionConfig, Option<ProjectConfigError>) {
+    let (project, error): (Option<ExtensionConfig>, Option<ProjectConfigError>) =
+        match read_project_extension_config(repo) {
+            Ok(project) => (project, None),
+            Err(err) => (Some(ExtensionConfig::default()), Some(err)),
+        };
+    let Some(project) = project else {
         let mut merged = base.clone();
         merged.mark_global_plan_questions();
-        return merged;
+        return (merged, None);
     };
 
     // Merge custom_sessions: start with project, then
@@ -616,7 +671,7 @@ pub fn merge_project_extension_config(base: &ExtensionConfig, repo: &Path) -> Ex
         prompt_overrides: project.prompt_overrides,
     };
     merged.normalize_legacy_review_modes();
-    merged
+    (merged, error)
 }
 
 /// Write an `ExtensionConfig` to `{repo}/aiw.json`.
@@ -631,6 +686,63 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use tempfile::TempDir;
+
+    #[test]
+    fn a_broken_aiw_json_is_reported_with_its_position_and_ignored() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            tmp.path().join("aiw.json"),
+            "{\n  \"lifecycle_hooks\": { \"on_start\": \n",
+        )
+        .unwrap();
+        let mut global = ExtensionConfig::default();
+        global.custom_sessions.push(CustomSessionConfig {
+            name: "global-logs".to_string(),
+            ..Default::default()
+        });
+
+        let (merged, error) = merge_project_extension_config_checked(&global, tmp.path());
+
+        let error = error.expect("the parse error is returned");
+        assert_eq!(error.path, tmp.path().join("aiw.json"));
+        assert!(error.detail.contains("line 3"), "{}", error.detail);
+        assert!(error.detail.contains("column"), "{}", error.detail);
+        let message = error.user_message("gamma");
+        assert!(
+            message.starts_with("aiw.json in gamma is invalid: "),
+            "{message}"
+        );
+        assert!(message.ends_with("hooks and custom sessions are disabled until fixed"));
+        // The project half is empty, the global half still applies.
+        assert!(merged.lifecycle_hooks.on_start.is_none());
+        assert_eq!(merged.custom_sessions.len(), 1);
+        // The unchecked entry point keeps its old shape.
+        assert_eq!(
+            merge_project_extension_config(&global, tmp.path())
+                .custom_sessions
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_missing_or_valid_aiw_json_reports_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(read_project_extension_config(tmp.path()).unwrap().is_none());
+        assert!(
+            merge_project_extension_config_checked(&ExtensionConfig::default(), tmp.path())
+                .1
+                .is_none()
+        );
+
+        std::fs::write(tmp.path().join("aiw.json"), "{}").unwrap();
+        assert!(read_project_extension_config(tmp.path()).unwrap().is_some());
+        assert!(
+            merge_project_extension_config_checked(&ExtensionConfig::default(), tmp.path())
+                .1
+                .is_none()
+        );
+    }
 
     #[test]
     fn resolve_project_config_prefers_aiw_json_over_legacy_amf_configs() {

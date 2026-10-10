@@ -235,7 +235,7 @@ impl App {
             .filter(|wt| wt.path != project_repo && !used_workdirs.contains(&wt.path))
             .collect();
 
-        self.active_extension = self.extension_for_repo(&project_repo);
+        self.active_extension = self.load_extension_for_repo(&project_repo); // FORK: reports a broken aiw.json
         let available = self.allowed_agents_for_repo(&project_repo);
         if available.is_empty() {
             self.open_harness_setup(false);
@@ -2289,14 +2289,14 @@ impl App {
 
         let (project_name, project_repo, feature) = match self.store.projects.get(pi) {
             Some(p) => match p.features.get(fi) {
-                Some(f) => (p.name.clone(), p.repo.clone(), f),
+                Some(f) => (p.name.clone(), p.repo.clone(), f.clone()),
                 None => return,
             },
             None => return,
         };
 
         let (agent, agent_index) = self.normalize_agent_for_repo(&project_repo, &feature.agent);
-        self.active_extension = self.extension_for_repo(&project_repo);
+        self.active_extension = self.load_extension_for_repo(&project_repo); // FORK: reports a broken aiw.json
 
         let state = ForkFeatureState {
             source_pi: pi,

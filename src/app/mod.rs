@@ -1033,6 +1033,10 @@ pub struct App {
     /// sweep re-detects the state after a relaunch. Cleared when the session
     /// is started again.
     pub exited_sessions: std::collections::HashSet<String>,
+    /// FORK: `aiw.json` parse errors already reported, by repo, so a broken
+    /// file is announced once per project load and again only when it
+    /// changes.
+    pub reported_config_errors: HashMap<PathBuf, String>,
     /// FORK: ids of projects whose repo folder no longer exists on disk; set
     /// by the sweep (with a one-time toast) for the dashboard to mark the row.
     pub missing_project_repos: std::collections::HashSet<String>,
@@ -2607,6 +2611,7 @@ impl App {
             pending_inputs: Vec::new(),
             user_stopped_features: std::collections::HashSet::new(),
             exited_sessions: std::collections::HashSet::new(),
+            reported_config_errors: HashMap::new(),
             missing_project_repos: std::collections::HashSet::new(),
             compose_direct_targets: std::collections::HashSet::new(),
             compose_drafts: HashMap::new(),
@@ -2864,6 +2869,7 @@ impl App {
             pending_inputs: Vec::new(),
             user_stopped_features: std::collections::HashSet::new(),
             exited_sessions: std::collections::HashSet::new(),
+            reported_config_errors: HashMap::new(),
             missing_project_repos: std::collections::HashSet::new(),
             compose_direct_targets: std::collections::HashSet::new(),
             compose_drafts: HashMap::new(),
@@ -3349,34 +3355,61 @@ impl App {
     /// project/feature. Call this whenever the selection changes.
     pub fn reload_extension_config(&mut self) {
         let global_ext = load_global_extension_config();
-        self.active_extension = match &self.selection {
-            Selection::Project(pi) => {
-                if let Some(project) = self.store.projects.get(*pi) {
-                    merge_project_extension_config(&global_ext, &project.repo)
-                } else {
-                    global_ext
-                }
+        // FORK: the project's `aiw.json` is read through
+        // `load_extension_for_repo` so a broken file is announced.
+        let repo = match &self.selection {
+            Selection::Project(pi) => self.store.projects.get(*pi).map(|p| p.repo.clone()),
+            // Extension config is project-scoped and lives under
+            // `{repo}/aiw.json`, so worktree selections still reload from
+            // the project repo.
+            Selection::Feature(pi, _) | Selection::Session(pi, _, _) => {
+                self.store.projects.get(*pi).map(|p| p.repo.clone())
             }
-            Selection::Feature(pi, fi) | Selection::Session(pi, fi, _) => {
-                if let Some(project) = self.store.projects.get(*pi) {
-                    if project.features.get(*fi).is_some() {
-                        // Extension config is project-scoped and lives under
-                        // `{repo}/aiw.json`, so worktree selections
-                        // should still reload from the project repo.
-                        merge_project_extension_config(&global_ext, &project.repo)
-                    } else {
-                        merge_project_extension_config(&global_ext, &project.repo)
-                    }
-                } else {
-                    global_ext
-                }
-            }
+        };
+        self.active_extension = match repo {
+            Some(repo) => self.load_extension_for_repo(&repo),
+            None => global_ext,
         };
     }
 
     pub(crate) fn extension_for_repo(&self, repo: &Path) -> ExtensionConfig {
         let global_ext = load_global_extension_config();
         merge_project_extension_config(&global_ext, repo)
+    }
+
+    /// FORK: [`Self::extension_for_repo`] for a project being loaded: an
+    /// `aiw.json` that cannot be parsed is announced once (toast + log),
+    /// again only if the error changes, and forgotten once the file is fixed.
+    pub(crate) fn load_extension_for_repo(&mut self, repo: &Path) -> ExtensionConfig {
+        let global_ext = load_global_extension_config();
+        let (merged, error) =
+            crate::extension::merge_project_extension_config_checked(&global_ext, repo);
+        match error {
+            Some(error) => {
+                let project = self
+                    .store
+                    .projects
+                    .iter()
+                    .find(|p| p.repo == repo)
+                    .map(|p| p.name.clone())
+                    .unwrap_or_else(|| repo.display().to_string());
+                let message = error.user_message(&project);
+                if self.reported_config_errors.get(repo) != Some(&message) {
+                    self.reported_config_errors
+                        .insert(repo.to_path_buf(), message.clone());
+                    self.log_warn("config", format!("{} — {message}", error.path.display()));
+                    self.push_toast_for(
+                        message,
+                        ToastKind::Warning,
+                        std::time::Duration::from_secs(12),
+                    );
+                }
+            }
+            None => {
+                self.reported_config_errors.remove(repo);
+            }
+        }
+        merged
     }
 
     /// The effective template for a headless prompt on the feature at
