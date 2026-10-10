@@ -150,8 +150,22 @@ pub fn draw_theme_picker(
         ));
         hint_spans.push(Span::raw(" revert")); // FORK: Esc undoes the live preview
     }
-    frame.render_widget(Paragraph::new(status_swatch(theme)), chunks[1]);
-    let hints = Paragraph::new(Line::from(hint_spans));
+    // FORK: G11 — a narrow dialog drops whole hints / swatches, not letters.
+    let width = usize::from(chunks[2].width);
+    let key = Style::default().fg(theme.warning.to_color());
+    frame.render_widget(
+        Paragraph::new(crate::ui::fork_text::fit_hints(
+            status_swatch(theme),
+            width,
+            |span| span.content.as_ref() == "\u{25cf} ",
+        )),
+        chunks[1],
+    );
+    let hints = Paragraph::new(crate::ui::fork_text::fit_hints(
+        Line::from(hint_spans),
+        width,
+        |span| span.style == key,
+    ));
     frame.render_widget(hints, chunks[2]);
 }
 
