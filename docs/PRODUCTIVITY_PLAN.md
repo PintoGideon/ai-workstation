@@ -114,6 +114,22 @@ Sources (October 2026):
   - Matching: a small built-in subsequence scorer, with no new dependency.
 - **Effort:** M.
 
+### P2b Obsidian log of what every agent did
+- **What:** every summary from P2 is also appended to a Markdown note in your Obsidian vault, which shows it live.
+  No plugin, no MCP, no server: a vault is a folder of Markdown files.
+- **How:**
+  - Config: `obsidian_vault: "~/Notes"` (off when unset) and `obsidian_layout: daily | feature | both`.
+  - `src/fork/obsidian.rs` formats one line per event and appends it:
+    - daily: `AIW/2026-10-10.md`, a `## project / feature` heading per feature, then
+      `- 09:41 **claude** ✓ summary (+61 −3)`;
+    - feature: `AIW/<project>/<feature>.md` with YAML properties (`tags: [aiw]`, project, branch, agents) and the
+      same lines, so notes can `[[link]]` to tickets.
+  - Writes are append-only and atomic (write a temp file, then rename); AIW never rewrites your notes.
+  - Called from the same place as P2 (`record_attention` in `src/app/notifications.rs`).
+  - When an agent should *read* the vault for context, that is a separate, optional per-worktree MCP server in
+    `.mcp.json` / `.codex/config.toml`, never global.
+- **Effort:** S. **Tests:** formatting, append-only behaviour, missing vault path, `~` expansion.
+
 ## Phase 2: steer many agents in one pass
 
 ### P6 Approve or deny from the dashboard
@@ -274,7 +290,7 @@ Sources (October 2026):
 
 | Sprint | Items | Why first |
 |---|---|---|
-| 1 | P1, P2, P3, P4, P9 | Small. You see what every agent did and needs without opening it, and the usage meters come back |
+| 1 | P1, P2, P2b, P3, P4, P9 | Small. You see what every agent did and needs without opening it, and the usage meters come back |
 | 2 | P6, P7, P8, P5 | Answer and steer many agents in one pass |
 | 3 | P10, P11, P12, P17 | Review per turn, safe undo, fewer broken "done"s |
 | 4 | P13, P14, P15, P16, P18 | Ship from AIW, compare attempts, full Pi support, search |
