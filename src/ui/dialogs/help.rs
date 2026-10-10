@@ -5,43 +5,114 @@ use ratatui::{
     text::{Line, Span},
     widgets::{
         Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
-        Wrap,
     },
 };
+use unicode_width::UnicodeWidthStr;
 
 use super::super::dashboard::centered_rect;
 use crate::theme::Theme;
 
 use crate::ui::fork_chrome::{dim_style, key_style};
 
+/// FORK: G11 — the two columns of the help body: a right-aligned key column
+/// and the description beside it, sized for the panel's inner width.
+#[derive(Clone, Copy)]
+struct HelpColumns {
+    key: usize,
+    desc: usize,
+}
+
+impl HelpColumns {
+    /// Two columns of margin, the key column, two columns of gap, the text.
+    const MARGIN: usize = 2;
+    const GAP: usize = 2;
+    const KEY: usize = 16;
+
+    fn for_width(width: usize) -> Self {
+        // A narrow panel gives the key column up rather than wrapping every
+        // description into one word per line.
+        let key = if width >= 60 {
+            Self::KEY
+        } else {
+            (width / 3).clamp(4, Self::KEY)
+        };
+        let desc = width.saturating_sub(Self::MARGIN + key + Self::GAP).max(8);
+        Self { key, desc }
+    }
+
+    fn indent(&self) -> usize {
+        Self::MARGIN + self.key + Self::GAP
+    }
+}
+
 /// FORK: G11 one key binding: key right-aligned in the accent colour, the
-/// description in the text colour; a continuation line (no key) reads dim.
-fn bind_line<'a>(key: &'a str, desc: &'a str, theme: &Theme) -> Line<'a> {
+/// description in the text colour, wrapped with a hanging indent so a
+/// continuation never starts at the border; a line with no key (a note)
+/// reads dim.
+fn bind_lines<'a>(
+    key: &'a str,
+    desc: &'a str,
+    columns: HelpColumns,
+    theme: &Theme,
+) -> Vec<Line<'a>> {
     let desc_style = if key.is_empty() {
         dim_style(theme)
     } else {
         Style::default().fg(theme.text.to_color())
     };
-    Line::from(vec![
-        Span::styled(format!("  {:>16}", key), key_style(theme)),
-        Span::raw("  "),
-        Span::styled(desc, desc_style),
-    ])
+    let key_shown = if key.width() > columns.key {
+        crate::ui::fork_text::fit_line(Line::from(key), columns.key).to_string()
+    } else {
+        key.to_string()
+    };
+    let mut wrapped = crate::ui::toast::wrap_message(desc, columns.desc, usize::MAX).into_iter();
+    let first = wrapped.next().unwrap_or_default();
+    let mut lines = vec![Line::from(vec![
+        Span::styled(
+            format!(
+                "{:>width$}",
+                key_shown,
+                width = HelpColumns::MARGIN + columns.key
+            ),
+            key_style(theme),
+        ),
+        Span::raw(" ".repeat(HelpColumns::GAP)),
+        Span::styled(first, desc_style),
+    ])];
+    lines.extend(wrapped.map(|rest| {
+        Line::from(vec![
+            Span::raw(" ".repeat(columns.indent())),
+            Span::styled(rest, dim_style(theme)),
+        ])
+    }));
+    lines
 }
 
-/// FORK: G11 a section title in bold text colour.
-fn section_title<'a>(title: &'a str, theme: &Theme) -> Line<'a> {
-    Line::from(Span::styled(
-        title,
-        Style::default()
-            .fg(theme.text.to_color())
-            .add_modifier(Modifier::BOLD),
-    ))
+/// FORK: G11 a section title in bold text colour, wrapped to the panel.
+fn section_title<'a>(title: &'a str, columns: HelpColumns, theme: &Theme) -> Vec<Line<'a>> {
+    let width = HelpColumns::MARGIN + columns.key + HelpColumns::GAP + columns.desc;
+    crate::ui::toast::wrap_message(
+        title.trim_start(),
+        width.saturating_sub(HelpColumns::MARGIN),
+        usize::MAX,
+    )
+    .into_iter()
+    .map(|text| {
+        Line::from(Span::styled(
+            format!("{}{text}", " ".repeat(HelpColumns::MARGIN)),
+            Style::default()
+                .fg(theme.text.to_color())
+                .add_modifier(Modifier::BOLD),
+        ))
+    })
+    .collect()
 }
 
 /// FORK: G11 a blank line, then the section title.
-fn section_header<'a>(title: &'a str, theme: &Theme) -> [Line<'a>; 2] {
-    [Line::from(""), section_title(title, theme)]
+fn section_header<'a>(title: &'a str, columns: HelpColumns, theme: &Theme) -> Vec<Line<'a>> {
+    let mut lines = vec![Line::from("")];
+    lines.extend(section_title(title, columns, theme));
+    lines
 }
 
 pub fn draw_help(frame: &mut Frame, scroll_offset: usize, theme: &Theme) -> usize {
@@ -51,6 +122,8 @@ pub fn draw_help(frame: &mut Frame, scroll_offset: usize, theme: &Theme) -> usiz
 
 fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &Theme) -> usize {
     crate::ui::draw_modal_overlay(frame, area, theme);
+    // FORK: G11 two-column layout sized once for this panel.
+    let columns = HelpColumns::for_width(usize::from(area.width.saturating_sub(2)));
 
     let normal_keybinds: Vec<(&str, &str)> = vec![
         ("j/k / \u{2191}/\u{2193}", "Navigate up/down"),
@@ -117,15 +190,15 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     // FORK: G11 — section titles instead of a banner line; the close/scroll
     // keys moved into the bottom border.
     let mut lines: Vec<Line> = Vec::with_capacity(256);
-    lines.push(section_title("  On the dashboard:", theme));
+    lines.extend(section_title("  On the dashboard:", columns, theme));
 
     lines.extend(
         normal_keybinds
             .iter()
-            .map(|(key, desc)| bind_line(key, desc, theme)),
+            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
-    lines.extend(section_header("  During a plan interview:", theme)); // FORK: G11
+    lines.extend(section_header("  During a plan interview:", columns, theme)); // FORK: G11
 
     let plan_interview_keybinds: Vec<(&str, &str)> = vec![
         ("r / d", "Resume or discard a saved draft (on entry)"),
@@ -164,10 +237,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     lines.extend(
         plan_interview_keybinds
             .iter()
-            .map(|(key, desc)| bind_line(key, desc, theme)),
+            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
-    lines.extend(section_header("  During plan review:", theme)); // FORK: G11
+    lines.extend(section_header("  During plan review:", columns, theme)); // FORK: G11
 
     let plan_review_keybinds: Vec<(&str, &str)> = vec![
         ("j/k / PgUp/PgDn", "Scroll the rendered plan"),
@@ -205,11 +278,12 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     lines.extend(
         plan_review_keybinds
             .iter()
-            .map(|(key, desc)| bind_line(key, desc, theme)),
+            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
     lines.extend(section_header(
         "  During an Expert review of the plan:",
+        columns,
         theme,
     )); // FORK: G11
 
@@ -222,11 +296,12 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     lines.extend(
         plan_critique_keybinds
             .iter()
-            .map(|(key, desc)| bind_line(key, desc, theme)),
+            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
     lines.extend(section_header(
         "  While viewing: Ctrl+Q exits; Ctrl+Space opens leader commands.",
+        columns,
         theme,
     )); // FORK: G11
 
@@ -277,10 +352,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     lines.extend(
         view_keybinds
             .iter()
-            .map(|(key, desc)| bind_line(key, desc, theme)),
+            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
-    lines.extend(section_header("  In the TODOs view:", theme)); // FORK: G11
+    lines.extend(section_header("  In the TODOs view:", columns, theme)); // FORK: G11
 
     let todos_keybinds: Vec<(&str, &str)> = vec![
         ("j/k / \u{2191}/\u{2193}", "Navigate TODOs"),
@@ -307,10 +382,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     lines.extend(
         todos_keybinds
             .iter()
-            .map(|(key, desc)| bind_line(key, desc, theme)),
+            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
-    lines.extend(section_header("  In PR Triage:", theme)); // FORK: G11
+    lines.extend(section_header("  In PR Triage:", columns, theme)); // FORK: G11
 
     let pr_review_keybinds: Vec<(&str, &str)> = vec![
         ("j/k", "Navigate comments"),
@@ -358,10 +433,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     lines.extend(
         pr_review_keybinds
             .iter()
-            .map(|(key, desc)| bind_line(key, desc, theme)),
+            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
-    lines.extend(section_header("  In AI Review:", theme)); // FORK: G11
+    lines.extend(section_header("  In AI Review:", columns, theme)); // FORK: G11
 
     let ai_review_keybinds: Vec<(&str, &str)> = vec![
         ("j/k", "Navigate findings"),
@@ -381,10 +456,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     lines.extend(
         ai_review_keybinds
             .iter()
-            .map(|(key, desc)| bind_line(key, desc, theme)),
+            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
-    lines.extend(section_header("  In the PR picker:", theme)); // FORK: G11
+    lines.extend(section_header("  In the PR picker:", columns, theme)); // FORK: G11
 
     let pr_picker_keybinds: Vec<(&str, &str)> = vec![
         ("j/k", "Navigate PRs"),
@@ -403,10 +478,14 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     lines.extend(
         pr_picker_keybinds
             .iter()
-            .map(|(key, desc)| bind_line(key, desc, theme)),
+            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
-    lines.extend(section_header("  In the PR picker's Review tab:", theme)); // FORK: G11
+    lines.extend(section_header(
+        "  In the PR picker's Review tab:",
+        columns,
+        theme,
+    )); // FORK: G11
 
     let review_tab_keybinds: Vec<(&str, &str)> = vec![
         ("j/k", "Navigate open PRs (yours and drafts included)"),
@@ -422,11 +501,13 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     lines.extend(
         review_tab_keybinds
             .iter()
-            .map(|(key, desc)| bind_line(key, desc, theme)),
+            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
-    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
-    let total_lines = paragraph.line_count(area.width.saturating_sub(2));
+    // Already wrapped with hanging indents, so no `Wrap` (which would restart
+    // a continuation at the border).
+    let total_lines = lines.len();
+    let paragraph = Paragraph::new(lines);
     let visible_height = area.height.saturating_sub(2) as usize;
     let max_scroll = total_lines.saturating_sub(visible_height);
     let scroll = scroll_offset.min(max_scroll) as u16;
