@@ -257,6 +257,16 @@ pub fn install_panic_hook() {
                 "panic",
                 &format!("thread `{thread}` panicked at {location}: {payload}"),
             );
+            // FORK: the location alone names the crate that panicked (often
+            // ratatui), not the AIW frame that fed it bad input. Capture the
+            // backtrace regardless of RUST_BACKTRACE — it only costs on a
+            // crash — and keep it in the log where `doctor`/bug reports look.
+            let backtrace = std::backtrace::Backtrace::force_capture();
+            log_to_file(
+                LogLevel::Error,
+                "panic",
+                &format!("backtrace:\n{backtrace}"),
+            );
             flush_log_writer();
             set_user_alert("Error: AIW hit an internal error. Check debug log for details.".into());
         }));
