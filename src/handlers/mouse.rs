@@ -298,7 +298,7 @@ fn handle_click(
             attention_counts,
             unexplained_pending,
             // FORK: G11 pills take header columns too.
-            crate::ui::header::header_pills(app, attention_counts, unexplained_pending),
+            crate::ui::header::header_pills(app),
         ) && badge.contains(&col)
         {
             app.mode = AppMode::NotificationPicker(0, None);

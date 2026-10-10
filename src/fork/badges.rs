@@ -1,0 +1,911 @@
+//! FORK: the one badge model (DESIGN.md §15) — what a session is doing, derived
+//! from state the app already holds, and shown the same way everywhere: the
+//! tree rows, the workspace sidebar, split-view tile titles, the needs-you
+//! picker and the header pills.
+//!
+//! Nothing here touches tmux or the filesystem. A badge is derived from the
+//! attention records, the thinking sets, the stopped/exited markers and the
+//! session's own status text; counts are rolled up per feature so the header
+//! pills, the project rows and the sidebar can never disagree.
+
+use chrono::{DateTime, Utc};
+use ratatui::style::Color;
+use std::collections::HashMap;
+
+use crate::app::App;
+use crate::app::attention::{AttentionRecord, AttentionState};
+use crate::project::{AgentKind, Feature, FeatureSession, ProjectStatus, SessionKind};
+use crate::theme::Theme;
+
+/// What a session is doing, strongest first: the order is the roll-up order
+/// (a feature shows its most pressing session) and the sort order of the
+/// workspace's "next needing you".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum BadgeKind {
+    /// Permission prompt, question, or a stop nothing explained.
+    NeedsYou,
+    /// The agent is thinking or running a tool.
+    Working,
+    /// Finished a turn and nobody has looked at it yet.
+    FinishedUnread,
+    /// The agent exited at its shell (the window is still there).
+    Exited,
+    /// Finished and already looked at, or a feature marked ready.
+    FinishedRead,
+    /// Running, nothing to report.
+    Idle,
+    /// Stopped (window gone or feature stopped).
+    Stopped,
+}
+
+impl BadgeKind {
+    /// Stronger kinds roll up over weaker ones.
+    fn rank(self) -> u8 {
+        match self {
+            BadgeKind::NeedsYou => 6,
+            BadgeKind::Working => 5,
+            BadgeKind::FinishedUnread => 4,
+            BadgeKind::Exited => 3,
+            BadgeKind::FinishedRead => 2,
+            BadgeKind::Idle => 1,
+            BadgeKind::Stopped => 0,
+        }
+    }
+
+    pub fn glyph(self) -> &'static str {
+        match self {
+            BadgeKind::NeedsYou => "⛔",
+            BadgeKind::Working => "●",
+            BadgeKind::FinishedUnread | BadgeKind::FinishedRead => "✓",
+            BadgeKind::Idle => "○",
+            BadgeKind::Stopped | BadgeKind::Exited => "■",
+        }
+    }
+
+    /// The theme colour of the glyph — never hard-coded.
+    pub fn tone(self, theme: &Theme) -> Color {
+        match self {
+            BadgeKind::NeedsYou => theme.status_waiting.to_color(),
+            BadgeKind::Working => theme.status_working.to_color(),
+            BadgeKind::FinishedUnread => theme.success.to_color(),
+            BadgeKind::FinishedRead => theme.text_muted.to_color(),
+            BadgeKind::Idle => theme.status_idle.to_color(),
+            BadgeKind::Stopped => theme.status_stopped.to_color(),
+            BadgeKind::Exited => theme.danger.to_color(),
+        }
+    }
+
+    pub fn needs_you(self) -> bool {
+        self == BadgeKind::NeedsYou
+    }
+
+    /// The kind a timestamp is kept for: a finished turn keeps its age when
+    /// it is read.
+    fn age_family(self) -> BadgeKind {
+        match self {
+            BadgeKind::FinishedRead => BadgeKind::FinishedUnread,
+            other => other,
+        }
+    }
+}
+
+/// One session's badge.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionBadge {
+    pub kind: BadgeKind,
+    /// When the state began.
+    pub since: DateTime<Utc>,
+    /// The reason or activity text behind the glyph, when something said it:
+    /// the permission subject, the question, the status line of a working
+    /// agent. Never invented.
+    pub detail: Option<String>,
+}
+
+impl SessionBadge {
+    pub fn glyph(&self) -> &'static str {
+        self.kind.glyph()
+    }
+
+    pub fn tone(&self, theme: &Theme) -> Color {
+        self.kind.tone(theme)
+    }
+
+    /// Compact elapsed time since the state began: `0:40`, `6m`, `2h`.
+    pub fn age(&self, now: DateTime<Utc>) -> String {
+        compact_elapsed((now - self.since).num_seconds())
+    }
+
+    /// Short reason text for a second sidebar line or a tile title.
+    pub fn label(&self, now: DateTime<Utc>) -> String {
+        match self.kind {
+            BadgeKind::NeedsYou => self.detail.clone().unwrap_or_else(|| "needs you".into()),
+            BadgeKind::Working => match &self.detail {
+                Some(detail) => format!("working {} · {detail}", self.age(now)),
+                None => format!("working {}", self.age(now)),
+            },
+            BadgeKind::FinishedUnread | BadgeKind::FinishedRead => {
+                format!("done · {}", self.age(now))
+            }
+            BadgeKind::Exited => "exited".into(),
+            BadgeKind::Stopped => "stopped".into(),
+            BadgeKind::Idle => match &self.detail {
+                Some(detail) => detail.clone(),
+                None => "idle".into(),
+            },
+        }
+    }
+
+    fn stronger(self, other: SessionBadge) -> SessionBadge {
+        if other.kind.rank() > self.kind.rank() {
+            other
+        } else {
+            self
+        }
+    }
+}
+
+/// `0:40` under a minute, `6m` under an hour, `2h` after that.
+pub fn compact_elapsed(secs: i64) -> String {
+    let secs = secs.max(0);
+    if secs < 60 {
+        format!("0:{secs:02}")
+    } else if secs < 3600 {
+        format!("{}m", secs / 60)
+    } else if secs < 48 * 3600 {
+        format!("{}h", secs / 3600)
+    } else {
+        format!("{}d", secs / 86400)
+    }
+}
+
+/// `⚠ needs you · ● working · ✓ finished`, counted per feature from the
+/// roll-up badges.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BadgeCounts {
+    pub needs_you: usize,
+    pub working: usize,
+    pub done: usize,
+}
+
+impl BadgeCounts {
+    fn add(&mut self, kind: BadgeKind) {
+        match kind {
+            BadgeKind::NeedsYou => self.needs_you += 1,
+            BadgeKind::Working => self.working += 1,
+            BadgeKind::FinishedUnread | BadgeKind::FinishedRead => self.done += 1,
+            BadgeKind::Exited | BadgeKind::Idle | BadgeKind::Stopped => {}
+        }
+    }
+}
+
+/// When each session's current state began, keyed by session id. Kept on
+/// `App` and refreshed once per main-loop iteration
+/// ([`App::refresh_badge_ages`]); the pure derivation reads it so a frame
+/// never mutates anything.
+#[derive(Debug, Default)]
+pub struct BadgeAges {
+    since: HashMap<String, (BadgeKind, DateTime<Utc>)>,
+}
+
+impl BadgeAges {
+    fn lookup(&self, session_id: &str, kind: BadgeKind) -> Option<DateTime<Utc>> {
+        self.since
+            .get(session_id)
+            .filter(|(seen, _)| seen.age_family() == kind.age_family())
+            .map(|(_, since)| *since)
+    }
+}
+
+/// The tidy subject of a permission prompt, out of the harness's own words:
+/// `Claude needs your permission to use Bash` → `Bash`.
+pub fn permission_subject(message: &str) -> Option<String> {
+    const PREFIXES: &[&str] = &[
+        " needs your permission to use ",
+        " needs your permission to ",
+        " needs approval to run ",
+        " needs approval to ",
+        " needs your approval to ",
+        " requests permission to ",
+    ];
+    for prefix in PREFIXES {
+        if let Some(index) = message.find(prefix) {
+            let subject = message[index + prefix.len()..].trim().trim_end_matches('.');
+            if !subject.is_empty() {
+                return Some(subject.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Why an attention record needs you, in a few words.
+fn attention_detail(record: &AttentionRecord) -> Option<String> {
+    let detail = record
+        .detail
+        .as_deref()
+        .map(str::trim)
+        .filter(|d| !d.is_empty());
+    let is_permission = record
+        .notification_type
+        .as_deref()
+        .map(str::to_ascii_lowercase)
+        .is_some_and(|t| t.contains("permission") || t.contains("approval"))
+        || detail.is_some_and(|d| {
+            let lower = d.to_ascii_lowercase();
+            lower.contains("permission") || lower.contains("approval")
+        });
+    match record.state {
+        AttentionState::Question if is_permission => Some(format!(
+            "permission: {}",
+            detail
+                .and_then(permission_subject)
+                .or_else(|| detail.map(str::to_string))
+                .unwrap_or_default()
+        )),
+        AttentionState::Question => Some(match detail {
+            Some(detail) => format!("question: {detail}"),
+            None => "question".to_string(),
+        }),
+        AttentionState::Waiting => Some(match detail {
+            Some(detail) => format!("waiting: {detail}"),
+            None => "waiting for you".to_string(),
+        }),
+        AttentionState::CompletedAwaitingReview => None,
+    }
+}
+
+fn session_kind_for_agent(agent: &AgentKind) -> SessionKind {
+    match agent {
+        AgentKind::Claude => SessionKind::Claude,
+        AgentKind::Codex => SessionKind::Codex,
+        AgentKind::Pi => SessionKind::Pi,
+        AgentKind::Gemini => SessionKind::Gemini,
+        AgentKind::Cursor => SessionKind::Cursor,
+    }
+}
+
+/// Whether a feature-level signal raised by `agent` belongs to `session`:
+/// the session the harness runs in when the feature has one, every agent
+/// session otherwise.
+fn signal_applies(feature: &Feature, agent: Option<&AgentKind>, session: &FeatureSession) -> bool {
+    if !session.kind.is_agent_harness() {
+        return false;
+    }
+    let Some(agent) = agent else {
+        return true;
+    };
+    let kind = session_kind_for_agent(agent);
+    if session.kind == kind {
+        return true;
+    }
+    !feature
+        .sessions
+        .iter()
+        .any(|s| s.kind == kind && !s.stopped)
+}
+
+fn feature_pending_detail(app: &App, feature: &Feature) -> Option<String> {
+    if !app.is_feature_waiting_for_input(&feature.name) {
+        return None;
+    }
+    let input = app
+        .pending_inputs
+        .iter()
+        .find(|input| input.feature_name.as_deref() == Some(feature.name.as_str()))?;
+    let message = input.message.trim();
+    let kind = match input.notification_type.as_str() {
+        "input-request" | "stop" => "input",
+        "diff-review" => "diff review",
+        "change-reason" => "change reason",
+        "review-ready" => "review ready",
+        other => other,
+    };
+    Some(if message.is_empty() {
+        kind.to_string()
+    } else {
+        let mut shown: String = message.chars().take(80).collect();
+        if shown.len() < message.len() {
+            shown.push('…');
+        }
+        format!("{kind}: {shown}")
+    })
+}
+
+/// Whether `session` is working: its own IPC marker when the harness sends
+/// one, else the feature's thinking marker shared by its agent sessions.
+fn session_working(app: &App, feature: &Feature, session: &FeatureSession) -> bool {
+    if !session.kind.is_agent_harness() {
+        return false;
+    }
+    let own = |s: &FeatureSession| {
+        app.ipc_thinking_feature_sessions.contains(&s.id)
+            || app.ipc_tool_feature_sessions.contains(&s.id)
+    };
+    if own(session) {
+        return true;
+    }
+    app.thinking_features.contains(&feature.tmux_session) && !feature.sessions.iter().any(own)
+}
+
+/// The badge of one session.
+pub fn session_badge(
+    app: &App,
+    pi: usize,
+    fi: usize,
+    si: usize,
+    now: DateTime<Utc>,
+) -> SessionBadge {
+    let feature = &app.store.projects[pi].features[fi];
+    let session = &feature.sessions[si];
+    let fallback_since = |kind: BadgeKind| app.badge_ages.lookup(&session.id, kind).unwrap_or(now);
+    let badge = |kind: BadgeKind, detail: Option<String>| SessionBadge {
+        kind,
+        since: fallback_since(kind),
+        detail,
+    };
+
+    if !session.kind.is_tmux_backed() {
+        return badge(BadgeKind::Idle, None);
+    }
+    let feature_stopped = feature.status == ProjectStatus::Stopped;
+    if feature_stopped || session.stopped {
+        let exited = !feature_stopped
+            && (app.session_is_exited(&session.id)
+                || session.status_text.as_deref()
+                    == Some(crate::fork::session_reconcile::EXITED_STATUS));
+        return if exited {
+            badge(BadgeKind::Exited, None)
+        } else {
+            badge(BadgeKind::Stopped, None)
+        };
+    }
+    if !session.kind.is_agent_harness() {
+        return badge(BadgeKind::Idle, Some("open".into()));
+    }
+
+    if let Some(record) = app.attention_for(&feature.tmux_session)
+        && signal_applies(feature, Some(&record.agent), session)
+    {
+        return match record.state {
+            AttentionState::Question | AttentionState::Waiting => SessionBadge {
+                kind: BadgeKind::NeedsYou,
+                since: record.since,
+                detail: attention_detail(record),
+            },
+            AttentionState::CompletedAwaitingReview => SessionBadge {
+                kind: if app.finished_seen.contains(&session.id) {
+                    BadgeKind::FinishedRead
+                } else {
+                    BadgeKind::FinishedUnread
+                },
+                since: record.since,
+                detail: None,
+            },
+        };
+    }
+    if session_working(app, feature, session) {
+        return badge(BadgeKind::Working, session.status_text.clone());
+    }
+    if let Some(detail) = feature_pending_detail(app, feature)
+        && signal_applies(feature, None, session)
+    {
+        return badge(BadgeKind::NeedsYou, Some(detail));
+    }
+    badge(BadgeKind::Idle, None)
+}
+
+/// A feature's roll-up: its most pressing agent session, or the feature's
+/// own signals when no session carries them (an attention record on a
+/// feature whose agent window is gone, a feature marked ready).
+pub fn feature_badge(app: &App, pi: usize, fi: usize, now: DateTime<Utc>) -> SessionBadge {
+    let feature = &app.store.projects[pi].features[fi];
+    let stopped = SessionBadge {
+        kind: BadgeKind::Stopped,
+        since: feature.last_accessed,
+        detail: None,
+    };
+    if feature.status == ProjectStatus::Stopped {
+        return stopped;
+    }
+    let mut best = SessionBadge {
+        kind: BadgeKind::Idle,
+        since: feature.last_accessed,
+        detail: None,
+    };
+    let mut any_agent = false;
+    for si in 0..feature.sessions.len() {
+        if !feature.sessions[si].kind.is_agent_harness() {
+            continue;
+        }
+        any_agent = true;
+        best = best.stronger(session_badge(app, pi, fi, si, now));
+    }
+    if !any_agent {
+        // Feature-level signals with nothing to hang them on.
+        if let Some(record) = app.attention_for(&feature.tmux_session) {
+            let kind = match record.state {
+                AttentionState::Question | AttentionState::Waiting => BadgeKind::NeedsYou,
+                AttentionState::CompletedAwaitingReview => BadgeKind::FinishedRead,
+            };
+            best = best.stronger(SessionBadge {
+                kind,
+                since: record.since,
+                detail: attention_detail(record),
+            });
+        } else if app.thinking_features.contains(&feature.tmux_session) {
+            best = best.stronger(SessionBadge {
+                kind: BadgeKind::Working,
+                since: now,
+                detail: None,
+            });
+        } else if let Some(detail) = feature_pending_detail(app, feature) {
+            best = best.stronger(SessionBadge {
+                kind: BadgeKind::NeedsYou,
+                since: now,
+                detail: Some(detail),
+            });
+        }
+    }
+    if feature.ready {
+        best = best.stronger(SessionBadge {
+            kind: BadgeKind::FinishedRead,
+            since: feature.last_accessed,
+            detail: Some("ready".into()),
+        });
+    }
+    best
+}
+
+/// The counts for one project's row.
+pub fn project_counts(app: &App, pi: usize, now: DateTime<Utc>) -> BadgeCounts {
+    let mut counts = BadgeCounts::default();
+    for fi in 0..app.store.projects[pi].features.len() {
+        counts.add(feature_badge(app, pi, fi, now).kind);
+    }
+    counts
+}
+
+/// The header pills: every project's counts summed.
+pub fn total_counts(app: &App, now: DateTime<Utc>) -> BadgeCounts {
+    let mut counts = BadgeCounts::default();
+    for pi in 0..app.store.projects.len() {
+        let project = project_counts(app, pi, now);
+        counts.needs_you += project.needs_you;
+        counts.working += project.working;
+        counts.done += project.done;
+    }
+    counts
+}
+
+impl App {
+    /// Record when each session's current badge state began. Called once
+    /// per main-loop iteration; a state that is still the one recorded
+    /// keeps its timestamp, so ages measure the state, not the sweep.
+    pub fn refresh_badge_ages(&mut self) {
+        let now = Utc::now();
+        let mut updates: Vec<(String, BadgeKind)> = Vec::new();
+        let mut live: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for (pi, project) in self.store.projects.iter().enumerate() {
+            for (fi, feature) in project.features.iter().enumerate() {
+                for (si, session) in feature.sessions.iter().enumerate() {
+                    live.insert(session.id.as_str());
+                    let kind = session_badge(self, pi, fi, si, now).kind;
+                    let recorded = self
+                        .badge_ages
+                        .since
+                        .get(&session.id)
+                        .map(|(seen, _)| seen.age_family());
+                    if recorded != Some(kind.age_family()) {
+                        updates.push((session.id.clone(), kind));
+                    }
+                }
+            }
+        }
+        if self.badge_ages.since.len() > live.len() {
+            let live: std::collections::HashSet<String> =
+                live.into_iter().map(str::to_string).collect();
+            self.badge_ages.since.retain(|id, _| live.contains(id));
+        }
+        for (id, kind) in updates {
+            self.badge_ages.since.insert(id, (kind, now));
+        }
+    }
+
+    /// A finished turn was looked at: its `✓` goes dim.
+    pub fn mark_finished_seen(&mut self, session_id: &str) {
+        if !self.finished_seen.contains(session_id) {
+            self.finished_seen.insert(session_id.to_string());
+        }
+    }
+
+    /// A feature finished a turn again: its sessions' `✓` are new.
+    pub(crate) fn forget_finished_seen_for(&mut self, tmux_session: &str) {
+        if self.finished_seen.is_empty() {
+            return;
+        }
+        let ids: Vec<String> = self
+            .store
+            .projects
+            .iter()
+            .flat_map(|p| p.features.iter())
+            .filter(|f| f.tmux_session == tmux_session)
+            .flat_map(|f| f.sessions.iter().map(|s| s.id.clone()))
+            .collect();
+        for id in ids {
+            self.finished_seen.remove(&id);
+        }
+    }
+
+    /// The badge of the session at `(pi, fi, si)` now.
+    pub fn session_badge_at(&self, pi: usize, fi: usize, si: usize) -> Option<SessionBadge> {
+        let feature = self.store.projects.get(pi)?.features.get(fi)?;
+        feature.sessions.get(si)?;
+        Some(session_badge(self, pi, fi, si, Utc::now()))
+    }
+
+    /// The id of the session in tmux `session:window`, if listed.
+    pub fn session_id_for_window(&self, tmux_session: &str, window: &str) -> Option<String> {
+        self.store
+            .projects
+            .iter()
+            .flat_map(|p| p.features.iter())
+            .filter(|f| f.tmux_session == tmux_session)
+            .flat_map(|f| f.sessions.iter())
+            .find(|s| s.tmux_window == window)
+            .map(|s| s.id.clone())
+    }
+
+    /// The badge of the session in tmux `session:window`, if listed.
+    pub fn session_badge_for_window(
+        &self,
+        tmux_session: &str,
+        window: &str,
+    ) -> Option<SessionBadge> {
+        let now = Utc::now();
+        for (pi, project) in self.store.projects.iter().enumerate() {
+            for (fi, feature) in project.features.iter().enumerate() {
+                if feature.tmux_session != tmux_session {
+                    continue;
+                }
+                if let Some(si) = feature
+                    .sessions
+                    .iter()
+                    .position(|s| s.tmux_window == window)
+                {
+                    return Some(session_badge(self, pi, fi, si, now));
+                }
+            }
+        }
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::attention::AttentionSource;
+    use crate::project::{Project, ProjectStore, VibeMode};
+    use crate::traits::{MockTmuxOps, MockWorktreeOps};
+    use chrono::Duration as ChronoDuration;
+    use std::path::PathBuf;
+
+    fn app_with(kinds: &[SessionKind]) -> App {
+        let mut feature = Feature::new(
+            "hx-12".into(),
+            "hx-12".into(),
+            PathBuf::from("/tmp"),
+            false,
+            VibeMode::Vibeless,
+            false,
+            false,
+            AgentKind::Claude,
+            false,
+            false,
+        );
+        feature.status = ProjectStatus::Active;
+        for kind in kinds {
+            feature.add_session(kind.clone());
+        }
+        let mut project = Project::new("RS".into(), PathBuf::from("/tmp"), true, AgentKind::Claude);
+        project.features.push(feature);
+        let store = ProjectStore {
+            version: 5,
+            projects: vec![project],
+            session_bookmarks: vec![],
+            available_harnesses: vec![],
+            prompt_templates: Vec::new(),
+            extra: Default::default(),
+        };
+        App::new_for_test(
+            store,
+            Box::new(MockTmuxOps::new()),
+            Box::new(MockWorktreeOps::new()),
+        )
+    }
+
+    fn id(app: &App, si: usize) -> String {
+        app.store.projects[0].features[0].sessions[si].id.clone()
+    }
+
+    #[test]
+    fn every_state_has_its_glyph_and_label() {
+        let now = Utc::now();
+        type Setup = Box<dyn Fn(&mut App)>;
+        // (name, setup, expected kind, glyph, label)
+        let cases: Vec<(&str, Setup, BadgeKind, &str, &str)> = vec![
+            ("idle", Box::new(|_| {}), BadgeKind::Idle, "○", "idle"),
+            (
+                "working",
+                Box::new(|app| {
+                    app.thinking_features.insert("aiw-hx-12".into());
+                }),
+                BadgeKind::Working,
+                "●",
+                "working 0:00",
+            ),
+            (
+                "working with activity",
+                Box::new(|app| {
+                    app.thinking_features.insert("aiw-hx-12".into());
+                    app.store.projects[0].features[0].sessions[0].status_text =
+                        Some("Edit src/auth.rs".into());
+                }),
+                BadgeKind::Working,
+                "●",
+                "working 0:00 · Edit src/auth.rs",
+            ),
+            (
+                "permission",
+                Box::new(|app| {
+                    app.record_attention_with_detail(
+                        "aiw-hx-12",
+                        &AgentKind::Claude,
+                        AttentionState::Question,
+                        AttentionSource::Hook,
+                        Some("permission_prompt".into()),
+                        Some("Claude needs your permission to use Bash".into()),
+                    );
+                }),
+                BadgeKind::NeedsYou,
+                "⛔",
+                "permission: Bash",
+            ),
+            (
+                "question",
+                Box::new(|app| {
+                    app.record_attention(
+                        "aiw-hx-12",
+                        &AgentKind::Claude,
+                        AttentionState::Question,
+                        AttentionSource::Hook,
+                    );
+                }),
+                BadgeKind::NeedsYou,
+                "⛔",
+                "question",
+            ),
+            (
+                "unexplained pending input",
+                Box::new(|app| {
+                    app.pending_inputs.push(crate::app::PendingInput {
+                        feature_name: Some("hx-12".into()),
+                        project_name: Some("RS".into()),
+                        notification_type: "input-request".into(),
+                        message: "Waiting for input".into(),
+                        ..Default::default()
+                    });
+                }),
+                BadgeKind::NeedsYou,
+                "⛔",
+                "input: Waiting for input",
+            ),
+            (
+                "finished, unread",
+                Box::new(|app| {
+                    app.record_attention(
+                        "aiw-hx-12",
+                        &AgentKind::Claude,
+                        AttentionState::CompletedAwaitingReview,
+                        AttentionSource::Hook,
+                    );
+                }),
+                BadgeKind::FinishedUnread,
+                "✓",
+                "done · 0:00",
+            ),
+            (
+                "finished, read",
+                Box::new(|app| {
+                    app.record_attention(
+                        "aiw-hx-12",
+                        &AgentKind::Claude,
+                        AttentionState::CompletedAwaitingReview,
+                        AttentionSource::Hook,
+                    );
+                    let id = id(app, 0);
+                    app.mark_finished_seen(&id);
+                }),
+                BadgeKind::FinishedRead,
+                "✓",
+                "done · 0:00",
+            ),
+            (
+                "stopped session",
+                Box::new(|app| {
+                    app.store.projects[0].features[0].sessions[0].stopped = true;
+                }),
+                BadgeKind::Stopped,
+                "■",
+                "stopped",
+            ),
+            (
+                "stopped feature",
+                Box::new(|app| {
+                    app.store.projects[0].features[0].status = ProjectStatus::Stopped;
+                }),
+                BadgeKind::Stopped,
+                "■",
+                "stopped",
+            ),
+            (
+                "exited at the shell",
+                Box::new(|app| {
+                    let id = id(app, 0);
+                    app.store.projects[0].features[0].sessions[0].stopped = true;
+                    app.exited_sessions.insert(id);
+                }),
+                BadgeKind::Exited,
+                "■",
+                "exited",
+            ),
+        ];
+        for (name, setup, kind, glyph, label) in cases {
+            let mut app = app_with(&[SessionKind::Claude]);
+            setup(&mut app);
+            let badge = session_badge(&app, 0, 0, 0, now);
+            assert_eq!(badge.kind, kind, "{name}");
+            assert_eq!(badge.glyph(), glyph, "{name}");
+            assert_eq!(badge.label(now), label, "{name}");
+            let theme = Theme::default();
+            assert_eq!(badge.tone(&theme), kind.tone(&theme), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_terminal_is_open_or_stopped_never_working() {
+        let mut app = app_with(&[SessionKind::Terminal]);
+        app.thinking_features.insert("aiw-hx-12".into());
+        let now = Utc::now();
+        let badge = session_badge(&app, 0, 0, 0, now);
+        assert_eq!(badge.kind, BadgeKind::Idle);
+        assert_eq!(badge.label(now), "open");
+        app.store.projects[0].features[0].sessions[0].stopped = true;
+        assert_eq!(session_badge(&app, 0, 0, 0, now).kind, BadgeKind::Stopped);
+    }
+
+    #[test]
+    fn a_feature_signal_lands_on_the_session_of_its_harness() {
+        let mut app = app_with(&[SessionKind::Claude, SessionKind::Codex]);
+        app.record_attention(
+            "aiw-hx-12",
+            &AgentKind::Claude,
+            AttentionState::Question,
+            AttentionSource::Hook,
+        );
+        app.thinking_features.insert("aiw-hx-12".into());
+        let now = Utc::now();
+        assert_eq!(session_badge(&app, 0, 0, 0, now).kind, BadgeKind::NeedsYou);
+        // The codex window shares the feature's thinking marker but not the
+        // question Claude asked.
+        assert_eq!(session_badge(&app, 0, 0, 1, now).kind, BadgeKind::Working);
+        // A per-session IPC marker narrows "working" to that window.
+        let codex_id = id(&app, 1);
+        app.ipc_thinking_feature_sessions.insert(codex_id);
+        app.attention.clear();
+        assert_eq!(session_badge(&app, 0, 0, 0, now).kind, BadgeKind::Idle);
+        assert_eq!(session_badge(&app, 0, 0, 1, now).kind, BadgeKind::Working);
+    }
+
+    #[test]
+    fn a_new_finished_turn_is_unread_again() {
+        let mut app = app_with(&[SessionKind::Claude]);
+        let now = Utc::now();
+        app.record_attention(
+            "aiw-hx-12",
+            &AgentKind::Claude,
+            AttentionState::CompletedAwaitingReview,
+            AttentionSource::Hook,
+        );
+        let session_id = id(&app, 0);
+        app.mark_finished_seen(&session_id);
+        assert_eq!(
+            session_badge(&app, 0, 0, 0, now).kind,
+            BadgeKind::FinishedRead
+        );
+        // Working again, then finished again: the seen mark is gone.
+        app.record_attention(
+            "aiw-hx-12",
+            &AgentKind::Claude,
+            AttentionState::Question,
+            AttentionSource::Hook,
+        );
+        app.record_attention(
+            "aiw-hx-12",
+            &AgentKind::Claude,
+            AttentionState::CompletedAwaitingReview,
+            AttentionSource::Hook,
+        );
+        assert_eq!(
+            session_badge(&app, 0, 0, 0, now).kind,
+            BadgeKind::FinishedUnread
+        );
+    }
+
+    #[test]
+    fn feature_rollup_takes_the_most_pressing_session_and_ready_counts_as_done() {
+        let mut app = app_with(&[
+            SessionKind::Claude,
+            SessionKind::Codex,
+            SessionKind::Terminal,
+        ]);
+        let now = Utc::now();
+        assert_eq!(feature_badge(&app, 0, 0, now).kind, BadgeKind::Idle);
+        app.store.projects[0].features[0].ready = true;
+        assert_eq!(feature_badge(&app, 0, 0, now).kind, BadgeKind::FinishedRead);
+        app.thinking_features.insert("aiw-hx-12".into());
+        assert_eq!(feature_badge(&app, 0, 0, now).kind, BadgeKind::Working);
+        app.record_attention(
+            "aiw-hx-12",
+            &AgentKind::Codex,
+            AttentionState::Waiting,
+            AttentionSource::Hook,
+        );
+        assert_eq!(feature_badge(&app, 0, 0, now).kind, BadgeKind::NeedsYou);
+        app.store.projects[0].features[0].status = ProjectStatus::Stopped;
+        assert_eq!(feature_badge(&app, 0, 0, now).kind, BadgeKind::Stopped);
+        assert_eq!(project_counts(&app, 0, now), BadgeCounts::default());
+    }
+
+    #[test]
+    fn ages_are_compact_and_stable_across_refreshes() {
+        assert_eq!(compact_elapsed(40), "0:40");
+        assert_eq!(compact_elapsed(6 * 60 + 5), "6m");
+        assert_eq!(compact_elapsed(2 * 3600 + 120), "2h");
+        assert_eq!(compact_elapsed(3 * 86400), "3d");
+        assert_eq!(compact_elapsed(-5), "0:00");
+
+        let mut app = app_with(&[SessionKind::Claude]);
+        app.thinking_features.insert("aiw-hx-12".into());
+        app.refresh_badge_ages();
+        let started = session_badge(&app, 0, 0, 0, Utc::now()).since;
+        app.refresh_badge_ages();
+        assert_eq!(session_badge(&app, 0, 0, 0, Utc::now()).since, started);
+        // The state changes: the clock restarts.
+        app.thinking_features.clear();
+        app.refresh_badge_ages();
+        let idle_since = session_badge(&app, 0, 0, 0, Utc::now()).since;
+        assert!(idle_since >= started);
+        // An attention record carries its own timestamp.
+        let since = Utc::now() - ChronoDuration::seconds(40);
+        app.attention.insert(
+            "aiw-hx-12".into(),
+            AttentionRecord::new(AgentKind::Claude, AttentionState::Question, since),
+        );
+        let badge = session_badge(&app, 0, 0, 0, Utc::now());
+        assert_eq!(badge.since, since);
+        assert_eq!(badge.age(since + ChronoDuration::seconds(40)), "0:40");
+    }
+
+    #[test]
+    fn permission_subjects_come_from_the_harness_wording() {
+        assert_eq!(
+            permission_subject("Claude needs your permission to use Bash").as_deref(),
+            Some("Bash")
+        );
+        assert_eq!(
+            permission_subject("Gemini needs approval to run cargo test").as_deref(),
+            Some("cargo test")
+        );
+        assert_eq!(permission_subject("Permission needed"), None);
+    }
+}

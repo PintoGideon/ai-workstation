@@ -27,14 +27,56 @@ use super::dashboard::centered_rect;
 /// layer could not explain. Each row is labelled with its state rather than
 /// with the agent's message — AIW deliberately does not capture the question
 /// text, so the label is all there is to say without opening the session.
+/// FORK: the badge (DESIGN.md §15) of the feature each row belongs to, so
+/// the picker shows the same glyph, reason and tone as the dashboard rows.
+pub(crate) fn row_badges(
+    app: &crate::app::App,
+    rows: &[AttentionRow],
+) -> Vec<Option<crate::fork::badges::SessionBadge>> {
+    let now = chrono::Utc::now();
+    rows.iter()
+        .map(|row| match row {
+            AttentionRow::Attention { entry, .. } => app
+                .store
+                .projects
+                .iter()
+                .enumerate()
+                .find_map(|(pi, project)| {
+                    project
+                        .features
+                        .iter()
+                        .position(|f| f.tmux_session == entry.tmux_session)
+                        .map(|fi| crate::fork::badges::feature_badge(app, pi, fi, now))
+                }),
+            AttentionRow::Pending(index) => {
+                let input = app.pending_inputs.get(*index)?;
+                let feature_name = input.feature_name.as_deref()?;
+                app.store
+                    .projects
+                    .iter()
+                    .enumerate()
+                    .find_map(|(pi, project)| {
+                        project
+                            .features
+                            .iter()
+                            .position(|f| f.name == feature_name)
+                            .map(|fi| crate::fork::badges::feature_badge(app, pi, fi, now))
+                    })
+            }
+        })
+        .collect()
+}
+
 pub fn draw_notification_picker(
     frame: &mut Frame,
     rows: &[AttentionRow],
     pending: &[PendingInput],
+    badges: &[Option<crate::fork::badges::SessionBadge>],
     selected: usize,
     nerd_font: bool,
     theme: &Theme,
 ) {
+    let now = chrono::Utc::now();
     let area = centered_rect(60, 50, frame.area());
     crate::ui::draw_modal_overlay(frame, area, theme);
 
@@ -85,17 +127,25 @@ pub fn draw_notification_picker(
                 ),
             };
 
-            // What the row is asking for. An explained stop shows its state;
-            // an unexplained one falls back to the pending input's own
-            // description, which is what the overlay always showed.
-            let (detail, detail_style) = match row.state() {
-                Some(state) => (
+            // What the row is asking for. FORK: the badge says it (glyph,
+            // reason, tone) when the row's feature is known; an explained
+            // stop without one shows its state; an unexplained one falls
+            // back to the pending input's own description.
+            let badge = badges.get(i).and_then(|b| b.as_ref());
+            let (detail, detail_style) = match (badge, row.state()) {
+                (Some(badge), _) => (
+                    format!("{} {}", badge.glyph(), badge.label(now)),
+                    Style::default()
+                        .fg(badge.tone(theme))
+                        .add_modifier(Modifier::BOLD),
+                ),
+                (None, Some(state)) => (
                     format!("{} {}", state.glyph(nerd_font), state.label()),
                     Style::default()
                         .fg(state.color(theme))
                         .add_modifier(Modifier::BOLD),
                 ),
-                None => {
+                (None, None) => {
                     let input_detail = input.map(|input| {
                         if input.message.len() > 50 {
                             format!("{}...", &input.message[..47])

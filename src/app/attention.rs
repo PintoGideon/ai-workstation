@@ -244,6 +244,13 @@ pub struct AttentionRecord {
     /// explain a generic `Waiting` as "this harness can't say more" rather
     /// than "nothing is known yet".
     pub capabilities: HarnessCapabilities,
+    /// FORK: the harness's own notification type (`permission_prompt`,
+    /// `ToolPermission`, …), when the payload carried one, so the badge
+    /// (`fork::badges`) can say *why* without guessing.
+    pub notification_type: Option<String>,
+    /// FORK: the harness's own words (`Claude needs your permission to use
+    /// Bash`), when the payload carried them.
+    pub detail: Option<String>,
 }
 
 impl AttentionRecord {
@@ -256,6 +263,8 @@ impl AttentionRecord {
             since,
             agent,
             capabilities,
+            notification_type: None,
+            detail: None,
         }
     }
 }
@@ -332,7 +341,23 @@ impl App {
         state: AttentionState,
         source: AttentionSource,
     ) {
-        let incoming = AttentionRecord::new(agent.clone(), state, Utc::now());
+        self.record_attention_with_detail(tmux_session, agent, state, source, None, None);
+    }
+
+    /// FORK: [`Self::record_attention`] keeping the harness's notification
+    /// type and message for the badge's reason text.
+    pub fn record_attention_with_detail(
+        &mut self,
+        tmux_session: &str,
+        agent: &AgentKind,
+        state: AttentionState,
+        source: AttentionSource,
+        notification_type: Option<String>,
+        detail: Option<String>,
+    ) {
+        let mut incoming = AttentionRecord::new(agent.clone(), state, Utc::now());
+        incoming.notification_type = notification_type;
+        incoming.detail = detail;
 
         if let Some(existing) = self.attention.get(tmux_session) {
             if existing.state == incoming.state {
@@ -346,6 +371,10 @@ impl App {
             }
         }
 
+        // FORK: a finished turn is news again (its `✓` is bright until looked at).
+        if incoming.state == AttentionState::CompletedAwaitingReview {
+            self.forget_finished_seen_for(tmux_session);
+        }
         self.attention.insert(tmux_session.to_string(), incoming);
     }
 

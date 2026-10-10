@@ -11,7 +11,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
-use crate::app::fork_split::{SplitViewState, TileStatusKind};
+use crate::app::fork_split::SplitViewState;
 use crate::app::{App, AppMode};
 use crate::fork::split;
 
@@ -63,33 +63,10 @@ fn draw_tile(frame: &mut Frame, app: &App, state: &SplitViewState, index: usize,
     let focused = index == state.focus;
     let status = app.split_tile_status(tile);
 
-    // The dashboard's status colours (G11): needs you = amber, working =
-    // blue, finished = green, idle / stopped = grey.
-    let status_color = match status.kind {
-        TileStatusKind::NeedsYou => theme.status_waiting.to_color(),
-        TileStatusKind::Working => theme.status_working.to_color(),
-        TileStatusKind::Finished => theme.success.to_color(),
-        TileStatusKind::Idle => theme.status_idle.to_color(),
-        TileStatusKind::Stopped => theme.status_stopped.to_color(),
-    };
-    let status_glyph = match status.kind {
-        TileStatusKind::NeedsYou => "!",
-        TileStatusKind::Working => "●",
-        TileStatusKind::Finished => "✓",
-        TileStatusKind::Idle => "○",
-        TileStatusKind::Stopped => "×",
-    };
-    let border_color = if status.kind.needs_attention() {
-        theme.status_waiting.to_color()
-    } else if focused {
-        theme.border_focus.to_color()
-    } else {
-        theme.border.to_color()
-    };
-    let mut border_style = Style::default().fg(border_color);
-    if focused {
-        border_style = border_style.add_modifier(Modifier::BOLD);
-    }
+    // The badge model's colours and glyphs (DESIGN.md §15), so a tile title
+    // and a sidebar row say the same thing.
+    let status_color = status.kind.badge_kind().tone(theme);
+    let status_glyph = status.kind.badge_kind().glyph();
 
     let name_style = if focused {
         Style::default()
@@ -119,26 +96,98 @@ fn draw_tile(frame: &mut Frame, app: &App, state: &SplitViewState, index: usize,
         Span::raw(" "),
     ]);
 
-    let block = Block::default()
+    let tile_frame = &state.frames[index];
+    let cursor = (focused && !app.leader_active)
+        .then_some(tile_frame.cursor)
+        .flatten();
+    draw_live_tile(
+        frame,
+        theme,
+        rect,
+        LiveTile {
+            title,
+            title_right: None,
+            focused,
+            needs_you: status.kind.needs_attention(),
+            lines: &tile_frame.lines,
+            cursor,
+            dead: tile_frame.dead,
+            empty: None,
+        },
+    );
+}
+
+/// What [`draw_live_tile`] draws: one bordered live terminal.
+pub(crate) struct LiveTile<'a> {
+    /// The top-left title (project › feature › session · status).
+    pub title: Line<'static>,
+    /// An optional right-aligned top title (the workspace pane's badge).
+    pub title_right: Option<Line<'static>>,
+    pub focused: bool,
+    /// Amber border, as a tile whose agent needs you.
+    pub needs_you: bool,
+    pub lines: &'a [Line<'static>],
+    /// Drawn only when given (the focused tile's).
+    pub cursor: Option<(u16, u16)>,
+    /// The tmux window is gone.
+    pub dead: bool,
+    /// Text to show instead of a terminal (an empty state), dim and centred.
+    pub empty: Option<&'a [Line<'static>]>,
+}
+
+/// The one live-tile renderer: split-view tiles and the workspace layout's
+/// pane (DESIGN.md §15) draw through here, so borders, focus and the
+/// needs-you tone cannot drift apart.
+pub(crate) fn draw_live_tile(
+    frame: &mut Frame,
+    theme: &crate::theme::Theme,
+    rect: Rect,
+    tile: LiveTile<'_>,
+) {
+    let border_color = if tile.needs_you {
+        theme.status_waiting.to_color()
+    } else if tile.focused {
+        theme.border_focus.to_color()
+    } else {
+        theme.border.to_color()
+    };
+    let mut border_style = Style::default().fg(border_color);
+    if tile.focused {
+        border_style = border_style.add_modifier(Modifier::BOLD);
+    }
+    let mut block = Block::default()
         .borders(Borders::ALL)
-        .border_type(if focused {
+        .border_type(if tile.focused {
             BorderType::Thick
         } else {
             BorderType::Rounded
         })
         .border_style(border_style)
-        .title(title);
+        .title(tile.title);
+    if let Some(right) = tile.title_right {
+        block = block.title_top(right.right_aligned());
+    }
     frame.render_widget(block, rect);
 
     let content = split::tile_content(rect);
     if content.width == 0 || content.height == 0 {
         return;
     }
-    let tile_frame = &state.frames[index];
     let pane_style = Style::default()
         .fg(theme.text.to_color())
         .bg(theme.effective_bg());
-    if tile_frame.dead {
+    if let Some(empty) = tile.empty {
+        let height = (empty.len() as u16).min(content.height);
+        let top = content.y + content.height.saturating_sub(height) / 2;
+        frame.render_widget(
+            Paragraph::new(empty.to_vec())
+                .alignment(ratatui::layout::Alignment::Center)
+                .style(pane_style.fg(theme.text_muted.to_color())),
+            Rect::new(content.x, top, content.width, height),
+        );
+        return;
+    }
+    if tile.dead {
         frame.render_widget(
             Paragraph::new("(this session's tmux window is gone)")
                 .style(pane_style.fg(theme.text_muted.to_color())),
@@ -146,7 +195,7 @@ fn draw_tile(frame: &mut Frame, app: &App, state: &SplitViewState, index: usize,
         );
         return;
     }
-    if tile_frame.lines.is_empty() {
+    if tile.lines.is_empty() {
         frame.render_widget(
             Paragraph::new("connecting…").style(pane_style.fg(theme.text_muted.to_color())),
             content,
@@ -155,18 +204,11 @@ fn draw_tile(frame: &mut Frame, app: &App, state: &SplitViewState, index: usize,
     }
     let buf = frame.buffer_mut();
     buf.set_style(content, pane_style);
-    for (i, line) in tile_frame
-        .lines
-        .iter()
-        .take(content.height as usize)
-        .enumerate()
-    {
+    for (i, line) in tile.lines.iter().take(content.height as usize).enumerate() {
         buf.set_line(content.x, content.y + i as u16, line, content.width);
     }
 
-    if focused
-        && !app.leader_active
-        && let Some((x, y)) = tile_frame.cursor
+    if let Some((x, y)) = tile.cursor
         && x < content.width
         && y < content.height
     {

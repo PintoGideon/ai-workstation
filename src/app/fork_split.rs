@@ -23,6 +23,7 @@ use super::{
     VIEW_SNAPSHOT_REFRESH_PANE_BURST, ViewSnapshot, ViewState,
 };
 use crate::app::attention::AttentionState;
+use crate::fork::badges::BadgeKind;
 use crate::fork::split::{self, Direction};
 use crate::project::{ProjectStatus, SessionKind, VibeMode};
 use crate::tmux::TmuxManager;
@@ -194,6 +195,8 @@ pub struct SplitViewState {
     resized: Vec<Option<(u16, u16)>>,
     viewport: Option<(u16, u16)>,
     viewport_since: Instant,
+    /// FORK(badges): the tile whose finished turn was last marked seen.
+    last_seen_focus: Option<usize>,
 }
 
 impl SplitViewState {
@@ -208,6 +211,7 @@ impl SplitViewState {
             resized: vec![None; n],
             viewport: None,
             viewport_since: Instant::now(),
+            last_seen_focus: None,
             tiles,
         }
     }
@@ -319,22 +323,37 @@ pub enum TileStatusKind {
     Finished,
     Idle,
     Stopped,
+    /// The agent exited at its shell (badge model, DESIGN.md §15).
+    Exited,
 }
 
 impl TileStatusKind {
     pub fn needs_attention(self) -> bool {
         self == TileStatusKind::NeedsYou
     }
-}
 
-pub(crate) fn format_elapsed(secs: i64) -> String {
-    let secs = secs.max(0);
-    if secs < 60 {
-        format!("0:{secs:02}")
-    } else if secs < 3600 {
-        format!("{}m", secs / 60)
-    } else {
-        format!("{}h{:02}m", secs / 3600, (secs % 3600) / 60)
+    /// FORK: the badge model's kind for a tile status (DESIGN.md §15).
+    pub fn from_badge(kind: BadgeKind) -> Self {
+        match kind {
+            BadgeKind::NeedsYou => TileStatusKind::NeedsYou,
+            BadgeKind::Working => TileStatusKind::Working,
+            BadgeKind::FinishedUnread | BadgeKind::FinishedRead => TileStatusKind::Finished,
+            BadgeKind::Idle => TileStatusKind::Idle,
+            BadgeKind::Stopped => TileStatusKind::Stopped,
+            BadgeKind::Exited => TileStatusKind::Exited,
+        }
+    }
+
+    /// The badge kind a tile status draws with.
+    pub fn badge_kind(self) -> BadgeKind {
+        match self {
+            TileStatusKind::NeedsYou => BadgeKind::NeedsYou,
+            TileStatusKind::Working => BadgeKind::Working,
+            TileStatusKind::Finished => BadgeKind::FinishedUnread,
+            TileStatusKind::Idle => BadgeKind::Idle,
+            TileStatusKind::Stopped => BadgeKind::Stopped,
+            TileStatusKind::Exited => BadgeKind::Exited,
+        }
     }
 }
 
@@ -544,49 +563,34 @@ impl App {
         }
     }
 
-    /// Header status of a tile, from the feature's attention/thinking state.
-    /// Both are tracked per feature, so tiles of one feature share it.
+    /// Header status of a tile: the session's badge (DESIGN.md §15), so a
+    /// tile title says what the sidebar row and the tree row say.
     pub fn split_tile_status(&self, tile: &SplitTile) -> TileStatus {
-        let feature_status = self
-            .store
-            .projects
-            .iter()
-            .flat_map(|p| p.features.iter())
-            .find(|f| f.tmux_session == tile.session)
-            .map(|f| f.status.clone());
-        if feature_status == Some(ProjectStatus::Stopped) {
+        let now = chrono::Utc::now();
+        let Some(badge) = self.session_badge_for_window(&tile.session, &tile.window) else {
             return TileStatus {
                 text: "stopped".into(),
                 kind: TileStatusKind::Stopped,
             };
-        }
-        if let Some(record) = self.attention_for(&tile.session) {
-            let elapsed = format_elapsed((chrono::Utc::now() - record.since).num_seconds());
-            return match record.state {
-                AttentionState::CompletedAwaitingReview => TileStatus {
-                    text: format!("finished {elapsed}"),
-                    kind: TileStatusKind::Finished,
-                },
-                AttentionState::Question => TileStatus {
-                    text: format!("question {elapsed}"),
-                    kind: TileStatusKind::NeedsYou,
-                },
-                AttentionState::Waiting => TileStatus {
-                    text: format!("waiting {elapsed}"),
-                    kind: TileStatusKind::NeedsYou,
-                },
-            };
-        }
-        if self.thinking_features.contains(&tile.session) {
-            return TileStatus {
-                text: "working".into(),
-                kind: TileStatusKind::Working,
-            };
-        }
-        TileStatus {
-            text: "idle".into(),
-            kind: TileStatusKind::Idle,
-        }
+        };
+        let kind = TileStatusKind::from_badge(badge.kind);
+        let text = match badge.kind {
+            BadgeKind::Working => format!("working {}", badge.age(now)),
+            BadgeKind::FinishedUnread | BadgeKind::FinishedRead => {
+                format!("finished {}", badge.age(now))
+            }
+            BadgeKind::NeedsYou => {
+                let word = match self.attention_for(&tile.session).map(|r| r.state) {
+                    Some(AttentionState::Question) => "question",
+                    _ => "waiting",
+                };
+                format!("{word} {}", badge.age(now))
+            }
+            BadgeKind::Idle => "idle".into(),
+            BadgeKind::Stopped => "stopped".into(),
+            BadgeKind::Exited => "exited".into(),
+        };
+        TileStatus { text, kind }
     }
 
     /// Main-loop step while in split view: lay out the current page for a
@@ -634,6 +638,22 @@ impl App {
                 worker.join();
             }
         }
+
+        // FORK(badges): the focused tile's finished turn counts as looked at.
+        if state.last_seen_focus != Some(state.focus) {
+            state.last_seen_focus = Some(state.focus);
+            if let Some(tile) = state.tiles.get(state.focus) {
+                let (session, window) = (tile.session.clone(), tile.window.clone());
+                if let Some(id) = self.session_id_for_window(&session, &window) {
+                    self.finished_seen.insert(id);
+                }
+            }
+        }
+        let AppMode::SplitView(state) = &mut self.mode else {
+            return changed;
+        };
+        let visible = state.visible();
+        let rects = state.rects.clone();
 
         for (slot, i) in visible.clone().enumerate() {
             let Some(rect) = rects.get(slot) else {
@@ -869,14 +889,6 @@ mod tests {
         assert_eq!(state.page(), 1);
         state.focus_tile(2);
         assert_eq!((state.page(), state.focus), (0, 2));
-    }
-
-    #[test]
-    fn elapsed_formatting() {
-        assert_eq!(format_elapsed(40), "0:40");
-        assert_eq!(format_elapsed(6 * 60 + 5), "6m");
-        assert_eq!(format_elapsed(3600 + 120), "1h02m");
-        assert_eq!(format_elapsed(-5), "0:00");
     }
 
     #[test]

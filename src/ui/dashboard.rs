@@ -598,10 +598,13 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     if let AppMode::NotificationPicker(selected, Some(view)) = &app.mode {
         draw_view_pane(frame, app, view, false, false);
+        let attention_rows = app.attention_rows(); // FORK: badge rows
+        let badges = super::picker::row_badges(app, &attention_rows);
         super::picker::draw_notification_picker(
             frame,
-            &app.attention_rows(),
+            &attention_rows,
             &app.pending_inputs,
+            &badges,
             *selected,
             app.config.nerd_font,
             &app.theme,
@@ -815,8 +818,8 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         .split(frame.area());
 
     let (attention_counts, unexplained_pending) = app.attention_badge_counts();
-    // FORK: G11 status pills; cwd read once (`fork_chrome::cwd_label`).
-    let pills = super::fork_chrome::header_pills(app, attention_counts, unexplained_pending);
+    // FORK: G11 status pills from the badge model; cwd read once.
+    let pills = super::fork_chrome::header_pills(app);
     super::header::draw(
         frame,
         chunks[0],
@@ -976,10 +979,14 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
 
     if let AppMode::NotificationPicker(selected, None) = &app.mode {
+        // FORK: rows carry the badge of the feature they belong to.
+        let attention_rows = app.attention_rows();
+        let badges = super::picker::row_badges(app, &attention_rows);
         super::picker::draw_notification_picker(
             frame,
-            &app.attention_rows(),
+            &attention_rows,
             &app.pending_inputs,
+            &badges,
             *selected,
             app.config.nerd_font,
             &app.theme,

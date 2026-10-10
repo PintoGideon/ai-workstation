@@ -9,6 +9,9 @@
 pub mod grid;
 pub mod split;
 
+// Workspace layout and the badge model (DESIGN.md §15).
+pub(crate) mod badges;
+
 // G9 — sessions whose tmux window closed on its own.
 pub mod session_reconcile;
 

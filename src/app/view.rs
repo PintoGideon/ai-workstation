@@ -248,6 +248,10 @@ impl App {
         self.save()?;
         self.pane_content.clear();
 
+        // FORK(badges): the finished turn of the viewed session is looked at.
+        if let Some(id) = self.session_id_for_window(&view.session, &view.window) {
+            self.mark_finished_seen(&id);
+        }
         self.mode = AppMode::Viewing(view);
         self.refresh_sidebar_for_current_view();
 

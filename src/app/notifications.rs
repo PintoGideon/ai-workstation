@@ -1201,11 +1201,14 @@ impl App {
             } else {
                 AttentionState::from_event_kind(kind)
             };
-            self.record_attention(
+            // FORK: keep the harness's type and words for the badge's reason.
+            self.record_attention_with_detail(
                 &tmux_session,
                 &agent,
                 state,
                 crate::app::attention::AttentionSource::Hook,
+                msg.notification_type.clone(),
+                msg.message.clone(),
             );
             self.log_debug(
                 "attention",

@@ -1004,6 +1004,11 @@ pub struct App {
     pub pane_content: String,
     // FORK: split view state that outlives `AppMode::SplitView` (zoom stash).
     pub fork_split: fork_split::SplitRuntime,
+    /// FORK: ids of sessions whose finished turn has been looked at (their
+    /// `✓` is dim). Not persisted; a new finished event clears the id.
+    pub finished_seen: std::collections::HashSet<String>,
+    /// FORK: when each session's badge state began (`fork::badges`).
+    pub badge_ages: crate::fork::badges::BadgeAges,
     /// FORK: per-frame dialog values, see `fork_render_memo`.
     pub(crate) fork_render_memo: fork_render_memo::RenderMemo,
     pub pane_lines: Vec<Line<'static>>,
@@ -2609,7 +2614,9 @@ impl App {
             toasts: Vec::new(),
             should_quit: false,
             pane_content: String::new(),
-            fork_split: Default::default(),       // FORK: split view
+            fork_split: Default::default(), // FORK: split view
+            finished_seen: std::collections::HashSet::new(), // FORK: badges
+            badge_ages: Default::default(), // FORK: badges
             fork_render_memo: Default::default(), // FORK: render memo
             pane_lines: Vec::new(),
             pane_content_cols: 0,
@@ -2870,7 +2877,9 @@ impl App {
             toasts: Vec::new(),
             should_quit: false,
             pane_content: String::new(),
-            fork_split: Default::default(),       // FORK: split view
+            fork_split: Default::default(), // FORK: split view
+            finished_seen: std::collections::HashSet::new(), // FORK: badges
+            badge_ages: Default::default(), // FORK: badges
             fork_render_memo: Default::default(), // FORK: render memo
             pane_lines: Vec::new(),
             pane_content_cols: 0,

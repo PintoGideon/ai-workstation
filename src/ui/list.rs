@@ -10,12 +10,11 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use crate::app::attention::AttentionState; // FORK: G11 pill glyphs on rows
 use crate::app::{App, Selection, VisibleItem};
 use crate::context_display::{ContextIndicator, format_context_indicator};
 use crate::context_tracking::ContextBand;
 use crate::custom_session_icons::resolve_custom_session_icon;
-use crate::project::{ProjectStatus, SessionKind, VibeMode};
+use crate::project::{SessionKind, VibeMode};
 use crate::theme::Theme;
 use crate::token_tracking::{
     aggregate_token_usage, format_feature_token_usage, provider_for_session_kind,
@@ -152,6 +151,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
     // FORK: borrowed rather than cloned per frame; every `&mut app` call is above.
     let theme = &app.theme;
     let guide = super::fork_chrome::guide_style(theme);
+    let now = Utc::now(); // FORK: one clock for every badge in the frame
     // FORK: G11 borders + one column of padding each side; a row wider than
     // this ends in `…` rather than being cut at the border.
     let row_width = usize::from(area.width.saturating_sub(4));
@@ -237,9 +237,6 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         "  ├─"
                     };
 
-                    let is_waiting_for_input = app.is_feature_waiting_for_input(&feature.name);
-                    let attention = app.feature_attention(&feature.tmux_session);
-                    let is_thinking = app.is_feature_thinking(&feature.tmux_session);
                     let is_being_deleted =
                         app.is_feature_being_deleted(&project.name, &feature.name);
                     let is_hook_running = app.is_hook_running(&feature.workdir);
@@ -275,60 +272,34 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         let mut span = throbber.to_symbol_span(&app.throbber_state);
                         span.content = format!(" {} ", span.content).into();
                         span
-                    } else if let Some(state) = attention {
-                        // Why the session stopped, when the harness could say.
-                        // FORK: G11 — the header pills' glyphs (`⚠` needs
-                        // you, `✓` finished), so the row and the pills agree.
-                        let glyph = match state {
-                            AttentionState::CompletedAwaitingReview => "✓",
-                            AttentionState::Question | AttentionState::Waiting => "⚠",
-                        };
-                        Span::styled(
-                            format!(" {glyph} "),
-                            Style::default()
-                                .fg(state.color(theme))
-                                .add_modifier(Modifier::BOLD),
-                        )
-                    } else if is_waiting_for_input {
-                        // Stopped, but nothing told us why — the pre-attention
-                        // signal, kept for harnesses that report no lifecycle
-                        // events at all.
-                        Span::styled(
-                            " ⚠ ",
-                            Style::default()
-                                .fg(theme.status_waiting.to_color())
-                                .add_modifier(Modifier::BOLD),
-                        )
-                    } else if is_thinking {
-                        let throbber = throbber_widgets_tui::Throbber::default()
-                            .throbber_style(
-                                Style::default()
-                                    // FORK: "working" status colour (blue in AIW themes,
-                                    // `primary` in upstream ones).
-                                    .fg(theme.status_working.to_color())
-                                    .add_modifier(Modifier::BOLD),
-                            )
-                            .throbber_set(throbber_widgets_tui::BRAILLE_EIGHT_DOUBLE)
-                            .use_type(throbber_widgets_tui::WhichUse::Spin);
-                        let mut span = throbber.to_symbol_span(&app.throbber_state);
-                        span.content = format!(" {} ", span.content).into();
-                        span
-                    } else if feature.ready {
-                        Span::styled(
-                            " ✓ ",
-                            Style::default()
-                                .fg(theme.success.to_color())
-                                .add_modifier(Modifier::BOLD),
-                        )
-                    } else if feature.status == ProjectStatus::Stopped {
-                        Span::styled(" ■ ", Style::default().fg(theme.status_stopped.to_color()))
-                    } else if feature.sessions.iter().any(|s| s.runs_with_feature()) {
-                        // FORK: G11 — the roll-up of the session rows below:
-                        // `●` while any of them runs, whatever the stored
-                        // Active/Idle status says.
-                        Span::styled(" ● ", Style::default().fg(theme.status_active.to_color()))
                     } else {
-                        Span::styled(" ○ ", Style::default().fg(theme.status_idle.to_color()))
+                        // FORK: the badge model (DESIGN.md §15) — the same
+                        // glyph and tone as the sidebar, the pills and the
+                        // tiles. `●` keeps the tree's spinner while working.
+                        let badge = crate::fork::badges::feature_badge(app, *pi, *fi, now);
+                        if badge.kind == crate::fork::badges::BadgeKind::Working {
+                            let throbber = throbber_widgets_tui::Throbber::default()
+                                .throbber_style(
+                                    Style::default()
+                                        .fg(badge.tone(theme))
+                                        .add_modifier(Modifier::BOLD),
+                                )
+                                .throbber_set(throbber_widgets_tui::BRAILLE_EIGHT_DOUBLE)
+                                .use_type(throbber_widgets_tui::WhichUse::Spin);
+                            let mut span = throbber.to_symbol_span(&app.throbber_state);
+                            span.content = format!(" {} ", span.content).into();
+                            span
+                        } else {
+                            let mut style = Style::default().fg(badge.tone(theme));
+                            if matches!(
+                                badge.kind,
+                                crate::fork::badges::BadgeKind::NeedsYou
+                                    | crate::fork::badges::BadgeKind::FinishedUnread
+                            ) {
+                                style = style.add_modifier(Modifier::BOLD);
+                            }
+                            Span::styled(format!(" {} ", badge.glyph()), style)
+                        }
                     };
 
                     let collapse_icon = if feature.sessions.is_empty() {
@@ -667,17 +638,23 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         }
                     };
 
-                    // Running vs stopped, per session — the same glyphs the
-                    // feature row uses. A native session (TODOs) has no
-                    // process to be either, so it gets blank space instead.
-                    let session_running =
-                        feature.status != ProjectStatus::Stopped && session.runs_with_feature();
+                    // FORK: the session's badge (DESIGN.md §15): `⛔` needs
+                    // you, `●` working, `✓` finished, `○` idle, `■` stopped or
+                    // exited. A native session (TODOs) has no process to be
+                    // any of those, so it gets blank space instead.
                     let state_icon = if !session.kind.is_tmux_backed() {
                         Span::raw("  ")
-                    } else if session_running {
-                        Span::styled("● ", Style::default().fg(theme.status_active.to_color()))
                     } else {
-                        Span::styled("■ ", Style::default().fg(theme.status_stopped.to_color()))
+                        let badge = crate::fork::badges::session_badge(app, *pi, *fi, *si, now);
+                        let mut style = Style::default().fg(badge.tone(theme));
+                        if matches!(
+                            badge.kind,
+                            crate::fork::badges::BadgeKind::NeedsYou
+                                | crate::fork::badges::BadgeKind::FinishedUnread
+                        ) {
+                            style = style.add_modifier(Modifier::BOLD);
+                        }
+                        Span::styled(format!("{} ", badge.glyph()), style)
                     };
 
                     let label_color = if session.stopped {
@@ -864,7 +841,9 @@ mod tests {
         ContextFreshness, ContextPercentage, ContextProvenance, ContextResetMetadata,
         SessionContextSnapshot, SessionContextState,
     };
-    use crate::project::{AgentKind, Feature, FeatureSession, Project, ProjectStore};
+    use crate::project::{
+        AgentKind, Feature, FeatureSession, Project, ProjectStatus, ProjectStore,
+    };
     use crate::token_tracking::{SessionTokenUsage, TokenUsageProvider, TokenUsageSource};
     use crate::traits::{MockTmuxOps, MockWorktreeOps};
 
@@ -1294,7 +1273,9 @@ mod tests {
             |app| app.store.projects[0].features[0].collapsed = false,
         );
 
-        assert!(rendered.contains("● * Claude 1"), "{rendered}");
+        // FORK: badge model — a running agent with nothing to report is
+        // idle (`○`); `●` means working.
+        assert!(rendered.contains("○ * Claude 1"), "{rendered}");
         assert!(rendered.contains("■ * Codex 1"), "{rendered}");
         // Still visible on the feature row when it is collapsed over them.
         assert!(rendered.contains("[1 stopped]"), "{rendered}");

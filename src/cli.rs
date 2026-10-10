@@ -2170,6 +2170,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         if app.fork_split.take_view_resize_invalidation() {
             last_resize = None;
         }
+        // FORK: badges keep their ages (DESIGN.md §15).
+        app.refresh_badge_ages();
 
         let live_view_for_sizing = match &app.mode {
             app::AppMode::Viewing(view) => Some(view.clone()),

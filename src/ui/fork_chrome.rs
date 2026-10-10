@@ -15,7 +15,6 @@ use ratatui::{
 
 use crate::app::App;
 use crate::app::attention::AttentionState;
-use crate::project::ProjectStatus;
 use crate::theme::Theme;
 
 /// The working directory shown in the header. AIW never changes its cwd, so
@@ -89,29 +88,15 @@ pub struct HeaderPills {
 const PILL_SEPARATOR: &str = " · ";
 
 impl HeaderPills {
-    /// Count the pills from state the dashboard already keeps. `attention`
-    /// and `unexplained_pending` are [`App::attention_badge_counts`], which
-    /// the header computes anyway, so this adds one pass over the features.
-    pub fn from_app(app: &App, attention: (usize, usize, usize), unexplained: usize) -> Self {
-        let mut working = 0;
-        let mut ready_without_attention = 0;
-        for project in &app.store.projects {
-            for feature in &project.features {
-                if feature.status == ProjectStatus::Stopped {
-                    continue;
-                }
-                if app.thinking_features.contains(&feature.tmux_session) {
-                    working += 1;
-                }
-                if feature.ready && !app.attention.contains_key(&feature.tmux_session) {
-                    ready_without_attention += 1;
-                }
-            }
-        }
+    /// Count the pills from the badge model (DESIGN.md §15): every feature's
+    /// roll-up badge, so the pills are the project rows' counts summed and
+    /// the sidebar, the tree and the header can never disagree.
+    pub fn from_app(app: &App) -> Self {
+        let counts = crate::fork::badges::total_counts(app, chrono::Utc::now());
         Self {
-            needs_you: attention.0 + attention.2 + unexplained,
-            working,
-            done: attention.1 + ready_without_attention,
+            needs_you: counts.needs_you,
+            working: counts.working,
+            done: counts.done,
         }
     }
 
@@ -157,16 +142,12 @@ impl HeaderPills {
 }
 
 /// The pills for the header, or `None` before there is any feature to count.
-pub fn header_pills(
-    app: &App,
-    attention: (usize, usize, usize),
-    unexplained: usize,
-) -> Option<HeaderPills> {
+pub fn header_pills(app: &App) -> Option<HeaderPills> {
     app.store
         .projects
         .iter()
         .any(|project| !project.features.is_empty())
-        .then(|| HeaderPills::from_app(app, attention, unexplained))
+        .then(|| HeaderPills::from_app(app))
 }
 
 /// The designed "no projects yet" state, centred in the list panel.
