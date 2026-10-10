@@ -486,3 +486,33 @@ fn a_broken_aiw_json_is_announced_once_per_project_load_and_again_when_it_change
     assert!(app.active_extension.lifecycle_hooks.on_start.is_some());
     assert_eq!(app.toasts.len(), 2);
 }
+
+// ── malformed notification files are quarantined ─────────────────────────────
+
+#[test]
+fn a_malformed_notification_file_is_moved_to_the_quarantine_by_the_scan() {
+    let notify_dir = crate::project::aiw_config_dir().join("notifications");
+    std::fs::create_dir_all(&notify_dir).unwrap();
+    let name = format!("garbage-{}.json", std::process::id());
+    let junk = notify_dir.join(&name);
+    std::fs::write(&junk, "{\"session_id\": ").unwrap();
+    let file = std::fs::File::options().write(true).open(&junk).unwrap();
+    file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(30))
+        .unwrap();
+
+    let app = App::new_for_test(
+        ProjectStore::empty(),
+        Box::new(MockTmuxOps::new()),
+        Box::new(MockWorktreeOps::new()),
+    );
+    let inputs = app.read_notification_files();
+
+    assert!(!inputs.iter().any(|i| i.file_path == junk));
+    assert!(
+        !junk.exists(),
+        "the malformed file is gone from the scan dir"
+    );
+    let quarantined = crate::fork::bad_notifications::bad_dir().join(&name);
+    assert!(quarantined.exists(), "{}", quarantined.display());
+    let _ = std::fs::remove_file(quarantined);
+}

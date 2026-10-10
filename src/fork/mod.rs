@@ -29,6 +29,7 @@ pub mod extra_agents;
 pub mod gemini;
 
 // G4/G5 — work-safety fixes (DESIGN.md §7).
+pub(crate) mod bad_notifications; // quarantine unparsable notification files
 pub mod branch_name; // git check-ref-format rules, applied in the dialog
 pub(crate) mod config;
 pub mod git_exclude;

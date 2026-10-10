@@ -101,14 +101,30 @@ struct NotificationJson {
 }
 
 impl NotificationJson {
-    /// Parse one `.json` notification file; anything unreadable or malformed
-    /// is skipped, exactly as the scan always has.
-    fn read(path: &Path) -> Option<Self> {
+    /// Parse one `.json` notification file. `Ok(None)` for a file the scan
+    /// never looks at (not `.json`); `Err` for one that is unreadable or
+    /// malformed — FORK: those are quarantined by the caller instead of
+    /// being re-parsed on every sweep for ever.
+    fn read(path: &Path) -> Result<Option<Self>, String> {
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
-            return None;
+            return Ok(None);
         }
-        let data = std::fs::read_to_string(path).ok()?;
-        serde_json::from_str(&data).ok()
+        let data = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&data)
+            .map(Some)
+            .map_err(|e| e.to_string())
+    }
+
+    /// [`Self::read`] for the scan: a malformed file is moved out of the way
+    /// (FORK: `crate::fork::bad_notifications`) and reported as absent.
+    fn read_or_quarantine(path: &Path) -> Option<Self> {
+        match Self::read(path) {
+            Ok(parsed) => parsed,
+            Err(reason) => {
+                crate::fork::bad_notifications::quarantine(path, &reason);
+                None
+            }
+        }
     }
 
     fn into_pending_input(
@@ -158,7 +174,7 @@ impl App {
                 };
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    let Some(notif) = NotificationJson::read(&path) else {
+                    let Some(notif) = NotificationJson::read_or_quarantine(&path) else {
                         continue;
                     };
                     inputs.push(notif.into_pending_input(
@@ -174,7 +190,7 @@ impl App {
         if let Ok(entries) = std::fs::read_dir(&global_notify_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                let Some(notif) = NotificationJson::read(&path) else {
+                let Some(notif) = NotificationJson::read_or_quarantine(&path) else {
                     continue;
                 };
                 let cwd_path = PathBuf::from(notif.cwd.as_deref().unwrap_or_default());
