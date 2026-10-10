@@ -255,6 +255,13 @@ drawing fails the suite.
 |---|---|---|---|
 | before (upstream look) | 390–430 µs | 410–460 µs | 7.17 M |
 | after (G11) | 360–375 µs | 387–435 µs | 6.76 M (−5.7 %) |
+| ratatui 0.30 (same code, 3 runs each side) | 340–367 → 372–373 µs | 357–396 → 398–403 µs | not measured |
+
+The ratatui 0.30 row (2026-10-10, `chore: upgrade to ratatui 0.30 …`): three back-to-back runs on each side of the
+upgrade on the same machine; the before runs spread 340–367 µs and the after runs sit at 372 µs, so the difference
+is within one run's variance, not a regression. The live-pane bench (§12.3, `view_refresh_bench`) is identical to
+the digit before and after (0.7 / 10.2 / 2.7 / 7.5 / 23.7 processes per second) — it counts tmux processes and
+frames, which the drawing library does not touch.
 
 Budget ≤ 2 ms: met with 5× headroom. No tmux or process calls per frame (before or after). About 70 % of a frame is
 ratatui's own buffer reset/diff (computing each cell's display width); AIW's own row building is under 1 %. The
