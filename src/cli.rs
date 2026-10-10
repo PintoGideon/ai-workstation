@@ -1366,7 +1366,9 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             || matches!(app.mode, app::AppMode::SplitView(_)); // FORK: split view tiles are live panes
         let animating = app.has_visible_animation();
 
-        let size = terminal.size()?;
+        // FORK: `mut` — a resize event below updates it, so the split-view
+        // tick lays tiles out for the frame that is about to be drawn.
+        let mut size = terminal.size()?;
         let visible_rows = size.height.saturating_sub(3);
         app.viewport_cols = size.width;
         app.viewport_rows = visible_rows;
@@ -1730,7 +1732,10 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                                 force_redraw = true;
                             }
                         }
-                        Event::Resize(_, _) => {
+                        Event::Resize(w, h) => {
+                            // FORK: see the other `Resize` arm.
+                            size = Size::new(w, h);
+                            app.split_view_note_resize();
                             last_resize = None;
                             force_redraw = true;
                         }
@@ -1782,7 +1787,15 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                         app.perf
                             .record_duration("main.handle_paste", started_at.elapsed());
                     }
-                    Event::Resize(_, _) => {
+                    Event::Resize(w, h) => {
+                        // FORK: `size` was read before the events; without
+                        // this the split-view tick below laid its tiles out
+                        // for the old frame and the draw wrote past the new,
+                        // smaller buffer (a panic on shrinking the terminal).
+                        // Dropping the cached rects makes the draw recompute
+                        // them from its own frame even before the next tick.
+                        size = Size::new(w, h);
+                        app.split_view_note_resize();
                         last_resize = None;
                         force_redraw = true;
                     }

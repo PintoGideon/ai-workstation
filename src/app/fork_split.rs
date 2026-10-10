@@ -272,6 +272,15 @@ impl SplitViewState {
             self.focus = index;
         }
     }
+
+    /// The terminal was resized: drop the rects laid out for the old size.
+    /// The renderer trusts `rects` whenever the count matches the visible
+    /// tiles, so stale ones from a larger frame would be written past the
+    /// new buffer; without them it recomputes from its own frame, and the
+    /// next tick stores fresh ones.
+    pub fn note_resize(&mut self) {
+        self.rects.clear();
+    }
 }
 
 impl Drop for SplitViewState {
@@ -581,6 +590,13 @@ impl App {
     }
 
     /// Main-loop step while in split view: lay out the current page for a
+    /// The terminal was resized (see [`SplitViewState::note_resize`]).
+    pub fn split_view_note_resize(&mut self) {
+        if let AppMode::SplitView(state) = &mut self.mode {
+            state.note_resize();
+        }
+    }
+
     /// `frame`-sized terminal, resize tile windows, (re)start workers for
     /// visible tiles (stopping the rest) and take new frames. Returns whether
     /// anything on screen changed.
@@ -897,6 +913,38 @@ mod tests {
         app.split_view_tick(Rect::new(0, 0, 200, 55));
         assert!(app.fork_split.take_view_resize_invalidation());
         assert!(!app.fork_split.take_view_resize_invalidation());
+    }
+
+    // Regression: the main loop ticked with the size read before the resize
+    // event, and the renderer trusted those rects (laid out for 120×40) while
+    // drawing an 80×24 frame — ratatui panicked with "index outside of
+    // buffer". After a resize the cached rects must not survive to the draw.
+    #[test]
+    fn drawing_after_a_shrink_never_writes_past_the_new_frame() {
+        let mut tmux = live_tmux();
+        tmux.expect_resize_pane().returning(|_, _, _, _| Ok(()));
+        let mut app = App::new_for_test(store(3), Box::new(tmux), Box::new(MockWorktreeOps::new()));
+        app.selection = Selection::Feature(0, 0);
+        app.open_split_view();
+        app.split_view_tick(Rect::new(0, 0, 200, 60));
+        assert_eq!(state(&app).rects.len(), 3);
+
+        app.split_view_note_resize();
+        assert!(state(&app).rects.is_empty());
+
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|frame| crate::ui::draw(frame, &mut app))
+            .unwrap();
+        // The next tick lays out for the real frame again.
+        app.split_view_tick(Rect::new(0, 0, 80, 24));
+        for rect in &state(&app).rects {
+            assert!(
+                rect.x + rect.width <= 80 && rect.y + rect.height <= 23,
+                "{rect:?}"
+            );
+        }
     }
 
     #[test]
