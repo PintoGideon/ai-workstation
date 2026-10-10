@@ -323,7 +323,7 @@ fn handle_leader_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<
         }
         KeyCode::Char('i') => {
             if app.attention_rows().is_empty() {
-                app.push_toast_warning("Nothing needs attention");
+                app.push_toast_warning("Nothing needs you"); // FORK: pill wording
             } else {
                 let view = match std::mem::replace(&mut app.mode, AppMode::Normal) {
                     AppMode::Viewing(v) => v,

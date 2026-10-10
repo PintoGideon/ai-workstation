@@ -273,7 +273,8 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
         }
         KeyCode::Char('i') => {
             if app.attention_rows().is_empty() {
-                app.push_toast_warning("Nothing needs attention");
+                // FORK: a footer line, worded like the header pills.
+                app.message = Some("Nothing needs you".to_string());
             } else {
                 app.mode = AppMode::NotificationPicker(0, None);
             }
@@ -410,7 +411,8 @@ fn handle_normal_leader_key(app: &mut App, key: KeyEvent) -> Result<()> {
     match key.code {
         KeyCode::Char('i') => {
             if app.attention_rows().is_empty() {
-                app.push_toast_warning("Nothing needs attention");
+                // FORK: a footer line, worded like the header pills.
+                app.message = Some("Nothing needs you".to_string());
             } else {
                 app.mode = AppMode::NotificationPicker(0, None);
             }
