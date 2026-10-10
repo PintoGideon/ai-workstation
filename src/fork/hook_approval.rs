@@ -464,17 +464,45 @@ pub(crate) fn handle_key(app: &mut App, key: KeyCode) -> Result<()> {
 
 /// Lines of the dialog body, separate from drawing so tests can check that
 /// the exact command is shown.
-pub(crate) fn body_lines(subject: &HookSubject, theme: &Theme) -> Vec<Line<'static>> {
+/// A `label  value` row whose value is a path: wrapped after `/` to `width`
+/// columns, continuation lines indented under the value.
+fn path_lines(
+    label_text: &str,
+    path: &str,
+    width: usize,
+    label: Style,
+    value: Style,
+) -> Vec<Line<'static>> {
+    let indent = label_text.len();
+    crate::ui::fork_text::wrap_path(path, width.saturating_sub(indent).max(8))
+        .into_iter()
+        .enumerate()
+        .map(|(index, part)| {
+            let head = if index == 0 {
+                label_text.to_string()
+            } else {
+                " ".repeat(indent)
+            };
+            Line::from(vec![Span::styled(head, label), Span::styled(part, value)])
+        })
+        .collect()
+}
+
+/// The dialog body for a box `width` columns wide inside its border.
+pub(crate) fn body_lines(subject: &HookSubject, width: usize, theme: &Theme) -> Vec<Line<'static>> {
     let label = Style::default().fg(theme.text_muted.to_color());
     let value = Style::default().fg(theme.text.to_color());
     let command_style = Style::default()
         .fg(theme.warning.to_color())
         .add_modifier(Modifier::BOLD);
-    let mut lines = vec![
-        Line::from(vec![
-            Span::styled("Repository  ", label),
-            Span::styled(subject.repo.display().to_string(), value),
-        ]),
+    let mut lines = path_lines(
+        "Repository  ",
+        &subject.repo.display().to_string(),
+        width,
+        label,
+        value,
+    );
+    lines.extend([
         Line::from(vec![
             Span::styled("Hook        ", label),
             Span::styled(
@@ -484,25 +512,34 @@ pub(crate) fn body_lines(subject: &HookSubject, theme: &Theme) -> Vec<Line<'stat
         ]),
         Line::from(""),
         Line::from(Span::styled("Command", label)),
-    ];
+    ]);
+    // A preview, so a long line is cut with `…` rather than wrapped into
+    // the margin.
+    let preview = |line: Line<'static>| crate::ui::fork_text::fit_line(line, width);
     for command_line in subject.command.lines() {
-        lines.push(Line::from(Span::styled(
+        lines.push(preview(Line::from(Span::styled(
             format!("  {command_line}"),
             command_style,
-        )));
+        ))));
     }
     if let Some(script) = &subject.script {
         lines.push(Line::from(""));
-        lines.push(Line::from(vec![
-            Span::styled("Runs script ", label),
-            Span::styled(script.path.display().to_string(), value),
-        ]));
+        lines.extend(path_lines(
+            "Runs script ",
+            &script.path.display().to_string(),
+            width,
+            label,
+            value,
+        ));
         match &script.bytes {
             Some(bytes) => {
                 let text = String::from_utf8_lossy(bytes);
                 let total = text.lines().count();
                 for line in text.lines().take(PREVIEW_LINES) {
-                    lines.push(Line::from(Span::styled(format!("  │ {line}"), label)));
+                    lines.push(preview(Line::from(Span::styled(
+                        format!("  │ {line}"),
+                        label,
+                    ))));
                 }
                 if total > PREVIEW_LINES {
                     lines.push(Line::from(Span::styled(
@@ -526,9 +563,10 @@ pub(crate) fn body_lines(subject: &HookSubject, theme: &Theme) -> Vec<Line<'stat
 }
 
 pub(crate) fn draw(frame: &mut Frame, state: &HookApprovalState, theme: &Theme) {
-    let body = body_lines(&state.subject, theme);
+    let width = 96.min(frame.area().width);
+    let body = body_lines(&state.subject, usize::from(width.saturating_sub(2)), theme);
     let height = (body.len() as u16).saturating_add(5).clamp(12, 40);
-    let area = crate::ui::dialog_rect(frame.area(), 96, height);
+    let area = crate::ui::dialog_rect(frame.area(), width, height);
     crate::ui::draw_modal_overlay(frame, area, theme);
 
     let block = Block::default()
@@ -697,7 +735,7 @@ mod tests {
         std::fs::write(repo.join("setup.sh"), "#!/bin/sh\nrm -rf build\n").unwrap();
         let subject = subject(repo, HookName::WorktreeCreated, "./setup.sh --fast", repo);
         let theme = Theme::default();
-        let text: String = body_lines(&subject, &theme)
+        let text: String = body_lines(&subject, 94, &theme)
             .iter()
             .map(|line| {
                 line.spans

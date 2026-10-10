@@ -55,16 +55,28 @@ pub fn draw_create_project_dialog(
         CreateProjectStep::Path => Style::default().fg(theme.primary.to_color()),
         _ => Style::default().fg(theme.text_muted.to_color()),
     };
+    // FORK: G11 — one row that scrolls (`…` + the tail) so the end of a
+    // long path and the cursor stay in view; the browse hint has its own
+    // row below instead of wrapping into the margin.
+    const PATH_LABEL: &str = " Repo path: ";
+    let path_cursor = cursor_span_project(&state.step, &CreateProjectStep::Path, theme);
+    let path_width =
+        usize::from(chunks[1].width).saturating_sub(PATH_LABEL.len() + path_cursor.width());
     let path_spans = vec![
-        Span::styled(" Repo path: ", path_style),
-        Span::styled(&state.path, Style::default().fg(theme.text.to_color())),
-        cursor_span_project(&state.step, &CreateProjectStep::Path, theme),
+        Span::styled(PATH_LABEL, path_style),
         Span::styled(
-            "  (Ctrl+B browse)",
-            Style::default().fg(theme.text_muted.to_color()),
+            crate::ui::fork_text::elide_head(&state.path, path_width),
+            Style::default().fg(theme.text.to_color()),
         ),
+        path_cursor,
     ];
-    let path_field = Paragraph::new(Line::from(path_spans)).wrap(Wrap { trim: false });
+    let path_field = Paragraph::new(vec![
+        Line::from(path_spans),
+        Line::from(Span::styled(
+            format!("{}Ctrl+B browse", " ".repeat(PATH_LABEL.len())),
+            Style::default().fg(theme.text_muted.to_color()),
+        )),
+    ]);
     frame.render_widget(path_field, chunks[1]);
 
     let agent_active = matches!(state.step, CreateProjectStep::Agent);
