@@ -112,17 +112,13 @@ fn with_right(
 /// The glyph in a two-column cell, so names line up whether the glyph is
 /// `⛔` (two columns wide in a terminal) or `●`.
 fn glyph_span(badge: &SessionBadge, theme: &Theme) -> Span<'static> {
-    let mut style = Style::default().fg(badge.tone(theme));
-    if matches!(badge.kind, BadgeKind::NeedsYou | BadgeKind::FinishedUnread) {
-        style = style.add_modifier(Modifier::BOLD);
-    }
     let glyph = badge.glyph();
     let cell = if UnicodeWidthStr::width(glyph) < 2 {
         format!("{glyph} ")
     } else {
         glyph.to_string()
     };
-    Span::styled(cell, style)
+    Span::styled(cell, badge.style(theme))
 }
 
 fn draw_sidebar(frame: &mut Frame, app: &mut App, area: Rect, compact: bool) {
@@ -760,7 +756,7 @@ mod tests {
         let screen = rows(&mut app, 200, 60);
         assert!(
             screen[1].contains(&format!(
-                "⚠ {} · ● {} · ✓ {}",
+                "⛔ {} · ● {} · ✓ {}",
                 total.needs_you, total.working, total.done
             )),
             "{}",
@@ -770,7 +766,7 @@ mod tests {
         app.config.aiw.dashboard_layout = DashboardLayout::Tree;
         let tree = rows(&mut app, 200, 60);
         assert!(tree[1].contains(&format!(
-            "⚠ {} · ● {} · ✓ {}",
+            "⛔ {} · ● {} · ✓ {}",
             total.needs_you, total.working, total.done
         )));
         let tree_text = tree.join("\n");

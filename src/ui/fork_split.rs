@@ -36,7 +36,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     };
     let mut needs_you = 0usize;
     for tile in &state.tiles {
-        if app.split_tile_status(tile).kind.needs_attention() {
+        if app.split_tile_status(tile).kind.needs_you() {
             needs_you += 1;
         }
     }
@@ -61,12 +61,10 @@ fn draw_tile(frame: &mut Frame, app: &App, state: &SplitViewState, index: usize,
     let theme = &app.theme;
     let tile = &state.tiles[index];
     let focused = index == state.focus;
+    // The session's badge (DESIGN.md §15): its glyph, tone and label, so a
+    // tile title and a sidebar row say the same thing.
     let status = app.split_tile_status(tile);
-
-    // The badge model's colours and glyphs (DESIGN.md §15), so a tile title
-    // and a sidebar row say the same thing.
-    let status_color = status.kind.badge_kind().tone(theme);
-    let status_glyph = status.kind.badge_kind().glyph();
+    let status_label = status.label(chrono::Utc::now());
 
     let name_style = if focused {
         Style::default()
@@ -90,8 +88,8 @@ fn draw_tile(frame: &mut Frame, app: &App, state: &SplitViewState, index: usize,
         Span::styled(tile.label.clone(), name_style),
         Span::styled(" · ", name_style),
         Span::styled(
-            format!("{status_glyph} {}", status.text),
-            Style::default().fg(status_color),
+            format!("{} {status_label}", status.glyph()),
+            Style::default().fg(status.tone(theme)),
         ),
         Span::raw(" "),
     ]);
@@ -108,7 +106,7 @@ fn draw_tile(frame: &mut Frame, app: &App, state: &SplitViewState, index: usize,
             title,
             title_right: None,
             focused,
-            needs_you: status.kind.needs_attention(),
+            needs_you: status.kind.needs_you(),
             lines: &tile_frame.lines,
             cursor,
             dead: tile_frame.dead,

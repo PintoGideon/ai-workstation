@@ -317,8 +317,9 @@ fn needs_attention_sorts_questions_first_then_oldest() {
         .collect();
 
     assert_eq!(ordered, vec!["feat-3", "feat-2", "feat-0", "feat-1"]);
-    // No pending inputs here, so every row is explained by the attention layer.
-    assert_eq!(app.attention_badge_counts(), ((2, 1, 1), 0));
+    // The header badge counts what needs the user: the two questions and the
+    // generic wait; the finished turn is a `✓`, not a `⛔`.
+    assert_eq!(app.attention_badge_count(), 3);
 }
 
 #[test]
@@ -335,7 +336,7 @@ fn needs_attention_skips_stopped_features() {
     // A record can outlive its session when the user stops a feature without
     // answering it; the list must not offer a session that isn't running.
     assert!(app.needs_attention().is_empty());
-    assert_eq!(app.attention_badge_counts(), ((0, 0, 0), 0));
+    assert_eq!(app.attention_badge_count(), 0);
 }
 
 /// A generic `input-request` filed against `feature_name`, the pending input
@@ -526,10 +527,10 @@ fn badge_counts_keep_pending_work_the_attention_layer_cannot_explain() {
     diff_review.notification_type = "diff-review".to_string();
     app.pending_inputs.push(diff_review);
 
-    assert_eq!(app.attention_badge_counts(), ((1, 0, 0), 1));
+    assert_eq!(app.attention_badge_count(), 2);
     assert_eq!(
-        crate::ui::header::badge_text((1, 0, 0), 1).as_deref(),
-        Some("  [1 question, 1 input request | <leader i>]")
+        crate::ui::header::badge_text(2).as_deref(),
+        Some("  [2 questions | <leader i>]")
     );
 }
 
@@ -537,12 +538,12 @@ fn badge_counts_keep_pending_work_the_attention_layer_cannot_explain() {
 fn badge_hit_columns_follow_the_rendered_title_not_a_hand_counted_constant() {
     use ratatui::layout::Rect;
 
-    let badge = crate::ui::header::badge_text((1, 0, 0), 0).expect("badge");
+    let badge = crate::ui::header::badge_text(1).expect("badge");
     let cwd = "/home/dev/code/ai-workstation";
     // Wide enough that the help hint clamps nothing.
     let area = Rect::new(0, 0, 200, 3);
 
-    let columns = crate::ui::header::badge_hit_columns(area, cwd, "0.37.0", (1, 0, 0), 0, None)
+    let columns = crate::ui::header::badge_hit_columns(area, cwd, "0.37.0", 1, None)
         .expect("badge is clickable");
 
     // The prefix is the border, then the spans `draw` renders ahead of the
@@ -559,17 +560,10 @@ fn badge_hit_columns_follow_the_rendered_title_not_a_hand_counted_constant() {
 fn a_narrow_header_shortens_the_cwd_rather_than_the_needs_attention_badge() {
     use ratatui::layout::Rect;
 
-    let badge = crate::ui::header::badge_text((1, 0, 0), 0).expect("badge");
+    let badge = crate::ui::header::badge_text(1).expect("badge");
     let cwd = "/home/dev/code/ai-workstation/.worktrees/some-long-branch";
     let full_width = |width: u16| {
-        crate::ui::header::badge_hit_columns(
-            Rect::new(0, 0, width, 3),
-            cwd,
-            "0.37.0",
-            (1, 0, 0),
-            0,
-            None,
-        )
+        crate::ui::header::badge_hit_columns(Rect::new(0, 0, width, 3), cwd, "0.37.0", 1, None)
     };
 
     let wide = full_width(200).expect("badge is clickable");

@@ -135,9 +135,7 @@ pub fn draw_notification_picker(
             let (detail, detail_style) = match (badge, row.state()) {
                 (Some(badge), _) => (
                     format!("{} {}", badge.glyph(), badge.label(now)),
-                    Style::default()
-                        .fg(badge.tone(theme))
-                        .add_modifier(Modifier::BOLD),
+                    badge.style(theme).add_modifier(Modifier::BOLD),
                 ),
                 (None, Some(state)) => (
                     format!("{} {}", state.glyph(nerd_font), state.label()),

@@ -817,7 +817,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         ])
         .split(frame.area());
 
-    let (attention_counts, unexplained_pending) = app.attention_badge_counts();
     // FORK: G11 status pills from the badge model; cwd read once.
     let pills = super::fork_chrome::header_pills(app);
     super::header::draw(
@@ -825,8 +824,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         chunks[0],
         super::fork_chrome::cwd_label(),
         env!("CARGO_PKG_VERSION"),
-        unexplained_pending,
-        attention_counts,
+        app.attention_badge_count(),
         pills,
         &app.theme,
     );

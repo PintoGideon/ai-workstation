@@ -285,9 +285,8 @@ fn handle_click(
         return Ok(());
     }
 
-    let (attention_counts, unexplained_pending) = app.attention_badge_counts();
     if row == 1 {
-        let cwd = crate::ui::header::cwd_label(); // FORK: cached cwd
+        let cwd = crate::ui::fork_chrome::cwd_label(); // FORK: cached cwd
         // The header owns the top three rows at full width; ask it where the
         // badge landed rather than re-deriving the title's layout here.
         let header_area = Rect::new(0, 0, app.viewport_cols, 3);
@@ -295,10 +294,9 @@ fn handle_click(
             header_area,
             cwd,
             env!("CARGO_PKG_VERSION"),
-            attention_counts,
-            unexplained_pending,
+            app.attention_badge_count(),
             // FORK: G11 pills take header columns too.
-            crate::ui::header::header_pills(app),
+            crate::ui::fork_chrome::header_pills(app),
         ) && badge.contains(&col)
         {
             app.mode = AppMode::NotificationPicker(0, None);

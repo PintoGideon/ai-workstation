@@ -366,6 +366,7 @@ what changed (`src/ui/fork_text.rs` holds the shared text fitting; everything el
 - **Status glyphs** on a feature row are the header pills' (`⚠` needs you, `✓` finished) and the row's fallback
   rolls up its sessions: `●` while any session runs, `■` stopped, `○` otherwise — a feature no longer shows
   `○` over `●` sessions. The bare ` ?` after the session count is gone (the glyph already says it).
+  *Superseded by §15: rows, pills and tiles now all draw the badge model's glyphs (`⛔` needs you).*
 - **Narrow rows.** The agent view's right-hand badges have priority: the long direct-input hint shortens to
   `[leader+e: compose]` and whatever header text would run under the badges is elided with `…`. The dashboard
   header's attention badge falls back to `[N | <leader i>]` when the full one would be cut, and to none at all

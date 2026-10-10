@@ -9,7 +9,7 @@
 //! pills, the project rows and the sidebar can never disagree.
 
 use chrono::{DateTime, Utc};
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier, Style};
 use std::collections::HashMap;
 
 use crate::app::App;
@@ -75,6 +75,17 @@ impl BadgeKind {
         }
     }
 
+    /// The glyph's style everywhere it is drawn: its tone, bold when it
+    /// asks for a look (needs you, finished and not yet read).
+    pub fn style(self, theme: &Theme) -> Style {
+        let style = Style::default().fg(self.tone(theme));
+        if matches!(self, BadgeKind::NeedsYou | BadgeKind::FinishedUnread) {
+            style.add_modifier(Modifier::BOLD)
+        } else {
+            style
+        }
+    }
+
     pub fn needs_you(self) -> bool {
         self == BadgeKind::NeedsYou
     }
@@ -108,6 +119,10 @@ impl SessionBadge {
 
     pub fn tone(&self, theme: &Theme) -> Color {
         self.kind.tone(theme)
+    }
+
+    pub fn style(&self, theme: &Theme) -> Style {
+        self.kind.style(theme)
     }
 
     /// Compact elapsed time since the state began: `0:40`, `6m`, `2h`.
@@ -158,7 +173,7 @@ pub fn compact_elapsed(secs: i64) -> String {
     }
 }
 
-/// `⚠ needs you · ● working · ✓ finished`, counted per feature from the
+/// `⛔ needs you · ● working · ✓ finished`, counted per feature from the
 /// roll-up badges.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct BadgeCounts {

@@ -12,9 +12,10 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Padding, Paragraph},
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::app::App;
-use crate::app::attention::AttentionState;
+use crate::fork::badges::BadgeKind;
 use crate::theme::Theme;
 
 /// The working directory shown in the header. AIW never changes its cwd, so
@@ -73,7 +74,8 @@ pub(crate) fn guide_style(theme: &Theme) -> Style {
     Style::default().fg(theme.border.to_color())
 }
 
-/// The header's status pills: `⚠ needs you · ● working · ✓ finished`.
+/// The header's status pills: `⛔ needs you · ● working · ✓ finished` — the
+/// badge model's own glyphs and tones (DESIGN.md §15).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct HeaderPills {
     /// Questions, generic waits and pending inputs nothing explained — the
@@ -100,41 +102,42 @@ impl HeaderPills {
         }
     }
 
-    fn parts(&self) -> [(&'static str, usize); 3] {
-        [("⚠", self.needs_you), ("●", self.working), ("✓", self.done)]
+    fn parts(&self) -> [(BadgeKind, usize); 3] {
+        [
+            (BadgeKind::NeedsYou, self.needs_you),
+            (BadgeKind::Working, self.working),
+            (BadgeKind::FinishedUnread, self.done),
+        ]
     }
 
-    /// Rendered width in columns (every glyph is single-width).
+    /// Rendered width in columns (`⛔` is two wide, the rest one).
     pub fn width(&self) -> u16 {
-        let digits: usize = self
+        let cells: usize = self
             .parts()
             .iter()
-            .map(|(_, count)| count.to_string().len())
+            .map(|(kind, count)| UnicodeWidthStr::width(kind.glyph()) + 1 + count.to_string().len())
             .sum();
-        // glyph + space + digits per pill, separators between (three columns:
-        // `·` is two bytes), two trailing spaces before the help hint.
-        (3 * 2 + digits + 2 * 3 + 2) as u16
+        // glyph + space + digits per pill, separators between (three columns
+        // each), two trailing spaces before the help hint.
+        (cells + 2 * 3 + 2) as u16
     }
 
     /// The pills as coloured spans. A zero count stays visible but dim, so
     /// the row keeps its shape and reads as "nothing here" at a glance.
     pub fn spans(&self, theme: &Theme) -> Vec<Span<'static>> {
-        let colors = [
-            AttentionState::Question.color(theme),
-            theme.status_working.to_color(),
-            theme.success.to_color(),
-        ];
         let mut spans = Vec::with_capacity(6);
-        for (index, ((glyph, count), color)) in self.parts().into_iter().zip(colors).enumerate() {
+        for (index, (kind, count)) in self.parts().into_iter().enumerate() {
             if index > 0 {
                 spans.push(Span::styled(PILL_SEPARATOR, guide_style(theme)));
             }
             let style = if count > 0 {
-                Style::default().fg(color).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(kind.tone(theme))
+                    .add_modifier(Modifier::BOLD)
             } else {
                 dim_style(theme)
             };
-            spans.push(Span::styled(format!("{glyph} {count}"), style));
+            spans.push(Span::styled(format!("{} {count}", kind.glyph()), style));
         }
         spans.push(Span::raw("  "));
         spans
@@ -201,12 +204,28 @@ mod tests {
     use crate::ui::fork_bench::realistic_app;
     use ratatui::{Terminal, backend::TestBackend};
 
+    /// The rendered rows as text. A wide glyph (`⛔`) owns two cells; the
+    /// continuation cell is skipped so the text reads as a terminal shows it.
+    fn row_text<'a>(cells: impl Iterator<Item = &'a str>) -> String {
+        let mut row = String::new();
+        let mut skip = 0usize;
+        for symbol in cells {
+            if skip > 0 {
+                skip -= 1;
+                continue;
+            }
+            skip = UnicodeWidthStr::width(symbol).saturating_sub(1);
+            row.push_str(symbol);
+        }
+        row
+    }
+
     fn rows(app: &mut App, width: u16, height: u16) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal.draw(|frame| crate::ui::draw(frame, app)).unwrap();
         let buffer = terminal.backend().buffer();
         (0..height)
-            .map(|y| (0..width).map(|x| buffer[(x, y)].symbol()).collect())
+            .map(|y| row_text((0..width).map(|x| buffer[(x, y)].symbol())))
             .collect()
     }
 
@@ -216,9 +235,9 @@ mod tests {
         let screen = rows(&mut app, 200, 60);
         // One question; two working features; one finished turn plus three
         // features marked ready.
-        assert!(screen[1].contains("⚠ 1 · ● 2 · ✓ 4"), "{}", screen[1]);
+        assert!(screen[1].contains("⛔ 1 · ● 2 · ✓ 4"), "{}", screen[1]);
         assert!(
-            screen[1].contains("[1 question, 1 to review | <leader i>]"),
+            screen[1].contains("[1 question | <leader i>]"),
             "{}",
             screen[1]
         );
@@ -243,8 +262,7 @@ mod tests {
                         Rect::new(0, 0, width, 3),
                         cwd,
                         "0.37.0",
-                        0,
-                        (1, 0, 0),
+                        1,
                         pills,
                         &theme,
                     )
@@ -256,8 +274,7 @@ mod tests {
                 Rect::new(0, 0, width, 3),
                 cwd,
                 "0.37.0",
-                (1, 0, 0),
-                0,
+                1,
                 pills,
             )
             .expect("badge is clickable");
@@ -266,9 +283,9 @@ mod tests {
                 under_hit_box, "  [1 question | <leader i>]",
                 "width {width}: hit box and drawn badge disagree"
             );
-            let line = row.concat();
+            let line = row_text(row.iter().copied());
             assert_eq!(
-                line.contains("⚠ 1 · ● 2 · ✓ 3"),
+                line.contains("⛔ 1 · ● 2 · ✓ 3"),
                 width >= 90,
                 "width {width}: {line}"
             );
@@ -312,7 +329,7 @@ mod tests {
         assert!(screen.contains("Press N to add a repository as your first project."));
         assert!(screen.contains("N new project"));
         // No features anywhere, so no pills to show.
-        assert!(!screen.contains("⚠ 0"));
+        assert!(!screen.contains("⛔ 0"));
     }
 
     #[test]
@@ -402,9 +419,12 @@ mod tests {
         let screen = rows(&mut app, 200, 60);
         // The panels' own borders are intact on every row...
         for (y, row) in screen.iter().enumerate() {
-            let chars: Vec<char> = row.chars().collect();
+            // `⛔` in the header owns two columns, so count from both ends
+            // rather than by a fixed index.
+            let first = row.chars().next();
+            let last = row.chars().last();
             assert!(
-                matches!(chars[0], '│' | '╭' | '╰') && matches!(chars[199], '│' | '╮' | '╯'),
+                matches!(first, Some('│' | '╭' | '╰')) && matches!(last, Some('│' | '╮' | '╯')),
                 "row {y}: {row}"
             );
         }

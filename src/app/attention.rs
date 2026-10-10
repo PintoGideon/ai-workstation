@@ -46,11 +46,12 @@ impl AttentionState {
         }
     }
 
-    /// The status glyph for a dashboard row.
+    /// The glyph for a needs-attention picker row the badge model has no
+    /// feature for (an explained stop with no live session). Dashboard rows,
+    /// the sidebar and the pills draw `crate::fork::badges` glyphs instead.
     ///
     /// `nerd_font` picks the icon set; the ASCII fallbacks are chosen to stay
-    /// distinguishable from the row glyphs already in use (`✓` for ready, `⚙`
-    /// for a pending worktree script, the spinner for thinking).
+    /// distinguishable from the badge glyphs (`✓` finished, `●` working).
     pub fn glyph(&self, nerd_font: bool) -> &'static str {
         match (self, nerd_font) {
             // question-circle
@@ -65,9 +66,10 @@ impl AttentionState {
         }
     }
 
-    /// The theme colour for this state: a question is the urgent one and keeps
-    /// the established waiting colour, a completion reads as done, and a
-    /// generic wait is deliberately quiet so it does not compete with either.
+    /// The theme colour for the same fallback row: a question is the urgent
+    /// one and keeps the established waiting colour, a completion reads as
+    /// done, and a generic wait is deliberately quiet so it does not compete
+    /// with either.
     pub fn color(&self, theme: &crate::theme::Theme) -> ratatui::style::Color {
         match self {
             AttentionState::Question => theme.status_waiting.to_color(),
@@ -534,27 +536,13 @@ impl App {
         rows
     }
 
-    /// What the header badge counts: the attention breakdown plus the number
-    /// of pending inputs the attention layer did *not* explain.
-    ///
-    /// Both halves are needed. A diff review, a change reason, or a
-    /// review-ready prompt is real work the badge has always advertised, and
-    /// it must not disappear from the count just because some other session
-    /// happens to hold an attention record. Derived from
-    /// [`Self::attention_rows`] so the badge and the `i` overlay can never
-    /// disagree about how many things are waiting.
-    pub fn attention_badge_counts(&self) -> ((usize, usize, usize), usize) {
-        let mut counts = (0usize, 0usize, 0usize);
-        let mut unexplained = 0usize;
-        for row in self.attention_rows() {
-            match row.state() {
-                Some(AttentionState::Question) => counts.0 += 1,
-                Some(AttentionState::CompletedAwaitingReview) => counts.1 += 1,
-                Some(AttentionState::Waiting) => counts.2 += 1,
-                None => unexplained += 1,
-            }
-        }
-        (counts, unexplained)
+    /// What the header's needs-attention badge counts: the badge model's
+    /// needs-you total (`crate::fork::badges::total_counts`) — questions,
+    /// permission prompts, generic waits and pending inputs nothing
+    /// explained, one per feature — so the badge, the `⛔` pill and the
+    /// sidebar can never disagree about how many things are waiting.
+    pub fn attention_badge_count(&self) -> usize {
+        crate::fork::badges::total_counts(self, Utc::now()).needs_you
     }
 }
 

@@ -92,7 +92,7 @@ cap | grep -q "handled 'hello from e2e'"; check "typing goes straight to the age
 grep -q '"event": "Stop"' "$S/log/claude.args" "$S/log/claude.hooks" 2>/dev/null; check "Claude Stop hook fired through AIW's settings.local.json" $?
 keys C-q; sleep 0.8; cap | sed -n 2p | grep -q '✓ 1'; check "header pill shows 1 finished" $?
 keys Enter; sleep 0.6; keys -l '/ask'; keys Enter; sleep 1.2; keys C-q; sleep 0.8
-cap | sed -n 2p | grep -q '⚠ 1'; check "permission request → ⚠ 1 pill" $?
+cap | sed -n 2p | grep -q '⛔ 1'; check "permission request → ⛔ 1 pill" $?
 keys i; wait_for 'Needs Attention' 3; check "i: needs-you list" $?; close_dialogs
 
 select_row 'alpha-1' >/dev/null; keys s; wait_for 'Start Session' 3; keys j j j j j Enter; sleep 0.5
@@ -220,7 +220,7 @@ select_row 'ws-1' >/dev/null; keys s; wait_for 'Start Session' 3; keys j Enter; 
 wait_for 'Name Session' 3 && keys Enter; sleep 1.5; hook_prompts; keys C-q; sleep 0.5
 aiw_tmux list-windows -t aiw-alpha-ws-1 -F '#W' | grep -q codex; check "ws: second agent (codex) added" $?
 keys b; wait_for '╭ Sessions' 3; check "b: workspace layout (sidebar + live pane)" $?
-cap | sed -n 2p | grep -qE '⚠ [0-9]+ · ● [0-9]+ · ✓ [0-9]+'; check "ws: header pills still count" $?
+cap | sed -n 2p | grep -qE '⛔ [0-9]+ · ● [0-9]+ · ✓ [0-9]+'; check "ws: header pills still count" $?
 # the fake Claude's banner scrolls off behind its long argument line, so the
 # Claude pane is told apart by its title and by what it echoes back
 select_row 'ws-1' >/dev/null; keys j; sleep 0.6

@@ -290,15 +290,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                             span.content = format!(" {} ", span.content).into();
                             span
                         } else {
-                            let mut style = Style::default().fg(badge.tone(theme));
-                            if matches!(
-                                badge.kind,
-                                crate::fork::badges::BadgeKind::NeedsYou
-                                    | crate::fork::badges::BadgeKind::FinishedUnread
-                            ) {
-                                style = style.add_modifier(Modifier::BOLD);
-                            }
-                            Span::styled(format!(" {} ", badge.glyph()), style)
+                            Span::styled(format!(" {} ", badge.glyph()), badge.style(theme))
                         }
                     };
 
@@ -509,7 +501,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         ));
                     }
                     // FORK: G11 — the bare ` ?` that marked a pending input
-                    // here is gone: the status glyph (`⚠`) already says it.
+                    // here is gone: the status glyph (`⛔`) already says it.
                     line_spans.push(Span::styled(
                         format!("  {}", shorten_path(&feature.workdir)),
                         Style::default().fg(muted),
@@ -646,15 +638,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         Span::raw("  ")
                     } else {
                         let badge = crate::fork::badges::session_badge(app, *pi, *fi, *si, now);
-                        let mut style = Style::default().fg(badge.tone(theme));
-                        if matches!(
-                            badge.kind,
-                            crate::fork::badges::BadgeKind::NeedsYou
-                                | crate::fork::badges::BadgeKind::FinishedUnread
-                        ) {
-                            style = style.add_modifier(Modifier::BOLD);
-                        }
-                        Span::styled(format!("{} ", badge.glyph()), style)
+                        Span::styled(format!("{} ", badge.glyph()), badge.style(theme))
                     };
 
                     let label_color = if session.stopped {

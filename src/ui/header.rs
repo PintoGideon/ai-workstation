@@ -8,9 +8,10 @@ use ratatui::{
     widgets::Paragraph,
 };
 
+use crate::fork::badges::BadgeKind;
 use crate::theme::Theme;
-// FORK: G11 status pills (`⚠ 2 · ● 6 · ✓ 1`) between the title and the hint.
-pub use super::fork_chrome::{HeaderPills, cwd_label, header_pills};
+// FORK: G11 status pills (`⛔ 2 · ● 6 · ✓ 1`) between the title and the hint.
+use super::fork_chrome::HeaderPills;
 
 /// The right-aligned hint painted at the end of the header row.
 const HELP_HINT: &str = "? help ";
@@ -21,155 +22,82 @@ const HELP_HINT: &str = "? help ";
 /// row.
 const HELP_HINT_WIDTH: u16 = HELP_HINT.len() as u16;
 
-/// Needs-attention counts as `(questions, completed, waiting)`.
-pub type AttentionCounts = (usize, usize, usize);
-
-/// Which needs-attention group a badge segment describes.
-enum AttentionGroup {
-    Question,
-    Completed,
-    Waiting,
-    /// Pending inputs the attention layer cannot explain: diff reviews, change
-    /// reasons, review-ready prompts, and harnesses that report no lifecycle
-    /// events at all.
-    Pending,
-}
-
-/// The badge's segments, in display order, with zero-count groups omitted
-/// rather than shown as `0`.
+/// The badge's plain text, so hit-testing can measure exactly what
+/// [`draw`] renders instead of reimplementing the decision. `None` when
+/// nothing needs the user.
 ///
-/// Questions and completions are named separately because they call for
-/// different things from the user — an answer versus a look — and the whole
-/// point of the attention layer is that the dashboard can tell them apart.
-/// Unexplained pending inputs are always appended rather than replaced by the
-/// breakdown: they are separate work, so one session's question must not hide
-/// another session's diff review from the count.
-fn badge_segments(counts: AttentionCounts, pending_count: usize) -> Vec<(String, AttentionGroup)> {
-    let (questions, completed, waiting) = counts;
-    let mut segments = Vec::new();
-
-    if questions > 0 {
-        segments.push((
-            format!(
-                "{questions} question{}",
-                if questions == 1 { "" } else { "s" }
-            ),
-            AttentionGroup::Question,
-        ));
-    }
-    if completed > 0 {
-        segments.push((format!("{completed} to review"), AttentionGroup::Completed));
-    }
-    if waiting > 0 {
-        segments.push((format!("{waiting} waiting"), AttentionGroup::Waiting));
-    }
-    if pending_count > 0 {
-        segments.push((
-            format!(
-                "{pending_count} input request{}",
-                if pending_count == 1 { "" } else { "s" }
-            ),
-            AttentionGroup::Pending,
-        ));
-    }
-    segments
+/// `needs_you` is the badge model's needs-you count
+/// (`crate::fork::badges::total_counts`): questions, permission prompts,
+/// generic waits and pending inputs nothing explained — the same rows the
+/// `i` overlay lists — so this badge, the header pills and the sidebar can
+/// never disagree about how many things are waiting.
+pub fn badge_text(needs_you: usize) -> Option<String> {
+    (needs_you > 0).then(|| {
+        format!(
+            "  [{needs_you} question{} | <leader i>]",
+            if needs_you == 1 { "" } else { "s" }
+        )
+    })
 }
 
-/// The header badge's plain text, so hit-testing can measure exactly what
-/// [`draw`] renders instead of reimplementing the decision. `None` when there
-/// is no badge.
-///
-/// `pending_count` is the number of pending inputs *not* already described by
-/// an attention row, so a session that both raised an input request and told
-/// us why it stopped is counted once.
-pub fn badge_text(attention: AttentionCounts, pending_count: usize) -> Option<String> {
-    let segments = badge_segments(attention, pending_count);
-    if segments.is_empty() {
-        return None;
-    }
-    let body: Vec<String> = segments.into_iter().map(|(text, _)| text).collect();
-    Some(format!("  [{} | <leader i>]", body.join(", ")))
-}
-
-/// FORK: the badge for a row too narrow for [`badge_text`]: just the total
+/// FORK: the badge for a row too narrow for [`badge_text`]: just the count
 /// and the key, so a small terminal still shows that work is waiting and
 /// how to reach it. `None` when there is nothing to count.
-pub fn badge_text_compact(attention: AttentionCounts, pending_count: usize) -> Option<String> {
-    let total = attention.0 + attention.1 + attention.2 + pending_count;
-    (total > 0).then(|| format!("  [{total} | <leader i>]"))
+pub fn badge_text_compact(needs_you: usize) -> Option<String> {
+    (needs_you > 0).then(|| format!("  [{needs_you} | <leader i>]"))
 }
 
-/// FORK: [`badge_text_compact`] as spans, styled like the full badge.
-fn badge_spans_compact(
-    attention: AttentionCounts,
-    pending_count: usize,
-    theme: &Theme,
-) -> Vec<Span<'static>> {
-    let total = attention.0 + attention.1 + attention.2 + pending_count;
-    if total == 0 {
-        return Vec::new();
-    }
-    let muted = Style::default().fg(theme.text_muted.to_color());
-    let urgent = attention.0 > 0 || pending_count > 0;
-    let count_style = if urgent {
-        Style::default()
-            .fg(theme.status_waiting.to_color())
-            .add_modifier(Modifier::BOLD)
-    } else {
-        Style::default()
-            .fg(theme.success.to_color())
-            .add_modifier(Modifier::BOLD)
-    };
-    vec![
-        Span::styled("  [", muted),
-        Span::styled(total.to_string(), count_style),
-        Span::styled(" | ", muted),
-        Span::styled(
-            "<leader i>",
-            Style::default()
-                .fg(theme.warning.to_color())
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled("]", muted),
-    ]
+/// The count in the badge model's needs-you tone, so the badge and the `⛔`
+/// pill beside it are the same colour.
+fn badge_count_style(theme: &Theme) -> Style {
+    Style::default()
+        .fg(BadgeKind::NeedsYou.tone(theme))
+        .add_modifier(Modifier::BOLD)
 }
 
-/// The badge breakdown, as coloured spans.
-fn badge_spans(counts: AttentionCounts, pending_count: usize, theme: &Theme) -> Vec<Span<'static>> {
-    let segments = badge_segments(counts, pending_count);
-    if segments.is_empty() {
-        return Vec::new();
-    }
-
-    let muted = Style::default().fg(theme.text_muted.to_color());
-    let mut spans = vec![Span::styled("  [", muted)];
-    for (i, (text, group)) in segments.into_iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::styled(", ", muted));
-        }
-        let style = match group {
-            AttentionGroup::Question => Style::default()
-                .fg(theme.status_waiting.to_color())
-                .add_modifier(Modifier::BOLD),
-            AttentionGroup::Completed => Style::default()
-                .fg(theme.success.to_color())
-                .add_modifier(Modifier::BOLD),
-            AttentionGroup::Waiting => muted,
-            AttentionGroup::Pending => Style::default()
-                .fg(theme.warning.to_color())
-                .add_modifier(Modifier::BOLD),
-        };
-        spans.push(Span::styled(text, style));
-    }
-    spans.push(Span::styled(" | ", muted));
-    spans.push(Span::styled(
+fn badge_key_span(theme: &Theme) -> Span<'static> {
+    Span::styled(
         "<leader i>",
         Style::default()
             .fg(theme.warning.to_color())
             .add_modifier(Modifier::BOLD),
-    ));
-    spans.push(Span::styled("]", muted));
-    spans
+    )
+}
+
+/// FORK: [`badge_text_compact`] as spans, styled like the full badge.
+fn badge_spans_compact(needs_you: usize, theme: &Theme) -> Vec<Span<'static>> {
+    if needs_you == 0 {
+        return Vec::new();
+    }
+    let muted = Style::default().fg(theme.text_muted.to_color());
+    vec![
+        Span::styled("  [", muted),
+        Span::styled(needs_you.to_string(), badge_count_style(theme)),
+        Span::styled(" | ", muted),
+        badge_key_span(theme),
+        Span::styled("]", muted),
+    ]
+}
+
+/// [`badge_text`] as coloured spans.
+fn badge_spans(needs_you: usize, theme: &Theme) -> Vec<Span<'static>> {
+    if needs_you == 0 {
+        return Vec::new();
+    }
+    let muted = Style::default().fg(theme.text_muted.to_color());
+    vec![
+        Span::styled("  [", muted),
+        Span::styled(
+            format!(
+                "{needs_you} question{}",
+                if needs_you == 1 { "" } else { "s" }
+            ),
+            badge_count_style(theme),
+        ),
+        Span::styled(" | ", muted),
+        badge_key_span(theme),
+        Span::styled("]", muted),
+    ]
 }
 
 /// The header title's fixed leading text, in render order: name, version,
@@ -245,8 +173,7 @@ fn layout_title(
     title_width: u16,
     cwd: &str,
     version: &str,
-    attention: AttentionCounts,
-    pending_count: usize,
+    needs_you: usize,
     pills: Option<HeaderPills>,
 ) -> TitleLayout {
     let [name, ver, sep] = title_prefix_parts(version);
@@ -256,14 +183,14 @@ fn layout_title(
         .sum();
     let fixed = fixed_head.saturating_add(sep.chars().count() as u16);
     // The badge is ASCII-only, so byte length is its rendered width.
-    let mut badge = badge_text(attention, pending_count);
+    let mut badge = badge_text(needs_you);
     let mut badge_width = badge.as_ref().map_or(0, |b| b.len() as u16);
     // FORK: a badge that cannot be shown whole next to the name and version
     // falls back to its compact form (and to none at all) rather than being
-    // cut to `[1 to`, which says nothing.
+    // cut to `[2 qu`, which says nothing.
     let mut badge_compact = false;
     if badge_width > title_width.saturating_sub(fixed_head) {
-        badge = badge_text_compact(attention, pending_count);
+        badge = badge_text_compact(needs_you);
         badge_width = badge.as_ref().map_or(0, |b| b.len() as u16);
         badge_compact = true;
         if badge_width > title_width.saturating_sub(fixed_head) {
@@ -322,24 +249,21 @@ pub fn badge_hit_columns(
     area: Rect,
     cwd: &str,
     version: &str,
-    attention: AttentionCounts,
-    pending_count: usize,
+    needs_you: usize,
     pills: Option<HeaderPills>, // FORK: G11 pills shift the cwd budget
 ) -> Option<Range<u16>> {
     let inner_x = area.x.saturating_add(1);
     let (title_width, _) = split_header_row(area.width.saturating_sub(2));
-    let columns = layout_title(title_width, cwd, version, attention, pending_count, pills).badge?;
+    let columns = layout_title(title_width, cwd, version, needs_you, pills).badge?;
     Some(inner_x.saturating_add(columns.start)..inner_x.saturating_add(columns.end))
 }
 
-#[allow(clippy::too_many_arguments)] // FORK: + pills
 pub fn draw(
     frame: &mut Frame,
     area: Rect,
     cwd: &str,
     version: &str,
-    pending_count: usize,
-    attention: AttentionCounts,
+    needs_you: usize,
     pills: Option<HeaderPills>,
     theme: &Theme,
 ) {
@@ -350,7 +274,7 @@ pub fn draw(
 
     let (title_width, hint_width) = split_header_row(inner.width);
 
-    let layout = layout_title(title_width, cwd, version, attention, pending_count, pills);
+    let layout = layout_title(title_width, cwd, version, needs_you, pills);
     let [name, ver, sep, dir] = layout.prefix;
     let mut title_spans = vec![
         Span::styled(
@@ -368,9 +292,9 @@ pub fn draw(
     // `badge_hit_columns` reports as clickable cannot disagree.
     if layout.badge.is_some() {
         title_spans.extend(if layout.badge_compact {
-            badge_spans_compact(attention, pending_count, theme) // FORK
+            badge_spans_compact(needs_you, theme) // FORK
         } else {
-            badge_spans(attention, pending_count, theme)
+            badge_spans(needs_you, theme)
         });
     }
 
@@ -442,8 +366,7 @@ mod tests {
                     Rect::new(0, 0, width, 3),
                     cwd,
                     "0.37.0",
-                    1,
-                    (1, 0, 0),
+                    2,
                     None,
                     &theme,
                 )
@@ -458,7 +381,7 @@ mod tests {
         );
         // ...the badge kept every column, including the key it names...
         assert!(
-            rendered.contains("[1 question, 1 input request | <leader i>]"),
+            rendered.contains("[2 questions | <leader i>]"),
             "badge was clipped: {rendered:?}"
         );
         // ...and the path is what gave way, marked as cut rather than silently
@@ -486,8 +409,7 @@ mod tests {
                         Rect::new(0, 0, width, 3),
                         cwd,
                         "0.37.0",
-                        1,
-                        (1, 0, 0),
+                        2,
                         None,
                         &theme,
                     )
@@ -516,24 +438,22 @@ mod tests {
                         Rect::new(0, 0, width, 3),
                         cwd,
                         "0.37.0",
-                        0,
-                        (1, 1, 0),
+                        2,
                         None,
                         &theme,
                     )
                 })
                 .expect("draw");
             let rendered = row(&terminal, 1);
-            let whole = rendered.contains("[1 question, 1 to review | <leader i>]");
+            let whole = rendered.contains("[2 questions | <leader i>]");
             let compact = rendered.contains("[2 | <leader i>]");
             assert!(
                 !rendered.contains('[') || whole || compact,
                 "width {width}: a cut badge: {rendered:?}"
             );
             if rendered.contains('[') {
-                let columns =
-                    badge_hit_columns(Rect::new(0, 0, width, 3), cwd, "0.37.0", (1, 1, 0), 0, None)
-                        .expect("a drawn badge is clickable");
+                let columns = badge_hit_columns(Rect::new(0, 0, width, 3), cwd, "0.37.0", 2, None)
+                    .expect("a drawn badge is clickable");
                 let under: String = rendered
                     .chars()
                     .skip(columns.start as usize)
@@ -552,8 +472,7 @@ mod tests {
                     Rect::new(0, 0, 60, 3),
                     cwd,
                     "0.37.0",
-                    0,
-                    (1, 1, 0),
+                    2,
                     None,
                     &theme,
                 )

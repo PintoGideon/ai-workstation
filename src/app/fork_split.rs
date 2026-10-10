@@ -23,7 +23,7 @@ use super::{
     VIEW_SNAPSHOT_REFRESH_PANE_BURST, ViewSnapshot, ViewState,
 };
 use crate::app::attention::AttentionState;
-use crate::fork::badges::BadgeKind;
+use crate::fork::badges::{BadgeKind, SessionBadge};
 use crate::fork::split::{self, Direction};
 use crate::project::{ProjectStatus, SessionKind, VibeMode};
 use crate::tmux::TmuxManager;
@@ -309,54 +309,6 @@ impl SplitRuntime {
     }
 }
 
-/// Header status of a tile.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TileStatus {
-    pub text: String,
-    pub kind: TileStatusKind,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TileStatusKind {
-    NeedsYou,
-    Working,
-    Finished,
-    Idle,
-    Stopped,
-    /// The agent exited at its shell (badge model, DESIGN.md §15).
-    Exited,
-}
-
-impl TileStatusKind {
-    pub fn needs_attention(self) -> bool {
-        self == TileStatusKind::NeedsYou
-    }
-
-    /// FORK: the badge model's kind for a tile status (DESIGN.md §15).
-    pub fn from_badge(kind: BadgeKind) -> Self {
-        match kind {
-            BadgeKind::NeedsYou => TileStatusKind::NeedsYou,
-            BadgeKind::Working => TileStatusKind::Working,
-            BadgeKind::FinishedUnread | BadgeKind::FinishedRead => TileStatusKind::Finished,
-            BadgeKind::Idle => TileStatusKind::Idle,
-            BadgeKind::Stopped => TileStatusKind::Stopped,
-            BadgeKind::Exited => TileStatusKind::Exited,
-        }
-    }
-
-    /// The badge kind a tile status draws with.
-    pub fn badge_kind(self) -> BadgeKind {
-        match self {
-            TileStatusKind::NeedsYou => BadgeKind::NeedsYou,
-            TileStatusKind::Working => BadgeKind::Working,
-            TileStatusKind::Finished => BadgeKind::FinishedUnread,
-            TileStatusKind::Idle => BadgeKind::Idle,
-            TileStatusKind::Stopped => BadgeKind::Stopped,
-            TileStatusKind::Exited => BadgeKind::Exited,
-        }
-    }
-}
-
 impl App {
     /// Agent tiles for one feature: its agent sessions whose tmux window is
     /// running, in dashboard order.
@@ -564,36 +516,17 @@ impl App {
     }
 
     /// Header status of a tile: the session's badge (DESIGN.md §15), so a
-    /// tile title says what the sidebar row and the tree row say.
-    pub fn split_tile_status(&self, tile: &SplitTile) -> TileStatus {
-        let now = chrono::Utc::now();
-        let Some(badge) = self.session_badge_for_window(&tile.session, &tile.window) else {
-            return TileStatus {
-                text: "stopped".into(),
-                kind: TileStatusKind::Stopped,
-            };
-        };
-        let kind = TileStatusKind::from_badge(badge.kind);
-        let text = match badge.kind {
-            BadgeKind::Working => format!("working {}", badge.age(now)),
-            BadgeKind::FinishedUnread | BadgeKind::FinishedRead => {
-                format!("finished {}", badge.age(now))
-            }
-            BadgeKind::NeedsYou => {
-                let word = match self.attention_for(&tile.session).map(|r| r.state) {
-                    Some(AttentionState::Question) => "question",
-                    _ => "waiting",
-                };
-                format!("{word} {}", badge.age(now))
-            }
-            BadgeKind::Idle => "idle".into(),
-            BadgeKind::Stopped => "stopped".into(),
-            BadgeKind::Exited => "exited".into(),
-        };
-        TileStatus { text, kind }
+    /// tile title says what the sidebar row and the tree row say. A tile
+    /// whose session is gone reads as stopped.
+    pub fn split_tile_status(&self, tile: &SplitTile) -> SessionBadge {
+        self.session_badge_for_window(&tile.session, &tile.window)
+            .unwrap_or_else(|| SessionBadge {
+                kind: BadgeKind::Stopped,
+                since: chrono::Utc::now(),
+                detail: None,
+            })
     }
 
-    /// Main-loop step while in split view: lay out the current page for a
     /// The terminal was resized (see [`SplitViewState::note_resize`]).
     pub fn split_view_note_resize(&mut self) {
         if let AppMode::SplitView(state) = &mut self.mode {
@@ -601,6 +534,7 @@ impl App {
         }
     }
 
+    /// Main-loop step while in split view: lay out the current page for a
     /// `frame`-sized terminal, resize tile windows, (re)start workers for
     /// visible tiles (stopping the rest) and take new frames. Returns whether
     /// anything on screen changed.
@@ -895,9 +829,9 @@ mod tests {
     fn tile_status_reflects_attention_and_thinking() {
         let mut app = app_in_split(1);
         let tile = state(&app).tiles[0].clone();
-        assert_eq!(app.split_tile_status(&tile).kind, TileStatusKind::Idle);
+        assert_eq!(app.split_tile_status(&tile).kind, BadgeKind::Idle);
         app.thinking_features.insert(tile.session.clone());
-        assert_eq!(app.split_tile_status(&tile).kind, TileStatusKind::Working);
+        assert_eq!(app.split_tile_status(&tile).kind, BadgeKind::Working);
         app.record_attention(
             &tile.session,
             &AgentKind::Claude,
@@ -905,8 +839,11 @@ mod tests {
             crate::app::attention::AttentionSource::Hook,
         );
         let status = app.split_tile_status(&tile);
-        assert_eq!(status.kind, TileStatusKind::NeedsYou);
-        assert!(status.text.starts_with("question"), "{}", status.text);
+        assert_eq!(status.kind, BadgeKind::NeedsYou);
+        // The tile title is the badge's own label, so it says what the
+        // sidebar says.
+        let label = status.label(chrono::Utc::now());
+        assert!(label.starts_with("question"), "{label}");
     }
 
     #[test]

@@ -546,10 +546,14 @@ impl AiReviewCacheEntry {
     }
 }
 
-/// Assemble the AI code-review prompt: the PR diff, the review-memory doc's
-/// content as context (so the agent checks the team's known recurring
+/// The full built-in AI PR-review prompt: the PR diff, the review-memory
+/// doc's content as context (so the agent checks the team's known recurring
 /// findings first), and a fixed-format output instruction so the response
 /// round-trips through [`parse_ai_findings`] with no further parsing.
+///
+/// Production goes through the resolver ([`run_ai_pr_review`] renders the
+/// resolved template); this keeps the whole-prompt assembly available to
+/// tests.
 ///
 /// `skill`, from `AppConfig::ai_review_skill`, is a Claude Code skill/command
 /// name (no leading `/`, e.g. `"review"`) to run first as the primary review
@@ -559,10 +563,7 @@ impl AiReviewCacheEntry {
 /// AIW still owns parsing the findings back out via the fixed-format
 /// instruction that follows. `None` (the default) skips straight to AIW's own
 /// review instructions.
-/// The full built-in AI PR-review prompt. Production goes through the
-/// resolver ([`run_ai_pr_review`] renders the resolved template); this keeps
-/// the whole-prompt assembly available to tests.
-#[allow(dead_code)]
+#[allow(dead_code)] // exercised only by unit tests
 pub fn ai_review_prompt(diff: &str, memory: &str, skill: Option<&str>) -> String {
     crate::prompts::render_template(
         crate::prompts::PromptId::PrReviewAiReview
