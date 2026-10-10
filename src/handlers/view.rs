@@ -444,6 +444,17 @@ pub(super) fn handle_leader_key(app: &mut App, key: KeyEvent, visible_rows: u16)
         KeyCode::Char('l') => {
             app.open_latest_prompt_from_view();
         }
+        // FORK: queue a follow-up for the viewed session (P7).
+        KeyCode::Char(super::fork_followups::LEADER_QUEUE_KEY) => {
+            let view = match std::mem::replace(&mut app.mode, AppMode::Normal) {
+                AppMode::Viewing(v) => v,
+                other => {
+                    app.mode = other;
+                    return Ok(());
+                }
+            };
+            app.open_followup_queue_for_view(&view, AppMode::Viewing(view.clone()));
+        }
         KeyCode::Char('p') => {
             let view_state = match std::mem::replace(&mut app.mode, AppMode::Normal) {
                 AppMode::Viewing(v) => v,

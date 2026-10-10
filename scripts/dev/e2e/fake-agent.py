@@ -19,7 +19,9 @@ Commands typed into the REPL (deterministic, scriptable):
   /ask     emit a permission request (Notification), print a yes/no prompt
   /perm C  run the PermissionRequest hook for `Bash C` and print
            `permission: allow|deny|prompt` from its answer
-  /done    emit the turn-end hook (Stop / AfterAgent / stop / codex notify)
+  /done    emit the turn-end hook (Stop / AfterAgent / stop / codex notify); a
+           continuation the hook hands back (a queued follow-up) is printed as
+           `followup: <text>` and run as the next turn
   /work    emit prompt-submit + tool-start and stay "working"
   /tool    emit tool-start then tool-stop
   /crash   exit 1
@@ -332,30 +334,51 @@ def permission_request(command):
 
 
 def fire(event, extra=None):
-    """Fire `event` with the agent's native payload shape."""
+    """Fire `event` with the agent's native payload shape; returns the hooks' stdouts."""
     extra = extra or {}
-    if NAME == "codex":
-        if event != "turn-complete" or not notify_argv:
-            return
-        payload = {"type": "agent-turn-complete", "thread-id": SESSION_ID, "turn-id": str(uuid.uuid4()),
-                   "input-messages": [extra.get("prompt", "")], "last-assistant-message": extra.get("answer", "")}
-        argv = notify_argv + [json.dumps(payload)]
-        try:
-            proc = subprocess.run(argv, capture_output=True, timeout=HOOK_TIMEOUT, cwd=CWD)
-            log("hooks", {"ts": time.time(), "event": event, "cmd": argv[0], "code": proc.returncode,
-                          "stderr": proc.stderr.decode("utf-8", "replace")[:400]})
-        except (subprocess.TimeoutExpired, OSError) as err:
-            log("hooks", {"ts": time.time(), "event": event, "cmd": argv[0], "code": None, "error": str(err)})
-        return
-    cmds = hook_commands(event)
-    if not cmds:
-        log("hooks", {"ts": time.time(), "event": event, "cmd": None, "note": "no hook configured"})
-        return
-    payload = base_payload(event)
-    payload.update(extra)
-    text = json.dumps(payload)
-    for cmd in cmds:
-        run_hook(cmd, text, event)
+    if NAME == "codex" and event == "turn-complete":
+        # The notify argv (turn end), then the `Stop` hook from .codex/hooks.json.
+        if notify_argv:
+            payload = {"type": "agent-turn-complete", "thread-id": SESSION_ID, "turn-id": str(uuid.uuid4()),
+                       "input-messages": [extra.get("prompt", "")], "last-assistant-message": extra.get("answer", "")}
+            argv = notify_argv + [json.dumps(payload)]
+            try:
+                proc = subprocess.run(argv, capture_output=True, timeout=HOOK_TIMEOUT, cwd=CWD)
+                log("hooks", {"ts": time.time(), "event": event, "cmd": argv[0], "code": proc.returncode,
+                              "stderr": proc.stderr.decode("utf-8", "replace")[:400]})
+            except (subprocess.TimeoutExpired, OSError) as err:
+                log("hooks", {"ts": time.time(), "event": event, "cmd": argv[0], "code": None, "error": str(err)})
+        return fire_collect("Stop", {"stop_hook_active": extra.get("stop_hook_active", False),
+                                     "last_assistant_message": extra.get("answer", "")})
+    return fire_collect(event, extra)
+
+
+def continuation_from(outputs):
+    """The next instruction a turn-end hook handed back, if any: Claude/Codex/Gemini
+    `{"decision":"block","reason":…}`, Cursor `{"followup_message":…}`."""
+    for text in outputs:
+        for line in (text or "").splitlines():
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                value = json.loads(line)
+            except ValueError:
+                continue
+            if value.get("decision") == "block" and value.get("reason"):
+                return value["reason"]
+            if value.get("followup_message"):
+                return value["followup_message"]
+    return None
+
+
+def finish_turn(prompt, answer):
+    """The turn ended: run the stop hooks; a continuation becomes the next turn."""
+    outputs = ev("stop", {"prompt": prompt, "answer": answer, "stop_hook_active": False, "status": "completed"})
+    followup = continuation_from(outputs or [])
+    if followup:
+        out(f"followup: {followup}")
+        normal_turn(followup)
 
 
 EVENTS = {
@@ -375,7 +398,8 @@ EV = EVENTS.get(NAME, {})
 def ev(kind, extra=None):
     name = EV.get(kind)
     if name:
-        fire(name, extra)
+        return fire(name, extra)
+    return []
 
 
 def tool_extra(kind):
@@ -432,7 +456,7 @@ def normal_turn(prompt):
     out(f"⏺ {answer}")
     record_turn(prompt, answer)
     run_status_line()
-    ev("stop", {"prompt": prompt, "answer": answer, "stop_hook_active": False, "status": "completed"})
+    finish_turn(prompt, answer)
 
 
 def wide_lines():
@@ -483,8 +507,7 @@ def main():
         elif cmd == "/done":
             answer = "Finished the task."
             out(f"⏺ {answer}")
-            ev("stop", {"prompt": rest or "(previous)", "answer": answer, "stop_hook_active": False,
-                        "status": "completed"})
+            finish_turn(rest or "(previous)", answer)
         elif cmd == "/work":
             ev("prompt", {"prompt": rest or "work"})
             out("⠋ thinking…")

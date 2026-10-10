@@ -1058,6 +1058,16 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         super::fork_permissions::draw_detail(frame, app, state);
     }
 
+    // FORK: the follow-up queue dialog (P7).
+    if let AppMode::FollowupQueue(state) = &mut app.mode {
+        let queue = app
+            .followups
+            .get(&state.session_id)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        super::dialogs::fork_followups::draw_followup_queue(frame, queue, &app.theme, state);
+    }
+
     // FORK: repo hook approval dialog.
     if let AppMode::ApprovingRepoHook(state) = &app.mode {
         crate::fork::hook_approval::draw(frame, state, &app.theme);

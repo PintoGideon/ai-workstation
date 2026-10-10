@@ -1,6 +1,7 @@
 mod ai_review_cache;
 mod debug_log;
 pub mod editors;
+mod followups; // FORK: queued follow-ups (src/app/fork_followups.rs)
 mod hook_approvals; // FORK: repo lifecycle hook approvals (src/fork/hook_approval.rs)
 pub mod learning;
 mod migrations;

@@ -20,6 +20,7 @@ pub(crate) mod feature_ops;
 pub(crate) mod feature_setup;
 pub(crate) mod fix_cost;
 pub(crate) mod fork_attach; // FORK: native attach (DESIGN.md §15.4)
+pub(crate) mod fork_followups; // FORK: queued follow-ups (P7, DESIGN.md §16)
 pub(crate) mod fork_launch; // FORK: launch-time arguments from the store (DESIGN.md §16)
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6, DESIGN.md §16)
 mod fork_render_memo; // FORK: per-frame dialog values (DESIGN.md §12.3)
@@ -1270,6 +1271,10 @@ pub struct App {
     /// by feature session id (P4).
     pub telemetry: HashMap<String, crate::fork::telemetry::SessionTelemetry>,
     pub(crate) fork_telemetry: fork_telemetry::TelemetryRuntime,
+    /// FORK: queued follow-ups per session id, mirroring `aiw_followups` (P7).
+    pub followups: fork_followups::FollowupQueues,
+    /// FORK: ids for queued items when no database is open (negative).
+    pub(crate) followup_memory_id: i64,
     pub ipc_tool_sessions: std::collections::HashSet<String>,
     /// Feature-session IDs currently reported as thinking by hook/plugin IPC.
     /// Unlike `ipc_thinking_sessions`, this distinguishes agent windows that
@@ -2729,6 +2734,8 @@ impl App {
             pending_permissions: Vec::new(), // FORK: P6
             telemetry: HashMap::new(),       // FORK: P4
             fork_telemetry: Default::default(),
+            followups: HashMap::new(), // FORK: P7
+            followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
             ipc_tool_feature_sessions: std::collections::HashSet::new(),
@@ -2823,6 +2830,7 @@ impl App {
         crate::highlight::reload_runtime_state();
         // FORK(no-cloud): no `gh` at startup. A pending/failed issue comment
         // is retried on the explicit refresh (`R`) instead.
+        app.load_followups(); // FORK: P7
 
         Ok(app)
     }
@@ -2997,6 +3005,8 @@ impl App {
             pending_permissions: Vec::new(), // FORK: P6
             telemetry: HashMap::new(),       // FORK: P4
             fork_telemetry: Default::default(),
+            followups: HashMap::new(), // FORK: P7
+            followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
             ipc_tool_feature_sessions: std::collections::HashSet::new(),

@@ -10,6 +10,7 @@ mod dormant;
 mod editor_view;
 mod feature;
 mod feature_setup;
+pub(crate) mod fork_followups; // FORK: queued follow-ups (P7)
 mod handoff;
 mod harness;
 mod help;

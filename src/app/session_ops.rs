@@ -1857,6 +1857,11 @@ impl App {
             )
         };
 
+        // FORK: nothing queued for a session that is gone; its Claude
+        // settings file goes too (DESIGN.md §16).
+        self.clear_followups(&session_id);
+        crate::fork::launch::remove_claude_settings(&session_id);
+
         // Run the custom session cleanup after a successful removal.
         if is_custom {
             if let Some(ref cmd) = on_stop {

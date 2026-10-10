@@ -308,6 +308,31 @@ wait_for '\[status\] Fake 1 · ctx 42%' 8; check "ctx: statusLine from --setting
 keys C-q; sleep 0.8
 cap | grep '▎' | head -1 | grep -q '42%'; check "ctx: the sidebar row shows 42% context" $?
 tail -1 "$S/log/claude.args" | grep -q '"--settings"'; check "ctx: Claude was launched with --settings <file>" $?
+# P7: queued follow-ups, delivered by the Stop hook one turn at a time
+keys e; wait_for 'Queue a follow-up' 3; check "queue: e opens the follow-up dialog for the selected session" $?
+keys -l 'first follow-up'; keys Enter; sleep 0.4; keys -l 'second follow-up'; keys Enter; sleep 0.4
+cap | grep -q '2\. second follow-up'; check "queue: two items listed in order" $?
+keys Escape; sleep 0.6
+cap | grep '▎' | grep -q '2 queued'; check "queue: the row says ⏭ 2 queued" $?
+ws_claude_id=$(python3 - <<PY
+import sqlite3; c=sqlite3.connect("$XDG_CONFIG_HOME/ai_workstation/aiw.db")
+print(c.execute("select s.id from feature_sessions s join features f on f.id=s.feature_id where f.name='ws-1' and s.kind='claude'").fetchone()[0])
+PY
+)
+aiw automation queue --session "$ws_claude_id" "third from automation" | grep -q '"queued": 3'; check "queue: aiw automation queue adds a third" $?
+keys Tab; sleep 0.3; keys -l '/done'; keys Enter
+wait_for 'followup: first follow-up' 8; check "queue: the Stop hook delivers the first follow-up" $?
+wait_for "handled 'first follow-up'" 8; check "queue: the agent ran it as its next turn" $?
+wait_for 'followup: second follow-up' 8; check "queue: the second follows when that turn ends" $?
+wait_for 'followup: third from automation' 8; check "queue: then the automation-queued one" $?
+wait_for "handled 'third from automation'" 8; sleep 1.5
+keys C-q; sleep 0.6; ! cap | grep '▎' | grep -q 'queued'; check "queue: nothing left queued after the last turn" $?
+[ "$(cap | grep -c 'followup: ')" = 3 ]; check "queue: exactly three continuations, then the Stop hook stays quiet" $?
+aiw_quit; aiw_start 200 60; wait_for '╭ Sessions' 8
+select_row 'ws-1' >/dev/null; keys j; sleep 0.4; keys e; wait_for 'Queue a follow-up' 3; keys -l 'after restart'; keys Enter; sleep 0.3; keys Escape; sleep 0.3
+aiw_quit; aiw_start 200 60; wait_for '╭ Sessions' 8; select_row 'ws-1' >/dev/null; keys j; sleep 0.6
+cap | grep '▎' | grep -q '1 queued'; check "queue: a queued follow-up survives an AIW restart" $?
+keys e; wait_for 'Queue a follow-up' 3; keys Tab; sleep 0.2; keys d; sleep 0.3; keys Escape; sleep 0.3
 
 aiw_quit; doctor_clean; check "doctor clean after the adversarial run" $?
 

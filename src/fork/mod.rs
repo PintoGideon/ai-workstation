@@ -37,6 +37,7 @@ pub mod gemini;
 pub(crate) mod bad_notifications; // quarantine unparsable notification files
 pub mod branch_name; // git check-ref-format rules, applied in the dialog
 pub(crate) mod config;
+pub mod followups; // P7: queued follow-ups, delivered by the Stop hook (DESIGN.md §16)
 pub mod git_exclude;
 pub(crate) mod hook_approval;
 pub(crate) mod hook_cli; // the `aiw` subcommands hook scripts call (DESIGN.md §16)

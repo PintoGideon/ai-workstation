@@ -392,10 +392,11 @@ pub fn session_badge(
     let badge = |kind: BadgeKind, detail: Option<String>| {
         SessionBadge::new(kind, fallback_since(kind), detail)
     };
-    // What the session reported about itself (P4 context) decorates whatever
-    // state it is in.
+    // What the session reported about itself (P4 context) and what the user
+    // queued for it (P7) decorate whatever state it is in.
     let decorate = |mut badge: SessionBadge| {
         badge.context = app.session_context_percent(&session.id).map(|(pct, _)| pct);
+        badge.queued = app.queued_followup_count(&session.id);
         badge
     };
 

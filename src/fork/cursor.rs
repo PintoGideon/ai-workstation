@@ -35,6 +35,8 @@ pub const HOOKS_FILE: &str = ".cursor/hooks.json";
 const HOOK_TIMEOUT_SECS: u64 = 10;
 /// Timeout for hooks that wait for an answer from the dashboard (P6).
 const WAIT_TIMEOUT_SECS: u64 = 600;
+/// How many queued follow-ups Cursor delivers back to back (P7).
+pub const STOP_LOOP_LIMIT: u64 = 20;
 
 /// The binary to launch: the first of [`BINARIES`] on `path_var`, else
 /// `agent` (so a missing install fails visibly in the pane).
@@ -85,6 +87,8 @@ pub const EVENTS: &[(&str, &[Step], Option<&str>)] = &[
             ("thinking-stop.sh", &[]),
             ("notify.sh", &[]),
             ("attention.sh", &["completed"]),
+            // Last, so its `followup_message` is the hook's answer (P7).
+            ("stop-hook.sh", &["cursor"]),
         ],
         None,
     ),
@@ -174,10 +178,16 @@ pub fn merge_hooks(mut config: Value, hooks_dir: &Path) -> Value {
         if !entries.is_array() {
             *entries = Value::Array(Vec::new());
         }
-        entries.as_array_mut().expect("array").push(json!({
+        let mut entry = json!({
             "command": event_command(hooks_dir, steps, *answer),
             "timeout": timeout_for(event),
-        }));
+        });
+        if *event == "stop" {
+            // Cursor stops honouring `followup_message` after `loop_limit`
+            // consecutive continuations (default 5); a queue can be longer.
+            entry["loop_limit"] = json!(STOP_LOOP_LIMIT);
+        }
+        entries.as_array_mut().expect("array").push(entry);
     }
     config
 }
@@ -288,6 +298,7 @@ mod tests {
             config["hooks"]["sessionEnd"][0]["command"],
             "'/home/u/.aiw/hooks/thinking-stop.sh'"
         );
+        assert_eq!(config["hooks"]["stop"][0]["loop_limit"], STOP_LOOP_LIMIT);
     }
 
     #[cfg(unix)]

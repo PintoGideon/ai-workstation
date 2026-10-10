@@ -331,6 +331,7 @@ fn handle_click(
             | AppMode::RenamingFeature(_)
             | AppMode::NotificationPicker(_, _)
             | AppMode::PermissionDetail(_) // FORK: P6
+            | AppMode::FollowupQueue(_) // FORK: P7
             | AppMode::DiffReviewPrompt(_)
             | AppMode::RunningHook(_)
             | AppMode::ConfirmResourceStart(_)

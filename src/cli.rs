@@ -186,6 +186,14 @@ enum Commands {
     /// and print one short line for Claude's footer.
     #[command(name = "status-line", hide = true)]
     StatusLine,
+    /// Turn-end hook: ask the dashboard for a queued follow-up and print the
+    /// harness's continuation JSON when there is one.
+    #[command(name = "stop-hook", hide = true)]
+    StopHook {
+        /// claude, codex, gemini or cursor.
+        #[arg(long)]
+        harness: String,
+    },
     /// Write a custom session status into the AIW database.
     /// Used by hook scripts for custom sessions.
     #[command(name = "set-status", hide = true)]
@@ -379,6 +387,19 @@ enum AutomationCommands {
         #[arg(long, default_value_t = 120000)]
         timeout_ms: u64,
     },
+    // FORK: queued follow-ups (P7, DESIGN.md §16).
+    /// Queue a follow-up for an agent session; it is delivered when the agent
+    /// finishes its current turn (never typed into a busy agent).
+    Queue {
+        /// The AIW session id (shown by `aiw doctor --json`).
+        #[arg(long)]
+        session: String,
+        /// The instruction. Omit it to read the text from stdin.
+        text: Option<String>,
+        /// Timeout in milliseconds while waiting for AIW to reply.
+        #[arg(long, default_value_t = 10000)]
+        timeout_ms: u64,
+    },
 }
 
 /// Best-effort delivery fallbacks for when the IPC socket is unavailable —
@@ -521,6 +542,7 @@ pub fn run() -> Result<()> {
                 | Commands::NotifyWait { .. }
                 | Commands::PermissionRequest { .. } // FORK: hook commands skip it too
                 | Commands::StatusLine
+                | Commands::StopHook { .. }
         )
     ) {
         run_first_run_migration()?;
@@ -533,6 +555,10 @@ pub fn run() -> Result<()> {
     }
     if let Some(Commands::StatusLine) = &cli.command {
         crate::fork::hook_cli::run_status_line();
+        return Ok(());
+    }
+    if let Some(Commands::StopHook { harness }) = &cli.command {
+        crate::fork::hook_cli::run_stop_hook(harness);
         return Ok(());
     }
 
@@ -1136,6 +1162,36 @@ fn run_automation_command(command: AutomationCommands) -> Result<()> {
             let socket = ipc::socket_path();
             let outbound = serde_json::to_string(&request.ipc_payload())?;
             let reply = ipc::send_wait(&socket, &outbound, Duration::from_millis(timeout_ms))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&reply).unwrap_or_else(|_| "{}".to_string())
+            );
+            Ok(())
+        }
+        // FORK: P7
+        AutomationCommands::Queue {
+            session,
+            text,
+            timeout_ms,
+        } => {
+            let text = match text {
+                Some(text) => text,
+                None => read_json_input(None)?,
+            };
+            if text.trim().is_empty() {
+                anyhow::bail!("the follow-up text is empty");
+            }
+            let outbound = serde_json::to_string(&serde_json::json!({
+                "type": automation::AUTOMATION_REQUEST_TYPE,
+                "action": crate::fork::followups::QUEUE_ACTION,
+                "session_id": session,
+                "text": text,
+            }))?;
+            let reply = ipc::send_wait(
+                &ipc::socket_path(),
+                &outbound,
+                Duration::from_millis(timeout_ms),
+            )?;
             println!(
                 "{}",
                 serde_json::to_string_pretty(&reply).unwrap_or_else(|_| "{}".to_string())

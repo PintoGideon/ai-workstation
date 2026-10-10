@@ -604,6 +604,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         // FORK: permission detail overlay (P6).
         AppMode::PermissionDetail(_) => super::fork_permissions::detail_hints(theme),
+        // FORK: the follow-up queue dialog (P7).
+        AppMode::FollowupQueue(state) => {
+            super::dialogs::fork_followups::dialog_hints(theme, state.focus)
+        }
         // FORK: repo hook approval dialog.
         AppMode::ApprovingRepoHook(_) => Line::from(vec![
             Span::styled(" y", key_style()),

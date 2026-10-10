@@ -145,6 +145,11 @@ fn handle_pane_leader_key(app: &mut App, key: KeyEvent, live: LiveTarget) -> Res
             app.request_attach_window(&live.session, &live.window);
             return Ok(());
         }
+        // P7: queue a follow-up for the shown session; closes back here.
+        KeyCode::Char(super::fork_followups::LEADER_QUEUE_KEY) => {
+            app.open_followup_queue_for_view(&live.view_state(), AppMode::Normal);
+            return Ok(());
+        }
         _ => {}
     }
     app.mode = AppMode::Viewing(live.view_state());

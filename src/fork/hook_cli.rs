@@ -135,6 +135,50 @@ fn run_user_status_line(status: &Value) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
+/// `aiw stop-hook --harness <h>`: the turn ended; print the harness's
+/// continuation JSON when the user queued a follow-up (P7).
+pub fn run_stop_hook(harness: &str) {
+    use super::followups::{StopHarness, TAKE_TYPE, TAKE_WAIT_MILLIS, stop_hook_output};
+    let Some(harness) = StopHarness::parse(harness) else {
+        return;
+    };
+    let payload = stdin_json();
+    let env = HookEnv::from_process_env();
+    let mut message = serde_json::Map::new();
+    message.insert("type".into(), Value::String(TAKE_TYPE.into()));
+    message.insert("harness".into(), Value::String(harness.as_str().into()));
+    if let Some(id) = payload
+        .get("session_id")
+        .or_else(|| payload.get("conversation_id"))
+        .cloned()
+    {
+        message.insert("session_id".into(), id);
+    }
+    if let Some(cwd) = payload.get("cwd").cloned() {
+        message.insert("cwd".into(), cwd);
+    }
+    message.insert(
+        "stop_hook_active".into(),
+        Value::Bool(
+            payload
+                .get("stop_hook_active")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        ),
+    );
+    identity_fields(&env, &mut message);
+    let answer = super::ipc_reply::request(
+        &crate::ipc::socket_path(),
+        Value::Object(message),
+        Duration::from_millis(TAKE_WAIT_MILLIS),
+    )
+    .ok()
+    .flatten();
+    if let Some(output) = stop_hook_output(harness, answer.as_ref()) {
+        println!("{output}");
+    }
+}
+
 /// `aiw permission-request --harness <h> [--event <e>]`.
 pub fn run_permission_request(harness: &str, event: Option<&str>) {
     let Some(harness) = Harness::parse(harness) else {

@@ -1814,6 +1814,8 @@ pub enum AppMode {
     ApprovingRepoHook(Box<crate::fork::hook_approval::HookApprovalState>),
     // FORK: a pending permission request's tool and full input (P6).
     PermissionDetail(Box<super::fork_permissions::PermissionDetailState>),
+    // FORK: the "Queue a follow-up" dialog (P7).
+    FollowupQueue(Box<super::fork_followups::FollowupQueueState>),
     LatestPrompt(LatestPromptState),
     PromptLibrary(PromptLibraryState),
     PromptEditor(PromptEditorState),

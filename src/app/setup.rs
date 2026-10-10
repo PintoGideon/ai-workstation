@@ -18,6 +18,7 @@ const SET_SESSION_STATUS_SH: &str = include_str!("../../scripts/set-session-stat
 // FORK: hook-driven productivity scripts (DESIGN.md §16).
 const PERMISSION_REQUEST_SH: &str = include_str!("../../scripts/permission-request.sh");
 const STATUS_LINE_SH: &str = include_str!("../../scripts/status-line.sh");
+const STOP_HOOK_SH: &str = include_str!("../../scripts/stop-hook.sh");
 const CUSTOM_DIFF_REVIEW_SH: &str =
     include_str!("../../plugins/diff-review/scripts/custom-diff-review.sh");
 
@@ -76,6 +77,7 @@ const CLAUDE_MANAGED_SCRIPT_NAMES: &[&str] = &[
     "attention.sh",
     // FORK: DESIGN.md §16
     "permission-request.sh",
+    "stop-hook.sh",
 ];
 
 #[derive(Default)]
@@ -647,6 +649,7 @@ pub fn ensure_notify_scripts() {
         PERMISSION_REQUEST_SH,
     );
     write_executable_if_changed(&claude_hooks_dir.join("status-line.sh"), STATUS_LINE_SH);
+    write_executable_if_changed(&claude_hooks_dir.join("stop-hook.sh"), STOP_HOOK_SH);
     write_executable_if_changed(
         &config_dir.join("codex-diff-review.sh"),
         CODEX_DIFF_REVIEW_SH,
@@ -1050,6 +1053,7 @@ pub fn ensure_notification_hooks(
     let tool_stop_path = hooks_dir.join("tool-stop.sh");
     let attention_path = hooks_dir.join("attention.sh");
     let permission_request_path = hooks_dir.join("permission-request.sh"); // FORK
+    let stop_hook_path = hooks_dir.join("stop-hook.sh"); // FORK
 
     let wants_diff_review = matches!(mode, VibeMode::Vibeless);
     let diff_review_cmd = if wants_diff_review {
@@ -1071,7 +1075,9 @@ pub fn ensure_notification_hooks(
             "hooks": [
                 claude_exec_hook(&thinking_stop_path),
                 claude_exec_hook(&notify_path),
-                claude_exec_hook_with_args(&attention_path, &["completed"])
+                claude_exec_hook_with_args(&attention_path, &["completed"]),
+                // FORK: a queued follow-up becomes the next turn (P7).
+                claude_exec_hook_with_timeout(&stop_hook_path, &["claude"], 30)
             ]
         }),
     );

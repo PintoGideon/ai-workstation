@@ -31,10 +31,14 @@ const QUICK_TIMEOUT_SECS: u64 = 10;
 /// hook JSON on stdin and never fails the turn.
 type Step = (&'static str, &'static [&'static str]);
 
-pub const EVENTS: &[(&str, &[Step])] = &[(
-    "PermissionRequest",
-    &[("permission-request.sh", &["codex"])],
-)];
+pub const EVENTS: &[(&str, &[Step])] = &[
+    (
+        "PermissionRequest",
+        &[("permission-request.sh", &["codex"])],
+    ),
+    // A queued follow-up becomes the next turn (P7).
+    ("Stop", &[("stop-hook.sh", &["codex"])]),
+];
 
 fn timeout_for(event: &str) -> u64 {
     match event {

@@ -1226,7 +1226,9 @@ const MIGRATION_047: &str = "CREATE TABLE screenshot_scopes (scope_id TEXT PRIMA
 // `aiw_hook_approvals`: one row per approved repo lifecycle hook, pinned to
 // the SHA-256 of repo path + hook name + exact command + script content
 // (`src/fork/hook_approval.rs`).
-pub(super) const FORK_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS aiw_hook_approvals (repo TEXT NOT NULL, hook TEXT NOT NULL, sha256 TEXT NOT NULL, command TEXT NOT NULL, approved_at TEXT NOT NULL, PRIMARY KEY (repo, hook, sha256));";
+pub(super) const FORK_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS aiw_hook_approvals (repo TEXT NOT NULL, hook TEXT NOT NULL, sha256 TEXT NOT NULL, command TEXT NOT NULL, approved_at TEXT NOT NULL, PRIMARY KEY (repo, hook, sha256));
+CREATE TABLE IF NOT EXISTS aiw_followups (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, position INTEGER NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_aiw_followups_session ON aiw_followups(session_id, position);";
 
 #[cfg(test)]
 mod tests {

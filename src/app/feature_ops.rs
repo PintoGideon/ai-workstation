@@ -2125,7 +2125,9 @@ impl App {
         }
         self.delete_plan_interviews_for_deleted_feature(&project_name, &feature_name, &feature_id);
         self.clear_todo_links_to_deleted_feature(feature_id.as_deref());
-        self.store.remove_feature(&project_name, &feature_name);
+        if let Some(removed) = self.store.remove_feature(&project_name, &feature_name) {
+            self.forget_deleted_feature_sessions(&removed); // FORK: queues, settings files
+        }
         self.save()?;
 
         if let Some(pi) = self
@@ -2291,8 +2293,12 @@ impl App {
                         &feature_id,
                     );
                     self.clear_todo_links_to_deleted_feature(feature_id.as_deref());
-                    self.store
-                        .remove_feature(&deletion.project_name, &deletion.feature_name);
+                    if let Some(removed) = self
+                        .store
+                        .remove_feature(&deletion.project_name, &deletion.feature_name)
+                    {
+                        self.forget_deleted_feature_sessions(&removed); // FORK
+                    }
                     let _ = self.save();
                     self.message = Some(format!("Deleted feature '{}'", deletion.feature_name));
                 }

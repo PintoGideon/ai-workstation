@@ -97,6 +97,8 @@ pub const EVENTS: &[(&str, &[HookSpec])] = &[
             ("aiw-thinking-stop", "thinking-stop.sh", &[]),
             ("aiw-notify", "notify.sh", &[]),
             ("aiw-attention", "attention.sh", &["completed"]),
+            // A queued follow-up becomes the next turn (P7).
+            ("aiw-stop-hook", "stop-hook.sh", &["gemini"]),
         ],
     ),
     (

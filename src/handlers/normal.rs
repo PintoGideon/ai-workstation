@@ -14,6 +14,10 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
     if super::fork_permissions::handle_dashboard_key(app, key)? {
         return Ok(());
     }
+    // FORK: `e` queues a follow-up for the selected agent session (P7).
+    if super::fork_followups::handle_dashboard_key(app, key)? {
+        return Ok(());
+    }
 
     if app.leader_active {
         return handle_normal_leader_key(app, key);
