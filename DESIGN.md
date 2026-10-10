@@ -497,3 +497,18 @@ selection alternating between a `⛔` row and a `●` row, a full pane of text, 
 The tree frame on the same machine and run: 393 → 426 µs mean, 432 → 457 µs p95 before → after on the same machine (the badge derivation per row and the pills' roll-up cost about 30 µs; still 4× under budget). `workspace_frame_makes_no_tmux_calls` renders the
 layout through a `MockTmuxOps` with no expectations, as the tree test does.
 
+### 15.4 Native attach (2026-10-10)
+
+The in-app pane and the full view relay keys with `send-keys` and redraw from a capture, so a keystroke costs a
+process spawn each way plus the capture interval: tens of milliseconds, felt as lag when typing a prompt. For
+sustained typing the dashboard hands the terminal over instead (`src/fork/attach.rs`, `src/app/fork_attach.rs`,
+`cli::run_pending_attach`): `Enter` on a running session or feature in the workspace layout, `Ctrl+Space Enter`
+in a view or the pane, records a `PendingAttach`; the main loop stops the capture worker, leaves raw mode and the
+alternate screen exactly as it does for `$EDITOR`, runs `tmux -S <private socket> … attach-session -t
+<session>:<window>` with `$TMUX` removed (AIW may itself run inside the user's tmux) and the terminal inherited,
+and takes the screen back when the client detaches. One tmux invocation sets `window-size latest` on the window
+(the dashboard had pinned it to the pane's size with `resize-window`), a status line (`AIW project › feature ›
+session` / `Ctrl+Q: back to AIW`) and, on AIW's own server only, `bind-key -T root C-q detach-client`; a
+user-owned server keeps its key tables and the status line says `prefix d`. On return the status line is
+restored, `last_resize` is dropped so the pane is resized and captured afresh, and the session's unread `✓` is
+cleared. While attached AIW is idle: no capture, no polling, nothing between the terminal and the agent.

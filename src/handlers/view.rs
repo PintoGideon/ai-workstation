@@ -302,6 +302,16 @@ pub(super) fn handle_leader_key(app: &mut App, key: KeyEvent, visible_rows: u16)
         KeyCode::Char('q') => {
             app.exit_view();
         }
+        // FORK: attach natively to the viewed session (DESIGN.md §15.4); the
+        // view is left so the dashboard is what the detach returns to.
+        KeyCode::Enter => {
+            if let AppMode::Viewing(view) = &app.mode {
+                let (session, window) = (view.session.clone(), view.window.clone());
+                if app.request_attach_window(&session, &window) {
+                    app.exit_view();
+                }
+            }
+        }
         KeyCode::Char('t') => {
             app.view_next_session();
         }

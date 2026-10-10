@@ -293,6 +293,7 @@ unless you turn it on with `Ctrl+Space`, then `e`. These controls belong to AIW:
 | --- | --- |
 | `Ctrl+Q` | Return to the dashboard |
 | `Ctrl+Space` | Open the leader-command menu |
+| `Ctrl+Space`, then `Enter` | Attach: hand the terminal to this agent's tmux window (native typing); `Ctrl+Q` detaches |
 | `Ctrl+Space`, then `w` | Switch sessions |
 | `Ctrl+Space`, then `i` | Jump to an agent needing attention |
 | `Ctrl+Space`, then `f` | Start final diff review |
@@ -349,8 +350,9 @@ you.
 | --- | --- |
 | `b` | Toggle tree ⇄ workspace layout (saved at once) |
 | `j` / `k`, arrows | Pick a session; the pane follows after 150 ms |
-| `Tab`, `Enter` on a session, a click on the pane | Type into the pane: keys go to the agent as in the full view |
-| `Ctrl+Q` | Back to the sidebar (not to the tree) |
+| `Enter` on a session or feature | **Attach**: your terminal is handed to the agent's tmux window, so typing is native (no relay, no lag). `Ctrl+Q` detaches and returns to the dashboard |
+| `Tab`, a click on the pane | Type through the in-app pane instead: keys are relayed to the agent as in the full view |
+| `Ctrl+Q` | In the pane: back to the sidebar (not to the tree) |
 | `o` | Open the selected session in the full view (sidebar, compose box, scroll mode) |
 | `Ctrl+Space` | Leader in the pane, as in the full view: `z` full view, `q` sidebar, `i` needs you, `f` final review, `p` prompts, `t` / `T` next / previous session |
 | `v` | Tile the feature's agents (split view); leaving it returns to the workspace |
@@ -359,6 +361,19 @@ you.
 Below 100 columns the sidebar shows glyph and name only; below 72 the
 dashboard shows the tree (with a note in the footer) until the window is
 wider.
+
+### Attach: typing natively
+
+The in-app pane and the full view relay every key through tmux and redraw
+from a capture, which costs a few tens of milliseconds per keystroke. When
+you are going to type for a while, attach instead: `Enter` on a session in
+the workspace layout (or `Ctrl+Space`, then `Enter`, in a view) hands your
+terminal to the agent's tmux window. Your terminal emulator then talks to
+Claude Code (or Codex, Gemini, Cursor, Pi) directly, with native latency,
+mouse and scrollback. A tmux status line shows where you are
+(`AIW project › feature › session`) and `Ctrl+Q` brings you back to the
+dashboard, which picks up where it left off. The agent keeps running either
+way; attaching changes nothing about the session.
 
 ## User workflows
 

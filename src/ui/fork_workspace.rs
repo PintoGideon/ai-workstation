@@ -446,7 +446,7 @@ pub(crate) fn footer_hints(app: &App) -> Line<'static> {
             spans = vec![
                 Span::styled(" Ctrl+Space", key),
                 Span::styled(
-                    "  z full view · q sidebar · i needs you · f final review · p prompts · t/T next/prev session · Ctrl+Space send it to the agent",
+                    "  Enter attach · z full view · q sidebar · i needs you · f final review · p prompts · t/T next/prev session · Ctrl+Space send it to the agent",
                     Style::default().fg(theme.warning.to_color()),
                 ),
             ];
@@ -454,10 +454,15 @@ pub(crate) fn footer_hints(app: &App) -> Line<'static> {
         return Line::from(spans);
     }
     let on_session = matches!(app.selection, Selection::Session(..));
-    let mut spans = vec![Span::styled(" Tab", key), hint(" type here  ")];
+    let mut spans = if app.desired_live_target_exists() {
+        vec![Span::styled(" Enter", key), hint(" attach  ")]
+    } else {
+        Vec::new()
+    };
+    spans.extend([Span::styled("Tab", key), hint(" type here  ")]);
     if on_session {
         spans.extend([Span::styled("o", key), hint(" full view  ")]);
-    } else {
+    } else if !app.desired_live_target_exists() {
         spans.extend([Span::styled("Enter", key), hint(" expand  ")]);
     }
     spans.extend([

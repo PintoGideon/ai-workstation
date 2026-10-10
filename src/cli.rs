@@ -1321,6 +1321,67 @@ fn run_pending_editor<B: Backend<Error = io::Error> + io::Write>(
     Ok(())
 }
 
+/// FORK: hand the terminal to `tmux attach-session` for one agent window,
+/// then take it back (DESIGN.md §15.4). Mirrors `run_pending_editor`: the
+/// screen is always restored, and a failed attach is a message, not an
+/// error.
+fn run_pending_attach<B: Backend<Error = io::Error> + io::Write>(
+    terminal: &mut Terminal<B>,
+    app: &mut App,
+    request: &crate::fork::attach::PendingAttach,
+) -> Result<()> {
+    // The capture worker would otherwise keep a pipe-pane on the window
+    // and race the attached client for its size.
+    app.stop_view_snapshot_worker();
+    if let Err(e) = app.flush_view_input_batch() {
+        app.log_error("attach", format!("{e:#}"));
+    }
+
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        DisableBracketedPaste,
+        DisableMouseCapture,
+        SetCursorStyle::DefaultUserShape,
+        LeaveAlternateScreen
+    )?;
+    terminal.show_cursor()?;
+
+    app.log_info(
+        "attach",
+        format!(
+            "Attaching to {} ({}:{})",
+            request.title, request.session, request.window
+        ),
+    );
+    let status = crate::fork::attach::run_attach(request);
+
+    enable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        EnterAlternateScreen,
+        EnableBracketedPaste,
+        EnableMouseCapture,
+        SetCursorStyle::SteadyBlock
+    )?;
+    terminal.hide_cursor()?;
+    terminal.clear()?;
+
+    let ok = match status {
+        Ok(status) if status.success() => true,
+        Ok(status) => {
+            app.log_error("attach", format!("tmux attach exited with {status}"));
+            false
+        }
+        Err(err) => {
+            app.log_error("attach", format!("Could not run tmux attach: {err}"));
+            false
+        }
+    };
+    app.note_attach_returned(request, ok);
+    Ok(())
+}
+
 // The `io::Write` bound is what lets `run_pending_editor` drive the terminal's
 // alternate screen / raw mode through the backend, the same way `run` does.
 fn run_loop<B: Backend<Error = io::Error> + io::Write>(
@@ -1867,6 +1928,15 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         // before the editor gets the terminal and go back up afterwards.
         if let Some(request) = app.pending_editor.take() {
             run_pending_editor(terminal, app, request)?;
+            force_redraw = true;
+        }
+
+        // FORK: native attach (DESIGN.md §15.4) — the same hand-over as the
+        // editor, to the tmux client. The window is resized by the attached
+        // client, so the dashboard's pane size has to be applied again.
+        if let Some(request) = app.pending_attach.take() {
+            run_pending_attach(terminal, app, &request)?;
+            last_resize = None;
             force_redraw = true;
         }
 

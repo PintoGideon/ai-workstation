@@ -697,6 +697,12 @@ impl TmuxManager {
         TMUX_PROCESSES_STARTED.load(AtomicOrdering::Relaxed)
     }
 
+    /// FORK: whether AIW owns the tmux server it talks to (its private
+    /// socket), so server-wide settings such as key bindings are its own.
+    pub(crate) fn manages_private_socket() -> bool {
+        Self::runtime().manages_private_socket
+    }
+
     pub(crate) fn command() -> Command {
         TMUX_PROCESSES_STARTED.fetch_add(1, AtomicOrdering::Relaxed); // FORK: perf counter
         let runtime = Self::runtime();

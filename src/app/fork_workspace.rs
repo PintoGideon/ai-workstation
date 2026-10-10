@@ -243,7 +243,13 @@ impl App {
     }
 
     /// What the selection asks the pane to show.
-    fn desired_live_target(&self) -> Option<LiveTarget> {
+    /// Whether `Enter` has something to attach to (a running agent under
+    /// the selection).
+    pub fn desired_live_target_exists(&self) -> bool {
+        self.desired_live_target().is_some()
+    }
+
+    pub(super) fn desired_live_target(&self) -> Option<LiveTarget> {
         match self.selection {
             Selection::Session(pi, fi, si) => self.live_target_for(pi, fi, si),
             Selection::Feature(pi, fi) => self.first_running_agent(pi, fi),

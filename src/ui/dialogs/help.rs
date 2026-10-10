@@ -203,13 +203,23 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     let workspace_keybinds: Vec<(&str, &str)> = vec![
         ("b", "Toggle the dashboard layout: tree ⇄ workspace (saved)"),
         ("j/k", "Pick a session; the pane follows after 150 ms"),
-        ("Tab / Enter", "Type into the pane (Enter on a session row)"),
-        ("Ctrl+Q", "Back to the sidebar (not to the tree)"),
+        (
+            "Enter",
+            "Attach: your terminal on the agent itself (native typing, no lag)",
+        ),
+        (
+            "Ctrl+Q",
+            "Detach: back to the dashboard (also: in the pane, back to the sidebar)",
+        ),
+        (
+            "Tab",
+            "Type through the in-app pane instead (keys are relayed)",
+        ),
         ("o", "Open the selected session in the full view"),
         ("Ctrl+Space", "Leader in the pane, as in the full view"),
         (
             "",
-            "  z full view · i needs you · f final review · p prompts · t/T sessions",
+            "  Enter attach · z full view · i needs you · f final review · p prompts · t/T sessions",
         ),
         (
             "i / v",
@@ -346,6 +356,11 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "Typed straight into the agent (compose box: Ctrl+Space e)",
         ),
         ("", "Commands below require Ctrl+Space first:"),
+        // FORK: native attach (DESIGN.md §15.4).
+        (
+            "Enter",
+            "Attach: your terminal on this agent (Ctrl+Q detaches)",
+        ),
         ("s", "Steering coach (experimental)"),
         ("e", "Toggle compose/direct input (agent sessions)"),
         ("d", "Diff viewer (all changes / commit)"),

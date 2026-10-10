@@ -1,8 +1,9 @@
 //! FORK: keys and mouse for the workspace dashboard layout (DESIGN.md §15).
 //!
 //! With the sidebar focused every dashboard key keeps its meaning; this
-//! file only adds `b` (layout toggle, in both layouts), `Tab` / `Enter`
-//! (focus the pane) and `o` (open the full view). With the pane focused,
+//! file only adds `b` (layout toggle, in both layouts), `Enter` (attach
+//! natively, DESIGN.md §15.4), `Tab` (type through the in-app pane) and `o`
+//! (open the full view). With the pane focused,
 //! keys go to the agent through the single view's `forward_tmux_key` with
 //! the same compose rules; `Ctrl+Q` returns to the sidebar and `Ctrl+Space`
 //! opens the view's leader, reusing `handle_leader_key`.
@@ -54,13 +55,17 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
             }
             Ok(true)
         }
-        // Enter on a running session types into it; anything else (a
-        // stopped session's recovery dialog, expand/collapse) is the
-        // dashboard's own Enter.
+        // Enter on a running session or feature attaches to it natively
+        // (the terminal's own typing, no proxy); anything else (a stopped
+        // session's recovery dialog, expand/collapse) is the dashboard's
+        // own Enter.
         KeyCode::Enter
-            if matches!(app.selection, Selection::Session(..))
-                && !app.paused_plan_interview_matches_selection()
-                && app.workspace_focus_pane() =>
+            if matches!(
+                app.selection,
+                Selection::Session(..) | Selection::Feature(..)
+            ) && !app.paused_plan_interview_matches_selection()
+                && app.desired_live_target_exists()
+                && app.request_attach_selected() =>
         {
             Ok(true)
         }
@@ -134,6 +139,10 @@ fn handle_pane_leader_key(app: &mut App, key: KeyEvent, live: LiveTarget) -> Res
             app.workspace_select_window(&live.session, &live.window);
             app.workspace_focus_sidebar();
             app.enter_view()?;
+            return Ok(());
+        }
+        KeyCode::Enter => {
+            app.request_attach_window(&live.session, &live.window);
             return Ok(());
         }
         _ => {}
@@ -294,16 +303,51 @@ mod tests {
     }
 
     #[test]
-    fn enter_on_a_session_focuses_the_pane_without_the_debounce() {
+    fn enter_on_a_session_requests_a_native_attach_not_the_pane() {
         let mut app = app_with(live());
         assert!(!app.workspace_tick() && app.fork_workspace.live.is_none());
         assert!(handle_key(&mut app, key(KeyCode::Enter)).unwrap());
-        assert_eq!(app.fork_workspace.focus, WorkspaceFocus::Pane);
+        let req = app.pending_attach.clone().expect("attach requested");
         assert_eq!(
-            app.fork_workspace.live.as_ref().map(|t| t.window.as_str()),
+            (req.session.as_str(), req.window.as_str()),
+            ("aiw-hx-12", "claude")
+        );
+        assert_eq!(req.title, "RS › hx-12 › Claude 1");
+        assert_eq!(app.fork_workspace.focus, WorkspaceFocus::Sidebar);
+        assert!(matches!(app.mode, AppMode::Normal), "not the full view");
+    }
+
+    #[test]
+    fn enter_on_a_stopped_feature_is_the_dashboards_own_enter() {
+        let mut app = app_with(live());
+        app.store.projects[0].features[0].status = ProjectStatus::Stopped;
+        app.selection = Selection::Feature(0, 0);
+        assert!(!handle_key(&mut app, key(KeyCode::Enter)).unwrap());
+        assert!(app.pending_attach.is_none());
+    }
+
+    #[test]
+    fn tab_still_types_through_the_pane() {
+        let mut app = app_with(live());
+        app.workspace_tick();
+        assert!(handle_key(&mut app, key(KeyCode::Tab)).unwrap());
+        assert_eq!(app.fork_workspace.focus, WorkspaceFocus::Pane);
+        assert!(app.pending_attach.is_none());
+    }
+
+    #[test]
+    fn the_pane_leader_enter_attaches_to_the_live_session() {
+        let mut app = app_with(live());
+        settle(&mut app);
+        handle_key(&mut app, key(KeyCode::Tab)).unwrap();
+        handle_key(&mut app, ctrl(' ')).unwrap();
+        assert!(app.leader_active);
+        assert!(handle_key(&mut app, key(KeyCode::Enter)).unwrap());
+        assert_eq!(
+            app.pending_attach.as_ref().map(|r| r.window.as_str()),
             Some("claude")
         );
-        assert!(matches!(app.mode, AppMode::Normal), "not the full view");
+        assert!(matches!(app.mode, AppMode::Normal));
     }
 
     #[test]

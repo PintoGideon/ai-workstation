@@ -230,6 +230,16 @@ wait_for '› Claude 1 ─' 6 && wait_gone 'codex \(fake e2e agent\)' 6; check "
 keys j; sleep 0.6; wait_for '› Codex 1 ─' 6 && wait_gone '› Claude 1 ─' 6; check "ws: j moves the live pane to the next agent" $?
 keys k; sleep 0.6; wait_for '› Claude 1 ─' 6 && wait_gone '› Codex 1 ─' 6; check "ws: k moves it back" $?
 snap ws-200x60
+# native attach: Enter hands the terminal to the agent's tmux window (the
+# status line names it), typing is the terminal's own, Ctrl+Q comes back
+keys Enter; wait_for 'Ctrl\+Q: back to AIW' 6; check "attach: Enter hands the terminal to the agent" $?
+cap | grep -q 'AIW alpha › ws-1 › Claude 1'; check "attach: status line names the session" $?
+keys -l 'hello native'; keys Enter; wait_for "handled 'hello native' \(claude\)" 6; check "attach: typing reaches the agent natively" $?
+snap ws-attached
+keys C-q; wait_for '╭ Sessions' 6; check "attach: Ctrl+Q returns to the dashboard" $?
+wait_for 'Back from alpha › ws-1 › Claude 1' 3; check "attach: return message" $?
+wait_for "handled 'hello native'" 6; check "attach: the pane captures afresh after the return" $?
+no_panic; check "attach: no panic" $?
 keys Tab; sleep 0.4; cap | tail -1 | grep -q 'Ctrl+Q sidebar'; check "ws: Tab focuses the pane (footer hints)" $?
 keys -l 'hello workspace'; keys Enter; sleep 1.5
 cap | grep -q "handled 'hello workspace' (claude)"; check "ws: typing in the pane reaches the agent" $?

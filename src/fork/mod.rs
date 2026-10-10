@@ -9,7 +9,8 @@
 pub mod grid;
 pub mod split;
 
-// Workspace layout and the badge model (DESIGN.md §15).
+// Workspace layout and the badge model (DESIGN.md §15); native attach (§15.4).
+pub(crate) mod attach;
 pub(crate) mod badges;
 
 // G9 — sessions whose tmux window closed on its own.
