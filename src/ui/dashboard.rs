@@ -303,17 +303,17 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     match &app.mode {
         AppMode::IssueBrowser(state) => {
             super::dialogs::draw_issue_browser(frame, state, &app.theme);
-            super::draw_toasts(frame, &app.toasts, &app.theme);
+            super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
             return;
         }
         AppMode::IssueSetup(state) => {
             super::dialogs::draw_issue_setup(frame, state, &app.theme);
-            super::draw_toasts(frame, &app.toasts, &app.theme);
+            super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
             return;
         }
         AppMode::IssueDuplicateWarning(state) => {
             super::dialogs::draw_issue_duplicate_warning(frame, state, &app.theme);
-            super::draw_toasts(frame, &app.toasts, &app.theme);
+            super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
             return;
         }
         _ => {}
@@ -328,7 +328,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     // swallowed until the mode changes.
     if let AppMode::PrReviewLoading(state) = &app.mode {
         super::dialogs::draw_pr_review_loading(frame, state, &app.throbber_state, &app.theme);
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
     if let AppMode::PrInvestigationLoading(state) = &app.mode {
@@ -338,7 +338,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             &app.throbber_state,
             &app.theme,
         );
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
     if matches!(app.mode, AppMode::PrReview(_)) {
@@ -378,7 +378,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 memory_paths.as_ref(),
             );
         }
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
     if matches!(app.mode, AppMode::AiReview(_)) {
@@ -394,19 +394,19 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 &finding_fix_costs,
             );
         }
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
     if let AppMode::PrPicker(state) = &app.mode {
         // FORK: memoised — this ran `git rev-parse` + config reads per frame.
         let memory_paths = app.render_review_memory_paths(&state.workdir);
         super::dialogs::draw_pr_picker(frame, state, &app.theme, &memory_paths);
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
     if let AppMode::PrReviewList(state) = &app.mode {
         super::dialogs::draw_pr_review_list(frame, state, &app.theme);
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
     if let AppMode::ReviewMemoryBootstrapRunning(state) = &app.mode {
@@ -416,7 +416,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             &app.throbber_state,
             &app.theme,
         );
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
     if let AppMode::ReviewMemoryCompactRunning(state) = &app.mode {
@@ -426,19 +426,19 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             &app.throbber_state,
             &app.theme,
         );
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
     if matches!(app.mode, AppMode::ReviewMemoryCompactReview(_)) {
         if let AppMode::ReviewMemoryCompactReview(state) = &mut app.mode {
             super::dialogs::draw_review_memory_compact_review(frame, state, &app.theme);
         }
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
     if let AppMode::AiReviewRunning(state) = &app.mode {
         super::dialogs::draw_ai_review_running(frame, state, &app.throbber_state, &app.theme);
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
 
@@ -451,13 +451,13 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             app.todo_project_visible,
             app.todo_global_visible,
         );
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
 
     if let AppMode::Learning(state) = &mut app.mode {
         super::dialogs::draw_learning_view(frame, state, &app.theme);
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
 
@@ -511,7 +511,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             }
             draw_badge_row(frame, area, badge_spans);
         }
-        super::draw_toasts(frame, &app.toasts, &app.theme);
+        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
 
@@ -1114,7 +1114,14 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         _ => {}
     }
 
-    super::draw_toasts(frame, &app.toasts, &app.theme);
+    // FORK: with the panels on screen a toast sits inside the list panel, so
+    // it never straddles the panel borders; a dialog has cleared them away.
+    let toast_area = if matches!(app.mode, AppMode::Normal) {
+        chunks[1].inner(ratatui::layout::Margin::new(1, 1))
+    } else {
+        frame.area()
+    };
+    super::draw_toasts(frame, toast_area, &app.toasts, &app.theme);
 }
 
 pub fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {

@@ -3,7 +3,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -15,13 +15,15 @@ use crate::theme::Theme;
 /// bound would push the others off the screen.
 const MAX_TOAST_LINES: usize = 5;
 
-pub(crate) fn draw_toasts(frame: &mut Frame, toasts: &[Toast], theme: &Theme) {
-    if toasts.is_empty() {
+/// Draw the toasts stacked in the bottom-right corner of `area`, one cell in
+/// from its edges. FORK: the caller picks the area — the dashboard hands over
+/// the list panel's inside, so a toast never sits across a panel border.
+pub(crate) fn draw_toasts(frame: &mut Frame, area: Rect, toasts: &[Toast], theme: &Theme) {
+    if toasts.is_empty() || area.width < 6 || area.height < 4 {
         return;
     }
 
-    let area = frame.area();
-    let toast_width = 50_u16.min(area.width.saturating_sub(4));
+    let toast_width = 50_u16.min(area.width.saturating_sub(2));
     let gap: u16 = 1;
     // Inside the border, minus the one column of left padding the text carries.
     let text_width = toast_width.saturating_sub(3) as usize;
@@ -33,7 +35,7 @@ pub(crate) fn draw_toasts(frame: &mut Frame, toasts: &[Toast], theme: &Theme) {
     for toast in toasts {
         let lines = wrap_message(&toast.message, text_width, MAX_TOAST_LINES);
         let toast_height = lines.len() as u16 + 2;
-        if bottom < area.top() + toast_height {
+        if bottom < area.top() + 1 + toast_height {
             break;
         }
         let y = bottom - toast_height;
@@ -58,6 +60,7 @@ pub(crate) fn draw_toasts(frame: &mut Frame, toasts: &[Toast], theme: &Theme) {
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded) // FORK: G11 look
             .border_style(Style::default().fg(border_color))
             .title(Span::styled(label, Style::default().fg(border_color)));
 
@@ -85,7 +88,7 @@ pub(crate) fn draw_toasts(frame: &mut Frame, toasts: &[Toast], theme: &Theme) {
 /// AIW's own messages use don't overflow the box — and sliced on character
 /// boundaries, never byte offsets, which a message carrying any non-ASCII would
 /// otherwise panic on.
-fn wrap_message(message: &str, width: usize, max_lines: usize) -> Vec<String> {
+pub(crate) fn wrap_message(message: &str, width: usize, max_lines: usize) -> Vec<String> {
     if width == 0 || max_lines == 0 {
         return vec![String::new()];
     }

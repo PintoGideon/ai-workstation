@@ -347,6 +347,106 @@ mod tests {
         assert!(screen.contains("▾ workflow-engine  /home/dev/code/workflow-engine  · no features yet — press n to add one"));
     }
 
+    /// Box-drawing glyphs that only a dialog border or a toast would leave on
+    /// a dashboard row: anything but the panel's own corners at the edges.
+    fn box_drawing_residue(screen: &[String]) -> Vec<(usize, String)> {
+        let mut residue = Vec::new();
+        for (y, row) in screen.iter().enumerate() {
+            let chars: Vec<char> = row.chars().collect();
+            let last = chars.len().saturating_sub(1);
+            for (x, ch) in chars.iter().enumerate() {
+                // `└` is also a tree guide, which sits in the first columns.
+                let corner =
+                    matches!(ch, '┌' | '┐' | '┘' | '╭' | '╮' | '╰' | '╯') || (*ch == '└' && x > 10);
+                if corner && x != 0 && x != last {
+                    residue.push((y, row.clone()));
+                    break;
+                }
+            }
+        }
+        residue
+    }
+
+    #[test]
+    fn closing_a_dialog_leaves_no_border_residue_on_the_dashboard() {
+        let mut app = realistic_app(MockTmuxOps::new());
+        let mut terminal = Terminal::new(TestBackend::new(200, 60)).unwrap();
+        let read = |terminal: &Terminal<TestBackend>| -> Vec<String> {
+            let buffer = terminal.backend().buffer();
+            (0..60)
+                .map(|y| (0..200).map(|x| buffer[(x, y)].symbol()).collect())
+                .collect()
+        };
+        terminal
+            .draw(|frame| crate::ui::draw(frame, &mut app))
+            .unwrap();
+        // Dialogs of several shapes, each followed by the plain dashboard.
+        let dialogs: Vec<crate::app::AppMode> = vec![
+            crate::app::AppMode::Help(crate::app::HelpState {
+                from_view: None,
+                scroll_offset: 0,
+            }),
+            crate::app::AppMode::DeletingFeature("harbor-api".into(), "harbor-12".into()),
+            crate::app::AppMode::DeletingProject("harbor-api".into()),
+            crate::app::AppMode::NotificationPicker(0, None),
+        ];
+        for dialog in dialogs {
+            app.mode = dialog;
+            terminal
+                .draw(|frame| crate::ui::draw(frame, &mut app))
+                .unwrap();
+            app.mode = crate::app::AppMode::Normal;
+            app.message = Some("Deleted feature 'harbor-12'".into());
+            terminal
+                .draw(|frame| crate::ui::draw(frame, &mut app))
+                .unwrap();
+            let screen = read(&terminal);
+            assert!(
+                box_drawing_residue(&screen).is_empty(),
+                "residue after a dialog: {:?}",
+                box_drawing_residue(&screen)
+            );
+            assert!(
+                screen[58].starts_with("│ Deleted feature 'harbor-12'"),
+                "{}",
+                screen[58]
+            );
+        }
+    }
+
+    #[test]
+    fn a_toast_sits_inside_the_list_panel_not_across_its_border() {
+        let mut app = realistic_app(MockTmuxOps::new());
+        app.push_toast_success("Deleted feature 'harbor-12'");
+        let screen = rows(&mut app, 200, 60);
+        // The panels' own borders are intact on every row...
+        for (y, row) in screen.iter().enumerate() {
+            let chars: Vec<char> = row.chars().collect();
+            assert!(
+                matches!(chars[0], '│' | '╭' | '╰') && matches!(chars[199], '│' | '╮' | '╯'),
+                "row {y}: {row}"
+            );
+        }
+        assert!(
+            screen[56].chars().all(|c| c == '─' || c == '╰' || c == '╯'),
+            "{}",
+            screen[56]
+        );
+        // ...and the toast box is whole, inside the list panel.
+        let top = screen
+            .iter()
+            .position(|row| row.contains("╭ ✓ "))
+            .expect("toast top border");
+        assert!(top > 4 && top < 56, "toast at row {top}");
+        assert!(
+            screen[top + 1].contains("Deleted feature 'harbor-12'"),
+            "{}",
+            screen[top + 1]
+        );
+        assert!(screen[top + 2].contains("╰─"), "{}", screen[top + 2]);
+        assert!(screen[top + 2].ends_with("╯ │"), "{}", screen[top + 2]);
+    }
+
     #[test]
     fn pill_width_matches_the_rendered_spans() {
         let theme = Theme::default();

@@ -49,7 +49,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     }
 
     draw_footer(frame, app, state, needs_you);
-    super::draw_toasts(frame, &app.toasts, theme);
+    super::draw_toasts(frame, frame.area(), &app.toasts, theme);
 }
 
 fn draw_tile(frame: &mut Frame, app: &App, state: &SplitViewState, index: usize, rect: Rect) {
