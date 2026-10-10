@@ -225,8 +225,10 @@ cap | sed -n 2p | grep -qE '⚠ [0-9]+ · ● [0-9]+ · ✓ [0-9]+'; check "ws: 
 # Claude pane is told apart by its title and by what it echoes back
 select_row 'ws-1' >/dev/null; keys j; sleep 0.6
 wait_for '› Claude 1 ─' 6 && wait_gone 'codex \(fake e2e agent\)' 6; check "ws: the live pane shows the selected session" $?
-keys j; sleep 0.6; wait_for 'codex \(fake e2e agent\)' 6; check "ws: j moves the live pane to the next agent" $?
-keys k; sleep 0.6; wait_for '› Claude 1 ─' 6 && wait_gone 'codex \(fake e2e agent\)' 6; check "ws: k moves it back" $?
+# the pane title names the shown session; the agent banner can scroll off
+# when the fake agent echoes its long argument list, so do not rely on it
+keys j; sleep 0.6; wait_for '› Codex 1 ─' 6 && wait_gone '› Claude 1 ─' 6; check "ws: j moves the live pane to the next agent" $?
+keys k; sleep 0.6; wait_for '› Claude 1 ─' 6 && wait_gone '› Codex 1 ─' 6; check "ws: k moves it back" $?
 snap ws-200x60
 keys Tab; sleep 0.4; cap | tail -1 | grep -q 'Ctrl+Q sidebar'; check "ws: Tab focuses the pane (footer hints)" $?
 keys -l 'hello workspace'; keys Enter; sleep 1.5
