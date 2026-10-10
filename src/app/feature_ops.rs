@@ -2572,6 +2572,11 @@ impl App {
             Ok(response) => response,
             Err(err) => {
                 self.message = Some(format!("Error: {err}"));
+                // FORK: the dialog stays open on an error and the footer
+                // message is hidden behind it, so "Project 'x' already
+                // exists" / "requires a git repository" looked like Enter
+                // doing nothing. A toast draws over the dialog.
+                self.push_toast_warning(format!("Batch features: {err}"));
                 return Ok(());
             }
         };
@@ -2615,6 +2620,42 @@ pub(crate) struct LaunchTarget {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // FORK: a batch-create error used to go only to the footer message, which
+    // the still-open dialog covers; it must also raise a toast.
+    #[test]
+    fn a_failed_batch_create_is_announced_over_the_dialog() {
+        use crate::traits::{MockTmuxOps, MockWorktreeOps};
+        let tmp = tempfile::tempdir().unwrap(); // not a git repository
+        let mut worktree = MockWorktreeOps::new();
+        worktree
+            .expect_repo_root()
+            .returning(|_| Err(anyhow::anyhow!("not a git repository")));
+        let mut app = App::new_for_test(
+            crate::project::ProjectStore::empty(),
+            Box::new(MockTmuxOps::new()),
+            Box::new(worktree),
+        );
+        let mut state = crate::app::CreateBatchFeaturesState::with_workspace(Some(
+            tmp.path().to_string_lossy().into_owned(),
+        ));
+        state.project_name = "batch".into();
+        state.feature_prefix = "f".into();
+        app.mode = AppMode::CreatingBatchFeatures(state);
+
+        app.create_batch_features().unwrap();
+
+        assert!(
+            matches!(app.mode, AppMode::CreatingBatchFeatures(_)),
+            "dialog stays open"
+        );
+        let toast = app.toasts.last().expect("a toast announces the failure");
+        assert!(
+            toast.message.contains("git repository"),
+            "{}",
+            toast.message
+        );
+    }
 
     // FORK: branch-in-use wording (git 2.53 and older).
     #[test]
