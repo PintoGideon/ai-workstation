@@ -6,7 +6,9 @@
 //! deleted) and logged once, at the move. A file younger than
 //! [`MIN_AGE`] is left alone: a hook may still be writing it.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
 
 /// How many quarantined files to keep.
@@ -29,6 +31,14 @@ pub(crate) fn quarantine(path: &Path, reason: &str) -> Option<PathBuf> {
 
 pub(crate) fn quarantine_into(path: &Path, reason: &str, dir: &Path) -> Option<PathBuf> {
     let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    if unmovable()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(path)
+        .is_some_and(|seen| *seen == modified)
+    {
+        return None;
+    }
     if SystemTime::now()
         .duration_since(modified)
         .is_ok_and(|age| age < MIN_AGE)
@@ -47,7 +57,25 @@ pub(crate) fn quarantine_into(path: &Path, reason: &str, dir: &Path) -> Option<P
         // Across filesystems (a feature's `.claude/notifications` on another
         // mount): copy, then remove.
         std::fs::copy(path, &target).ok()?;
-        let _ = std::fs::remove_file(path);
+        if let Err(err) = std::fs::remove_file(path) {
+            // The original cannot be deleted (a read-only or foreign-owned
+            // folder): undo the copy and stop trying until the file
+            // changes, or every sweep would quarantine another copy.
+            let _ = std::fs::remove_file(&target);
+            unmovable()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(path.to_path_buf(), modified);
+            crate::debug::log_to_file(
+                crate::debug::LogLevel::Warn,
+                "notify",
+                &format!(
+                    "notification file {} could not be parsed ({reason}) and cannot be removed ({err}); ignoring it until it changes",
+                    path.display()
+                ),
+            );
+            return None;
+        }
     }
     crate::debug::log_to_file(
         crate::debug::LogLevel::Warn,
@@ -60,6 +88,13 @@ pub(crate) fn quarantine_into(path: &Path, reason: &str, dir: &Path) -> Option<P
     );
     trim(dir);
     Some(target)
+}
+
+/// Malformed files that could be copied but not removed, with the
+/// modification time they had then. Skipped until that time changes.
+fn unmovable() -> &'static Mutex<HashMap<PathBuf, SystemTime>> {
+    static UNMOVABLE: OnceLock<Mutex<HashMap<PathBuf, SystemTime>>> = OnceLock::new();
+    UNMOVABLE.get_or_init(Default::default)
 }
 
 /// Keep the [`KEEP`] newest files in `dir`, delete the rest.
@@ -125,6 +160,31 @@ mod tests {
             std::fs::read_to_string(bad.join("junk.json")).unwrap(),
             "{not json"
         );
+    }
+
+    #[test]
+    fn a_file_that_cannot_be_removed_is_not_copied_again_every_sweep() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let bad = tmp.path().join("bad");
+        let locked = tmp.path().join("locked");
+        std::fs::create_dir_all(&locked).unwrap();
+        let junk = old_file(&locked, "junk.json", "{not json");
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // Root ignores the read-only bit; nothing to check then.
+        if std::fs::File::create(locked.join("probe")).is_ok() {
+            std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+            return;
+        }
+
+        for _ in 0..3 {
+            assert!(quarantine_into(&junk, "x", &bad).is_none());
+        }
+        assert!(junk.exists());
+        let copies = std::fs::read_dir(&bad).map(|d| d.count()).unwrap_or(0);
+        assert_eq!(copies, 0, "no copy is left behind");
+
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
 
     #[test]
