@@ -32,6 +32,7 @@ pub mod gemini;
 pub(crate) mod config;
 pub mod git_exclude;
 pub(crate) mod hook_approval;
+pub mod instance_lock; // one TUI per config dir (flock on aiw.lock)
 pub(crate) mod ipc_rebind; // re-bind the IPC socket if its file vanishes
 pub(crate) mod line_fold; // incremental JSONL reads for the status sweep (DESIGN.md §12.3)
 pub mod migrate; // first-run copy of an AMF setup (DESIGN.md §11)

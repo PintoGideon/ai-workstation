@@ -707,6 +707,17 @@ pub fn run() -> Result<()> {
         return Ok(());
     }
 
+    // FORK: one TUI per config dir. Taken before anything below touches the
+    // database or the IPC socket; released by the kernel when this process
+    // exits, so a crash never leaves a stale lock behind.
+    let _instance_lock = match crate::fork::instance_lock::acquire(&project::aiw_config_dir()) {
+        Ok(lock) => lock,
+        Err(err) => {
+            eprintln!("{}", err.user_message());
+            std::process::exit(1);
+        }
+    };
+
     // FORK: decide on the first-run icon check before `load_config` writes a
     // default config.json.
     let icon_check =
