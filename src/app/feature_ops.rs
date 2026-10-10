@@ -342,6 +342,12 @@ impl App {
                 ));
                 return Ok(());
             }
+            // FORK: a preset prefix or a pasted name can still be invalid
+            // here; the duplicate check above is the more specific message.
+            if let Err(error) = crate::fork::branch_name::validate_branch_name(&branch) {
+                self.set_create_feature_branch_error(error);
+                return Ok(());
+            }
 
             if !use_worktree
                 && selected_worktree.is_none()

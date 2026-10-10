@@ -29,6 +29,7 @@ pub mod extra_agents;
 pub mod gemini;
 
 // G4/G5 — work-safety fixes (DESIGN.md §7).
+pub mod branch_name; // git check-ref-format rules, applied in the dialog
 pub(crate) mod config;
 pub mod git_exclude;
 pub(crate) mod hook_approval;

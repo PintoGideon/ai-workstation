@@ -28,7 +28,9 @@ fn branch_error(app: &App) -> Option<String> {
         ));
     }
 
-    None
+    // FORK: the rules of `git check-ref-format --branch`, said plainly here
+    // instead of as raw git output after the worktree add fails.
+    crate::fork::branch_name::validate_branch_name(branch).err()
 }
 
 pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {

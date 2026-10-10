@@ -31,9 +31,30 @@ pub fn normalized_feature_name(name: &str) -> String {
     slugify_component(name)
 }
 
+/// FORK: longest slug a project or feature contributes to a tmux session or
+/// worktree name. tmux itself has no limit, but the session name is typed in
+/// `aiw grid`, appears in every hook payload and makes a folder name; a
+/// 200-character feature name serves none of those.
+const MAX_SLUG_LEN: usize = 48;
+
+/// FORK: `slugify_component`, capped at [`MAX_SLUG_LEN`] characters with no
+/// dangling `-`. Names up to the cap are unchanged, so every existing
+/// session keeps its name.
+fn capped_slug(s: &str) -> String {
+    let slug = slugify_component(s);
+    if slug.chars().count() <= MAX_SLUG_LEN {
+        return slug;
+    }
+    slug.chars()
+        .take(MAX_SLUG_LEN)
+        .collect::<String>()
+        .trim_end_matches('-')
+        .to_string()
+}
+
 pub fn tmux_session_name(project_name: &str, feature_name: &str) -> String {
-    let project = slugify_component(project_name);
-    let feature = slugify_component(feature_name);
+    let project = capped_slug(project_name);
+    let feature = capped_slug(feature_name);
 
     match (project.is_empty(), feature.is_empty()) {
         (false, false) => format!("aiw-{project}-{feature}"),
@@ -44,8 +65,8 @@ pub fn tmux_session_name(project_name: &str, feature_name: &str) -> String {
 }
 
 pub fn worktree_name(project_name: &str, feature_name: &str) -> String {
-    let project = slugify_component(project_name);
-    let feature = slugify_component(feature_name);
+    let project = capped_slug(project_name);
+    let feature = capped_slug(feature_name);
 
     match (project.is_empty(), feature.is_empty()) {
         (false, false) => format!("{project}-{feature}"),
@@ -1684,6 +1705,42 @@ pub fn store_path() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    // FORK: names that tmux or a filesystem would choke on are slugged and
+    // capped; `.` and `:` are tmux target separators.
+    #[test]
+    fn tmux_session_and_worktree_names_are_slugged_and_capped() {
+        assert_eq!(
+            super::tmux_session_name("my.project", "v1.2:fix"),
+            "aiw-my-project-v1-2-fix"
+        );
+        assert!(!super::tmux_session_name("a.b", "c:d").contains(['.', ':']));
+        assert_eq!(
+            super::worktree_name("my.project", "v1.2:fix"),
+            "my-project-v1-2-fix"
+        );
+
+        let long = format!("{}-{}", "x".repeat(60), "y".repeat(140));
+        let session = super::tmux_session_name("proj", &long);
+        assert!(session.starts_with("aiw-proj-"));
+        assert_eq!(session.len(), "aiw-proj-".len() + super::MAX_SLUG_LEN);
+        assert!(!session.ends_with('-'));
+        let worktree = super::worktree_name(&long, &long);
+        assert!(worktree.len() <= 2 * super::MAX_SLUG_LEN + 1, "{worktree}");
+
+        // A cut landing on a separator leaves no dangling dash.
+        let dashed = format!("{}-tail", "z".repeat(super::MAX_SLUG_LEN - 1));
+        assert!(!super::tmux_session_name("p", &dashed).ends_with('-'));
+
+        // Short names are untouched, so existing sessions keep their names.
+        assert_eq!(
+            super::tmux_session_name("alpha", "alpha-1"),
+            "aiw-alpha-alpha-1"
+        );
+        assert_eq!(super::tmux_session_name("", ""), "aiw-feature");
+        // Unicode letters survive.
+        assert_eq!(super::tmux_session_name("p", "名前-ünï"), "aiw-p-名前-ünï");
+    }
+
     /// The suite writes real executable hook scripts through
     /// `ensure_notify_scripts`. If these resolvers ever point back at the
     /// developer's actual home directory, running `cargo test` silently

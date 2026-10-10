@@ -626,6 +626,55 @@ fn create_feature_branch_enter_shows_inline_duplicate_error() {
     }
 }
 
+// FORK: names git would refuse are stopped at the dialog with a plain message.
+#[test]
+fn create_feature_branch_enter_rejects_names_git_would_refuse() {
+    let store = store_with_feature(ProjectStatus::Stopped);
+    let mut app = app_in_creating_feature_mode(store, "my-project", "bad name", false);
+
+    crate::handlers::handle_create_feature_key(&mut app, KeyCode::Enter).unwrap();
+
+    match &app.mode {
+        AppMode::CreatingFeature(state) => {
+            assert_eq!(state.step, CreateFeatureStep::Branch);
+            assert_eq!(
+                state.branch_error.as_deref(),
+                Some("Feature name cannot contain spaces")
+            );
+        }
+        _ => panic!("expected CreatingFeature mode"),
+    }
+    assert!(
+        app.toasts
+            .iter()
+            .any(|t| t.message.contains("cannot contain spaces"))
+    );
+
+    for (name, expect) in [
+        ("x".repeat(121), "too long"),
+        ("-lead".to_string(), "start with '-'"),
+        ("a..b".to_string(), "'..'"),
+        ("ok/name".to_string(), ""),
+    ] {
+        if let AppMode::CreatingFeature(state) = &mut app.mode {
+            state.branch = name.clone();
+            state.step = CreateFeatureStep::Branch;
+        }
+        crate::handlers::handle_create_feature_key(&mut app, KeyCode::Enter).unwrap();
+        let AppMode::CreatingFeature(state) = &app.mode else {
+            panic!("expected CreatingFeature mode");
+        };
+        if expect.is_empty() {
+            assert_eq!(state.step, CreateFeatureStep::Worktree, "{name}");
+            assert!(state.branch_error.is_none());
+        } else {
+            assert_eq!(state.step, CreateFeatureStep::Branch, "{name}");
+            let error = state.branch_error.as_deref().unwrap_or_default();
+            assert!(error.contains(expect), "{name}: {error}");
+        }
+    }
+}
+
 #[test]
 fn create_feature_branch_edit_after_error_can_continue() {
     let store = store_with_feature(ProjectStatus::Stopped);
