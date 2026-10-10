@@ -86,14 +86,16 @@ impl App {
             items.push(VisibleItem::Project(pi));
             if !project.collapsed {
                 let mut feature_indices: Vec<usize> = (0..project.features.len()).collect();
+                // FORK: creation order (oldest first), so a batch reads
+                // batch1, batch2, … and a new feature lands at the bottom.
                 feature_indices.sort_by(|&a, &b| {
                     project.features[a]
                         .is_worktree
                         .cmp(&project.features[b].is_worktree)
                         .then_with(|| {
-                            project.features[b]
+                            project.features[a]
                                 .created_at
-                                .cmp(&project.features[a].created_at)
+                                .cmp(&project.features[b].created_at)
                         })
                 });
                 for fi in feature_indices {
