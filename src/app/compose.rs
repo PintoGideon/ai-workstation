@@ -369,6 +369,38 @@ impl App {
         self.persist_compose_targets();
     }
 
+    /// FORK: drop compose toggles whose session is no longer in the store.
+    /// Toggles are keyed by tmux `session:window`, so a deleted feature's
+    /// toggle would otherwise pass to a new feature of the same name (and
+    /// the set would grow for ever). Run on every save, the one step every
+    /// deletion path ends with.
+    pub(crate) fn prune_compose_targets(&mut self) {
+        if self.compose_direct_targets.is_empty() {
+            return;
+        }
+        let live: std::collections::HashSet<String> = self
+            .store
+            .projects
+            .iter()
+            .flat_map(|p| &p.features)
+            .flat_map(|f| {
+                f.sessions
+                    .iter()
+                    .map(|s| compose_target_key(&f.tmux_session, &s.tmux_window))
+            })
+            .collect();
+        let before = self.compose_direct_targets.len();
+        self.compose_direct_targets.retain(|key| live.contains(key));
+        if self.compose_direct_targets.len() != before {
+            let mut targets: Vec<&String> = self.compose_direct_targets.iter().collect();
+            targets.sort();
+            let value = serde_json::json!(targets);
+            self.store
+                .extra
+                .insert(COMPOSE_TARGETS_KEY.to_string(), value);
+        }
+    }
+
     /// FORK: the per-session compose toggles live in the project store
     /// (`extra.compose_direct_targets`) so a relaunch keeps them.
     pub(crate) fn persist_compose_targets(&mut self) {

@@ -1424,6 +1424,10 @@ mod tests {
                 view.session_kind = kind.clone();
                 view.window = window.clone();
             }
+            // FORK: toggles of windows with no stored session are pruned on save.
+            let stored = &mut app.store.projects[0].features[0].sessions[0];
+            stored.kind = kind.clone();
+            stored.tmux_window = window.clone();
 
             app.activate_leader();
             handle_view_key(&mut app, key(KeyCode::Char('e')), 20).unwrap();

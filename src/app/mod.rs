@@ -3716,6 +3716,7 @@ impl App {
     /// Any `(pi, fi, si)` the caller held from before the call may be stale
     /// after `Ok(false)`; re-resolve by stable id before indexing again.
     pub(crate) fn save_reporting_conflict(&mut self) -> Result<bool> {
+        self.prune_compose_targets(); // FORK
         if let Some(db) = &self.db {
             let Some(expected) = self.store_version else {
                 // No known baseline -- either genuinely the first save this

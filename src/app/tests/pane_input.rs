@@ -401,6 +401,10 @@ fn submit_compose_interactive_command_enables_direct_input() {
     );
     app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
     app.store_path = tmp.path().to_path_buf();
+    // FORK: toggles of sessions not in the store are pruned on save.
+    app.store.projects[0].features[0]
+        .sessions
+        .push(make_session("claude", None));
     app.mode = AppMode::Compose(ComposeState::new(
         compose_test_view(),
         repo.path().to_path_buf(),
@@ -412,6 +416,40 @@ fn submit_compose_interactive_command_enables_direct_input() {
 
     assert!(matches!(&app.mode, AppMode::Viewing(_)));
     assert!(app.compose_direct_targets.contains("aiw-my-feat:claude"));
+}
+
+#[test]
+fn a_deleted_sessions_compose_toggle_is_not_inherited_by_its_namesake() {
+    let repo = TempDir::new().unwrap();
+    let tmp = NamedTempFile::new().unwrap();
+    let mut app = App::new_for_test(
+        store_with_repo(repo.path().to_path_buf(), ProjectStatus::Active),
+        Box::new(MockTmuxOps::new()),
+        Box::new(MockWorktreeOps::new()),
+    );
+    app.store_path = tmp.path().to_path_buf();
+    app.store.projects[0].features[0]
+        .sessions
+        .push(make_session("claude", None));
+    app.config.compose_box = true;
+    app.set_compose_direct("aiw-my-feat:claude".to_string());
+    assert!(app.compose_direct_targets.contains("aiw-my-feat:claude"));
+
+    // The feature's session goes; the save that follows forgets its toggle.
+    app.store.projects[0].features[0].sessions.clear();
+    app.save().unwrap();
+    assert!(app.compose_direct_targets.is_empty());
+    assert_eq!(
+        app.store.extra.get("compose_direct_targets"),
+        Some(&serde_json::json!([]))
+    );
+
+    // A new session in the same window starts from the default.
+    app.store.projects[0].features[0]
+        .sessions
+        .push(make_session("claude", None));
+    let view = compose_test_view();
+    assert_eq!(app.compose_intercept_active(&view), app.config.compose_box);
 }
 
 #[test]
