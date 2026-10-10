@@ -1033,6 +1033,9 @@ pub struct App {
     /// sweep re-detects the state after a relaunch. Cleared when the session
     /// is started again.
     pub exited_sessions: std::collections::HashSet<String>,
+    /// FORK: when `confirm_quit` is on and agents are running, the first `q`
+    /// arms this and a second one within a few seconds quits.
+    pub quit_confirm_armed_at: Option<Instant>,
     /// FORK: `aiw.json` parse errors already reported, by repo, so a broken
     /// file is announced once per project load and again only when it
     /// changes.
@@ -2611,6 +2614,7 @@ impl App {
             pending_inputs: Vec::new(),
             user_stopped_features: std::collections::HashSet::new(),
             exited_sessions: std::collections::HashSet::new(),
+            quit_confirm_armed_at: None,
             reported_config_errors: HashMap::new(),
             missing_project_repos: std::collections::HashSet::new(),
             compose_direct_targets: std::collections::HashSet::new(),
@@ -2869,6 +2873,7 @@ impl App {
             pending_inputs: Vec::new(),
             user_stopped_features: std::collections::HashSet::new(),
             exited_sessions: std::collections::HashSet::new(),
+            quit_confirm_armed_at: None,
             reported_config_errors: HashMap::new(),
             missing_project_repos: std::collections::HashSet::new(),
             compose_direct_targets: std::collections::HashSet::new(),

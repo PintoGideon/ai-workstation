@@ -29,7 +29,7 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
             // FORK: Ctrl+Q is "back to the dashboard" in every view, so one
             // press too many used to fall through to the plain `q` arm below
             // and quit AIW without confirmation. On the dashboard it is a
-            // no-op; `q` / `Esc` still quit.
+            // no-op; `q` still quits.
             KeyCode::Char('q') => return Ok(()),
             _ => {}
         }
@@ -56,8 +56,15 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
     };
     let key = remapped_key;
     match key {
-        KeyCode::Char('q') | KeyCode::Esc => {
-            app.request_dashboard_quit();
+        KeyCode::Char('q') => {
+            // FORK: asks first when `confirm_quit` is on and agents run.
+            crate::fork::quit_confirm::request_quit(app);
+        }
+        // FORK: Esc used to quit like `q`, so one Esc too many after closing
+        // a dialog ended the session. On the dashboard it only takes back a
+        // pending quit confirmation.
+        KeyCode::Esc => {
+            crate::fork::quit_confirm::cancel(app);
         }
         KeyCode::Char('N') => {
             app.start_create_project();
@@ -463,8 +470,29 @@ fn handle_normal_leader_key(app: &mut App, key: KeyEvent) -> Result<()> {
 mod tests {
     use super::*;
 
+    // FORK: Esc on the dashboard is a no-op (one Esc too many after a dialog
+    // used to end the session); `q` still quits as the README says.
+    #[test]
+    fn esc_on_the_dashboard_does_not_quit() {
+        use crate::traits::{MockTmuxOps, MockWorktreeOps};
+        let mut app = App::new_for_test(
+            crate::project::ProjectStore::empty(),
+            Box::new(MockTmuxOps::new()),
+            Box::new(MockWorktreeOps::new()),
+        );
+        handle_normal_key(&mut app, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)).unwrap();
+        assert!(!app.should_quit);
+        assert!(matches!(app.mode, AppMode::Normal));
+        handle_normal_key(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE),
+        )
+        .unwrap();
+        assert!(app.should_quit);
+    }
+
     // FORK: a stray Ctrl+Q (the "leave the view" key) on the dashboard must
-    // not quit; only `q` / `Esc` do.
+    // not quit; only `q` does.
     #[test]
     fn ctrl_q_on_the_dashboard_does_not_quit() {
         use crate::traits::{MockTmuxOps, MockWorktreeOps};

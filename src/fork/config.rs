@@ -21,6 +21,10 @@ pub struct AiwConfig {
     /// checkout into a fresh worktree. A repo's `.worktreeinclude` overrides
     /// this.
     pub worktree_include: Vec<String>,
+    /// Ask before `q` quits the dashboard while agents are running: the first
+    /// press shows how many and the second press (within a few seconds)
+    /// quits. Off by default, so `q` quits at once as it always has.
+    pub confirm_quit: bool,
 }
 
 impl Default for AiwConfig {
@@ -28,6 +32,7 @@ impl Default for AiwConfig {
         Self {
             worktree_base_dir: None,
             worktree_include: default_worktree_include(),
+            confirm_quit: false,
         }
     }
 }

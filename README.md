@@ -278,7 +278,7 @@ and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-inte
 | `T` | Choose a theme |
 | `A` | Manage installed agent harnesses |
 | `?` | Show all keybindings |
-| `q` / `Esc` | Quit |
+| `q` | Quit (`Esc` does nothing on the dashboard) |
 
 Search accepts every letter, including `j` and `k`. Use arrow keys or
 `Tab` / `Shift+Tab` to select a result, `Enter` to jump, and `Esc` to cancel.
@@ -747,6 +747,10 @@ These settings govern the resource guards described above:
   "dormant_last_accessed_hours": 4
 }
 ```
+
+Set `"confirm_quit": true` to have `q` ask first while agents are running:
+the first press says how many, a second press within five seconds quits and
+`Esc` keeps AIW open. Off by default, so `q` quits at once.
 
 `0` disables either warning. The defaults come from measured idle memory: a
 Claude harness settles near 380 MiB and Codex near 220 MiB, while a single

@@ -41,6 +41,7 @@ pub mod migrate; // first-run copy of an AMF setup (DESIGN.md §11)
 pub(crate) mod notices; // toasts raised off the main thread (hooks, worktree prep)
 pub(crate) mod paths;
 pub(crate) mod ports;
+pub(crate) mod quit_confirm; // `q` asks first when agents run and `confirm_quit` is on
 pub(crate) mod worktree_paths;
 pub(crate) mod worktree_prep;
 pub(crate) mod worktree_repair; // recreate a checkout that vanished on disk
