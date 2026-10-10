@@ -63,21 +63,70 @@ Optional tools:
 ## Installation
 
 AIW is built from source; there are no release bundles. Building needs Rust
-(via [rustup](https://rustup.rs)), a C compiler, and `tmux`.
+(via [rustup](https://rustup.rs)) with the 1.99.0 toolchain, a C compiler, git
+and `tmux`.
+
+**One-time setup**
 
 ```bash
-cd ~/ai_workstation                      # your clone of this fork
-cargo +1.99.0 install --path . --locked  # installs the `aiw` binary into ~/.cargo/bin
-aiw
+# macOS
+xcode-select --install && brew install tmux
+# Ubuntu / Debian
+sudo apt install build-essential tmux git
+
+rustup toolchain install 1.99.0
 ```
 
-Make sure `~/.cargo/bin` is in your `PATH`. The first launch of `aiw` copies an
-existing AMF setup (projects, settings) into AIW's own folders; see
-"Coming from AMF" below.
+**Build and install** (run from any terminal):
 
-For contributor setup, focused tests and CI commands, see the
-[development checks](docs/development/checks.md) and
-[architecture guide](docs/development/architecture.md).
+```bash
+cd ~/ai_workstation                                # your clone of this fork
+git switch ai-workstation                          # the branch with the AIW work
+cargo +1.99.0 install --path . --locked --force    # installs `aiw` into ~/.cargo/bin
+aiw -V                                             # AI Workstation (aiw) 0.49.0
+```
+
+Make sure `~/.cargo/bin` is in your `PATH`.
+
+### Run it in a new terminal
+
+AIW is an interactive TUI, so open a **new terminal window** (Ghostty, iTerm2,
+WezTerm, Kitty or GNOME Terminal), not an editor's output panel. It runs its
+own private tmux server, so it works the same from a plain shell or from
+inside your own tmux.
+
+```bash
+aiw doctor     # optional: read-only report of what AIW has on this machine
+aiw            # open the dashboard
+```
+
+The first launch copies an existing AMF setup (projects, settings) into AIW's
+own folders and leaves AMF untouched; see "Coming from AMF" below. Then follow
+the [Quick start](#quick-start).
+
+Other commands:
+
+| Command | What it does |
+| --- | --- |
+| `aiw grid <feature>` | Show a feature's agents as live tiled panes in this terminal (`project/feature` when ambiguous; `-p <project>` for one agent per feature; `--all` adds shells). `Alt+q` closes the grid; agents keep running |
+| `aiw fonts` | Print a font + icon config snippet for your terminal (`--terminal ghostty\|iterm2\|wezterm\|kitty\|alacritty`, `--font jetbrains\|geist\|iosevka\|fira`) |
+| `aiw doctor [--json]` | Read-only health report: running agents, memory and swap, orphaned tmux sessions, worktrees and editors, the no-network check. Changes nothing |
+| `aiw automation …` | Machine-friendly actions against a running AIW (see [Automation](#automation)) |
+| `aiw --help` | Everything else |
+
+Closing the terminal does not stop your agents: they keep running in AIW's
+tmux server. Run `aiw` again to pick up where you left off.
+
+For a contributor setup, focused tests and CI commands, see the
+[development checks](docs/development/checks.md) and the
+[architecture guide](docs/development/architecture.md):
+
+```bash
+cargo +1.99.0 build --locked
+cargo +1.99.0 test --locked
+cargo +1.99.0 clippy --all-targets --locked
+scripts/check-no-network.sh                        # the app makes no network calls
+```
 
 For a container installation, see the
 [Docker guide](docs/docker-no-tmux.md).
@@ -85,7 +134,13 @@ For a container installation, see the
 ### Upgrade
 
 AIW (this fork) has no self-upgrade: it never downloads anything itself. Pull
-the fork and rebuild (`cargo install --path .`). See [NO_CLOUD.md](NO_CLOUD.md).
+the fork and rebuild; running agents are not affected. See
+[NO_CLOUD.md](NO_CLOUD.md).
+
+```bash
+cd ~/ai_workstation && git pull
+cargo +1.99.0 install --path . --locked --force
+```
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and migration guidance.
 
@@ -207,6 +262,7 @@ and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-inte
 | `N` / `n` | Create a project / feature |
 | `s` | Add a session to a feature |
 | `c` | Start the selected feature, or the selected stopped session |
+| `v` | Split view: tile the feature's agents live, 2–4 per screen (on a project row: one per feature) |
 | `x` | Stop a feature or a single session. A stopped session stays listed (`■`) and stays stopped when its feature starts again |
 | `r` | Rename a feature or session |
 | `d` | Delete a project, feature, or session |
@@ -229,7 +285,8 @@ Search accepts every letter, including `j` and `k`. Use arrow keys or
 
 ### Embedded session
 
-Most keys go directly to the active session. These controls belong to AIW:
+Everything you type goes straight to the agent; there is no compose box
+unless you turn it on with `Ctrl+Space`, then `e`. These controls belong to AIW:
 
 | Key | Action |
 | --- | --- |
@@ -241,7 +298,12 @@ Most keys go directly to the active session. These controls belong to AIW:
 | `Ctrl+Space`, then `p` | Open the prompt library |
 | `Ctrl+Space`, then `E` | Edit headless AI prompt templates (overrides) |
 | `Ctrl+Space`, then `N` | Add a TODO to this worktree's list |
+| `Ctrl+Space`, then `e` | Turn the compose box on or off for this session |
 | `Ctrl+Space`, then `?` | Show all leader commands |
+
+In split view, `Ctrl+Space` then an arrow key moves focus between tiles, `z`
+zooms the focused tile, `[` / `]` page through more agents, `i` jumps to the
+next agent needing you and `v` leaves split view.
 
 ## User workflows
 
