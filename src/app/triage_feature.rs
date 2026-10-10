@@ -36,7 +36,6 @@ use crate::app::state::{
     AppMode, TriageFeatureSetupState, TriageIntegrateState, TriageIntegration,
 };
 use crate::app::{App, StartIntent};
-use crate::extension::merge_project_extension_config;
 use crate::project::{
     Feature, ProjectStatus, TriageSource, VibeMode, normalized_feature_name, worktree_name,
 };
@@ -304,7 +303,7 @@ impl App {
         // on-worktree-created hook synchronously — the interactive prompt flow
         // would have to unwind the PR pane, and the choice-less path is what
         // the automation API already does here.
-        let ext = merge_project_extension_config(&self.config.extension, &project_repo);
+        let ext = self.merge_extension(&self.config.extension, &project_repo);
         // FORK: an unapproved repo-supplied hook is skipped (no dialog here).
         let worktree_hook = self.approved_repo_hook_or_skip(
             &project_repo,

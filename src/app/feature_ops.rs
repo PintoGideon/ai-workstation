@@ -7,7 +7,7 @@ use super::setup::{
 use super::*;
 use crate::app::util::read_latest_prompt;
 use crate::automation::CreateBatchFeaturesRequest;
-use crate::extension::{load_global_extension_config, merge_project_extension_config};
+use crate::extension::load_global_extension_config;
 use crate::project::{LaunchOpts, normalized_feature_name, worktree_name};
 use crate::tmux::TmuxManager;
 use crate::worktree::WorktreeManager;
@@ -380,7 +380,7 @@ impl App {
         } else if use_worktree {
             // FORK: a repo-supplied hook needs one-time approval, asked before
             // anything is created; the dialog replays `create_feature`.
-            let ext = merge_project_extension_config(&self.config.extension, &project_repo);
+            let ext = self.merge_extension(&self.config.extension, &project_repo);
             let Some(worktree_hook) = self.gate_repo_hook(
                 &project_repo,
                 crate::fork::hook_approval::HookName::WorktreeCreated,
@@ -2386,7 +2386,7 @@ impl App {
         // FORK: a repo-supplied hook needs one-time approval, asked before
         // the worktree is created; the dialog replays `create_forked_feature`.
         let global_ext = load_global_extension_config();
-        let ext = merge_project_extension_config(&global_ext, &project_repo);
+        let ext = self.merge_extension(&global_ext, &project_repo);
         let Some(worktree_hook) = self.gate_repo_hook(
             &project_repo,
             crate::fork::hook_approval::HookName::WorktreeCreated,

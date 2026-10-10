@@ -1594,6 +1594,10 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         if app.poll_learning_answers_bg() {
             force_redraw = true;
         }
+        // FORK: a broken aiw.json read by any action is announced here.
+        if app.report_config_errors() {
+            force_redraw = true;
+        }
         if app.poll_review_questions() {
             force_redraw = true;
         }

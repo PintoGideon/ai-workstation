@@ -8,7 +8,7 @@ use crate::automation::{
     CreateBatchFeaturesResponse, CreateFeatureRequest, CreateFeatureResponse, CreateProjectRequest,
     CreateProjectResponse, SeedAiReviewRequest, SeedAiReviewResponse,
 };
-use crate::extension::{HookPrompt, merge_project_extension_config};
+use crate::extension::HookPrompt;
 use crate::project::{normalized_feature_name, tmux_session_name, worktree_name};
 
 /// A missing or unknown answer to the project's `on_worktree_created`
@@ -117,7 +117,7 @@ impl App {
         &self,
         project_repo: &Path,
     ) -> Option<AutomationHookPrompt> {
-        let ext = merge_project_extension_config(&self.config.extension, project_repo);
+        let ext = self.merge_extension(&self.config.extension, project_repo);
         ext.lifecycle_hooks
             .on_worktree_created
             .as_ref()
@@ -135,7 +135,7 @@ impl App {
         project_repo: &Path,
         choice: Option<&str>,
     ) -> Result<()> {
-        let ext = merge_project_extension_config(&self.config.extension, project_repo);
+        let ext = self.merge_extension(&self.config.extension, project_repo);
         let hook = ext.lifecycle_hooks.on_worktree_created.as_ref();
         checked_hook_choice(hook.and_then(|hook| hook.prompt()), choice)?;
         Ok(())
@@ -337,7 +337,7 @@ impl App {
         // checkout exists; the hook that runs below is this same one, so the
         // choice cannot go stale between the check and the run.
         let worktree_hook = if use_worktree {
-            merge_project_extension_config(&self.config.extension, &project_repo)
+            self.merge_extension(&self.config.extension, &project_repo)
                 .lifecycle_hooks
                 .on_worktree_created
         } else {

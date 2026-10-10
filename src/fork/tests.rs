@@ -487,6 +487,32 @@ fn a_broken_aiw_json_is_announced_once_per_project_load_and_again_when_it_change
     assert_eq!(app.toasts.len(), 2);
 }
 
+#[test]
+fn a_broken_aiw_json_read_by_any_action_is_announced_on_the_next_tick() {
+    let tmp = TempDir::new().unwrap();
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::write(repo.join("aiw.json"), "{ \"custom_sessions\": [").unwrap();
+    let mut app = App::new_for_test(
+        store_with_repo(repo.clone()),
+        Box::new(MockTmuxOps::new()),
+        Box::new(MockWorktreeOps::new()),
+    );
+
+    // Reads through `&self` (automation, plan interview, triage…) queue it.
+    let _ = app.extension_for_repo(&repo);
+    let _ = app.merge_extension(&app.config.extension.clone(), &repo);
+    assert!(app.toasts.is_empty());
+    assert!(app.report_config_errors());
+    assert_eq!(app.toasts.len(), 1);
+    assert!(app.toasts[0].message.contains("is invalid"));
+
+    // Same error again: no second toast.
+    let _ = app.extension_for_repo(&repo);
+    assert!(!app.report_config_errors());
+    assert_eq!(app.toasts.len(), 1);
+}
+
 // ── malformed notification files are quarantined ─────────────────────────────
 
 #[test]

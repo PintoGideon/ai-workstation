@@ -8,7 +8,6 @@ use crate::app::{
     App, AppMode, AwaitingReviewFix, FileComment, HashMap, LineComment, ReviewAction,
     ReviewDecision, ReviewHarnessPickState, Severity, StartIntent, ViewState,
 };
-use crate::extension::merge_project_extension_config;
 use anyhow::Result;
 use std::collections::HashSet;
 use std::path::Path;
@@ -586,7 +585,7 @@ impl App {
             .projects
             .iter()
             .find(|p| p.name == project_name)
-            .map(|p| merge_project_extension_config(&self.config.extension, &p.repo))
+            .map(|p| self.merge_extension(&self.config.extension, &p.repo))
             .and_then(|ext| ext.final_review_check_command)
             .map(|c| c.trim().to_string())
             .filter(|c| !c.is_empty());

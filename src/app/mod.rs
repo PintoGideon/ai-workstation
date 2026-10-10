@@ -1040,6 +1040,16 @@ pub struct App {
     /// file is announced once per project load and again only when it
     /// changes.
     pub reported_config_errors: HashMap<PathBuf, String>,
+    /// FORK: outcomes of `aiw.json` reads made through `&self`
+    /// ([`Self::merge_extension`]), waiting for
+    /// [`Self::report_config_errors`] to announce or forget them. Every
+    /// project-config read in `App` goes through that one checked loader,
+    /// so whether a broken file is reported never depends on the entry
+    /// point.
+    /// Keyed by repo, latest read wins, so it stays bounded in a process
+    /// that never drains it (the GUI).
+    pub(crate) config_error_checks:
+        std::sync::Mutex<HashMap<PathBuf, Option<crate::extension::ProjectConfigError>>>,
     /// FORK: ids of projects whose repo folder no longer exists on disk; set
     /// by the sweep (with a one-time toast) for the dashboard to mark the row.
     pub missing_project_repos: std::collections::HashSet<String>,
@@ -2617,6 +2627,7 @@ impl App {
             exited_sessions: std::collections::HashSet::new(),
             quit_confirm_armed_at: None,
             reported_config_errors: HashMap::new(),
+            config_error_checks: Default::default(),
             missing_project_repos: std::collections::HashSet::new(),
             compose_direct_targets, // FORK: persisted in the store
             compose_drafts: HashMap::new(),
@@ -2877,6 +2888,7 @@ impl App {
             exited_sessions: std::collections::HashSet::new(),
             quit_confirm_armed_at: None,
             reported_config_errors: HashMap::new(),
+            config_error_checks: Default::default(),
             missing_project_repos: std::collections::HashSet::new(),
             compose_direct_targets, // FORK: persisted in the store
             compose_drafts: HashMap::new(),
@@ -3380,43 +3392,68 @@ impl App {
     }
 
     pub(crate) fn extension_for_repo(&self, repo: &Path) -> ExtensionConfig {
-        let global_ext = load_global_extension_config();
-        merge_project_extension_config(&global_ext, repo)
+        self.merge_extension(&load_global_extension_config(), repo)
     }
 
-    /// FORK: [`Self::extension_for_repo`] for a project being loaded: an
-    /// `aiw.json` that cannot be parsed is announced once (toast + log),
-    /// again only if the error changes, and forgotten once the file is fixed.
-    pub(crate) fn load_extension_for_repo(&mut self, repo: &Path) -> ExtensionConfig {
-        let global_ext = load_global_extension_config();
-        let (merged, error) =
-            crate::extension::merge_project_extension_config_checked(&global_ext, repo);
-        match error {
-            Some(error) => {
-                let project = self
-                    .store
-                    .projects
-                    .iter()
-                    .find(|p| p.repo == repo)
-                    .map(|p| p.name.clone())
-                    .unwrap_or_else(|| repo.display().to_string());
-                let message = error.user_message(&project);
-                if self.reported_config_errors.get(repo) != Some(&message) {
-                    self.reported_config_errors
-                        .insert(repo.to_path_buf(), message.clone());
-                    self.log_warn("config", format!("{} — {message}", error.path.display()));
-                    self.push_toast_for(
-                        message,
-                        ToastKind::Warning,
-                        std::time::Duration::from_secs(12),
-                    );
-                }
-            }
-            None => {
-                self.reported_config_errors.remove(repo);
-            }
-        }
+    /// FORK: `base` merged with `repo`'s `aiw.json` — the one way `App`
+    /// reads a project config. A file that cannot be parsed is queued for
+    /// [`Self::report_config_errors`] (run on the next tick), so it is
+    /// announced whichever action read it.
+    pub(crate) fn merge_extension(&self, base: &ExtensionConfig, repo: &Path) -> ExtensionConfig {
+        let (merged, error) = crate::extension::merge_project_extension_config_checked(base, repo);
+        self.config_error_checks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(repo.to_path_buf(), error);
         merged
+    }
+
+    /// FORK: [`Self::extension_for_repo`], reporting a broken `aiw.json` now
+    /// rather than on the next tick (for a project being loaded).
+    pub(crate) fn load_extension_for_repo(&mut self, repo: &Path) -> ExtensionConfig {
+        let merged = self.extension_for_repo(repo);
+        self.report_config_errors();
+        merged
+    }
+
+    /// FORK: announce the `aiw.json` errors [`Self::merge_extension`] found:
+    /// once per project (toast + log), again only if the error changes, and
+    /// forgotten once the file is fixed. Returns whether anything was shown.
+    pub(crate) fn report_config_errors(&mut self) -> bool {
+        let checks = std::mem::take(
+            &mut *self
+                .config_error_checks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+        );
+        let mut shown = false;
+        for (repo, error) in checks {
+            let Some(error) = error else {
+                self.reported_config_errors.remove(&repo);
+                continue;
+            };
+            let project = self
+                .store
+                .projects
+                .iter()
+                .find(|p| p.repo == repo)
+                .map(|p| p.name.clone())
+                .unwrap_or_else(|| repo.display().to_string());
+            let message = error.user_message(&project);
+            if self.reported_config_errors.get(&repo) == Some(&message) {
+                continue;
+            }
+            self.reported_config_errors
+                .insert(repo.clone(), message.clone());
+            self.log_warn("config", format!("{} — {message}", error.path.display()));
+            self.push_toast_for(
+                message,
+                ToastKind::Warning,
+                std::time::Duration::from_secs(12),
+            );
+            shown = true;
+        }
+        shown
     }
 
     /// The effective template for a headless prompt on the feature at
