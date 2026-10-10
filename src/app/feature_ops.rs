@@ -1202,6 +1202,42 @@ impl App {
                 }
             }
         }
+        // FORK: a worktree whose checkout vanished on disk is recreated on its
+        // branch (or the start refused) before anything writes into the
+        // folder — see fork::worktree_repair.
+        if !already_running {
+            use crate::fork::worktree_repair::{self, Checkout};
+            let feature = &self.store.projects[pi].features[fi];
+            match worktree_repair::inspect(feature) {
+                Checkout::Intact => {}
+                Checkout::Unsafe(foreign) => worktree_repair::refuse(feature, &foreign)?,
+                Checkout::Missing => {
+                    let project_name = self.store.projects[pi].name.clone();
+                    let name = feature.name.clone();
+                    let old = feature.workdir.clone();
+                    let path = worktree_repair::recreate(
+                        self.worktree.as_ref(),
+                        &repo,
+                        &project_name,
+                        feature,
+                    )?;
+                    self.log_warn(
+                        "worktree",
+                        format!(
+                            "'{name}': checkout at {} was gone; recreated it at {}",
+                            old.display(),
+                            path.display()
+                        ),
+                    );
+                    self.push_toast_warning(format!(
+                        "'{name}': its worktree folder was gone — recreated it on branch '{}'",
+                        self.store.projects[pi].features[fi].branch
+                    ));
+                    self.store.projects[pi].features[fi].workdir = path;
+                }
+            }
+        }
+
         let feature = match self
             .store
             .projects

@@ -83,4 +83,10 @@ pub trait WorktreeOps: Send + Sync {
         let _ = base;
         self.create(repo, name, new_branch)
     }
+    /// FORK: `git worktree prune` — drop registrations whose directory is
+    /// gone, so a vanished checkout can be recreated on its branch.
+    fn prune(&self, repo: &Path) -> Result<()> {
+        let _ = repo;
+        Ok(())
+    }
 }

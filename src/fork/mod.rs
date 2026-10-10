@@ -39,5 +39,6 @@ pub(crate) mod ports;
 pub(crate) mod worktree_paths;
 pub(crate) mod worktree_prep;
 
+pub(crate) mod worktree_repair; // recreate a checkout that vanished on disk
 #[cfg(test)]
 mod tests;

@@ -448,6 +448,22 @@ impl WorktreeOps for WorktreeManager {
     ) -> Result<PathBuf> {
         WorktreeManager::create_from(repo, name, new_branch, base)
     }
+
+    // FORK: see fork::worktree_repair.
+    fn prune(&self, repo: &Path) -> Result<()> {
+        let output = Command::new("git")
+            .args(["worktree", "prune"])
+            .current_dir(repo)
+            .output()
+            .context("Failed to prune worktrees")?;
+        if !output.status.success() {
+            bail!(
+                "git worktree prune failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
