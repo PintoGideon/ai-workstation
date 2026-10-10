@@ -152,6 +152,9 @@ pub(crate) fn realistic_app(tmux: MockTmuxOps) -> App {
         Box::new(tmux),
         Box::new(MockWorktreeOps::new()),
     );
+    // The tree, explicitly: the chrome and bench tests read tree rows. The
+    // workspace benches and tests set the layout themselves.
+    app.config.aiw.dashboard_layout = crate::fork::config::DashboardLayout::Tree;
     app.selection = crate::app::Selection::Feature(1, 1);
     app.thinking_features.insert("aiw-harbor-12".to_string());
     app.thinking_features.insert("aiw-workflow-12".to_string());

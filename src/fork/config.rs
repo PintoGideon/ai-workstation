@@ -25,9 +25,9 @@ pub struct AiwConfig {
     /// press shows how many and the second press (within a few seconds)
     /// quits. Off by default, so `q` quits at once as it always has.
     pub confirm_quit: bool,
-    /// The dashboard layout: the project tree, or the workspace (a session
-    /// sidebar beside a live pane, DESIGN.md §15). `b` on the dashboard
-    /// toggles it and saves at once.
+    /// The dashboard layout: the workspace (a session sidebar beside a live
+    /// pane, DESIGN.md §15 — the default) or the project tree. `b` on the
+    /// dashboard toggles it and saves at once.
     pub dashboard_layout: DashboardLayout,
 }
 
@@ -37,17 +37,18 @@ impl Default for AiwConfig {
             worktree_base_dir: None,
             worktree_include: default_worktree_include(),
             confirm_quit: false,
-            dashboard_layout: DashboardLayout::Tree,
+            dashboard_layout: DashboardLayout::Workspace,
         }
     }
 }
 
-/// `dashboard_layout` in `config.json`.
+/// `dashboard_layout` in `config.json`. The workspace is the default; a
+/// config that says `"tree"` keeps the tree.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum DashboardLayout {
-    #[default]
     Tree,
+    #[default]
     Workspace,
 }
 
@@ -98,7 +99,7 @@ mod tests {
         let rendered = serde_json::to_value(&config).unwrap();
         assert!(rendered.get("worktree_base_dir").is_none());
         assert_eq!(rendered["worktree_include"][0], ".env*");
-        assert_eq!(rendered["dashboard_layout"], "tree");
+        assert_eq!(rendered["dashboard_layout"], "workspace");
     }
 
     #[test]
@@ -109,5 +110,15 @@ mod tests {
         assert_eq!(DashboardLayout::Workspace.toggled(), DashboardLayout::Tree);
         let rendered = serde_json::to_value(&config).unwrap();
         assert_eq!(rendered["dashboard_layout"], "workspace");
+    }
+
+    #[test]
+    fn an_existing_tree_setting_is_kept_over_the_workspace_default() {
+        assert_eq!(DashboardLayout::default(), DashboardLayout::Workspace);
+        let config: crate::app::AppConfig =
+            serde_json::from_str(r#"{"dashboard_layout":"tree"}"#).unwrap();
+        assert_eq!(config.aiw.dashboard_layout, DashboardLayout::Tree);
+        let rendered = serde_json::to_value(&config).unwrap();
+        assert_eq!(rendered["dashboard_layout"], "tree");
     }
 }

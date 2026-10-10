@@ -341,6 +341,8 @@ mod tests {
             Box::new(MockTmuxOps::new()),
             Box::new(MockWorktreeOps::new()),
         );
+        // A tree row: the workspace sidebar words it differently.
+        app.config.aiw.dashboard_layout = crate::fork::config::DashboardLayout::Tree;
         let screen = rows(&mut app, 200, 60).concat();
         assert!(screen.contains("▾ workflow-engine  /home/dev/code/workflow-engine  · no features yet — press n to add one"));
     }

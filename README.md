@@ -263,7 +263,7 @@ and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-inte
 | `s` | Add a session to a feature |
 | `c` | Start the selected feature, or the selected stopped session (an agent that exited at its shell shows `■` "exited" and is relaunched in the same window) |
 | `v` | Split view: tile the feature's agents live, 2–4 per screen (on a project row: one per feature) |
-| `b` | Workspace layout: a session sidebar beside the selected session, live (see below) |
+| `b` | Toggle the dashboard layout: the workspace (default: a session sidebar beside the selected session, live — see below) ⇄ the project tree |
 | `x` | Stop a feature or a single session. A stopped session stays listed (`■`) and stays stopped when its feature starts again |
 | `r` | Rename a feature or session |
 | `d` | Delete a project, feature, or session |
@@ -309,11 +309,13 @@ next agent needing you and `v` leaves split view.
 
 ### Workspace layout
 
-Press `b` on the dashboard to swap the project tree for a **workspace**: a
-session sidebar on the left and the selected session live on the right. You
-move between agents by moving the cursor; the pane follows the selection
-(after 150 ms, so scrolling through rows is free). The choice is saved
-(`dashboard_layout` in `config.json`); the tree stays the default.
+The dashboard opens in the **workspace** layout: a session sidebar on the
+left and the selected session live on the right. You move between agents by
+moving the cursor; the pane follows the selection (after 150 ms, so scrolling
+through rows is free). `b` swaps it for the project tree and back; the choice
+is saved (`dashboard_layout` in `config.json`, and an existing `"tree"`
+setting is kept). Below 72 columns the tree is shown with a note until the
+window is wider.
 
 ```
 ╭ Sessions ──────────────────╮╭ RS › hx-12 › claude ─────────────────────────── ⛔ question 0:40 ╮

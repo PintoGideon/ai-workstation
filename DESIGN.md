@@ -410,8 +410,8 @@ to load:
 
 With 10–30 agents the tree is a list of names, and reaching an agent means entering and leaving a view. The
 workspace layout keeps the sidebar and shows the selected session live beside it, so moving between agents is
-moving the cursor. `b` toggles it (saved as `dashboard_layout` in `config.json`; the tree stays the default for
-this round). README "Workspace layout" has the key table.
+moving the cursor. It is the default layout; `b` toggles to the tree and back (saved as `dashboard_layout` in
+`config.json` — a config that already says `"tree"` keeps the tree). README "Workspace layout" has the key table.
 
 ```
 ╭ Sessions ──────────────────╮╭ RS › hx-12 › claude ─────────────────────────── ⛔ question 0:40 ╮

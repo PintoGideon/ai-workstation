@@ -62,6 +62,10 @@ EOF
 aiw_start 200 60; wait_for 'No projects yet' 8; check "relaunch after first run" $?
 
 add_project alpha '~/repos/alpha' 0; check "add project via ~ path" $?
+# the workspace is the default layout once there is a project to show; Parts
+# 1 and 2 drive the tree, so switch to it here (Part 2b comes back with `b`)
+wait_for '╭ Sessions' 3; check "workspace layout is the default" $?
+keys b; wait_for '╭ Projects' 3; check "b: tree layout for the rest of the run" $?
 add_project beta "$S/repos/beta" 1; check "add project (absolute path)" $?
 add_project gamma "$S/repos/gamma" 3; check "add project gamma" $?
 add_project plain "$S/repos/plain" 2; check "add non-git project" $?
@@ -248,8 +252,9 @@ wait_sel_glyph '⛔' 6; check "ws: /ask → row shows ⛔" $?
 cap | grep '▎' | sed -n 2p | grep -q 'permission: Bash'; check "ws: /ask → reason line under the row" $?
 cap | grep -qE '⛔ +question'; check "ws: /ask → pane badge says question" $?
 # the focused pane's border is thick, so its corner is ┓; the sidebar glyph
-# and that corner must share the needs-you colour
-row=$(cap_ansi | grep -F '▎' | grep -F '⛔' | head -1); title=$(cap_ansi | grep -F '⛔' | grep -F 'question' | head -1)
+# and that corner must share the needs-you colour (the header row also says
+# `⛔ 1` and "1 question" now, so the title is the line with the corner)
+row=$(cap_ansi | grep -F '▎' | grep -F '⛔' | head -1); title=$(cap_ansi | grep -F '┓' | grep -F '⛔' | grep -F 'question' | head -1)
 [ -n "$(sgr_color "$(sgr_params_before "$row" '⛔')")" ] && [ "$(sgr_color "$(sgr_params_before "$row" '⛔')")" = "$(sgr_color "$(sgr_params_before "$title" '┓')")" ]
 check "ws: /ask → pane border takes the needs-you tone" $?
 snap ws-needs-you

@@ -201,7 +201,7 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     // FORK: workspace layout (DESIGN.md §15).
     lines.extend(section_header("  Workspace layout (b):", columns, theme));
     let workspace_keybinds: Vec<(&str, &str)> = vec![
-        ("b", "Toggle the dashboard layout: tree ⇄ workspace (saved)"),
+        ("b", "Toggle the dashboard layout: workspace ⇄ tree (saved)"),
         ("j/k", "Pick a session; the pane follows after 150 ms"),
         (
             "Enter",
