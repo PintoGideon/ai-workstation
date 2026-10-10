@@ -109,6 +109,21 @@ pub(crate) fn fit_hints<'a>(
     Line::from(spans).style(line.style)
 }
 
+/// Keep at most `width` columns of `text`; a text that was cut ends in `…`.
+/// The plain-string form of [`fit_line`], for a cell that is built before
+/// it is styled. Never splits a character, so a multibyte or wide glyph at
+/// the cut is dropped rather than sliced.
+pub(crate) fn fit_text(text: &str, width: usize) -> String {
+    if UnicodeWidthStr::width(text) <= width {
+        return text.to_string();
+    }
+    fit_line(Line::from(text), width)
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect()
+}
+
 /// The last `width` columns of `text`, marked with a leading `…` when the
 /// front was dropped — for an input field that must keep its end (and the
 /// cursor after it) in view.
@@ -230,6 +245,19 @@ mod tests {
         assert_eq!(text(&fit_line(line.clone(), 3)), "ab…");
         assert_eq!(text(&fit_line(line.clone(), 4)), "ab …");
         assert_eq!(text(&fit_line(line, 0)), "");
+    }
+
+    #[test]
+    fn fit_text_cuts_on_columns_not_bytes() {
+        assert_eq!(fit_text("abc", 3), "abc");
+        assert_eq!(fit_text("abcdef", 4), "abc…");
+        // Every character here is multibyte; a byte slice at the width would
+        // land inside one of them.
+        let message = "Привет, нужно разрешение на запуск команды";
+        let fitted = fit_text(message, 20);
+        assert_eq!(UnicodeWidthStr::width(fitted.as_str()), 20);
+        assert!(fitted.ends_with(ELLIPSIS));
+        assert_eq!(fit_text("ab🚀cd", 4), "ab …");
     }
 
     #[test]

@@ -19,6 +19,7 @@ use crate::theme::Theme;
 use crate::usage::{UsageData, format_usage_summary, usage_windows_for_session_kind};
 
 use super::dashboard::centered_rect;
+use super::fork_text::fit_text;
 
 /// The needs-attention overlay (`i`).
 ///
@@ -145,12 +146,12 @@ pub fn draw_notification_picker(
                 ),
                 (None, None) => {
                     let input_detail = input.map(|input| {
-                        if input.message.len() > 50 {
-                            format!("{}...", &input.message[..47])
-                        } else if input.message.is_empty() {
+                        if input.message.is_empty() {
                             input.notification_type.clone()
                         } else {
-                            input.message.clone()
+                            // Columns, not bytes: a multibyte message must
+                            // never be sliced mid-character.
+                            fit_text(&input.message, 50)
                         }
                     });
                     (
@@ -1753,4 +1754,65 @@ pub fn draw_session_picker(
         Span::styled(" cancel", Style::default().fg(theme.text_muted.to_color())),
     ]));
     frame.render_widget(hints, chunks[1]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{Terminal, backend::TestBackend};
+    use std::path::PathBuf;
+
+    fn pending_input(message: &str) -> PendingInput {
+        PendingInput {
+            session_id: "aiw-feat".to_string(),
+            cwd: String::new(),
+            message: message.to_string(),
+            notification_type: "input-request".to_string(),
+            file_path: PathBuf::new(),
+            target_file_path: None,
+            relative_path: None,
+            change_id: None,
+            tool: None,
+            old_snippet: None,
+            new_snippet: None,
+            original_file: None,
+            proposed_file: None,
+            is_new_file: None,
+            reason: None,
+            response_file: None,
+            project_name: Some("proj".to_string()),
+            feature_name: Some("feat".to_string()),
+            proceed_signal: None,
+            request_id: None,
+            reply_socket: None,
+        }
+    }
+
+    /// Regression: the row used to slice the message at byte 47, which
+    /// panics inside a multibyte character.
+    #[test]
+    fn a_long_multibyte_pending_message_is_cut_on_columns_not_bytes() {
+        let message = "Привет, агенту нужно разрешение на запуск команды в терминале";
+        assert!(message.len() > 50 && !message.is_char_boundary(47));
+        let pending = vec![pending_input(message)];
+        let rows = vec![AttentionRow::Pending(0)];
+        let theme = Theme::default();
+        let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+        terminal
+            .draw(|frame| {
+                draw_notification_picker(frame, &rows, &pending, &[None], 0, false, &theme)
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let screen: String = (0..30)
+            .map(|y| {
+                (0..120)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(screen.contains("Привет, агенту"), "{screen}");
+        assert!(screen.contains('…'), "{screen}");
+    }
 }
