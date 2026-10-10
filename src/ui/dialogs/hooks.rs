@@ -11,6 +11,7 @@ use crate::highlight;
 use crate::theme::Theme;
 
 use super::super::dashboard::centered_rect;
+use super::super::fork_text::fit_text;
 use super::diff::{PatchPanelOptions, draw_patch_panel};
 
 /// Cap on the TODO title shown in an unsent-prompt row's badge, so the badge
@@ -677,7 +678,7 @@ pub fn draw_latest_prompt_dialog(
                     // badge and crowd out the preview text below.
                     format!(
                         "unsent \u{00b7} {}",
-                        truncate_str(&prompt.label, UNSENT_LABEL_MAX_CHARS)
+                        fit_text(&prompt.label, UNSENT_LABEL_MAX_CHARS)
                     )
                 }
             };
@@ -695,7 +696,7 @@ pub fn draw_latest_prompt_dialog(
                 .unwrap_or("")
                 .trim();
 
-            let truncated = truncate_str(first_line, avail);
+            let truncated = fit_text(first_line, avail);
 
             let prefix_style = if is_selected {
                 Style::default()
@@ -778,19 +779,6 @@ pub fn draw_latest_prompt_dialog(
             Paragraph::new(Line::from(Span::styled(msg, Style::default().fg(color)))),
             chunks[4],
         );
-    }
-}
-
-fn truncate_str(s: &str, max_chars: usize) -> String {
-    if max_chars == 0 {
-        return String::new();
-    }
-    let char_count = s.chars().count();
-    if char_count <= max_chars {
-        s.to_string()
-    } else {
-        let truncated: String = s.chars().take(max_chars.saturating_sub(1)).collect();
-        format!("{truncated}…")
     }
 }
 

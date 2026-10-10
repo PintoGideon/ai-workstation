@@ -48,18 +48,9 @@ fn usage_bar_spans<'a>(label: &'a str, pct: f64, bar_width: usize, theme: &Theme
     ]
 }
 
-fn format_tokens(n: u64) -> String {
-    if n >= 1_000_000 {
-        format!("{:.1}M", n as f64 / 1_000_000.0)
-    } else if n >= 1_000 {
-        format!("{:.1}K", n as f64 / 1_000.0)
-    } else {
-        n.to_string()
-    }
-}
-
-// FORK: one copy (`list::shorten_path`, home looked up once).
-use super::list::shorten_path;
+// FORK: one copy (`app::util::shorten_path`, home looked up once).
+use crate::app::util::shorten_path;
+use crate::token_tracking::format_token_count;
 
 pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let theme = &app.theme;
@@ -1236,14 +1227,14 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 right_spans.push(Span::raw(" "));
             } else if usage.codex.five_hour_tokens > 0 {
                 right_spans.push(Span::styled(
-                    format!("5h {} ", format_tokens(usage.codex.five_hour_tokens)),
+                    format!("5h {} ", format_token_count(usage.codex.five_hour_tokens)),
                     Style::default().fg(theme.warning.to_color()),
                 ));
             }
 
             if usage.codex.today_tokens > 0 {
                 right_spans.push(Span::styled(
-                    format!("{} tok ", format_tokens(usage.codex.today_tokens)),
+                    format!("{} tok ", format_token_count(usage.codex.today_tokens)),
                     Style::default().fg(theme.info.to_color()),
                 ));
             }
@@ -1264,7 +1255,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 right_spans.push(Span::raw(" "));
             } else if usage.zai.today_tokens > 0 {
                 right_spans.push(Span::styled(
-                    format!("{} ", format_tokens(usage.zai.today_tokens)),
+                    format!("{} ", format_token_count(usage.zai.today_tokens)),
                     Style::default().fg(theme.info.to_color()),
                 ));
             }

@@ -14,6 +14,7 @@ use crate::editor::VimMode;
 use crate::theme::Theme;
 
 use super::super::dashboard::centered_rect;
+use super::super::fork_text::fit_text;
 use super::editor_view::editor_lines;
 
 /// Picker over the prompt library: a list of templates on the left with
@@ -126,7 +127,7 @@ pub fn draw_prompt_library(
 
             let badge = format!(" [{}]", entry.source.label());
             let fixed = marker.len() + badge.len();
-            let name = truncate(&entry.template.name, list_width.saturating_sub(fixed));
+            let name = fit_text(&entry.template.name, list_width.saturating_sub(fixed));
 
             Some(ListItem::new(Line::from(vec![
                 Span::styled(marker.to_string(), name_style),
@@ -740,7 +741,7 @@ pub fn draw_skill_picker(frame: &mut Frame, state: &SkillPickerState, theme: &Th
                     let room = width.saturating_sub(used);
                     if room > 4 {
                         spans.push(Span::styled(
-                            format!("  — {}", truncate(&skill.description, room)),
+                            format!("  — {}", fit_text(&skill.description, room)),
                             Style::default().fg(theme.text_muted.to_color()),
                         ));
                     }
@@ -765,20 +766,4 @@ pub fn draw_skill_picker(frame: &mut Frame, state: &SkillPickerState, theme: &Th
         ])),
         chunks[2],
     );
-}
-
-fn truncate(s: &str, max_chars: usize) -> String {
-    if max_chars == 0 {
-        return String::new();
-    }
-    let count = s.chars().count();
-    if count <= max_chars {
-        return s.to_string();
-    }
-    if max_chars == 1 {
-        return "…".to_string();
-    }
-    let mut out: String = s.chars().take(max_chars - 1).collect();
-    out.push('…');
-    out
 }

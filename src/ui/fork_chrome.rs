@@ -24,7 +24,7 @@ pub fn cwd_label() -> &'static str {
     static CWD: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     CWD.get_or_init(|| {
         std::env::current_dir()
-            .map(|p| super::list::shorten_path(&p))
+            .map(|p| crate::app::util::shorten_path(&p))
             .unwrap_or_default()
     })
 }

@@ -36,6 +36,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{GuiError, GuiHandle, GuiResult, WorkspaceSnapshot};
 use crate::app::App;
+use crate::app::util::shorten_path;
 use crate::context_display::format_context_indicator;
 use crate::context_tracking::ContextBand;
 use crate::custom_session_icons::resolve_custom_session_icon;
@@ -44,7 +45,7 @@ use crate::project::{Project, ProjectStatus, ProjectStore, SessionKind};
 use crate::token_tracking::{
     aggregate_token_usage, format_feature_token_usage, provider_for_session_kind,
 };
-use crate::ui::list::{format_age, shorten_path};
+use crate::ui::list::format_age;
 
 /// Mirrors the TUI's `NOTIFICATION_MAX_AGE` (`app/notifications.rs`): the TUI
 /// prunes notification files older than this at startup, so the GUI ignores

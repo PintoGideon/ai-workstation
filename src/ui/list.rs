@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use chrono::{DateTime, Utc};
 use ratatui::{
     Frame,
@@ -8,8 +6,10 @@ use ratatui::{
     text::{Line, Span},
     widgets::{List, ListItem}, // FORK: G11 panels come from `fork_chrome`
 };
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthStr;
 
+use super::fork_text::fit_text;
+use crate::app::util::shorten_path;
 use crate::app::{App, Selection, VisibleItem};
 use crate::context_display::{ContextIndicator, format_context_indicator};
 use crate::context_tracking::ContextBand;
@@ -56,43 +56,6 @@ pub fn rainbow_spans(text: &str, theme: &Theme) -> Vec<Span<'static>> {
         .collect()
 }
 
-pub(crate) fn shorten_path(path: &Path) -> String {
-    // FORK: home looked up once, not per row per frame.
-    static HOME: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
-    if let Some(home) = HOME.get_or_init(dirs::home_dir)
-        && let Ok(rest) = path.strip_prefix(home)
-    {
-        return format!("~/{}", rest.display());
-    }
-    path.display().to_string()
-}
-
-fn truncate_right_to_width(text: &str, width: usize) -> String {
-    if UnicodeWidthStr::width(text) <= width {
-        return text.to_string();
-    }
-    if width == 0 {
-        return String::new();
-    }
-    if width == 1 {
-        return "…".to_string();
-    }
-
-    let content_width = width - 1;
-    let mut result = String::new();
-    let mut used = 0;
-    for character in text.chars() {
-        let character_width = UnicodeWidthChar::width(character).unwrap_or(0);
-        if used + character_width > content_width {
-            break;
-        }
-        result.push(character);
-        used += character_width;
-    }
-    result.push('…');
-    result
-}
-
 /// Reserve room for the full context label without sacrificing the session
 /// name entirely. At widths where both cannot be meaningful, the name wins.
 fn fit_session_label(
@@ -112,7 +75,7 @@ fn fit_session_label(
     if row_width < reserved + MIN_SESSION_NAME_WIDTH {
         return (label.to_string(), false);
     }
-    (truncate_right_to_width(label, row_width - reserved), true)
+    (fit_text(label, row_width - reserved), true)
 }
 
 fn context_indicator_style(indicator: &ContextIndicator, theme: &Theme) -> Style {

@@ -5,6 +5,7 @@
 //! All widths are display columns (`unicode-width`), so a wide glyph or an
 //! emoji at the cut never spills over a border.
 
+use chrono::{DateTime, Local};
 use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -152,6 +153,23 @@ pub(crate) fn elide_head(text: &str, width: usize) -> String {
     let mut shown = ELLIPSIS.to_string();
     shown.extend(tail);
     shown
+}
+
+/// How long ago `at` was, for a list row: `now`, `5m`, `3h`, `2d`, then
+/// the date (`Mar 4`) once it is a week old.
+pub(crate) fn relative_age(at: DateTime<Local>) -> String {
+    let delta = Local::now().signed_duration_since(at);
+    if delta.num_minutes() < 1 {
+        "now".to_string()
+    } else if delta.num_hours() < 1 {
+        format!("{}m", delta.num_minutes())
+    } else if delta.num_days() < 1 {
+        format!("{}h", delta.num_hours())
+    } else if delta.num_days() < 7 {
+        format!("{}d", delta.num_days())
+    } else {
+        at.format("%b %-d").to_string()
+    }
 }
 
 /// Wrap a path to `width` columns, breaking after a `/` wherever one

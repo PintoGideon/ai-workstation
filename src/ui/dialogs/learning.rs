@@ -21,6 +21,7 @@ use ratatui::{
 use std::path::Path;
 
 use super::super::dashboard::centered_rect;
+use super::super::fork_text::{elide_head, fit_text};
 use super::editor_view::{count_wrapped_editor_lines, editor_lines, sync_editor_scroll};
 use crate::app::learning::STARTER_QUESTIONS;
 use crate::app::{
@@ -417,9 +418,9 @@ fn file_row(
     // Truncating a tree row from the left would eat the indent that says where
     // it sits, so those clip from the right instead.
     let body = if truncate_from_left {
-        truncate_left(&text, avail)
+        elide_head(&text, avail)
     } else {
-        truncate_right(&text, avail)
+        fit_text(&text, avail)
     };
     let style = if selected {
         Style::default()
@@ -804,10 +805,7 @@ fn qa_question_line(
     };
     Line::from(vec![
         Span::raw(indent),
-        Span::styled(
-            truncate_right(&text, width.saturating_sub(indent.len())),
-            style,
-        ),
+        Span::styled(fit_text(&text, width.saturating_sub(indent.len())), style),
     ])
 }
 
@@ -1347,7 +1345,7 @@ fn draw_action_editor(frame: &mut Frame, state: &mut LearningViewState, theme: &
                 .lines()
                 .map(|line| {
                     Line::from(Span::styled(
-                        format!(" {}", truncate_right(line, body_width)),
+                        format!(" {}", fit_text(line, body_width)),
                         Style::default().fg(theme.text_muted.to_color()),
                     ))
                 })
@@ -1794,33 +1792,6 @@ fn indent(depth: usize) -> String {
 /// How far tree rows step right before the indent stops growing.
 const MAX_INDENT_LEVELS: usize = 6;
 
-fn truncate_left(text: &str, width: usize) -> String {
-    if width == 0 {
-        return String::new();
-    }
-    let chars: Vec<char> = text.chars().collect();
-    if chars.len() <= width {
-        return text.to_string();
-    }
-    let keep = width.saturating_sub(1);
-    let mut out = String::from("…");
-    out.extend(chars[chars.len() - keep..].iter());
-    out
-}
-
-fn truncate_right(text: &str, width: usize) -> String {
-    if width == 0 {
-        return String::new();
-    }
-    let chars: Vec<char> = text.chars().collect();
-    if chars.len() <= width {
-        return text.to_string();
-    }
-    let mut out: String = chars[..width.saturating_sub(1)].iter().collect();
-    out.push('…');
-    out
-}
-
 /// A question's first line, for the one-line history row.
 fn first_line(text: &str) -> String {
     text.lines().next().unwrap_or("").trim().to_string()
@@ -1836,20 +1807,6 @@ mod tests {
         assert_eq!(keep_in_view(5, 2, 10), 2, "scrolled past it going up");
         assert_eq!(keep_in_view(0, 12, 10), 3, "just far enough down");
         assert_eq!(keep_in_view(4, 4, 0), 4, "no room to decide anything");
-    }
-
-    #[test]
-    fn truncation_keeps_the_end_of_a_path_and_the_start_of_a_question() {
-        assert_eq!(
-            truncate_left("src/app/learning.rs", 40),
-            "src/app/learning.rs"
-        );
-        assert_eq!(truncate_left("src/app/learning.rs", 10), "…arning.rs");
-        assert_eq!(
-            truncate_right("what does this do?", 40),
-            "what does this do?"
-        );
-        assert_eq!(truncate_right("what does this do?", 10), "what does…");
     }
 
     #[test]

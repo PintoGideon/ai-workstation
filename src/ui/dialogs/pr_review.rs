@@ -12,6 +12,7 @@ use unicode_width::UnicodeWidthStr;
 
 use std::path::Path;
 
+use crate::ui::fork_text::elide_head;
 use crate::{
     app::ai_review::AiReviewTriageStatus,
     app::pr_review::{
@@ -2570,7 +2571,7 @@ fn comment_list_line<'a>(
         + marker_span.chars().count()
         + author_span.chars().count()
         + attribution_span.chars().count();
-    let location = truncate_left(&location, width.saturating_sub(prefix_width));
+    let location = elide_head(&location, width.saturating_sub(prefix_width));
 
     Line::from(vec![
         Span::styled(
@@ -2631,18 +2632,6 @@ fn comment_list_line<'a>(
 /// Truncate `s` to at most `max` display columns, keeping the tail and marking
 /// the elision with a leading `…`. Used for file paths so the filename (and its
 /// line number) remain visible when the row is too narrow for the full path.
-pub(crate) fn truncate_left(s: &str, max: usize) -> String {
-    let len = s.chars().count();
-    if len <= max {
-        return s.to_string();
-    }
-    if max <= 1 {
-        return "…".to_string();
-    }
-    let tail: String = s.chars().skip(len - (max - 1)).collect();
-    format!("…{tail}")
-}
-
 /// Render the detail pane for the selected comment and return the number of
 /// content lines built (used by the caller to clamp detail scrolling). The
 /// detail is laid out as distinct sections — a chip-laden header, the diff hunk

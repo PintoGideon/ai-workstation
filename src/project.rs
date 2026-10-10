@@ -10,7 +10,9 @@ use crate::token_tracking::{SessionTokenUsage, TokenUsageSource};
 
 pub(crate) const CURRENT_PROJECT_STORE_VERSION: u32 = 5;
 
-fn slugify_component(s: &str) -> String {
+/// Lower-case, non-alphanumerics folded to single `-`, no leading or
+/// trailing dash. Re-exported as `crate::app::util::slugify`.
+pub fn slugify(s: &str) -> String {
     s.to_lowercase()
         .chars()
         .map(|c| {
@@ -28,7 +30,7 @@ fn slugify_component(s: &str) -> String {
 }
 
 pub fn normalized_feature_name(name: &str) -> String {
-    slugify_component(name)
+    slugify(name)
 }
 
 /// FORK: longest slug a project or feature contributes to a tmux session or
@@ -44,7 +46,7 @@ const MAX_SLUG_LEN: usize = 48;
 /// get distinct tmux sessions and worktree folders (the duplicate check
 /// compares full names).
 fn capped_slug(s: &str) -> String {
-    let slug = slugify_component(s);
+    let slug = slugify(s);
     if slug.chars().count() <= MAX_SLUG_LEN {
         return slug;
     }

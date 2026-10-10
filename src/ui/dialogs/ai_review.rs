@@ -2,7 +2,6 @@
 //! independent of PR Triage. See `crate::app::ai_review`'s module doc for why
 //! this is a separate workflow/pane rather than bolted onto triage.
 
-use chrono::{DateTime, Local};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -21,7 +20,8 @@ use crate::{
     theme::Theme,
 };
 
-use super::pr_review::{chip, diff_hunk_lines, divider, pane_block, section_label, truncate_left};
+use super::pr_review::{chip, diff_hunk_lines, divider, pane_block, section_label};
+use crate::ui::fork_text::{elide_head, fit_text, relative_age};
 
 /// Full-screen running view for the background diff-fetch + review pass.
 pub fn draw_ai_review_running(
@@ -124,7 +124,7 @@ pub(super) fn ai_review_run_badge_text(
     run: &AiReviewRun,
     include_error_detail: bool,
 ) -> (String, bool) {
-    let age = format_relative_time(run.ran_at);
+    let age = relative_age(run.ran_at);
     match &run.outcome {
         AiReviewRunOutcome::Findings(0) => (format!("no findings ({age})"), false),
         AiReviewRunOutcome::Findings(n) => (
@@ -132,7 +132,7 @@ pub(super) fn ai_review_run_badge_text(
             false,
         ),
         AiReviewRunOutcome::Error(e) if include_error_detail => {
-            (format!("failed ({age}): {}", truncate_right(e, 60)), true)
+            (format!("failed ({age}): {}", fit_text(e, 60)), true)
         }
         AiReviewRunOutcome::Error(_) => (format!("failed ({age})"), true),
     }
@@ -140,33 +140,6 @@ pub(super) fn ai_review_run_badge_text(
 
 /// Coarse relative age (`"now"`, `"5m"`, `"3h"`, `"2d"`, or a bare date past a
 /// week) for a header badge.
-fn format_relative_time(at: DateTime<Local>) -> String {
-    let delta = Local::now().signed_duration_since(at);
-    if delta.num_minutes() < 1 {
-        "now".to_string()
-    } else if delta.num_hours() < 1 {
-        format!("{}m", delta.num_minutes())
-    } else if delta.num_days() < 1 {
-        format!("{}h", delta.num_hours())
-    } else if delta.num_days() < 7 {
-        format!("{}d", delta.num_days())
-    } else {
-        at.format("%b %-d").to_string()
-    }
-}
-
-fn truncate_right(s: &str, max: usize) -> String {
-    let len = s.chars().count();
-    if len <= max {
-        return s.to_string();
-    }
-    if max <= 1 {
-        return "…".to_string();
-    }
-    let head: String = s.chars().take(max - 1).collect();
-    format!("{head}…")
-}
-
 fn finding_location(f: &AiReviewFinding) -> String {
     match (&f.path, f.side, f.line) {
         (Some(path), Some(crate::diff::DiffSide::Old), Some(line)) => {
@@ -211,7 +184,7 @@ fn finding_list_line(
     let combined_span = if has_combined_cost { "⧉ " } else { "" };
     let prefix_width =
         marker_span.chars().count() + index_span.chars().count() + combined_span.chars().count();
-    let location = truncate_left(&finding_location(f), width.saturating_sub(prefix_width));
+    let location = elide_head(&finding_location(f), width.saturating_sub(prefix_width));
     let snippet = f.body.lines().next().unwrap_or("").to_string();
 
     Line::from(vec![

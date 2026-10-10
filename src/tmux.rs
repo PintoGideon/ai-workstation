@@ -42,18 +42,7 @@ fn usable_cli_binary(exe: PathBuf) -> Option<PathBuf> {
         Some(stripped) => PathBuf::from(stripped),
         None => exe,
     };
-    is_executable_file(&path).then_some(path)
-}
-
-#[cfg(unix)]
-fn is_executable_file(path: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    fs::metadata(path).is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
-}
-
-#[cfg(not(unix))]
-fn is_executable_file(path: &Path) -> bool {
-    path.is_file()
+    crate::fork::extra_agents::is_executable(&path).then_some(path)
 }
 
 /// How many lines of tmux history a scroll-back view reads. Shared by the

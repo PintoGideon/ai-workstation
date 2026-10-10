@@ -19,7 +19,7 @@ use crate::theme::Theme;
 use crate::usage::{UsageData, format_usage_summary, usage_windows_for_session_kind};
 
 use super::dashboard::centered_rect;
-use super::fork_text::fit_text;
+use super::fork_text::{fit_text, relative_age};
 
 /// The needs-attention overlay (`i`).
 ///
@@ -1324,7 +1324,7 @@ fn session_picker_item(
 ) -> ListItem<'static> {
     let marker = if is_selected { "  > " } else { "    " };
     let age = format_session_age(updated);
-    let ident = truncate_text(identifier, 12);
+    let ident = fit_text(identifier, 12);
     let age_str = format!("{age:>6}");
     let ident_str = format!("  {ident:<12}  ");
     let meta_chars = age_str.chars().count() + ident_str.chars().count();
@@ -1348,11 +1348,11 @@ fn session_picker_item(
         let overflow = wrapped.split_off(1);
         let joined = overflow.join(" ");
         let second_width = continuation_width.max(1);
-        wrapped.push(truncate_text(&joined, second_width));
+        wrapped.push(fit_text(&joined, second_width));
     }
     if wrapped.len() == 2 {
         let second_width = continuation_width.max(1);
-        wrapped[1] = truncate_text(&wrapped[1], second_width);
+        wrapped[1] = fit_text(&wrapped[1], second_width);
     }
 
     let first_line = Line::from(vec![
@@ -1363,7 +1363,7 @@ fn session_picker_item(
             wrapped
                 .first()
                 .cloned()
-                .unwrap_or_else(|| truncate_text(title, title_width.max(1))),
+                .unwrap_or_else(|| fit_text(title, title_width.max(1))),
             title_style,
         ),
     ]);
@@ -1384,25 +1384,10 @@ fn session_picker_item(
 }
 
 fn format_session_age(updated: i64) -> String {
-    let Some(updated) = normalize_timestamp(updated) else {
-        return "--".to_string();
-    };
-    let Some(updated_at) = Local.timestamp_opt(updated, 0).single() else {
-        return "--".to_string();
-    };
-
-    let delta = Local::now().signed_duration_since(updated_at);
-    if delta.num_minutes() < 1 {
-        "now".to_string()
-    } else if delta.num_hours() < 1 {
-        format!("{}m", delta.num_minutes())
-    } else if delta.num_days() < 1 {
-        format!("{}h", delta.num_hours())
-    } else if delta.num_days() < 7 {
-        format!("{}d", delta.num_days())
-    } else {
-        updated_at.format("%b %-d").to_string()
-    }
+    normalize_timestamp(updated)
+        .and_then(|updated| Local.timestamp_opt(updated, 0).single())
+        .map(relative_age)
+        .unwrap_or_else(|| "--".to_string())
 }
 
 fn normalize_timestamp(updated: i64) -> Option<i64> {
@@ -1426,20 +1411,6 @@ fn short_session_id(id: &str) -> String {
     } else {
         base.chars().take(10).collect()
     }
-}
-
-fn truncate_text(text: &str, max_chars: usize) -> String {
-    let count = text.chars().count();
-    if count <= max_chars {
-        return text.to_string();
-    }
-    if max_chars <= 1 {
-        return "…".to_string();
-    }
-
-    let mut truncated = text.chars().take(max_chars - 1).collect::<String>();
-    truncated.push('…');
-    truncated
 }
 
 fn wrap_text_to_width(text: &str, max_chars: usize) -> Vec<String> {

@@ -30,31 +30,19 @@ impl ClaudeTaskState {
     }
 }
 
+/// `~/…` for a path under the home directory, the path as given otherwise.
 pub fn shorten_path(path: &std::path::Path) -> String {
-    if let Some(home) = dirs::home_dir()
-        && let Ok(rest) = path.strip_prefix(&home)
+    // FORK: home looked up once, not per row per frame.
+    static HOME: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    if let Some(home) = HOME.get_or_init(dirs::home_dir)
+        && let Ok(rest) = path.strip_prefix(home)
     {
         return format!("~/{}", rest.display());
     }
     path.display().to_string()
 }
 
-pub fn slugify(s: &str) -> String {
-    s.to_lowercase()
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '-' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>()
-        .split('-')
-        .filter(|p| !p.is_empty())
-        .collect::<Vec<_>>()
-        .join("-")
-}
+pub use crate::project::slugify;
 
 /// `slugify`, then shortened to at most `max` characters **at a word
 /// boundary**.
