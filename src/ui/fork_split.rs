@@ -45,6 +45,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
         let Some(rect) = rects.get(slot).copied() else {
             continue;
         };
+        // A stale layout (resize before the tick recomputed it) must never
+        // draw outside the frame: skip any tile that does not fit inside it.
+        if rect.is_empty() || area.intersection(rect) != rect {
+            continue;
+        }
         draw_tile(frame, app, state, index, rect);
     }
 
@@ -219,5 +224,9 @@ fn draw_footer(frame: &mut Frame, app: &App, state: &SplitViewState, needs_you: 
             ));
         }
     }
-    frame.render_widget(Paragraph::new(Line::from(spans)), footer);
+    // Drop whole hints from the end before they would be cut mid-word.
+    let line = super::fork_text::fit_hints(Line::from(spans), footer.width as usize, |span| {
+        span.style == key
+    });
+    frame.render_widget(Paragraph::new(line), footer);
 }
