@@ -1033,6 +1033,9 @@ pub struct App {
     /// sweep re-detects the state after a relaunch. Cleared when the session
     /// is started again.
     pub exited_sessions: std::collections::HashSet<String>,
+    /// FORK: ids of projects whose repo folder no longer exists on disk; set
+    /// by the sweep (with a one-time toast) for the dashboard to mark the row.
+    pub missing_project_repos: std::collections::HashSet<String>,
     /// Tmux "session:window" targets where compose interception is
     /// disabled and keys pass straight through to Claude Code.
     pub compose_direct_targets: std::collections::HashSet<String>,
@@ -2604,6 +2607,7 @@ impl App {
             pending_inputs: Vec::new(),
             user_stopped_features: std::collections::HashSet::new(),
             exited_sessions: std::collections::HashSet::new(),
+            missing_project_repos: std::collections::HashSet::new(),
             compose_direct_targets: std::collections::HashSet::new(),
             compose_drafts: HashMap::new(),
             compose_clipboard_paste: None,
@@ -2860,6 +2864,7 @@ impl App {
             pending_inputs: Vec::new(),
             user_stopped_features: std::collections::HashSet::new(),
             exited_sessions: std::collections::HashSet::new(),
+            missing_project_repos: std::collections::HashSet::new(),
             compose_direct_targets: std::collections::HashSet::new(),
             compose_drafts: HashMap::new(),
             compose_clipboard_paste: None,

@@ -342,3 +342,28 @@ fn the_viewed_feature_losing_its_whole_tmux_session_also_leaves_the_view() {
     // Feature-level recovery owns the session rows in this case.
     assert_eq!(listed(&app), vec![("claude".into(), false)]);
 }
+
+// ── projects whose folder is gone ────────────────────────────────────────────
+
+#[test]
+fn a_missing_project_folder_is_flagged_and_announced_once() {
+    let mut app = app_with(vec![], &[]);
+    let dir = tempfile::tempdir().unwrap();
+    let gone = dir.path().join("vanished");
+    app.store.projects[0].repo = gone.clone();
+
+    assert!(app.reconcile_missing_project_dirs());
+    assert!(app.missing_project_repos.contains("proj-1"));
+    assert_eq!(app.toasts.len(), 1);
+    assert!(app.toasts[0].message.contains("folder is gone"));
+    assert!(app.toasts[0].message.contains("1 feature(s) still run"));
+
+    // Same state next sweep: no second toast.
+    assert!(!app.reconcile_missing_project_dirs());
+    assert_eq!(app.toasts.len(), 1);
+
+    // The folder coming back clears the flag.
+    std::fs::create_dir_all(&gone).unwrap();
+    assert!(app.reconcile_missing_project_dirs());
+    assert!(app.missing_project_repos.is_empty());
+}

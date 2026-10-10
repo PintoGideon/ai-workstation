@@ -1942,8 +1942,11 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             && !defer_background_sync
             && !startup_tasks_pending
         {
-            // FORK: drop/stop sessions whose tmux window closed on its own.
+            // FORK: drop/stop sessions whose tmux window closed on its own,
+            // mark agents that exited at the shell, and flag projects whose
+            // folder is gone.
             app.reconcile_vanished_windows();
+            app.reconcile_missing_project_dirs();
             // FORK: re-bind the IPC socket if its file was removed under us.
             crate::fork::ipc_rebind::rebind_if_vanished(app);
             // Kick off a background refresh only when the previous one has

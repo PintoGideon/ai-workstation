@@ -266,6 +266,49 @@ impl App {
     pub fn session_is_exited(&self, id: &str) -> bool {
         self.exited_sessions.contains(id)
     }
+
+    /// Projects whose repo folder no longer exists: flag them (once, with a
+    /// toast) so the dashboard can mark the row; sessions keep running in a
+    /// deleted directory until the user acts. A folder that comes back
+    /// clears the flag. Returns whether the set of flagged projects changed.
+    pub(crate) fn reconcile_missing_project_dirs(&mut self) -> bool {
+        let mut changed = false;
+        let mut gone: Vec<(String, String, String, usize)> = Vec::new();
+        for project in &self.store.projects {
+            let exists = project.repo.exists();
+            let flagged = self.missing_project_repos.contains(&project.id);
+            if !exists && !flagged {
+                let running = project
+                    .features
+                    .iter()
+                    .filter(|f| f.status != ProjectStatus::Stopped)
+                    .count();
+                gone.push((
+                    project.id.clone(),
+                    project.name.clone(),
+                    project.repo.display().to_string(),
+                    running,
+                ));
+            } else if exists && flagged {
+                self.missing_project_repos.remove(&project.id);
+                changed = true;
+            }
+        }
+        for (id, name, path, running) in gone {
+            self.missing_project_repos.insert(id);
+            let msg = if running > 0 {
+                format!(
+                    "Project '{name}' folder is gone ({path}); {running} feature(s) still run in a deleted directory"
+                )
+            } else {
+                format!("Project '{name}' folder is gone ({path})")
+            };
+            self.log_warn("reconcile", msg.clone());
+            self.push_toast_warning(msg);
+            changed = true;
+        }
+        changed
+    }
 }
 
 /// Where the selection should point after session `(pi, fi, si)` is removed.
