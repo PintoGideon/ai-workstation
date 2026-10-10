@@ -1,5 +1,4 @@
-//! SQLite persistence for PR Triage's **Investigate** action
-//! (`AIW_PLAN.md` — "PR Triage: Investigate").
+//! SQLite persistence for PR Triage's **Investigate** action.
 //!
 //! A [`PrInvestigation`] is one strictly read-only headless investigation of a
 //! single review comment. There is exactly one per `(project_id, PR#, comment
@@ -21,10 +20,6 @@
 //! signal, exactly as `pr_comment_triage` uses it, not part of the identity, so
 //! a push that moves the PR head doesn't orphan the finding.
 //!
-//! The persistence layer lands ahead of its UI consumers (later `AIW_PLAN.md`
-//! tasks), so parts of this API are allowed to be unused for now — like
-//! `src/db/todos.rs` and `src/db/learning.rs`.
-#![allow(dead_code)]
 
 use anyhow::Result;
 use rusqlite::{Connection, params};

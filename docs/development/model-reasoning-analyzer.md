@@ -5,8 +5,8 @@
 
 Inventory and first-release implementation checked on 2026-09-29, with Claude
 Code discovery and research added on 2026-09-30 and additional plan-review entry
-points, including Expert review advice, on 2026-10-01, against
-`AIW_PLAN.md`. The headless inventory includes the subsequent reasoning-picker
+points, including Expert review advice, on 2026-10-01, against the plan of
+record (now DESIGN.md). The headless inventory includes the subsequent reasoning-picker
 integration from main. In-place Codex session application was verified on
 2026-10-01 against Codex 0.159.3's installed protocol and an isolated no-turn
 probe. Other harnesses retain view-only session advice.
@@ -114,27 +114,8 @@ installed `codex --help` and `codex debug --help`, and catalog field inspection.
 
 ### OpenCode
 
-AIW's existing picker has Default/Custom, without a discovered catalog.
-OpenCode identifies models by `provider/model`; reasoning variants are
-model/provider-specific and can be configured or disabled. Effective catalogs
-are scoped to the project. The CLI offers `models` (and metadata via
-`--verbose`), but public catalog membership alone does not prove the provider
-is connected. The server's `/provider` response separates its catalog from
-connected provider IDs; an adapter would need effective enabled models,
-connected providers and variant metadata for the launch's workdir.
-
-The installed interactive CLI advertises `--model` but no `--variant`;
-`opencode run` documents `--variant`. V2 documents `provider/model#variant`.
-These interfaces must not be mixed without checking the installed version.
-Current `TmuxOps::launch_opencode[_with_session]` accepts no extra arguments;
-therefore **no explicit model or variant is currently applicable through AIW's
-interactive launch boundary**. HeadlessRunner can pass an explicit model and
-reasoning as `--variant`, but this is not effective provider/variant discovery.
-Extending interactive launch requires that discovery contract first.
-
-Sources: [OpenCode CLI](https://opencode.ai/docs/cli/),
-[server providers](https://opencode.ai/docs/server/),
-[V2 model references](https://opencode.ai/v2/docs/models), installed CLI help.
+Removed from AI Workstation (see the note at the top); the original seam
+notes are not kept here.
 
 ### Pi
 

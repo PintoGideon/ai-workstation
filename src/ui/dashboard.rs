@@ -64,7 +64,7 @@ fn pr_triage_badge_span(app: &App, view: &crate::app::ViewState) -> Option<Span<
         ));
     }
     // No open PR: a merged or closed one is finished work, not "no PR" —
-    // show that instead of nothing (D3 in AIW_PLAN.md).
+    // show that instead of nothing.
     let pr = app.terminal_pr_for_feature(&feature.id)?;
     let color = match pr.state {
         crate::github::TerminalPrState::Merged => app.theme.pr_merged.to_color(),

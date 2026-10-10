@@ -361,7 +361,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                     } else if let Some(pr) = app.terminal_pr_for_feature(&feature.id) {
                         // A branch with no open PR but a merged/closed one is
                         // finished work, not "no PR" — show that instead of
-                        // nothing (see D3 in AIW_PLAN.md).
+                        // nothing.
                         let (word, color) = match pr.state {
                             crate::github::TerminalPrState::Merged => {
                                 (pr.state.label(), theme.pr_merged.to_color())

@@ -1,18 +1,16 @@
 //! Central registry of every headless AI prompt AIW sends.
 //!
 //! Historically each headless call site (`app/plan_interview.rs`,
-//! `app/learning.rs`, `app/review.rs`, `app/ai_review.rs`, `app/pr_review.rs`,
+//! `app/learning/`, `app/review/`, `app/ai_review.rs`, `app/pr_review/`,
 //! `handlers/diff_review.rs`, `summary.rs`) assembled its prompt inline. This
 //! module is the single place those templates live, so they can be listed,
 //! displayed, and overridden.
 //!
-//! Task boundaries (see `AIW_PLAN.md`):
 //! - This file: stable [`PromptId`]s, the built-in default template text
 //!   (in [`defaults`]), the placeholder names each expects, and room for
 //!   optional per-harness default variants.
-//! - Next: `resolve_prompt(id, harness, ctx)` — pick the effective template
-//!   (feature → project → global → built-in) and interpolate `ctx` with no
-//!   validation.
+//! - [`resolve`]: pick the effective template (feature → project → global →
+//!   built-in) and interpolate the context with no validation.
 //!
 //! A full map of prompt IDs → placeholder sets → call sites lives in
 //! `docs/backlog/editable-prompts-call-site-inventory.md`.

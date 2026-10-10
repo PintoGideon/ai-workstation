@@ -876,10 +876,7 @@ impl AiwDb {
 
 /// PR Triage "Investigate" findings: a read-only headless investigation of one
 /// review comment, persisted per `(project id, PR#, comment id)` and reloaded
-/// with the triage overlay. The persistence layer lands ahead of its UI
-/// consumers (later `AIW_PLAN.md` tasks), so this is allowed to be unused for
-/// now — mirroring the todo / learning blocks above.
-#[allow(dead_code)]
+/// with the triage overlay (`src/app/pr_review/investigation.rs`).
 impl AiwDb {
     /// Every persisted investigation for one PR in one project, oldest first.
     pub fn load_pr_investigations(

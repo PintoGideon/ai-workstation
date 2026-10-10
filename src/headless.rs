@@ -190,8 +190,8 @@ pub fn will_overflow_with_budget(prompt: &str, budget_tokens: usize) -> bool {
 // fails with a typed [`PromptTooLong`] instead of a generic error string so
 // `crate::review_batch` can halve that batch and retry rather than
 // abandoning coverage. Any failure the classifier does not recognize stays a
-// plain `anyhow` error — see AIW_PLAN.md's risk note on unverified CLI
-// phrasings.
+// plain `anyhow` error: the CLIs' "too long" phrasings are unverified across
+// versions, so the classifier is deliberately conservative.
 // ---------------------------------------------------------------------------
 
 /// A one-shot run rejected because the prompt exceeded the model's context
@@ -491,8 +491,8 @@ impl HeadlessRunner {
         run_command_with_args(harness, &spec, &extra, workdir, prompt, model.into())
     }
 
-    /// The **strictly read-only** entry the PR-triage "Investigate" flow uses
-    /// (`AIW_PLAN.md`). A named seam over [`read_only_command_for`] so the
+    /// The **strictly read-only** entry the PR-triage "Investigate" flow uses.
+    /// A named seam over [`read_only_command_for`] so the
     /// read-only contract is greppable and cannot be swapped for a
     /// tool-enabled path ([`Self::run`] / [`Self::run_with_progress`]) in a
     /// later refactor without it being obvious. The command it builds cannot

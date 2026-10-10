@@ -9,9 +9,10 @@ rustls-webpki 0.103.9 advisories:
 - [RUSTSEC-2026-0099](https://rustsec.org/advisories/RUSTSEC-2026-0099): wildcard name constraints.
 - [RUSTSEC-2026-0104](https://rustsec.org/advisories/RUSTSEC-2026-0104): panic while parsing CRLs.
 
-The targeted lockfile update to 0.103.13 clears all four. The dependency is
-reachable through rustls/rustls-platform-verifier and ureq. No other package
-version or manifest requirement changed. The second audit exited successfully
+The targeted lockfile update to 0.103.13 cleared all four at the time. That
+dependency came in through rustls/rustls-platform-verifier and ureq, none of
+which AIW links any more (see NO_CLOUD.md), so those advisories no longer apply
+to this tree. No other package version or manifest requirement changed. The second audit exited successfully
 with zero blocking vulnerabilities and the five default nonfatal warnings below.
 No advisory is ignored or suppressed by configuration.
 

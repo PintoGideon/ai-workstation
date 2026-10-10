@@ -60,10 +60,6 @@ session's claude.ai URL when Claude has printed it as visible text;
 own `/rc` in the session. Remote Control is Claude-only and unavailable on
 z.ai / third-party-provider sessions.
 
-In a session, `Ctrl+Space`, then `Shift+C` and `Shift+Q` belong to AIW's own
-phone companion instead: they turn its server on or off and show the pairing
-QR code, exactly as on the dashboard.
-
 ## Icons for custom sessions
 
 When adding a custom session (`s`, or the config wizard's Custom Sessions

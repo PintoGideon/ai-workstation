@@ -160,11 +160,9 @@ opening in the browser. The manifest schema and discovery URL convention
 are specified in the evidence contract. No crawling,
 JavaScript execution or cookie import is proposed.
 
-The repository's current screenshot publisher produces a private Cloudflare
-Pages gallery and links it in a marked PR-body region. Its HTML is built by
-`scripts/dev/screenshot/build_static_gallery.py`; this is a known protected
-gallery/browser case, not evidence of a universal gallery API. This feature
-does not require modifying the capture engine or publishing screenshot proof.
+The repository's local screenshot gallery (`scripts/dev/screenshot/build_gallery.py`)
+is a known local-files case, not evidence of a universal gallery API. This
+feature does not require modifying the capture engine.
 
 ## Validation commands and acceptance boundary
 
