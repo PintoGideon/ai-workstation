@@ -55,6 +55,11 @@ keys y; wait_for 'Configure Agent Harnesses' 10; check "first run: harness selec
 keys Enter j Enter j Enter j Enter j Enter; sleep 0.3
 cap | grep -q '\[x\] Cursor (installed)'; check "all five fake CLIs detected as installed" $?
 keys c; wait_for 'No projects yet' 5; check "empty dashboard" $?
+# no concurrency guard for the rest of the run: every start would otherwise ask
+aiw_quit; python3 - <<EOF
+import json; p="$XDG_CONFIG_HOME/ai_workstation/config.json"; c=json.load(open(p)); c["max_concurrent_agents"]=0; json.dump(c,open(p,"w"),indent=2)
+EOF
+aiw_start 200 60; wait_for 'No projects yet' 8; check "relaunch after first run" $?
 
 add_project alpha '~/repos/alpha' 0; check "add project via ~ path" $?
 add_project beta "$S/repos/beta" 1; check "add project (absolute path)" $?
@@ -75,8 +80,8 @@ grep -q '"--approval-mode", "auto_edit"' "$S/log/gemini.args"; check "Gemini lau
 select_row 'plain' >/dev/null; new_feature plain-1 n 2 1; sleep 2; hook_prompts
 test -f "$S/log/cursor-agent.args"; check "Cursor agent launched in the non-git project" $?
 
-# batch creation makes a new project
-keys B; wait_for 'Workspace Path' 3; keys Enter; sleep 0.3
+# batch creation makes a new project (workspace = the selected project's repo)
+select_row 'alpha' >/dev/null; keys B; wait_for 'Workspace Path' 3; keys Enter; sleep 0.3
 for i in $(seq 1 12); do keys BSpace; done; keys -l batch; keys Enter; sleep 0.3
 keys j Enter; sleep 0.3; for i in $(seq 1 12); do keys BSpace; done; keys -l batch; keys Enter; sleep 0.3
 keys j Enter j Enter Enter; sleep 2; hook_prompts
@@ -150,13 +155,8 @@ cap | grep -q "already checked out"; check "branch checked out elsewhere → cle
 select_row 'alpha' >/dev/null; new_feature alpha-1 n 0 1; sleep 1.5
 cap | grep -q "already exists"; check "duplicate feature name → message" $?; close_dialogs
 
-python3 - <<'EOF' >"$S/keys.txt"
-import random
-random.seed(7)
-pool = list("abcdefghijklmnoprstuvwxyzABCDEFGHIJKLMNOPRSTUVWXYZ0123456789/?.,;:[]{}-=_+!@#$%^&*()") + ["Enter","Tab","BTab","Up","Down","Left","Right","Home","End","PPage","NPage","Space","BSpace","DC","C-j","C-k","C-l","C-u","C-Space","C-a","C-e","C-r","C-t","C-w","C-z","F1","F5"]
-print(" ".join(random.choice(pool) for _ in range(500)))
-EOF
-for k in $(cat "$S/keys.txt"); do case "$k" in [a-zA-Z0-9/?.,\;:\[\]{}=_+!@#\$%^\&\*\(\)-]) keys -l "$k";; *) keys "$k";; esac; done; sleep 2
+"$HERE/random-keys.py" 500 >"$S/keys.txt"
+while IFS= read -r k; do case "$k" in ?) keys -l "$k";; *) keys "$k";; esac; done <"$S/keys.txt"; sleep 2
 no_panic && ! cap | grep -q 'aiw exited'; check "500 random dashboard keys: no panic, no exit" $?
 keys C-q; keys C-q; sleep 0.5; close_dialogs
 for sz in "120 40" "80 24" "40 10"; do set -- $sz; resize "$1" "$2"; sleep 0.8; snap "p3-dashboard-${1}x${2}"; keys '?'; sleep 0.5; snap "p3-help-${1}x${2}"; close_dialogs; done
