@@ -5,6 +5,12 @@ use crate::app::{App, AppMode, Selection};
 use crate::project::{AgentKind, SessionKind};
 
 pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
+    // FORK: workspace layout — the layout toggle, the sidebar's own keys and,
+    // with the pane focused, everything (it goes to the agent).
+    if super::fork_workspace::handle_key(app, key)? {
+        return Ok(());
+    }
+
     if app.leader_active {
         return handle_normal_leader_key(app, key);
     }

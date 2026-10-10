@@ -274,7 +274,8 @@ fn handle_scroll_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<
     Ok(())
 }
 
-fn handle_leader_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()> {
+// FORK: pub(super) so the workspace pane (`handlers/fork_workspace.rs`) reuses it.
+pub(super) fn handle_leader_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()> {
     app.deactivate_leader();
 
     // FORK: in a tile zoomed from split view, `z` goes back to the tiles.

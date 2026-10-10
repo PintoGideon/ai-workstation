@@ -198,6 +198,38 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
+    // FORK: workspace layout (DESIGN.md §15).
+    lines.extend(section_header("  Workspace layout (b):", columns, theme));
+    let workspace_keybinds: Vec<(&str, &str)> = vec![
+        ("b", "Toggle the dashboard layout: tree ⇄ workspace (saved)"),
+        ("j/k", "Pick a session; the pane follows after 150 ms"),
+        ("Tab / Enter", "Type into the pane (Enter on a session row)"),
+        ("Ctrl+Q", "Back to the sidebar (not to the tree)"),
+        ("o", "Open the selected session in the full view"),
+        ("Ctrl+Space", "Leader in the pane, as in the full view"),
+        (
+            "",
+            "  z full view · i needs you · f final review · p prompts · t/T sessions",
+        ),
+        (
+            "i / v",
+            "Next needing you / tile the feature's agents (split view)",
+        ),
+        (
+            "",
+            "Badges: ⛔ needs you · ● working · ✓ finished (dim once seen)",
+        ),
+        (
+            "",
+            "        ○ idle · ■ stopped · ■ exited (agent died at its shell)",
+        ),
+    ];
+    lines.extend(
+        workspace_keybinds
+            .iter()
+            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
+    );
+
     lines.extend(section_header("  During a plan interview:", columns, theme)); // FORK: G11
 
     let plan_interview_keybinds: Vec<(&str, &str)> = vec![

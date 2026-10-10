@@ -340,6 +340,12 @@ fn handle_click(
         return Ok(());
     }
 
+    // FORK: workspace layout — a click on the pane focuses it; a click on the
+    // sidebar lands on the row hit test below.
+    if crate::handlers::fork_workspace::handle_click(app, col, row)? {
+        return Ok(());
+    }
+
     let list_start_row = 4;
     let list_visible_height = visible_rows.saturating_sub(5);
     let list_end_row = list_start_row + list_visible_height;

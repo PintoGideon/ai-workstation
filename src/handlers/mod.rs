@@ -11,6 +11,7 @@ mod dormant;
 mod feature_creation;
 mod fork;
 mod fork_split; // FORK: split view
+pub(crate) mod fork_workspace; // FORK: workspace layout
 mod handoff;
 mod harness;
 mod hooks;
