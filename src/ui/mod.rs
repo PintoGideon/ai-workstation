@@ -2,12 +2,13 @@ mod dashboard;
 mod dialogs;
 pub(crate) mod fork_chrome; // FORK: G11 dashboard chrome
 mod fork_split; // FORK: split view
+pub(crate) mod fork_text; // FORK: `…` fitting, hint cutting, path wrapping
 pub mod header;
 pub(crate) mod list;
 pub mod pane;
 mod picker;
 mod status;
-mod toast;
+pub(crate) mod toast; // FORK: `wrap_message` shared with the help overlay
 
 use ratatui::{
     Frame,
