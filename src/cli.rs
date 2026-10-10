@@ -112,8 +112,10 @@ enum Commands {
         /// command knows which session id won.
         #[arg(long = "fallback-touch")]
         fallback_touch: Option<std::path::PathBuf>,
-        /// On delivery failure, remove `<DIR>/<session id>` — the clearing
-        /// half of `--fallback-touch`.
+        /// Remove `<DIR>/<session id>` — the clearing half of
+        /// `--fallback-touch`. FORK: done whether or not delivery succeeds,
+        /// so a marker an earlier, undelivered turn left behind cannot
+        /// outlive the session's stop.
         #[arg(long = "fallback-remove")]
         fallback_remove: Option<std::path::PathBuf>,
         /// On delivery failure, write this payload field to
@@ -598,7 +600,10 @@ pub fn run() -> Result<()> {
         };
 
         let sent = ipc::send(&ipc::socket_path(), &serde_json::to_string(&payload)?).is_ok();
-        if !sent {
+        if sent {
+            // FORK: clearing a marker is right either way (see the flag).
+            run_notify_fallbacks(&payload, None, fallback_remove.as_deref(), &[]);
+        } else {
             run_notify_fallbacks(
                 &payload,
                 fallback_touch.as_deref(),

@@ -44,7 +44,10 @@ send() {
     printf '%s' "$INPUT" | "$AIW_CMD" notify --source codex-notify "$@" 2>/dev/null || true
 }
 
-send --type thinking-stop
+# `--fallback-remove` clears the thinking marker whether or not the socket is
+# up (a marker an earlier, undelivered turn left would otherwise stick), and
+# `aiw` resolves where markers live, legacy /tmp/aiw-thinking included.
+send --type thinking-stop --fallback-remove /tmp/aiw-thinking
 send --type prompt-submit --derive-prompt --require prompt \
     --fallback-write-field prompt latest-prompt.txt
 send --type input-request \
@@ -54,17 +57,3 @@ send --type input-request \
 # "I'm asking you something" from "I'm done". Reporting "completed" is the
 # strongest claim the signal supports; AIW narrows anything it cannot justify.
 send --type attention --event-kind completed
-
-# Clear the thinking sentinel unconditionally, matching the pre-IPC behaviour:
-# the dashboard prefers its IPC state, and a stale sentinel would otherwise sit
-# there until its 2-second freshness window lapsed.
-if [ -n "${AIW_SESSION:-}" ]; then
-    # The marker lives under AIW's state dir (Linux: $XDG_STATE_HOME or
-    # ~/.local/state; macOS: /tmp); the old /tmp/aiw-thinking is cleared too.
-    if [ "$(uname -s 2>/dev/null)" = Darwin ]; then
-        aiw_state_dir="/tmp/ai_workstation"
-    else
-        aiw_state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/ai_workstation"
-    fi
-    rm -f "$aiw_state_dir/thinking/${AIW_SESSION}" "/tmp/aiw-thinking/${AIW_SESSION}"
-fi
