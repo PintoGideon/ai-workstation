@@ -130,8 +130,11 @@ it; it must be a short path because tmux and IPC sockets live under it). It
 walks the README quick start (first run, projects, features with every agent,
 sessions, hooks → header pills and `i`, split view with resizes, rename, stop/
 start, resume, delete, quit/relaunch, `doctor`), then adversarial cases (killed
-windows, deleted worktrees, corrupt `aiw.json`, ghost hooks, removed IPC
-socket, odd names, random keys, small terminals) and the AMF migration cases
+windows, deleted worktrees, corrupt `aiw.json` and its toast, ghost hooks,
+removed IPC socket, a second `aiw` instance against the lock, an agent that
+exits at its shell (`/crash` → ■ exited → `c` relaunches in place), a feature
+name with a space, a malformed notification file, `Esc` on the dashboard, odd
+names, random keys, small terminals) and the AMF migration cases
 (`migration.sh`: plain, locked database, no database, OpenCode-only). Text
 captures for UI review are left in `<sandbox>/captures`. The pieces are
 reusable on their own: `setup-sandbox.sh` builds the sandbox, `lib.sh` has the

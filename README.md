@@ -261,7 +261,7 @@ and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-inte
 | `Enter` | Open the selected session or expand/collapse an item |
 | `N` / `n` | Create a project / feature |
 | `s` | Add a session to a feature |
-| `c` | Start the selected feature, or the selected stopped session |
+| `c` | Start the selected feature, or the selected stopped session (an agent that exited at its shell shows `■` "exited" and is relaunched in the same window) |
 | `v` | Split view: tile the feature's agents live, 2–4 per screen (on a project row: one per feature) |
 | `x` | Stop a feature or a single session. A stopped session stays listed (`■`) and stays stopped when its feature starts again |
 | `r` | Rename a feature or session |

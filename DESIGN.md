@@ -38,7 +38,7 @@ Learning mode · prompt library · prompt overrides · TODO lists · usage/cost 
 | G6 | Basic theme list; fonts left entirely to the terminal | **Theming & fonts polish** | P1 | ✅ |
 | G7 | Flat list for many projects | project tags/colours, summary counts, `0`–`9` scope | P2 | ⏳ |
 | G8 | No tickets | board, start N agents on a ticket, compare, pick → PR → Linear (on demand only) | P3 | ⏳ |
-| G9 | A session whose window closed on its own (`exit`, agent quit) stayed listed as running; opening it errored | closed terminals disappear; closed agents show as stopped (■) and reopen with their conversation | P1 | ✅ |
+| G9 | A session whose window closed on its own (`exit`, agent quit) stayed listed as running; opening it errored | closed terminals disappear; closed agents show as stopped (■) and reopen with their conversation; an agent that exits while its shell survives shows ■ "exited" (no "finished" attention) and `c`/`S` relaunch it in the same window; the single view returns to the dashboard when its window is gone | P1 | ✅ |
 | G10 | Typing in an agent opened a compose box | keys go **straight to the agent**; compose box optional (`compose_box` setting, or `Ctrl+Space e` per session) | P1 | ✅ |
 | G11 | Dated look | **UI revamp** within a strict performance budget (§12) | P2 | ✅ dashboard, footer, help; project colour tags ⏳ (with G7) |
 | G12 | OpenCode support we don't use | **OpenCode removed** (code, plugins, themes, GUI, docs); old data still loads — see §14 | P1 | ✅ |
@@ -129,6 +129,20 @@ code removed), checked by `scripts/check-no-network.sh` (inspects `cargo tree` a
 7. `~` expanded in the add-project path.
 8. Clear message when a branch is already checked out (current git wording), new-feature branch never defaults to the
    current branch, no empty `.worktrees/` left after a failure.
+9. Feature names are checked against `git check-ref-format --branch` rules in the dialog (no spaces, `..`, leading
+   `-`, `~^:?*[\`, trailing `/` or `.lock`, `@{`, control characters; max 120 chars); tmux session and worktree
+   slugs are capped at 48 chars per component.
+10. One TUI per config dir (`aiw.lock`, advisory `flock`): a second `aiw` prints who holds it and exits 1;
+    `doctor`/`grid`/`fonts`/`automation`/`notify` are unaffected.
+11. Loud failures: an invalid `aiw.json` or unreadable `.worktreeinclude` is a toast plus a log line once per
+    project load; a lifecycle hook exiting non-zero toasts `Hook on_start failed (exit N) in <feature>`; a worktree
+    hook still running after 60 s can be skipped with `Esc`; a project whose folder vanished is flagged
+    (`App::missing_project_repos`) with a one-time toast; unparsable notification files are quarantined under
+    `<state>/notifications/bad/` (50 kept).
+12. `Esc` on the dashboard is a no-op (`q` quits; `confirm_quit` makes `q` ask first while agents run); `Ctrl+Q`
+    leaves the view from the composer too; per-session compose toggles persist in the store.
+13. Thinking markers live in `<state>/thinking` (the old `/tmp/aiw-thinking` is read for one release); the Codex
+    sessions root is derived from `$HOME` only.
 
 ## 8. G6 — Theming and fonts
 

@@ -9,6 +9,8 @@
 #   wait_gone <regex> [seconds]                 poll until it no longer matches
 #   snap <name>                                 save a capture under $S/captures
 #   aiw_quit                                    q on the dashboard and wait for exit
+#   row_glyph <text> <glyph>                    the first dashboard row matching <text> shows <glyph>
+#   wait_row_glyph <text> <glyph> [seconds]     poll until it does
 #   aiw_tmux <args…>                            tmux on AIW's private socket (read-only use)
 #   check <name> <cond-exit-code>               record pass/fail
 #   drive_kill                                  kill the driver tmux server
@@ -90,6 +92,19 @@ aiw_quit() {
 
 resize() { dt resize-window -t "$DRIVE_SESSION" -x "$1" -y "$2"; sleep 0.4; }
 
+# row_glyph <text> <glyph>: the first dashboard row containing <text> shows
+# <glyph> (● running, ■ stopped/exited)
+row_glyph() { cap | grep -F -- "$1" | head -1 | grep -qF -- "$2"; }
+
+wait_row_glyph() {
+    local text=$1 glyph=$2 secs=${3:-10} i=0
+    while ! row_glyph "$text" "$glyph"; do
+        i=$((i + 1))
+        if [ "$i" -ge $((secs * 10)) ]; then return 1; fi
+        sleep 0.1
+    done
+}
+
 drive_kill() { dt kill-server 2>/dev/null || true; }
 
 # pid of the aiw TUI running in this sandbox (the one whose HOME is $S)
@@ -153,7 +168,7 @@ select_row() {
     return 1
 }
 
-# close_dialogs: Esc out of any open dialog, never from the dashboard itself (Esc there quits)
+# close_dialogs: Esc out of any open dialog (Esc on the dashboard itself is a no-op)
 close_dialogs() {
     local i
     for i in $(seq 1 10); do

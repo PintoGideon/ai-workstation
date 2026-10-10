@@ -145,11 +145,51 @@ test -f "$wt/.git"; check "deleted worktree dir is recreated on start" $?
 printf '{ "lifecycle_hooks": { "on_start": ' >"$S/repos/gamma/aiw.json"
 select_row 'gamma' >/dev/null; new_feature gamma-2 n 0 1; sleep 2; hook_prompts
 cap | grep -q 'gamma-2'; check "corrupt aiw.json does not block feature creation" $?
+cap | grep -q 'aiw.json in gamma is invalid'; check "corrupt aiw.json → toast names the project and the error" $?
 
 echo '{"session_id":"nope","cwd":"/tmp","hook_event_name":"Stop"}' | AIW_ACTIVE=1 AIW_SESSION=aiw-ghost aiw notify --type thinking-start
 sleep 1; cap | grep -q '╭ Projects' && no_panic; check "hook for an unknown session is harmless" $?
 rm -f "$XDG_STATE_HOME/ai_workstation/aiw.sock"; sleep 7
 test -S "$XDG_STATE_HOME/ai_workstation/aiw.sock"; check "removed IPC socket is re-bound within the sweep" $?
+
+# a second TUI must not share the database and steal the socket; read-only
+# subcommands keep working alongside the running one
+second=$(timeout 10 env -u TMUX aiw </dev/null 2>&1); rc=$?
+[ "$rc" -eq 1 ] && echo "$second" | grep -q "already running (pid $(aiw_pid))"; check "second aiw instance exits 1 with 'already running (pid N)'" $?
+AIW_TMUX_SOCKET=$AIW_SOCK timeout 30 aiw doctor >/dev/null 2>&1; check "aiw doctor works alongside the running TUI" $?
+test -S "$XDG_STATE_HOME/ai_workstation/aiw.sock" && [ -n "$(aiw_pid)" ]; check "first instance keeps running with its socket" $?
+
+# an agent that exits (/crash) leaves its shell: the row must say so, and
+# `c` must launch the agent again into that same window
+select_row 'Claude 1' >/dev/null; keys c; sleep 3; hook_prompts; sleep 1
+row_glyph 'Claude 1' '●'; check "c: restart the stopped Claude session" $?
+n_before=$(wc -l <"$S/log/claude.args")
+done_before=$(cap | sed -n 2p | grep -o '✓ [0-9]*')
+keys Enter; sleep 1.5; keys -l '/crash'; keys Enter; sleep 1; keys C-q; sleep 0.5
+wait_row_glyph 'Claude 1' '■' 20; check "/crash: agent gone, shell alive → row shows ■ exited" $?
+[ "$(cap | sed -n 2p | grep -o '✓ [0-9]*')" = "$done_before" ]; check "/crash: no 'finished' attention pill" $?
+aiw_tmux list-windows -t aiw-alpha-alpha-1 -F '#W' | grep -qx claude; check "/crash: the window itself is still there" $?
+select_row 'Claude 1' >/dev/null; keys c; sleep 3; hook_prompts; sleep 1
+row_glyph 'Claude 1' '●' && [ "$(wc -l <"$S/log/claude.args")" -gt "$n_before" ]; check "c: exited agent is launched again" $?
+[ "$(aiw_tmux list-windows -t aiw-alpha-alpha-1 -F '#W' | grep -cx claude)" = 1 ]; check "c: relaunch reused the window (no duplicate)" $?
+keys C-q; sleep 0.3
+
+# names git refuses are stopped in the dialog with a plain message
+select_row 'alpha' >/dev/null; keys n; wait_for 'New Feature' 5
+if cap | grep -q 'Source:'; then keys Enter; sleep 0.2; fi
+wait_for 'Name:' 3; keys -l 'bad name'; keys Enter; sleep 0.6
+cap | grep -q 'cannot contain spaces'; check "feature name with a space → plain message, no git error" $?
+close_dialogs
+
+# an unparsable notification file is moved aside, not re-parsed for ever
+junk="$XDG_CONFIG_HOME/ai_workstation/notifications/junk-e2e.json"
+mkdir -p "$(dirname "$junk")"; printf '{"session_id": ' >"$junk"; touch -d '30 seconds ago' "$junk"; sleep 7
+test -f "$XDG_STATE_HOME/ai_workstation/notifications/bad/junk-e2e.json" && ! test -e "$junk"; check "malformed notification file is quarantined by the sweep" $?
+no_panic; check "no panic after the malformed notification" $?
+
+# Esc on the dashboard is a no-op (q quits)
+keys Escape; sleep 0.6
+[ -n "$(aiw_pid)" ] && cap | grep -q '╭ Projects'; check "Esc on the dashboard does not quit" $?
 
 select_row 'alpha' >/dev/null; new_feature taken-branch y 0 1; sleep 2; hook_prompts
 cap | grep -q "already checked out"; check "branch checked out elsewhere → clear message" $?; close_dialogs
