@@ -244,12 +244,93 @@ fn dashboard_frame_bench() {
     }
 }
 
+/// The same frame budget for the workspace layout (DESIGN.md §15): sidebar
+/// with badges on every row plus the live pane, the selection alternating
+/// between a row needing you and a working one, with a pane full of text.
+#[test]
+#[ignore = "timing benchmark; run in release with --ignored --nocapture"]
+fn workspace_frame_bench() {
+    const WARMUP: usize = 50;
+    const FRAMES: usize = 2_000;
+
+    let mut app = realistic_app(MockTmuxOps::new());
+    app.config.aiw.dashboard_layout = crate::fork::config::DashboardLayout::Workspace;
+    app.viewport_cols = WIDTH;
+    app.viewport_total_rows = HEIGHT;
+    app.viewport_rows = HEIGHT - 3;
+    app.selection = crate::app::Selection::Session(1, 0, 0);
+    app.workspace_tick();
+    std::thread::sleep(crate::app::fork_workspace::SELECTION_DEBOUNCE + Duration::from_millis(20));
+    app.workspace_tick();
+    app.pane_lines = (0..(HEIGHT - 8))
+        .map(|i| {
+            ratatui::text::Line::from(format!(
+                "{i:03} ⏺ Bash(cargo test) … running 3 tests … ok  {}",
+                "x".repeat(120)
+            ))
+        })
+        .collect();
+    app.workspace_focus_pane();
+    let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).unwrap();
+    for _ in 0..WARMUP {
+        render(&mut terminal, &mut app);
+    }
+
+    let mut samples: Vec<Duration> = Vec::with_capacity(FRAMES);
+    for frame in 0..FRAMES {
+        app.selection = if frame % 2 == 0 {
+            crate::app::Selection::Session(1, 0, 0)
+        } else {
+            crate::app::Selection::Session(0, 0, 1)
+        };
+        app.refresh_badge_ages();
+        let started = Instant::now();
+        render(&mut terminal, &mut app);
+        samples.push(started.elapsed());
+    }
+    samples.sort_unstable();
+    let total: Duration = samples.iter().sum();
+    let mean = total / FRAMES as u32;
+    let p50 = samples[FRAMES / 2];
+    let p95 = samples[FRAMES * 95 / 100];
+    let max = samples[FRAMES - 1];
+    println!(
+        "workspace frame {WIDTH}x{HEIGHT} ({} build): mean {:.1}us p50 {:.1}us p95 {:.1}us max {:.1}us over {FRAMES} frames",
+        if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        },
+        mean.as_secs_f64() * 1e6,
+        p50.as_secs_f64() * 1e6,
+        p95.as_secs_f64() * 1e6,
+        max.as_secs_f64() * 1e6,
+    );
+    if !cfg!(debug_assertions) {
+        assert!(
+            p95 <= Duration::from_millis(2),
+            "workspace frame p95 {p95:?} is over the 2 ms budget"
+        );
+    }
+}
+
 /// Print the dashboard as text (for DESIGN.md sketches and eyeballing):
 /// `cargo +1.99.0 test --locked dashboard_text_snapshot -- --ignored --nocapture`.
 #[test]
 #[ignore = "prints the rendered dashboard; nothing to assert"]
 fn dashboard_text_snapshot() {
     let mut app = realistic_app(MockTmuxOps::new());
+    // `AIW_SNAPSHOT_LAYOUT=workspace` prints the workspace layout instead.
+    if std::env::var("AIW_SNAPSHOT_LAYOUT").as_deref() == Ok("workspace") {
+        app.config.aiw.dashboard_layout = crate::fork::config::DashboardLayout::Workspace;
+        app.selection = crate::app::Selection::Session(1, 0, 0);
+        app.viewport_cols = 120;
+        app.workspace_tick();
+        std::thread::sleep(
+            crate::app::fork_workspace::SELECTION_DEBOUNCE + Duration::from_millis(20),
+        );
+        app.workspace_tick();
+    }
     let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
     render(&mut terminal, &mut app);
     let buffer = terminal.backend().buffer();

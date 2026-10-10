@@ -93,8 +93,40 @@ aiw_quit() {
 resize() { dt resize-window -t "$DRIVE_SESSION" -x "$1" -y "$2"; sleep 0.4; }
 
 # row_glyph <text> <glyph>: the first dashboard row containing <text> shows
-# <glyph> (● running, ■ stopped/exited)
+# <glyph> (⛔ needs you, ● working, ✓ finished, ○ idle, ■ stopped/exited)
 row_glyph() { cap | grep -F -- "$1" | head -1 | grep -qF -- "$2"; }
+
+# row_running <text>: the first row containing <text> is up (idle or working)
+row_running() { row_glyph "$1" '○' || row_glyph "$1" '●'; }
+
+# sel_glyph <glyph>: the selected row (accent bar ▎) shows <glyph>
+sel_glyph() { cap | grep '▎' | head -1 | grep -qF -- "$1"; }
+
+wait_sel_glyph() {
+    local glyph=$1 secs=${2:-10} i=0
+    while ! sel_glyph "$glyph"; do
+        i=$((i + 1))
+        if [ "$i" -ge $((secs * 10)) ]; then return 1; fi
+        sleep 0.1
+    done
+}
+
+# sgr_params_before <line> <needle>: the SGR parameters in force at <needle>
+# (everything since the last reset), e.g. "1 38;2;255;176;0"
+sgr_params_before() {
+    python3 - "$1" "$2" <<'PY'
+import re, sys
+line, needle = sys.argv[1], sys.argv[2]
+i = line.rfind(needle)
+if i < 0:
+    sys.exit(0)
+chunks = re.split(r'\x1b\[0?m', line[:i])
+print(" ".join(m[2:-1] for m in re.findall(r'\x1b\[[0-9;]*m', chunks[-1])))
+PY
+}
+
+# sgr_color <params>: the colour part of SGR parameters (38;2;r;g;b or 38;5;n)
+sgr_color() { echo "$1" | grep -oE '38;(2;[0-9]+;[0-9]+;[0-9]+|5;[0-9]+)' | tail -1; }
 
 wait_row_glyph() {
     local text=$1 glyph=$2 secs=${3:-10} i=0
@@ -172,7 +204,7 @@ select_row() {
 close_dialogs() {
     local i
     for i in $(seq 1 10); do
-        cap | grep -q '╭ Projects' && return 0
+        cap | grep -qE '╭ (Projects|Sessions)' && return 0
         keys Escape; sleep 0.25
     done
 }

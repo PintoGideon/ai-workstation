@@ -162,7 +162,7 @@ test -S "$XDG_STATE_HOME/ai_workstation/aiw.sock" && [ -n "$(aiw_pid)" ]; check 
 # an agent that exits (/crash) leaves its shell: the row must say so, and
 # `c` must launch the agent again into that same window
 select_row 'Claude 1' >/dev/null; keys c; sleep 3; hook_prompts; sleep 1
-row_glyph 'Claude 1' '●'; check "c: restart the stopped Claude session" $?
+row_running 'Claude 1'; check "c: restart the stopped Claude session" $?
 n_before=$(wc -l <"$S/log/claude.args")
 done_before=$(cap | sed -n 2p | grep -o '✓ [0-9]*')
 keys Enter; sleep 1.5; keys -l '/crash'; keys Enter; sleep 1; keys C-q; sleep 0.5
@@ -178,7 +178,7 @@ select_row 'Claude 1' >/dev/null; keys Enter; sleep 0.4; keys -l 'xyz'; sleep 2.
 no_panic; check "whole tmux session gone: no panic" $?
 close_dialogs; keys C-q; sleep 0.3; close_dialogs
 select_row 'Claude 1' >/dev/null; keys c; sleep 3; hook_prompts; sleep 1
-row_glyph 'Claude 1' '●' && [ "$(wc -l <"$S/log/claude.args")" -gt "$n_before" ]; check "c: exited agent is launched again" $?
+row_running 'Claude 1' && [ "$(wc -l <"$S/log/claude.args")" -gt "$n_before" ]; check "c: exited agent is launched again" $?
 [ "$(aiw_tmux list-windows -t aiw-alpha-alpha-1 -F '#W' | grep -cx claude)" = 1 ]; check "c: relaunch reused the window (no duplicate)" $?
 keys C-q; sleep 0.3
 
@@ -210,6 +210,60 @@ no_panic && ! cap | grep -q 'aiw exited'; check "500 random dashboard keys: no p
 keys C-q; keys C-q; sleep 0.5; close_dialogs
 for sz in "120 40" "80 24" "40 10"; do set -- $sz; resize "$1" "$2"; sleep 0.8; snap "p3-dashboard-${1}x${2}"; keys '?'; sleep 0.5; snap "p3-help-${1}x${2}"; close_dialogs; done
 resize 200 60; sleep 0.8; no_panic; check "dashboard/help at 120x40, 80x24, 40x10" $?
+
+echo "=== Part 2b: workspace layout"
+close_dialogs; cap | grep -q '╭ Sessions' && { keys b; sleep 0.4; }
+# a fresh feature with two fake agents whose banners differ
+select_row 'alpha' >/dev/null; new_feature ws-1 y 0 1; sleep 2; hook_prompts
+wait_for "Created and started feature 'ws-1'" 5; check "ws: feature with a Claude agent" $?
+select_row 'ws-1' >/dev/null; keys s; wait_for 'Start Session' 3; keys j Enter; sleep 0.5
+wait_for 'Name Session' 3 && keys Enter; sleep 1.5; hook_prompts; keys C-q; sleep 0.5
+aiw_tmux list-windows -t aiw-alpha-ws-1 -F '#W' | grep -q codex; check "ws: second agent (codex) added" $?
+keys b; wait_for '╭ Sessions' 3; check "b: workspace layout (sidebar + live pane)" $?
+cap | sed -n 2p | grep -qE '⚠ [0-9]+ · ● [0-9]+ · ✓ [0-9]+'; check "ws: header pills still count" $?
+# the fake Claude's banner scrolls off behind its long argument line, so the
+# Claude pane is told apart by its title and by what it echoes back
+select_row 'ws-1' >/dev/null; keys j; sleep 0.6
+wait_for '› Claude 1 ─' 6 && wait_gone 'codex \(fake e2e agent\)' 6; check "ws: the live pane shows the selected session" $?
+keys j; sleep 0.6; wait_for 'codex \(fake e2e agent\)' 6; check "ws: j moves the live pane to the next agent" $?
+keys k; sleep 0.6; wait_for '› Claude 1 ─' 6 && wait_gone 'codex \(fake e2e agent\)' 6; check "ws: k moves it back" $?
+snap ws-200x60
+keys Tab; sleep 0.4; cap | tail -1 | grep -q 'Ctrl+Q sidebar'; check "ws: Tab focuses the pane (footer hints)" $?
+keys -l 'hello workspace'; keys Enter; sleep 1.5
+cap | grep -q "handled 'hello workspace' (claude)"; check "ws: typing in the pane reaches the agent" $?
+keys -l '/ask'; keys Enter; sleep 1.5
+wait_sel_glyph '⛔' 6; check "ws: /ask → row shows ⛔" $?
+cap | grep '▎' | sed -n 2p | grep -q 'permission: Bash'; check "ws: /ask → reason line under the row" $?
+cap | grep -qE '⛔ +question'; check "ws: /ask → pane badge says question" $?
+# the focused pane's border is thick, so its corner is ┓; the sidebar glyph
+# and that corner must share the needs-you colour
+row=$(cap_ansi | grep -F '▎' | grep -F '⛔' | head -1); title=$(cap_ansi | grep -F '⛔' | grep -F 'question' | head -1)
+[ -n "$(sgr_color "$(sgr_params_before "$row" '⛔')")" ] && [ "$(sgr_color "$(sgr_params_before "$row" '⛔')")" = "$(sgr_color "$(sgr_params_before "$title" '┓')")" ]
+check "ws: /ask → pane border takes the needs-you tone" $?
+snap ws-needs-you
+keys -l '/done'; keys Enter; sleep 1.5
+wait_sel_glyph '✓' 6; check "ws: /done → row shows ✓" $?
+keys C-q; sleep 0.5; cap | tail -1 | grep -q 'Tab type here'; check "ws: Ctrl+Q returns to the sidebar" $?
+row=$(cap_ansi | grep -F '▎' | grep -F '✓' | head -1)
+echo "$(sgr_params_before "$row" '✓')" | grep -qE '(^|[ ;])1([ ;]|$)'; check "ws: unread ✓ is bright (bold)" $?
+keys Tab; sleep 0.4; keys C-q; sleep 0.4
+row=$(cap_ansi | grep -F '▎' | grep -F '✓' | head -1)
+! echo "$(sgr_params_before "$row" '✓')" | grep -qE '(^|[ ;])1([ ;]|$)'; check "ws: ✓ dims once the pane was focused" $?
+keys Tab; sleep 0.3; keys -l '/crash'; keys Enter; sleep 0.5; keys C-q; sleep 0.3
+wait_sel_glyph '■' 20; check "ws: /crash → row shows ■" $?
+cap | grep '▎' | sed -n 2p | grep -q 'exited'; check "ws: /crash → reason line says exited" $?
+snap ws-exited
+keys v; sleep 2; cap | tail -1 | grep -q leave; check "ws: v tiles the feature's agents" $?
+keys C-Space; keys v; sleep 0.8; cap | grep -q '╭ Sessions'; check "ws: leaving the tiles returns to the workspace" $?
+resize 60 24; sleep 0.8; cap | grep -q '╭ Projects' && cap | grep -q '72 columns'; check "ws: 60 columns falls back to the tree with a note" $?
+snap ws-60x24
+resize 120 40; sleep 0.8; cap | grep -q '╭ Sessions'; check "ws: 120 columns restores the layout" $?
+snap ws-120x40
+resize 80 24; sleep 0.8; cap | grep -q '╭ Sessions'; snap ws-80x24; check "ws: 80 columns keeps the compact sidebar" $?
+resize 200 60; sleep 0.8; no_panic; check "ws: no panic across the resizes" $?
+aiw_quit; aiw_start 200 60; wait_for '╭ Sessions' 8; check "relaunch: the workspace layout persists" $?
+keys b; sleep 0.5; cap | grep -q '╭ Projects'; check "b: back to the tree" $?
+
 aiw_quit; doctor_clean; check "doctor clean after the adversarial run" $?
 
 echo "=== Part 3: AMF migration cases"
