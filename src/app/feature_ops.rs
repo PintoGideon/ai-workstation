@@ -1190,21 +1190,10 @@ impl App {
             None => return Ok(Started::Yes),
         };
         self.ensure_agent_mode_supported(&agent, &mode)?;
-        // Resolve before the mutable borrow of `feature` below.
-        let rc_allowed = self.remote_control_allowed();
-        let mut screenshot_owners = std::collections::HashMap::new();
-        if !already_running {
-            for session in &self.store.projects[pi].features[fi].sessions {
-                if matches!(session.kind, SessionKind::Claude | SessionKind::Codex)
-                    && let Some(owner) = self.screenshot_owner(pi, fi, &session.id)?
-                {
-                    screenshot_owners.insert(session.id.clone(), owner);
-                }
-            }
-        }
         // FORK: a worktree whose checkout vanished on disk is recreated on its
-        // branch (or the start refused) before anything writes into the
-        // folder — see fork::worktree_repair.
+        // branch (or the start refused) before anything reads or writes the
+        // folder (the screenshot-owner check below, the hook files) — see
+        // fork::worktree_repair.
         if !already_running {
             use crate::fork::worktree_repair::{self, Checkout};
             let feature = &self.store.projects[pi].features[fi];
@@ -1238,6 +1227,18 @@ impl App {
             }
         }
 
+        // Resolve before the mutable borrow of `feature` below.
+        let rc_allowed = self.remote_control_allowed();
+        let mut screenshot_owners = std::collections::HashMap::new();
+        if !already_running {
+            for session in &self.store.projects[pi].features[fi].sessions {
+                if matches!(session.kind, SessionKind::Claude | SessionKind::Codex)
+                    && let Some(owner) = self.screenshot_owner(pi, fi, &session.id)?
+                {
+                    screenshot_owners.insert(session.id.clone(), owner);
+                }
+            }
+        }
         let feature = match self
             .store
             .projects

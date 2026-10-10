@@ -370,3 +370,48 @@ fn port_block_is_reserved_for_the_session_and_released_on_delete() {
     store.remove_feature("safety", "ports-feat").unwrap();
     assert!(crate::fork::ports::env_for_tmux_session(&session).is_empty());
 }
+
+// ── Worktree checkout that vanished on disk ─────────────────────────────
+
+/// Starting a worktree feature whose folder is gone must recreate the
+/// checkout before anything else looks inside the folder (the screenshot-owner
+/// check used to fail with ENOENT first, and a later start then launched the
+/// agent into a folder holding only AIW's helper files).
+#[test]
+fn starting_a_feature_whose_worktree_vanished_recreates_it_first() {
+    let repo = TempDir::new().unwrap();
+    let parent = TempDir::new().unwrap();
+    let gone = parent.path().join("vanished"); // never created
+    let mut store = store_with_repo(repo.path().to_path_buf());
+    let mut feature = crate::project::Feature::new_for_project(
+        "safety",
+        "wt-feat".into(),
+        "wt-feat".into(),
+        gone.clone(),
+        true,
+        crate::project::VibeMode::Vibe,
+        false,
+        false,
+        AgentKind::Claude,
+        false,
+        false,
+    );
+    feature.add_session(crate::project::SessionKind::Claude);
+    store.projects[0].features.push(feature);
+
+    let mut worktree = MockWorktreeOps::new();
+    worktree.expect_prune().times(1).returning(|_| Ok(()));
+    worktree
+        .expect_create()
+        .times(1)
+        .withf(|_, name, branch| name == "safety-wt-feat" && branch == "wt-feat")
+        .returning(|_, _, _| Err(anyhow::anyhow!("boom: git worktree add")));
+    let mut tmux = MockTmuxOps::new();
+    tmux.expect_session_exists().returning(|_| false);
+    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(worktree));
+
+    let err = app
+        .ensure_feature_running(0, 0, crate::app::resource_gate::StartIntent::Approved)
+        .unwrap_err();
+    assert!(err.to_string().contains("boom"), "{err}");
+}
