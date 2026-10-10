@@ -263,6 +263,7 @@ and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-inte
 | `s` | Add a session to a feature |
 | `c` | Start the selected feature, or the selected stopped session (an agent that exited at its shell shows `■` "exited" and is relaunched in the same window) |
 | `v` | Split view: tile the feature's agents live, 2–4 per screen (on a project row: one per feature) |
+| `b` | Workspace layout: a session sidebar beside the selected session, live (see below) |
 | `x` | Stop a feature or a single session. A stopped session stays listed (`■`) and stays stopped when its feature starts again |
 | `r` | Rename a feature or session |
 | `d` | Delete a project, feature, or session |
@@ -304,6 +305,60 @@ unless you turn it on with `Ctrl+Space`, then `e`. These controls belong to AIW:
 In split view, `Ctrl+Space` then an arrow key moves focus between tiles, `z`
 zooms the focused tile, `[` / `]` page through more agents, `i` jumps to the
 next agent needing you and `v` leaves split view.
+
+### Workspace layout
+
+Press `b` on the dashboard to swap the project tree for a **workspace**: a
+session sidebar on the left and the selected session live on the right. You
+move between agents by moving the cursor; the pane follows the selection
+(after 150 ms, so scrolling through rows is free). The choice is saved
+(`dashboard_layout` in `config.json`); the tree stays the default.
+
+```
+╭ Sessions ──────────────────╮╭ RS › hx-12 › claude ─────────────────────────── ⛔ question 0:40 ╮
+│ ▾ RS               ⛔1 ●1  ││                                                                  │
+│  ▾ ⛔ hx-12           0:40 ││  ⏺ Bash(git push origin hx-12-sso)                               │
+│▎   ⛔ claude          0:40 ││  Do you want to proceed?                                         │
+│▎     permission: Bash      ││  ❯ 1. Yes   2. Yes, and don't ask again   3. No                  │
+│    ●  codex             6m ││                                                                  │
+│    ✓  gemini            3m ││                                                                  │
+│  ▾ ●  hx-14            12m ││                                                                  │
+│    ●  claude           12m ││                                                                  │
+│ ▾ BA                   ⛔1 ││                                                                  │
+│  ▾ ⛔ ba-7              2m ││                                                                  │
+╰────────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+╰ Tab type here  o full view  i next needing you  v tiles  n feature  c start  x stop  b tree ───╯
+```
+
+Every row carries one badge, the same one the tree, the header pills, the
+split-view tiles and the needs-you list use:
+
+| Badge | Meaning |
+| --- | --- |
+| `⛔` | needs you: a permission prompt, a question, or a stop nothing explained (the reason is on the next line) |
+| `●` | working (the activity line, when the agent reports one) |
+| `✓` | finished a turn; bright until you look at it, dim after |
+| `○` | idle (running, nothing to report) |
+| `■` | stopped; `■ exited` when the agent died at its shell (`c` relaunches it) |
+
+Project rows show their counts (`⛔1 ●7 ✓2`); feature rows show their most
+pressing session. The pane border turns amber while the shown agent needs
+you.
+
+| Key | Action |
+| --- | --- |
+| `b` | Toggle tree ⇄ workspace layout (saved at once) |
+| `j` / `k`, arrows | Pick a session; the pane follows after 150 ms |
+| `Tab`, `Enter` on a session, a click on the pane | Type into the pane: keys go to the agent as in the full view |
+| `Ctrl+Q` | Back to the sidebar (not to the tree) |
+| `o` | Open the selected session in the full view (sidebar, compose box, scroll mode) |
+| `Ctrl+Space` | Leader in the pane, as in the full view: `z` full view, `q` sidebar, `i` needs you, `f` final review, `p` prompts, `t` / `T` next / previous session |
+| `v` | Tile the feature's agents (split view); leaving it returns to the workspace |
+| everything else | The dashboard keys keep working with the sidebar focused: `n`, `s`, `c`, `x`, `d`, `r`, `i`, `z`, `/`, `B`, `G`, `T`, `?`, … |
+
+Below 100 columns the sidebar shows glyph and name only; below 72 the
+dashboard shows the tree (with a note in the footer) until the window is
+wider.
 
 ## User workflows
 

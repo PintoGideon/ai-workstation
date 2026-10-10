@@ -271,6 +271,8 @@ drawing fails the suite.
 | after (G11) | 360–375 µs | 387–435 µs | 6.76 M (−5.7 %) |
 | ratatui 0.30 (same code, 3 runs each side) | 340–367 → 372–373 µs | 357–396 → 398–403 µs | not measured |
 | polish pass (§12.4, 3 idle runs each side) | 360–363 → 357–361 µs | 384–401 → 375–384 µs | not measured |
+| badge model + workspace layout (§15): tree frame | 442 µs | 477 µs | not measured |
+| badge model + workspace layout (§15): workspace frame (`workspace_frame_bench`) | 552 µs | 606 µs | not measured |
 
 The ratatui 0.30 row (2026-10-10, `chore: upgrade to ratatui 0.30 …`): three back-to-back runs on each side of the
 upgrade on the same machine; the before runs spread 340–367 µs and the after runs sit at 372 µs, so the difference
@@ -402,4 +404,93 @@ to load:
 - `allowed_agents` and the available-harness list **drop** OpenCode (a list that named only OpenCode means "no
   restriction"); OpenCode **prompt overrides** and cached **token usage** are ignored (left in the table untouched);
 - the old `opencode_theme` config key is ignored.
+
+## 15. Workspace layout and badges (2026-10-10)
+
+With 10–30 agents the tree is a list of names, and reaching an agent means entering and leaving a view. The
+workspace layout keeps the sidebar and shows the selected session live beside it, so moving between agents is
+moving the cursor. `b` toggles it (saved as `dashboard_layout` in `config.json`; the tree stays the default for
+this round). README "Workspace layout" has the key table.
+
+```
+╭ Sessions ──────────────────╮╭ RS › hx-12 › claude ─────────────────────────── ⛔ question 0:40 ╮
+│ ▾ RS               ⛔1 ●1  ││                                                                  │
+│  ▾ ⛔ hx-12           0:40 ││  ⏺ Bash(git push origin hx-12-sso)                               │
+│▎   ⛔ claude          0:40 ││  Do you want to proceed?                                         │
+│▎     permission: Bash      ││  ❯ 1. Yes   2. Yes, and don't ask again   3. No                  │
+│    ●  codex             6m ││                                                                  │
+│    ✓  gemini            3m ││                                                                  │
+│  ▾ ●  hx-14            12m ││                                                                  │
+│    ●  claude           12m ││                                                                  │
+│ ▾ BA                   ⛔1 ││                                                                  │
+│  ▾ ⛔ ba-7              2m ││                                                                  │
+╰────────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+╰ Tab type here  o full view  i next needing you  v tiles  n feature  c start  x stop  b tree ───╯
+```
+
+**One badge model** (`src/fork/badges.rs`). Every place that says what a session is doing — tree rows, sidebar
+rows, split-view tile titles, the needs-you picker, the header pills — derives a `SessionBadge` from state the
+app already holds: the attention records (now carrying the harness's notification type and words, so the
+reason can be shown without guessing), the per-feature and per-session thinking/tool markers, the stopped and
+exited markers, the session's status line. Nothing in the derivation touches tmux or the filesystem.
+
+| kind | glyph | tone | label | since |
+|---|---|---|---|---|
+| needs you | `⛔` bold | `status_waiting` | `permission: Bash` · `question: …` · `waiting: …` · `input: …` | attention record |
+| working | `●` (tree: spinner) | `status_working` | `working 6m · Edit src/auth.rs` (status line, when there is one) | state began |
+| finished, unread | `✓` bold | `success` | `done · 3m` | attention record |
+| finished, read | `✓` | `text_muted` | `done · 3m` | attention record |
+| exited | `■` | `danger` | `exited` | state began |
+| idle | `○` | `status_idle` | `idle` (`open` for a terminal) | state began |
+| stopped | `■` | `status_stopped` | `stopped` | state began |
+
+Decisions:
+
+- **A feature-level signal lands on the session of its harness.** Attention and thinking are tracked per
+  feature; the record's `agent` picks the matching session (Claude's question does not mark the Codex window
+  `⛔`), and a per-session IPC marker narrows "working" to that window. A feature's roll-up is its most pressing
+  agent session (needs you > working > finished unread > exited > finished read > idle > stopped), plus `ready`
+  as a read `✓`.
+- **Counts cannot disagree.** The header pills are `badges::total_counts` — every project's `⚠n ●n ✓n` summed
+  — and each project row shows its own counts. A feature counts once, under its roll-up (a feature that is
+  both working and asking counts as needing you).
+- **Unread finished.** `App::finished_seen` (not persisted) holds the sessions whose finished turn was looked
+  at: focusing the workspace pane, sending it a key, opening the full view or focusing a split tile. A new
+  finished event clears the id, so the next `✓` is bright again.
+- **Ages** come from the attention record when there is one, else from `App::badge_ages`, refreshed once per
+  main-loop iteration (`refresh_badge_ages`), so the pure derivation never mutates and a frame allocates no
+  more than the tree did (one clock per frame, a label string per row).
+- **`●` means an agent is working.** A running agent with nothing to report is `○`; a running terminal is
+  `○ open`. Before, `●` meant "the window exists".
+- **Dormant** has no badge: dormancy needs tmux activity times that the sweep does not cache; the `z` list
+  stays the way to find them.
+
+**Layout** (`src/app/fork_workspace.rs`, `src/ui/fork_workspace.rs`, `src/handlers/fork_workspace.rs`):
+
+- The sidebar reuses `App::visible_items`, the selection, the scroll offset and the disclosure state, so every
+  dashboard key keeps working; only `b`, `Tab`, `Enter` on a running session and `o` are new. Widths: 34 columns
+  from 160, 30 from 120, 26 from 100, 22 (glyph and name only) from 72; below 72 the tree is drawn with a
+  one-time footer note. A session row takes a second line, the badge label, while selected or needing you.
+- **One capture target.** The pane reuses the single view's snapshot worker: `current_view_snapshot_target`
+  answers with the live target while the dashboard is up in this layout, the main loop sizes that window to the
+  pane's inner size exactly as it sizes the single view, and the capture-rate rules of §12.3 are unchanged.
+  Opening split view (`v`) or a dialog stops the dashboard's capture; leaving them starts it again.
+- **Debounced follow.** The selection is what the pane *wants*; it is committed after 150 ms of rest
+  (`SELECTION_DEBOUNCE`), so holding `j` never restarts a capture per row. Focusing the pane (`Tab`, `Enter`, a
+  click) commits a pending selection at once. Project and feature rows show the feature's first running agent.
+- **Focus.** With the pane focused keys go through `forward_tmux_key` with the single view's compose rule
+  (`compose_intercept_active`; with the compose box on for the session, typing opens it over the full view).
+  `Ctrl+Q` returns to the sidebar, never to the tree. `Ctrl+Space` reuses the view's `handle_leader_key`
+  against the live session: `z` opens the full view, `q` the sidebar; `t`/`T` move the sidebar to the session
+  they land on; overlays that would close into the full view (`i`, `?`) close into the workspace instead.
+- The pane is a split-view tile: `fork_split::draw_live_tile` is the one live-tile renderer (focused = thick
+  bright border, needs you = `status_waiting` border, badge right-aligned in the title). Everything is clipped
+  to `frame.area()`; a resize past the layout's limits falls back to the tree until the next frame fits.
+- `b` was chosen because `w` (the obvious key) is context settings and `l`/`d`/`s`/`p`/`t`/`v` are taken;
+  `b` reads as "board".
+
+**Measured** (`src/ui/fork_bench.rs::workspace_frame_bench`, release, 200×60, 3 projects × 10 sessions, the
+selection alternating between a `⛔` row and a `●` row, a full pane of text, 2,000 frames): **mean 552 µs, p50 562 µs, p95 606 µs, max 799 µs** — under the 2 ms budget with 3× headroom.
+The tree frame on the same machine and run: mean 442 µs, p95 477 µs (the badge derivation per row and the pills' roll-up add a few tens of microseconds to the tree frame of §12.2; still 4× under budget). `workspace_frame_makes_no_tmux_calls` renders the
+layout through a `MockTmuxOps` with no expectations, as the tree test does.
 
