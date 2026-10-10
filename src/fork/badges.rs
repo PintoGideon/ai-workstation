@@ -265,7 +265,8 @@ fn session_kind_for_agent(agent: &AgentKind) -> SessionKind {
 }
 
 /// Whether a feature-level signal raised by `agent` belongs to `session`:
-/// the session the harness runs in when the feature has one, every agent
+/// the session of that harness when the feature lists one (even stopped or
+/// exited — the signal stays with the agent that raised it), every agent
 /// session otherwise.
 fn signal_applies(feature: &Feature, agent: Option<&AgentKind>, session: &FeatureSession) -> bool {
     if !session.kind.is_agent_harness() {
@@ -278,10 +279,7 @@ fn signal_applies(feature: &Feature, agent: Option<&AgentKind>, session: &Featur
     if session.kind == kind {
         return true;
     }
-    !feature
-        .sessions
-        .iter()
-        .any(|s| s.kind == kind && !s.stopped)
+    !feature.sessions.iter().any(|s| s.kind == kind)
 }
 
 fn feature_pending_detail(app: &App, feature: &Feature) -> Option<String> {
@@ -804,6 +802,37 @@ mod tests {
         app.attention.clear();
         assert_eq!(session_badge(&app, 0, 0, 0, now).kind, BadgeKind::Idle);
         assert_eq!(session_badge(&app, 0, 0, 1, now).kind, BadgeKind::Working);
+    }
+
+    #[test]
+    fn a_signal_stays_with_the_agent_that_raised_it_even_after_it_exited() {
+        let mut app = app_with(&[SessionKind::Claude, SessionKind::Codex]);
+        let now = Utc::now();
+        app.record_attention(
+            "aiw-hx-12",
+            &AgentKind::Claude,
+            AttentionState::CompletedAwaitingReview,
+            AttentionSource::Hook,
+        );
+        let claude_id = id(&app, 0);
+        app.store.projects[0].features[0].sessions[0].stopped = true;
+        app.exited_sessions.insert(claude_id);
+        assert_eq!(session_badge(&app, 0, 0, 0, now).kind, BadgeKind::Exited);
+        assert_eq!(
+            session_badge(&app, 0, 0, 1, now).kind,
+            BadgeKind::Idle,
+            "Claude's finished turn does not move to the Codex window"
+        );
+        assert_eq!(feature_badge(&app, 0, 0, now).kind, BadgeKind::Exited);
+        // Codex finishing a turn of its own is the feature's most pressing state.
+        app.record_attention(
+            "aiw-hx-12",
+            &AgentKind::Codex,
+            AttentionState::Waiting,
+            AttentionSource::Hook,
+        );
+        assert_eq!(session_badge(&app, 0, 0, 1, now).kind, BadgeKind::NeedsYou);
+        assert_eq!(feature_badge(&app, 0, 0, now).kind, BadgeKind::NeedsYou);
     }
 
     #[test]

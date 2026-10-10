@@ -33,7 +33,14 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
     {
         return Ok(false);
     }
-    if key.code == KeyCode::Char(LAYOUT_TOGGLE_KEY) {
+    // A user who bound `b` to a dashboard action keeps it.
+    if key.code == KeyCode::Char(LAYOUT_TOGGLE_KEY)
+        && !app
+            .active_extension
+            .keybindings
+            .values()
+            .any(|&bound| bound == LAYOUT_TOGGLE_KEY)
+    {
         app.toggle_dashboard_layout();
         return Ok(true);
     }
