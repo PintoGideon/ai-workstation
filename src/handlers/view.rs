@@ -1232,6 +1232,61 @@ mod tests {
         }
     }
 
+    // FORK: Ctrl+Q is "back to the dashboard" everywhere, including from the
+    // composer; the draft survives for the next visit.
+    #[test]
+    fn ctrl_q_in_compose_leaves_the_view_and_keeps_the_draft() {
+        let repo = TempDir::new().unwrap();
+        let mut app = app_for_viewing_repo(repo.path());
+        app.config.compose_box = true;
+
+        handle_view_key(&mut app, key(KeyCode::Char('h')), 20).unwrap();
+        assert!(matches!(&app.mode, AppMode::Compose(_)));
+        crate::handlers::handle_compose_key(&mut app, ctrl(KeyCode::Char('q'))).unwrap();
+
+        assert!(matches!(&app.mode, AppMode::Normal), "left the view");
+        assert_eq!(
+            app.compose_drafts
+                .get("aiw-feature:claude")
+                .map(|d| d.text.as_str()),
+            Some("h")
+        );
+    }
+
+    // FORK: the per-session compose toggle is written to the store, and a
+    // fresh App built from that store starts with it.
+    #[test]
+    fn compose_toggle_is_persisted_in_the_store_across_relaunch() {
+        let repo = TempDir::new().unwrap();
+        let mut app = app_for_viewing_repo(repo.path());
+        app.config.compose_box = true;
+
+        handle_view_key(&mut app, key(KeyCode::Char('h')), 20).unwrap();
+        crate::handlers::handle_compose_key(&mut app, ctrl(KeyCode::Char('e'))).unwrap();
+        assert!(app.compose_direct_targets.contains("aiw-feature:claude"));
+        assert_eq!(
+            app.store.extra.get("compose_direct_targets"),
+            Some(&serde_json::json!(["aiw-feature:claude"]))
+        );
+
+        // "Relaunch": a new App over the saved store.
+        let store = app.store.clone();
+        let again = App::new_for_test(
+            store,
+            Box::new(MockTmuxOps::new()),
+            Box::new(MockWorktreeOps::new()),
+        );
+        assert!(again.compose_direct_targets.contains("aiw-feature:claude"));
+
+        // Toggling back clears the saved entry too.
+        app.activate_leader();
+        handle_view_key(&mut app, key(KeyCode::Char('e')), 20).unwrap();
+        assert_eq!(
+            app.store.extra.get("compose_direct_targets"),
+            Some(&serde_json::json!([]))
+        );
+    }
+
     #[test]
     fn ctrl_e_in_compose_switches_to_direct_input_and_keeps_draft() {
         let repo = TempDir::new().unwrap();

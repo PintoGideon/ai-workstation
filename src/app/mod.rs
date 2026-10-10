@@ -2557,6 +2557,7 @@ impl App {
             .map(|p| merge_project_extension_config(&global_ext, &p.repo))
             .unwrap_or(global_ext);
         let (codex_sidebar_metadata_tx, codex_sidebar_metadata_rx) = std::sync::mpsc::channel();
+        let compose_direct_targets = compose::compose_targets_from_store(&store); // FORK
         let view_snapshot_slot = Arc::new(StdMutex::new(None));
         let (wakeup_rx, wakeup_tx) = unsafe {
             let mut fds = [0i32; 2];
@@ -2617,7 +2618,7 @@ impl App {
             quit_confirm_armed_at: None,
             reported_config_errors: HashMap::new(),
             missing_project_repos: std::collections::HashSet::new(),
-            compose_direct_targets: std::collections::HashSet::new(),
+            compose_direct_targets, // FORK: persisted in the store
             compose_drafts: HashMap::new(),
             compose_clipboard_paste: None,
             compose_submit: None,
@@ -2812,6 +2813,7 @@ impl App {
         let (sidebar_load_tx, sidebar_load_rx) = std::sync::mpsc::channel();
         let latest_prompt_cache = Self::build_latest_prompt_cache(&store);
         let (codex_sidebar_metadata_tx, codex_sidebar_metadata_rx) = std::sync::mpsc::channel();
+        let compose_direct_targets = compose::compose_targets_from_store(&store); // FORK
         let view_snapshot_slot = Arc::new(StdMutex::new(None));
         let (wakeup_rx, wakeup_tx) = unsafe {
             let mut fds = [0i32; 2];
@@ -2876,7 +2878,7 @@ impl App {
             quit_confirm_armed_at: None,
             reported_config_errors: HashMap::new(),
             missing_project_repos: std::collections::HashSet::new(),
-            compose_direct_targets: std::collections::HashSet::new(),
+            compose_direct_targets, // FORK: persisted in the store
             compose_drafts: HashMap::new(),
             compose_clipboard_paste: None,
             compose_submit: None,

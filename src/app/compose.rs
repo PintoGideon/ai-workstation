@@ -113,6 +113,26 @@ fn wait_for_image_ingested(session: &str, window: &str, baseline: usize) {
     }
 }
 
+/// FORK: `ProjectStore::extra` key holding the persisted compose toggles.
+pub(crate) const COMPOSE_TARGETS_KEY: &str = "compose_direct_targets";
+
+/// FORK: the compose toggles saved in a store, for `App` construction.
+pub(crate) fn compose_targets_from_store(
+    store: &crate::project::ProjectStore,
+) -> std::collections::HashSet<String> {
+    store
+        .extra
+        .get(COMPOSE_TARGETS_KEY)
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 pub(crate) fn compose_target_key(session: &str, window: &str) -> String {
     format!("{session}:{window}")
 }
@@ -346,6 +366,24 @@ impl App {
         } else {
             self.compose_direct_targets.remove(&target);
         }
+        self.persist_compose_targets();
+    }
+
+    /// FORK: the per-session compose toggles live in the project store
+    /// (`extra.compose_direct_targets`) so a relaunch keeps them.
+    pub(crate) fn persist_compose_targets(&mut self) {
+        let mut targets: Vec<&String> = self.compose_direct_targets.iter().collect();
+        targets.sort();
+        let value = serde_json::json!(targets);
+        if self.store.extra.get(COMPOSE_TARGETS_KEY) == Some(&value) {
+            return;
+        }
+        self.store
+            .extra
+            .insert(COMPOSE_TARGETS_KEY.to_string(), value);
+        if let Err(err) = self.save() {
+            self.log_warn("compose", format!("could not save compose toggles: {err}"));
+        }
     }
 
     /// Toggle compose interception for the currently viewed session.
@@ -368,6 +406,7 @@ impl App {
         if !self.compose_direct_targets.remove(&key) {
             self.compose_direct_targets.insert(key.clone());
         }
+        self.persist_compose_targets(); // FORK: survives a relaunch
         // FORK: report the resulting state, whichever default is configured.
         if self.config.compose_box != self.compose_direct_targets.contains(&key) {
             self.push_toast_success(

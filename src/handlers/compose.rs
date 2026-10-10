@@ -22,7 +22,10 @@ pub fn handle_compose_key(app: &mut App, key: KeyEvent) -> Result<()> {
     }
 
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
+        // FORK: Ctrl+Q leaves the view from the composer too (draft kept);
+        // Esc is the key that only closes the compose box.
         app.cancel_compose();
+        app.exit_view();
         return Ok(());
     }
 
