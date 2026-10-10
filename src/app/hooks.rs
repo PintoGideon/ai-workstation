@@ -461,11 +461,17 @@ impl App {
         };
 
         let mut cmd = std::process::Command::new("sh");
+        // FORK: the hook leads its own process group, so skipping it can end
+        // everything it started (`npm install`, `docker compose up`, …), not
+        // just this `sh`. Its stdin is not the TUI's terminal.
+        use std::os::unix::process::CommandExt;
         cmd.arg("-c")
             .arg(&expanded)
             .current_dir(&workdir)
+            .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
+            .stderr(std::process::Stdio::piped())
+            .process_group(0);
         if let Some(ref c) = choice {
             cmd.env("AIW_HOOK_CHOICE", c);
         }
@@ -602,6 +608,9 @@ impl App {
             return false;
         }
         if let Some(mut child) = state.child.take() {
+            // The whole group and tree: a grandchild left running would keep
+            // writing into the new worktree and hold the output pipe open.
+            crate::resources::procs::kill_group_and_tree(i64::from(child.id()));
             let _ = child.kill();
             let _ = child.wait();
         }

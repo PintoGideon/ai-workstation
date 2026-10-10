@@ -636,3 +636,44 @@ fn a_hanging_worktree_hook_offers_a_way_out_after_the_timeout() {
         .unwrap_or(false);
     assert!(!alive, "the hook process was killed");
 }
+
+#[test]
+fn skipping_a_hanging_hook_also_kills_what_it_started() {
+    use crate::app::RunningHookState;
+    use std::os::unix::process::CommandExt;
+
+    // Like a hook running `npm install`: `sh` with a long-running child.
+    let child = Command::new("sh")
+        .args(["-c", "sleep 600 & echo $!; wait"])
+        .stdout(std::process::Stdio::piped())
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let mut child = child;
+    let mut line = String::new();
+    {
+        use std::io::BufRead;
+        let stdout = child.stdout.take().unwrap();
+        std::io::BufReader::new(stdout)
+            .read_line(&mut line)
+            .unwrap();
+    }
+    let grandchild: i64 = line.trim().parse().unwrap();
+    assert!(crate::resources::procs::pid_alive(grandchild));
+
+    let mut app = empty_app();
+    let mut state = running_hook_state(Some(child));
+    state.started_at = std::time::Instant::now() - RunningHookState::TIMEOUT;
+    app.mode = AppMode::RunningHook(state);
+    assert!(app.skip_running_hook());
+
+    // The grandchild is reparented and reaped by init, which can take a moment.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while crate::resources::procs::pid_alive(grandchild) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(
+        !crate::resources::procs::pid_alive(grandchild),
+        "the hook's child was killed too"
+    );
+}

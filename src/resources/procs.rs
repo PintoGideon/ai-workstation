@@ -148,6 +148,24 @@ pub fn terminate_tree(root: i64, grace: Duration) -> Vec<i64> {
     tree.into_iter().filter(|pid| !pid_alive(*pid)).collect()
 }
 
+/// `SIGKILL` process group `pgid` and `pgid`'s whole process tree, now, with
+/// no grace period. For a child spawned with `process_group(0)` the group
+/// catches descendants that were reparented after their parent died; the
+/// tree catches any that moved to a group of their own.
+pub fn kill_group_and_tree(pgid: i64) {
+    if pgid <= 0 {
+        return;
+    }
+    let tree = process_tree(&list_processes(), pgid);
+    // SAFETY: a group that does not exist just returns ESRCH.
+    unsafe {
+        libc::killpg(pgid as libc::pid_t, libc::SIGKILL);
+    }
+    for pid in tree.into_iter().rev() {
+        signal(pid, libc::SIGKILL);
+    }
+}
+
 fn signal(pid: i64, sig: libc::c_int) {
     if pid <= 0 {
         return;
