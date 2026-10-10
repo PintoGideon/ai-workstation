@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, FrameExt, Paragraph},
 };
 
 use crate::app::AttachDocState;
@@ -57,7 +57,7 @@ pub fn draw_plan_interview_attach_doc_dialog(
         chunks[0],
     );
 
-    frame.render_widget(&state.explorer.widget(), chunks[1]);
+    frame.render_widget_ref(state.explorer.widget(), chunks[1]);
 
     let status_line = if let Some(err) = &state.error {
         Line::from(Span::styled(
@@ -83,7 +83,10 @@ pub fn draw_plan_interview_attach_doc_dialog(
             Span::styled("h/BS", Style::default().fg(theme.warning.to_color())),
             Span::raw(" parent  "),
             Span::styled("Esc", Style::default().fg(theme.warning.to_color())),
-            Span::raw(" cancel"),
+            Span::raw(" cancel  "),
+            // FORK: ratatui-explorer 0.3 hides dotfiles by default; ^h toggles them.
+            Span::styled("^h", Style::default().fg(theme.warning.to_color())),
+            Span::raw(" hidden"),
         ]),
     ]);
     frame.render_widget(hints, chunks[2]);

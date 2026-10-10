@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, FrameExt, Paragraph},
 };
 
 use crate::app::BrowsePathState;
@@ -64,7 +64,7 @@ pub fn draw_browse_path_dialog(frame: &mut Frame, state: &BrowsePathState, theme
         ]));
         frame.render_widget(prompt, input_chunks[0]);
     } else {
-        frame.render_widget(&state.explorer.widget(), chunks[1]);
+        frame.render_widget_ref(state.explorer.widget(), chunks[1]);
     }
 
     let hints = if state.creating_folder {
@@ -96,7 +96,10 @@ pub fn draw_browse_path_dialog(frame: &mut Frame, state: &BrowsePathState, theme
                 Span::styled("h/BS", Style::default().fg(theme.warning.to_color())),
                 Span::raw(" parent  "),
                 Span::styled("Esc", Style::default().fg(theme.warning.to_color())),
-                Span::raw(" cancel"),
+                Span::raw(" cancel  "),
+                // FORK: ratatui-explorer 0.3 hides dotfiles by default; ^h toggles them.
+                Span::styled("^h", Style::default().fg(theme.warning.to_color())),
+                Span::raw(" hidden"),
             ]),
         ])
     };

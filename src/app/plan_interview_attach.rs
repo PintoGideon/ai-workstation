@@ -64,10 +64,10 @@ impl App {
         let outcome = match &mut self.mode {
             AppMode::PlanInterviewAttachDoc(state) => {
                 let current = state.explorer.current();
-                if current.is_dir() {
+                if current.is_dir {
                     return;
                 }
-                let path = current.path().clone();
+                let path = current.path.clone();
                 state.interview.attach_doc(&path)
             }
             _ => return,

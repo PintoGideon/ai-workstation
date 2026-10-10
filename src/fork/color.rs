@@ -245,7 +245,9 @@ impl<B> ColorBackend<B> {
 }
 
 impl<B: Backend> Backend for ColorBackend<B> {
-    fn draw<'a, I>(&mut self, content: I) -> io::Result<()>
+    type Error = B::Error;
+
+    fn draw<'a, I>(&mut self, content: I) -> Result<(), B::Error>
     where
         I: Iterator<Item = (u16, u16, &'a Cell)>,
     {
@@ -265,43 +267,43 @@ impl<B: Backend> Backend for ColorBackend<B> {
             .draw(cells.iter().map(|(x, y, cell)| (*x, *y, cell)))
     }
 
-    fn append_lines(&mut self, n: u16) -> io::Result<()> {
+    fn append_lines(&mut self, n: u16) -> Result<(), B::Error> {
         self.inner.append_lines(n)
     }
 
-    fn hide_cursor(&mut self) -> io::Result<()> {
+    fn hide_cursor(&mut self) -> Result<(), B::Error> {
         self.inner.hide_cursor()
     }
 
-    fn show_cursor(&mut self) -> io::Result<()> {
+    fn show_cursor(&mut self) -> Result<(), B::Error> {
         self.inner.show_cursor()
     }
 
-    fn get_cursor_position(&mut self) -> io::Result<Position> {
+    fn get_cursor_position(&mut self) -> Result<Position, B::Error> {
         self.inner.get_cursor_position()
     }
 
-    fn set_cursor_position<P: Into<Position>>(&mut self, position: P) -> io::Result<()> {
+    fn set_cursor_position<P: Into<Position>>(&mut self, position: P) -> Result<(), B::Error> {
         self.inner.set_cursor_position(position)
     }
 
-    fn clear(&mut self) -> io::Result<()> {
+    fn clear(&mut self) -> Result<(), B::Error> {
         self.inner.clear()
     }
 
-    fn clear_region(&mut self, clear_type: ClearType) -> io::Result<()> {
+    fn clear_region(&mut self, clear_type: ClearType) -> Result<(), B::Error> {
         self.inner.clear_region(clear_type)
     }
 
-    fn size(&self) -> io::Result<Size> {
+    fn size(&self) -> Result<Size, B::Error> {
         self.inner.size()
     }
 
-    fn window_size(&mut self) -> io::Result<WindowSize> {
+    fn window_size(&mut self) -> Result<WindowSize, B::Error> {
         self.inner.window_size()
     }
 
-    fn flush(&mut self) -> io::Result<()> {
+    fn flush(&mut self) -> Result<(), B::Error> {
         Backend::flush(&mut self.inner)
     }
 }

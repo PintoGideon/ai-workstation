@@ -55,7 +55,7 @@ pub fn handle_browse_path_key(app: &mut App, key: KeyEvent) -> Result<()> {
         }
         KeyCode::Enter => {
             let is_dir = match &app.mode {
-                AppMode::BrowsingPath(state) => state.explorer.current().is_dir(),
+                AppMode::BrowsingPath(state) => state.explorer.current().is_dir,
                 _ => false,
             };
             if is_dir {

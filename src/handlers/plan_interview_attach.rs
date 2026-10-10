@@ -14,7 +14,7 @@ pub fn handle_plan_interview_attach_doc_key(app: &mut App, key: KeyEvent) -> Res
         KeyCode::Enter => {
             let is_dir = matches!(
                 &app.mode,
-                AppMode::PlanInterviewAttachDoc(state) if state.explorer.current().is_dir()
+                AppMode::PlanInterviewAttachDoc(state) if state.explorer.current().is_dir
             );
             if is_dir {
                 if let AppMode::PlanInterviewAttachDoc(state) = &mut app.mode {

@@ -1207,7 +1207,7 @@ impl LoopDeadlines {
 /// up: a missing editor should not end the session — but the screen is always
 /// restored first, since returning to a half-torn-down terminal is worse than
 /// any editor error.
-fn run_pending_editor<B: Backend + io::Write>(
+fn run_pending_editor<B: Backend<Error = io::Error> + io::Write>(
     terminal: &mut Terminal<B>,
     app: &mut App,
     request: app::PendingEditorOpen,
@@ -1285,7 +1285,7 @@ fn run_pending_editor<B: Backend + io::Write>(
 
 // The `io::Write` bound is what lets `run_pending_editor` drive the terminal's
 // alternate screen / raw mode through the backend, the same way `run` does.
-fn run_loop<B: Backend + io::Write>(
+fn run_loop<B: Backend<Error = io::Error> + io::Write>(
     terminal: &mut Terminal<B>,
     app: &mut App,
     vscode_check_rx: std::sync::mpsc::Receiver<bool>,

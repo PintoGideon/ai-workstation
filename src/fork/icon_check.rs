@@ -62,7 +62,10 @@ pub fn record(app: &mut App, answer: Answer) {
 }
 
 /// Show the check and wait for y / n / Esc.
-pub fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
+pub fn run<B: Backend<Error = std::io::Error>>(
+    terminal: &mut Terminal<B>,
+    app: &mut App,
+) -> Result<()> {
     loop {
         terminal.draw(|frame| draw(frame, &app.theme))?;
         if let Event::Key(key) = event::read()?
