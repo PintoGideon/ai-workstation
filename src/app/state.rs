@@ -2337,11 +2337,25 @@ pub struct RunningHookState {
     pub output: String,
     pub success: Option<bool>,
     pub output_rx: Option<std::sync::mpsc::Receiver<String>>,
+    /// FORK: when the hook was started, for the "still running" notice.
+    pub started_at: Instant,
+    /// FORK: the notice after [`RunningHookState::TIMEOUT`] was appended.
+    pub timeout_noted: bool,
+    /// FORK: the user skipped the hook (killed) after it overran.
+    pub skipped: bool,
 }
 
 impl RunningHookState {
+    /// FORK: after this long a hanging hook can be skipped with Esc.
+    pub const TIMEOUT: Duration = Duration::from_secs(60);
+
     pub fn key(&self) -> String {
         format!("{}/{}", self.workdir.display(), self.script)
+    }
+
+    /// FORK: the hook has overrun [`Self::TIMEOUT`] and is still running.
+    pub fn overran(&self) -> bool {
+        self.child.is_some() && self.started_at.elapsed() >= Self::TIMEOUT
     }
 }
 

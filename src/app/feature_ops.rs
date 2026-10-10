@@ -1645,14 +1645,14 @@ impl App {
 
         // Fire on_start lifecycle hook (plain script) if configured.
         if let Some(ref cfg) = on_start {
-            let workdir = self
+            let (workdir, feature_name) = self
                 .store
                 .projects
                 .get(pi)
                 .and_then(|p| p.features.get(fi))
-                .map(|f| f.workdir.clone())
+                .map(|f| (f.workdir.clone(), f.name.clone()))
                 .unwrap_or_default();
-            self.run_lifecycle_hook(cfg.script(), &workdir, None);
+            self.run_lifecycle_hook("on_start", &feature_name, cfg.script(), &workdir, None);
         }
 
         let name = self.store.projects[pi].features[fi].name.clone();
@@ -1713,6 +1713,7 @@ impl App {
         // Clone hook and workdir data before mutable borrow.
         let on_stop_hook = self.active_extension.lifecycle_hooks.on_stop.clone();
         let workdir_for_hook = feature.workdir.clone();
+        let feature_name_for_hook = feature.name.clone(); // FORK: named in the failure toast
         // FORK: a repo-supplied hook needs one-time approval first.
         let Some(on_stop_hook) = self.gate_feature_hook(
             pi,
@@ -1739,7 +1740,13 @@ impl App {
         }
 
         if let Some(ref cfg) = on_stop_hook {
-            self.run_lifecycle_hook(cfg.script(), &workdir_for_hook, None);
+            self.run_lifecycle_hook(
+                "on_stop",
+                &feature_name_for_hook,
+                cfg.script(),
+                &workdir_for_hook,
+                None,
+            );
         }
 
         self.do_stop_feature(pi, fi)?;

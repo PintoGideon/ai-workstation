@@ -197,6 +197,16 @@ impl App {
         self.finish_feature_launch(prepared)
     }
 
+    /// FORK: the feature's name for messages, or its indices when unknown.
+    fn feature_name_at(&self, pi: usize, fi: usize) -> String {
+        self.store
+            .projects
+            .get(pi)
+            .and_then(|p| p.features.get(fi))
+            .map(|f| f.name.clone())
+            .unwrap_or_else(|| format!("feature {pi}/{fi}"))
+    }
+
     fn hook_failure_detail(output: &str) -> String {
         output
             .lines()
@@ -210,7 +220,17 @@ impl App {
     /// Expands leading `~/` to the home directory.
     /// If `choice` is provided it is set as `AIW_HOOK_CHOICE`
     /// in the child environment.
-    pub fn run_lifecycle_hook(&self, script: &str, workdir: &Path, choice: Option<&str>) {
+    ///
+    /// FORK: `hook` (`on_start`, `on_stop`) and `feature` name the hook in
+    /// the toast a non-zero exit raises on the next tick.
+    pub fn run_lifecycle_hook(
+        &self,
+        hook: &str,
+        feature: &str,
+        script: &str,
+        workdir: &Path,
+        choice: Option<&str>,
+    ) {
         let expanded = if script.starts_with("~/") {
             dirs::home_dir()
                 .map(|h| format!("{}/{}", h.display(), &script[2..]))
@@ -229,6 +249,8 @@ impl App {
             cmd.env("AIW_HOOK_CHOICE", c);
         }
         let workdir = workdir.to_path_buf();
+        let hook_name = hook.to_string();
+        let feature = feature.to_string();
         match cmd.spawn() {
             Ok(mut child) => {
                 let hook = expanded.clone();
@@ -260,6 +282,15 @@ impl App {
                                     status.code()
                                 ),
                             );
+                            // FORK: surfaced as a toast on the next tick.
+                            let exit = match status.code() {
+                                Some(code) => format!("exit {code}"),
+                                None => "killed by a signal".to_string(),
+                            };
+                            crate::fork::notices::warn(
+                                "hooks",
+                                format!("Hook {hook_name} failed ({exit}) in {feature}"),
+                            );
                         }
                         Ok(_) => {}
                         Err(err) => {
@@ -283,6 +314,10 @@ impl App {
                         "failed to spawn lifecycle hook `{expanded}` in {}: {err}",
                         workdir.display()
                     ),
+                );
+                crate::fork::notices::warn(
+                    "hooks",
+                    format!("Hook {hook_name} could not start in {feature}: {err}"),
                 );
             }
         }
@@ -368,11 +403,25 @@ impl App {
                 );
             }
             HookNext::StartFeature { pi, fi, session_id } => {
-                self.run_lifecycle_hook(&state.script, &state.workdir, Some(&choice));
+                let feature = self.feature_name_at(pi, fi);
+                self.run_lifecycle_hook(
+                    "on_start",
+                    &feature,
+                    &state.script,
+                    &state.workdir,
+                    Some(&choice),
+                );
                 self.do_start_feature(pi, fi, session_id.as_deref())?;
             }
             HookNext::StopFeature { pi, fi } => {
-                self.run_lifecycle_hook(&state.script, &state.workdir, Some(&choice));
+                let feature = self.feature_name_at(pi, fi);
+                self.run_lifecycle_hook(
+                    "on_stop",
+                    &feature,
+                    &state.script,
+                    &state.workdir,
+                    Some(&choice),
+                );
                 self.do_stop_feature(pi, fi)?;
             }
         }
@@ -490,6 +539,9 @@ impl App {
             output: String::new(),
             success: None,
             output_rx: Some(rx),
+            started_at: std::time::Instant::now(),
+            timeout_noted: false,
+            skipped: false,
         });
     }
 
@@ -518,6 +570,15 @@ impl App {
                     }
                     state.child = None;
                 }
+                Ok(None) if !state.timeout_noted && state.overran() => {
+                    // FORK: a hanging hook blocks this dialog; say so and
+                    // offer a way out (`Esc` → `skip_running_hook`).
+                    state.timeout_noted = true;
+                    state.output.push_str(&format!(
+                        "\n[still running after {} s… press Esc to skip it and continue without the hook]\n",
+                        RunningHookState::TIMEOUT.as_secs()
+                    ));
+                }
                 Ok(None) => {}
                 Err(e) => {
                     state.success = Some(false);
@@ -528,6 +589,37 @@ impl App {
         }
 
         Ok(())
+    }
+
+    /// FORK: give up on a hook that overran [`RunningHookState::TIMEOUT`]:
+    /// kill it and let the feature creation go on without it. Returns
+    /// whether there was such a hook to skip.
+    pub fn skip_running_hook(&mut self) -> bool {
+        let AppMode::RunningHook(state) = &mut self.mode else {
+            return false;
+        };
+        if !state.overran() {
+            return false;
+        }
+        if let Some(mut child) = state.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        state.skipped = true;
+        state.success = None;
+        state
+            .output
+            .push_str("\n[hook skipped: killed after the timeout]\n");
+        let (script, workdir) = (state.script.clone(), state.workdir.clone());
+        self.log_warn(
+            "hooks",
+            format!(
+                "worktree hook `{script}` in {} skipped after {} s",
+                workdir.display(),
+                RunningHookState::TIMEOUT.as_secs()
+            ),
+        );
+        true
     }
 
     pub fn complete_running_hook(&mut self) -> Result<()> {
@@ -550,6 +642,7 @@ impl App {
             steering_enabled,
             startup_prompt,
             success,
+            skipped,
         ) = {
             match &self.mode {
                 AppMode::RunningHook(s) => (
@@ -571,6 +664,7 @@ impl App {
                     s.steering_enabled,
                     s.startup_prompt.clone(),
                     s.success,
+                    s.skipped,
                 ),
                 _ => return Ok(()),
             }
@@ -600,6 +694,17 @@ impl App {
 
         if matches!(self.mode, AppMode::PlanInterview(_)) {
             self.message = None;
+            return Ok(());
+        }
+
+        if skipped {
+            // FORK: the hook was killed after the timeout; the feature is up.
+            let text = format!(
+                "Created and started feature '{branch}' without its worktree hook (skipped after {} s)",
+                RunningHookState::TIMEOUT.as_secs()
+            );
+            self.push_toast_warning(text.clone());
+            self.message = Some(text);
             return Ok(());
         }
 

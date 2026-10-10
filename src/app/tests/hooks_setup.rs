@@ -484,6 +484,9 @@ fn complete_running_hook_clears_pending_state_and_starts_feature() {
         output: String::new(),
         success: Some(true),
         output_rx: None,
+        started_at: std::time::Instant::now(),
+        timeout_noted: false,
+        skipped: false,
     });
 
     app.complete_running_hook().unwrap();

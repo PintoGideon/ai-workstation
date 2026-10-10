@@ -10,8 +10,11 @@ pub fn handle_running_hook_key(app: &mut App, key: KeyCode) -> Result<()> {
     };
 
     if is_running {
-        if let KeyCode::Char('h') = key {
-            app.hide_running_hook();
+        match key {
+            KeyCode::Char('h') => app.hide_running_hook(),
+            // FORK: a hook that overran its timeout can be skipped.
+            KeyCode::Esc if app.skip_running_hook() => app.complete_running_hook()?,
+            _ => {}
         }
         return Ok(());
     }

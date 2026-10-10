@@ -516,3 +516,123 @@ fn a_malformed_notification_file_is_moved_to_the_quarantine_by_the_scan() {
     assert!(quarantined.exists(), "{}", quarantined.display());
     let _ = std::fs::remove_file(quarantined);
 }
+
+// ── hook failures are visible ────────────────────────────────────────────────
+
+fn empty_app() -> App {
+    App::new_for_test(
+        ProjectStore::empty(),
+        Box::new(MockTmuxOps::new()),
+        Box::new(MockWorktreeOps::new()),
+    )
+}
+
+#[test]
+fn a_failing_lifecycle_hook_raises_a_toast_naming_the_hook_and_feature() {
+    let tmp = TempDir::new().unwrap();
+    let mut app = empty_app();
+    let tag = format!("hooktoast-{}", std::process::id());
+
+    app.run_lifecycle_hook("on_start", &tag, "exit 7", tmp.path(), None);
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let expected = format!("Hook on_start failed (exit 7) in {tag}");
+    while !app.toasts.iter().any(|t| t.message == expected) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "no toast: {:?}",
+            app.toasts.iter().map(|t| &t.message).collect::<Vec<_>>()
+        );
+        app.drain_fork_notices();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+
+    // A hook that succeeds says nothing.
+    let quiet = format!("quiet-{}", std::process::id());
+    app.run_lifecycle_hook("on_stop", &quiet, "exit 0", tmp.path(), None);
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    app.drain_fork_notices();
+    assert!(!app.toasts.iter().any(|t| t.message.contains(&quiet)));
+}
+
+fn running_hook_state(child: Option<std::process::Child>) -> crate::app::RunningHookState {
+    crate::app::RunningHookState {
+        script: "sleep 600".to_string(),
+        workdir: std::env::temp_dir(),
+        project_name: "safety".to_string(),
+        feature_name: None,
+        todo_origin: None,
+        issue_source: None,
+        branch: "slow".to_string(),
+        mode: crate::project::VibeMode::default(),
+        review: false,
+        plan_mode: false,
+        quick_plan: false,
+        agent: AgentKind::Claude,
+        create_terminal: false,
+        session_name: "Claude 1".to_string(),
+        enable_chrome: false,
+        remote_control: false,
+        steering_enabled: false,
+        startup_prompt: None,
+        child,
+        output: String::new(),
+        success: None,
+        output_rx: None,
+        started_at: std::time::Instant::now(),
+        timeout_noted: false,
+        skipped: false,
+    }
+}
+
+#[test]
+fn a_hanging_worktree_hook_offers_a_way_out_after_the_timeout() {
+    use crate::app::RunningHookState;
+
+    let child = Command::new("sleep")
+        .arg("600")
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    let mut app = empty_app();
+    app.mode = AppMode::RunningHook(running_hook_state(Some(child)));
+
+    // Before the timeout: nothing to skip, Esc is ignored while running.
+    app.poll_running_hook().unwrap();
+    assert!(!app.skip_running_hook());
+    crate::handlers::handle_running_hook_key(&mut app, KeyCode::Esc).unwrap();
+    assert!(matches!(app.mode, AppMode::RunningHook(_)));
+
+    // Past the timeout the dialog text says what to do.
+    if let AppMode::RunningHook(state) = &mut app.mode {
+        state.started_at = std::time::Instant::now() - RunningHookState::TIMEOUT;
+    }
+    app.poll_running_hook().unwrap();
+    let AppMode::RunningHook(state) = &app.mode else {
+        panic!("still running")
+    };
+    assert!(state.timeout_noted);
+    assert!(
+        state.output.contains("still running after 60 s"),
+        "{}",
+        state.output
+    );
+    assert!(state.output.contains("Esc to skip"), "{}", state.output);
+    assert!(state.child.is_some());
+
+    // Skipping kills the hook and records it.
+    assert!(app.skip_running_hook());
+    let AppMode::RunningHook(state) = &app.mode else {
+        panic!("still in the dialog until completion")
+    };
+    assert!(state.skipped);
+    assert!(state.child.is_none());
+    assert!(state.output.contains("hook skipped"));
+    let alive = Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    assert!(!alive, "the hook process was killed");
+}
