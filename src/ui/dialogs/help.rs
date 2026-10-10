@@ -233,9 +233,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     let view_keybinds: Vec<(&str, &str)> = vec![
         ("Ctrl+Q", "Exit view"),
         ("Ctrl+Space", "Open leader command menu"),
+        // FORK: typing goes straight to the agent unless the compose box is on.
         (
             "any text key",
-            "Open compose input (agent sessions, without leader)",
+            "Typed straight into the agent (compose box: Ctrl+Space e)",
         ),
         ("", "Commands below require Ctrl+Space first:"),
         ("s", "Steering coach (experimental)"),
