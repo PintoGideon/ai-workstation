@@ -68,12 +68,20 @@ fn send_key_name(
     if result.is_ok() && refresh_after_send {
         app.request_view_snapshot_pane_burst();
     }
-    result
+    // FORK: a window that closed under the view ends the view, not the key.
+    match result {
+        Err(err) if app.handle_vanished_tmux_target(&err) => Ok(()),
+        other => other,
+    }
 }
 
 fn flush_view_input_batch(app: &mut App) -> Result<()> {
-    let _ = app.flush_view_input_batch()?;
-    Ok(())
+    match app.flush_view_input_batch() {
+        Ok(_) => Ok(()),
+        // FORK: see `send_key_name`.
+        Err(err) if app.handle_vanished_tmux_target(&err) => Ok(()),
+        Err(err) => Err(err),
+    }
 }
 
 // FORK: pub(super) so split view (`handlers/fork_split.rs`) routes keys the same way.

@@ -32,7 +32,11 @@ pub fn handle_split_key(app: &mut App, key: KeyEvent) -> Result<()> {
             // `Ctrl+Space` twice: tmux names that key `C-Space`, not `C- `.
             if key.code == KeyCode::Char(' ') && key.modifiers.contains(KeyModifiers::CONTROL) {
                 app.flush_view_input_batch()?;
-                app.tmux.send_key_name(&session, &window, "C-Space")?;
+                if let Err(err) = app.tmux.send_key_name(&session, &window, "C-Space")
+                    && !app.handle_vanished_tmux_target(&err)
+                {
+                    return Err(err);
+                }
                 app.request_split_focus_refresh();
                 return Ok(());
             }

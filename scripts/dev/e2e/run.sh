@@ -169,6 +169,14 @@ keys Enter; sleep 1.5; keys -l '/crash'; keys Enter; sleep 1; keys C-q; sleep 0.
 wait_row_glyph 'Claude 1' '■' 20; check "/crash: agent gone, shell alive → row shows ■ exited" $?
 [ "$(cap | sed -n 2p | grep -o '✓ [0-9]*')" = "$done_before" ]; check "/crash: no 'finished' attention pill" $?
 aiw_tmux list-windows -t aiw-alpha-alpha-1 -F '#W' | grep -qx claude; check "/crash: the window itself is still there" $?
+
+# the feature's whole tmux session ends (its last window closed) and the user
+# presses Enter and types before the next sweep: no error per keystroke
+aiw_tmux kill-session -t aiw-alpha-alpha-1 2>/dev/null
+select_row 'Claude 1' >/dev/null; keys Enter; sleep 0.4; keys -l 'xyz'; sleep 2.5; hook_prompts
+! cap | grep -q 'send-keys failed'; check "whole tmux session gone: Enter + typing shows no send-keys error" $?
+no_panic; check "whole tmux session gone: no panic" $?
+close_dialogs; keys C-q; sleep 0.3; close_dialogs
 select_row 'Claude 1' >/dev/null; keys c; sleep 3; hook_prompts; sleep 1
 row_glyph 'Claude 1' '●' && [ "$(wc -l <"$S/log/claude.args")" -gt "$n_before" ]; check "c: exited agent is launched again" $?
 [ "$(aiw_tmux list-windows -t aiw-alpha-alpha-1 -F '#W' | grep -cx claude)" = 1 ]; check "c: relaunch reused the window (no duplicate)" $?

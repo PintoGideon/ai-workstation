@@ -26,7 +26,7 @@
 //!
 //! One `tmux list-panes -a` per sweep answers both questions.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::app::{App, AppMode, Selection};
 use crate::project::{ProjectStatus, SessionKind};
@@ -95,7 +95,6 @@ impl App {
                 *entry = command;
             }
         }
-        let live_sessions: HashSet<&str> = commands.keys().map(|(s, _)| s.as_str()).collect();
 
         let viewing = match &self.mode {
             AppMode::Viewing(view) => Some((view.session.clone(), view.window.clone())),
@@ -109,9 +108,11 @@ impl App {
         let mut fixes: Vec<(usize, usize, usize, Fix)> = Vec::new();
         for (pi, project) in self.store.projects.iter().enumerate() {
             for (fi, feature) in project.features.iter().enumerate() {
-                if feature.status == ProjectStatus::Stopped
-                    || !live_sessions.contains(feature.tmux_session.as_str())
-                {
+                // A feature whose whole tmux session is gone (its last window
+                // closed) is treated like one that lost every window: each
+                // session is marked, so Enter restarts it instead of typing
+                // into nothing. Stopped features are already settled.
+                if feature.status == ProjectStatus::Stopped {
                     continue;
                 }
                 for (si, session) in feature.sessions.iter().enumerate() {
@@ -151,8 +152,7 @@ impl App {
             && !commands.contains_key(key)
         {
             leave_view = true;
-            if live_sessions.contains(key.0.as_str())
-                && let Some((pi, fi, si)) = self.session_indices_for_window(&key.0, &key.1)
+            if let Some((pi, fi, si)) = self.session_indices_for_window(&key.0, &key.1)
                 && let Some(session) = self
                     .store
                     .projects
@@ -324,6 +324,27 @@ pub(crate) fn selection_after_removal(
             Selection::Session(p, f, s - 1)
         }
         ref other => other.clone(),
+    }
+}
+
+impl App {
+    /// A tmux send failed because its target no longer exists (the agent's
+    /// window closed, or its whole tmux session ended). Settle the list and
+    /// leave the view once, instead of an error per keystroke. Returns
+    /// `false` for any other error, which the caller reports as before.
+    pub(crate) fn handle_vanished_tmux_target(&mut self, err: &anyhow::Error) -> bool {
+        let text = format!("{err:#}");
+        if !(text.contains("can't find session") || text.contains("can't find window")) {
+            return false;
+        }
+        self.reconcile_vanished_windows();
+        if matches!(self.mode, AppMode::Viewing(_) | AppMode::Compose(_)) {
+            // tmux could not even be listed: leave the dead frame anyway.
+            self.exit_view();
+            self.message = Some(VIEWED_WINDOW_GONE.to_string());
+            self.log_info("reconcile", VIEWED_WINDOW_GONE.to_string());
+        }
+        true
     }
 }
 
