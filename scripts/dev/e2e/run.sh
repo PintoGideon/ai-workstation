@@ -115,7 +115,8 @@ cap | grep -q "Renamed to 'cx'"; check "r: rename session" $?
 select_row 'alpha-1' >/dev/null; keys x; sleep 2; ! aiw_tmux has-session -t aiw-alpha-alpha-1 2>/dev/null; check "x: stop feature kills its tmux session" $?
 keys c; sleep 2; hook_prompts; aiw_tmux has-session -t aiw-alpha-alpha-1 2>/dev/null; check "c: start feature again" $?
 select_row 'Claude 1' >/dev/null; keys S; wait_for 'Claude Sessions' 4; check "S: saved Claude conversations listed" $?
-keys Enter; sleep 2.5; hook_prompts; keys C-q; sleep 0.5
+keys Enter; sleep 0.8
+wait_for 'Confirm Restart' 3 && keys y; sleep 3; hook_prompts; keys C-q; sleep 0.5
 tail -1 "$S/log/claude.args" | grep -q '"--resume"'; check "S: Claude relaunched with --resume <id>" $?
 
 keys z; sleep 0.6; cap | grep -qi 'dormant'; check "z: dormant list" $?; close_dialogs

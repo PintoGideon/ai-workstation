@@ -76,10 +76,12 @@ check() {
     fi
 }
 
+# q quits from the dashboard; it first closes a result dialog (e.g. the
+# "Feature deleted" acknowledgement), so press it again if AIW is still up.
 aiw_quit() {
-    keys q
     local i
     for i in $(seq 1 100); do
+        [ $((i % 30)) -eq 1 ] && keys q
         [ -z "$(aiw_pid)" ] && return 0
         sleep 0.1
     done
