@@ -679,28 +679,27 @@ fn parse_timestamp(timestamp: &str) -> Option<i64> {
 }
 
 fn codex_sessions_root() -> Option<PathBuf> {
-    let from_dirs = dirs::home_dir().map(|h| h.join(".codex").join("sessions"));
+    codex_sessions_root_in(
+        dirs::home_dir(),
+        std::env::var_os("HOME").map(PathBuf::from),
+    )
+}
+
+/// `~/.codex/sessions` under the home directory — the platform's idea of it,
+/// else `$HOME`. FORK: never guessed from `$USER` (`/home/$USER` is another
+/// user's folder on a shared box, and a wrong guess read their sessions).
+fn codex_sessions_root_in(home: Option<PathBuf>, env_home: Option<PathBuf>) -> Option<PathBuf> {
+    let from_dirs = home.map(|h| h.join(".codex").join("sessions"));
     if from_dirs.as_ref().is_some_and(|p| p.exists()) {
         return from_dirs;
     }
 
-    let from_env = std::env::var("HOME")
-        .ok()
-        .map(PathBuf::from)
-        .map(|h| h.join(".codex").join("sessions"));
+    let from_env = env_home.map(|h| h.join(".codex").join("sessions"));
     if from_env.as_ref().is_some_and(|p| p.exists()) {
         return from_env;
     }
 
-    let from_user_home = std::env::var("USER")
-        .ok()
-        .map(|u| PathBuf::from("/home").join(u))
-        .map(|h| h.join(".codex").join("sessions"));
-    if from_user_home.as_ref().is_some_and(|p| p.exists()) {
-        return from_user_home;
-    }
-
-    from_dirs.or(from_env).or(from_user_home)
+    from_dirs.or(from_env)
 }
 
 fn sql_quote(path: &Path) -> String {
@@ -711,6 +710,28 @@ fn sql_quote(path: &Path) -> String {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    // FORK: the sessions root comes from the home directory only; with no
+    // such folder the answer is still under home, never `/home/$USER`.
+    #[test]
+    fn codex_sessions_root_never_guesses_another_users_home() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let env_home = tmp.path().join("env-home");
+        std::fs::create_dir_all(env_home.join(".codex").join("sessions")).unwrap();
+
+        // Present under $HOME, absent under the platform home: $HOME wins.
+        assert_eq!(
+            codex_sessions_root_in(Some(home.clone()), Some(env_home.clone())),
+            Some(env_home.join(".codex").join("sessions"))
+        );
+        // Absent everywhere: the platform home's path, no other guess.
+        assert_eq!(
+            codex_sessions_root_in(Some(home.clone()), Some(home.clone())),
+            Some(home.join(".codex").join("sessions"))
+        );
+        assert_eq!(codex_sessions_root_in(None, None), None);
+    }
 
     fn write_session(root: &Path, relative: &str, contents: &str) {
         let path = root.join(relative);

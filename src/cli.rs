@@ -380,12 +380,19 @@ fn run_notify_fallbacks(
         .unwrap_or_default();
 
     if !session_id.is_empty() {
+        // FORK: the hook scripts still name `/tmp/aiw-thinking`; markers now
+        // live under the state dir (and a stale legacy one is removed too).
         if let Some(dir) = touch_dir {
-            let _ = std::fs::create_dir_all(dir);
+            let dir = crate::fork::paths::resolve_marker_dir(dir);
+            let _ = std::fs::create_dir_all(&dir);
             let _ = std::fs::File::create(dir.join(session_id));
         }
         if let Some(dir) = remove_dir {
             let _ = std::fs::remove_file(dir.join(session_id));
+            let resolved = crate::fork::paths::resolve_marker_dir(dir);
+            if resolved != dir {
+                let _ = std::fs::remove_file(resolved.join(session_id));
+            }
         }
     }
 
@@ -1103,7 +1110,7 @@ fn run_automation_command(command: AutomationCommands) -> Result<()> {
 /// Merges AIW thinking-detection hooks into ~/.claude/settings.json.
 ///
 /// Uses Claude Code's PreToolUse / Stop hooks to touch / remove a
-/// sentinel file at /tmp/aiw-thinking/<AIW_SESSION> so the dashboard
+/// sentinel file at `<state dir>/thinking/<AIW_SESSION>` so the dashboard
 /// can show a throbber without polling tmux pane content.
 ///
 /// The function is idempotent: it only appends entries when they are
@@ -2328,12 +2335,42 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
 #[cfg(test)]
 mod tests {
     use super::{
-        Cli, Commands, cleanup_hooks_at, startup_loading_pending, startup_sidebar_can_warm,
+        Cli, Commands, cleanup_hooks_at, run_notify_fallbacks, startup_loading_pending,
+        startup_sidebar_can_warm,
     };
     use clap::Parser;
     use std::collections::BTreeSet;
     use std::fs;
     use tempfile::TempDir;
+
+    // FORK: the hook scripts still pass `/tmp/aiw-thinking`; the marker is
+    // written under the state dir and removed from both places.
+    #[test]
+    fn notify_fallbacks_redirect_the_legacy_marker_dir_to_the_state_dir() {
+        let session = format!("aiw-marker-test-{}", std::process::id());
+        let payload = serde_json::json!({ "session_id": session });
+        let legacy = std::path::Path::new(crate::fork::paths::LEGACY_THINKING_DIR);
+        let current = crate::fork::paths::thinking_dir().join(&session);
+
+        run_notify_fallbacks(&payload, Some(legacy), None, &[]);
+        assert!(current.exists(), "{}", current.display());
+        assert!(!legacy.join(&session).exists());
+
+        // A marker an older build left in /tmp goes too.
+        let _ = fs::create_dir_all(legacy);
+        let stale = legacy.join(&session);
+        let legacy_writable = fs::write(&stale, "").is_ok();
+        run_notify_fallbacks(&payload, None, Some(legacy), &[]);
+        assert!(!current.exists());
+        if legacy_writable {
+            assert!(!stale.exists());
+        }
+
+        // Any other directory is used as given.
+        let other = TempDir::new().unwrap();
+        run_notify_fallbacks(&payload, Some(other.path()), None, &[]);
+        assert!(other.path().join(&session).exists());
+    }
 
     fn schema_keys(help: &str) -> BTreeSet<String> {
         help.lines()

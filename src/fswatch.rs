@@ -4,7 +4,7 @@
 //! One `notify` (inotify) watcher observes the filesystem state AIW
 //! previously discovered by periodic scanning:
 //!
-//! - `/tmp/aiw-thinking` — thinking marker files
+//! - `<state dir>/thinking` (and the legacy `/tmp/aiw-thinking`) — thinking marker files
 //! - `~/.codex/sessions` — codex transcripts (usage stats)
 //! - `~/.claude/projects` — claude transcripts (usage stats)
 //! - per-feature `.claude` / `.codex` dirs — `latest-prompt.txt`
@@ -88,13 +88,18 @@ impl FsWatcher {
     pub fn start(wakeup_fd: Arc<OwnedFd>) -> notify::Result<Self> {
         let flags = Arc::new(FsWatchFlags::default());
 
-        let thinking_root = PathBuf::from("/tmp/aiw-thinking");
+        // FORK: markers live under the state dir now; the legacy `/tmp`
+        // directory is watched too while older sessions still write there.
+        let thinking_roots = crate::fork::paths::thinking_dirs();
+        let thinking_root = thinking_roots[0].clone();
+        let legacy_thinking_root = thinking_roots[1].clone();
         let codex_root = dirs::home_dir().map(|home| home.join(".codex").join("sessions"));
         let claude_root = dirs::home_dir().map(|home| home.join(".claude").join("projects"));
         let notification_root = crate::project::aiw_config_dir().join("notifications");
 
         let handler_flags = flags.clone();
         let handler_thinking_root = thinking_root.clone();
+        let handler_legacy_thinking_root = legacy_thinking_root.clone();
         let handler_codex_root = codex_root.clone();
         let handler_claude_root = claude_root.clone();
         let handler_notification_root = notification_root.clone();
@@ -111,7 +116,9 @@ impl FsWatcher {
 
             let mut wake = false;
             for path in &event.paths {
-                if path.starts_with(&handler_thinking_root) {
+                if path.starts_with(&handler_thinking_root)
+                    || path.starts_with(&handler_legacy_thinking_root)
+                {
                     handler_flags.thinking_dirty.store(true, Ordering::Relaxed);
                     wake = true;
                 } else if is_notification_path(path, &handler_notification_root) {
@@ -153,7 +160,7 @@ impl FsWatcher {
         // The thinking and notification dirs may not exist yet; create
         // them so the watches stick (hook scripts create files inside
         // them later).
-        for root in [&thinking_root, &notification_root] {
+        for root in [&thinking_root, &legacy_thinking_root, &notification_root] {
             let _ = std::fs::create_dir_all(root);
             if let Err(e) = watcher.watch(root, RecursiveMode::NonRecursive) {
                 log_to_file(

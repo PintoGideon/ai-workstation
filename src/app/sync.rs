@@ -1434,12 +1434,14 @@ impl App {
     }
 
     pub(super) fn is_session_marked_thinking(tmux_session: &str) -> bool {
-        let path_str = format!("/tmp/aiw-thinking/{}", tmux_session);
-        let path = std::path::Path::new(&path_str);
-        if !path.exists() {
-            return false;
-        }
+        // FORK: the marker moved under the state dir; the old `/tmp`
+        // location is still read for one release.
+        crate::fork::paths::thinking_dirs()
+            .iter()
+            .any(|dir| Self::marker_is_fresh(&dir.join(tmux_session)))
+    }
 
+    fn marker_is_fresh(path: &std::path::Path) -> bool {
         match std::fs::metadata(path) {
             Ok(metadata) => match metadata.modified() {
                 Ok(modified) => match modified.elapsed() {
@@ -1453,17 +1455,19 @@ impl App {
     }
 
     pub fn cleanup_stale_thinking_files() {
-        let Ok(entries) = std::fs::read_dir("/tmp/aiw-thinking") else {
-            return;
-        };
+        for dir in crate::fork::paths::thinking_dirs() {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                continue;
+            };
 
-        for entry in entries.flatten() {
-            if let Ok(metadata) = entry.metadata()
-                && let Ok(modified) = metadata.modified()
-                && let Ok(elapsed) = modified.elapsed()
-                && elapsed > std::time::Duration::from_secs(10)
-            {
-                let _ = std::fs::remove_file(entry.path());
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata()
+                    && let Ok(modified) = metadata.modified()
+                    && let Ok(elapsed) = modified.elapsed()
+                    && elapsed > std::time::Duration::from_secs(10)
+                {
+                    let _ = std::fs::remove_file(entry.path());
+                }
             }
         }
     }

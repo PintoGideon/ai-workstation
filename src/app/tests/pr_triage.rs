@@ -2421,7 +2421,7 @@ fn pr_review_dedicated_pi_session_uses_thinking_marker() {
     );
     let tmux_session = format!("aiw-pi-triage-test-{}", uuid::Uuid::new_v4());
     store.projects[0].features[0].tmux_session = tmux_session.clone();
-    let marker = PathBuf::from("/tmp/aiw-thinking").join(&tmux_session);
+    let marker = crate::fork::paths::thinking_dir().join(&tmux_session);
     std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
     std::fs::write(&marker, "").unwrap();
     let mut app = App::new_for_test(

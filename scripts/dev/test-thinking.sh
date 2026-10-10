@@ -16,7 +16,11 @@ fi
 
 SESSION="$1"
 DURATION="${2:-8}"
-SENTINEL_DIR="/tmp/aiw-thinking"
+if [ "$(uname -s 2>/dev/null)" = Darwin ]; then
+    SENTINEL_DIR="/tmp/ai_workstation/thinking"
+else
+    SENTINEL_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ai_workstation/thinking"
+fi
 SENTINEL_PATH="$SENTINEL_DIR/$SESSION"
 
 if ! [[ "$DURATION" =~ ^[0-9]+$ ]]; then

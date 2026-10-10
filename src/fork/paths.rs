@@ -1,6 +1,34 @@
-//! Path helpers for user-typed paths.
+//! Path helpers for user-typed paths, and the thinking-marker directory.
 
 use std::path::{Path, PathBuf};
+
+/// Where the hooks' thinking markers lived before they moved under the
+/// state dir. Still read (never written) for one release so sessions
+/// started by an older build keep showing their throbber.
+pub(crate) const LEGACY_THINKING_DIR: &str = "/tmp/aiw-thinking";
+
+/// `<state dir>/thinking`: one empty file per tmux session while its agent
+/// works (`~/.local/state/ai_workstation/thinking` on Linux,
+/// `/tmp/ai_workstation/thinking` on macOS). Per user, unlike the old
+/// world-shared `/tmp/aiw-thinking`.
+pub(crate) fn thinking_dir() -> PathBuf {
+    crate::ipc::state_dir().join("thinking")
+}
+
+/// The directories a thinking marker may be in, current first.
+pub(crate) fn thinking_dirs() -> [PathBuf; 2] {
+    [thinking_dir(), PathBuf::from(LEGACY_THINKING_DIR)]
+}
+
+/// A marker directory a hook script named: the legacy `/tmp/aiw-thinking`
+/// is redirected to [`thinking_dir`], anything else is used as given.
+pub(crate) fn resolve_marker_dir(dir: &Path) -> PathBuf {
+    if dir == Path::new(LEGACY_THINKING_DIR) {
+        thinking_dir()
+    } else {
+        dir.to_path_buf()
+    }
+}
 
 /// Expand a leading `~`, `~/…`, `$HOME`, `$HOME/…` or `${HOME}/…` in a path the
 /// user typed. Anything else (including `~otheruser/…`) is returned unchanged.
@@ -29,6 +57,24 @@ fn expand_user_path_with(raw: &str, home: Option<&Path>) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thinking_markers_live_under_the_state_dir_and_the_legacy_dir_is_redirected() {
+        assert_eq!(thinking_dir(), crate::ipc::state_dir().join("thinking"));
+        assert!(!thinking_dir().starts_with("/tmp/aiw-thinking"));
+        assert_eq!(
+            thinking_dirs(),
+            [thinking_dir(), PathBuf::from("/tmp/aiw-thinking")]
+        );
+        assert_eq!(
+            resolve_marker_dir(Path::new("/tmp/aiw-thinking")),
+            thinking_dir()
+        );
+        assert_eq!(
+            resolve_marker_dir(Path::new("/elsewhere")),
+            PathBuf::from("/elsewhere")
+        );
+    }
 
     fn expand(raw: &str) -> PathBuf {
         expand_user_path_with(raw, Some(Path::new("/home/me")))

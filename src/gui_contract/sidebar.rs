@@ -14,7 +14,7 @@
 //! | Signal | Source in the GUI |
 //! | --- | --- |
 //! | Context window, session status text, token usage | The shared session-status collector (`App::sync_session_status_background`), run by this process |
-//! | Thinking | The hooks' `/tmp/aiw-thinking` marker files (Claude/Codex/Pi), the TUI's own non-IPC sources |
+//! | Thinking | The hooks' `<state dir>/thinking` marker files (Claude/Codex/Pi), the TUI's own non-IPC sources |
 //! | Waiting for input / pending input | The hooks' notification files on disk, read without consuming them |
 //! | Open PR + unresolved threads | The shared dashboard PR sweep (`App::sync_active_prs_background`), run by this process when PR Triage opens (FORK(no-cloud): never on a timer) |
 //! | Merged/closed PR | `pr_terminal_state` in SQLite plus this process's own sweep |
@@ -909,15 +909,16 @@ mod tests {
         let mut stopped = feature("stopped", dir.path(), vec![]);
         stopped.status = ProjectStatus::Stopped;
         let markers = [running.tmux_session.clone(), stopped.tmux_session.clone()];
-        std::fs::create_dir_all("/tmp/aiw-thinking").unwrap();
+        let thinking_dir = crate::fork::paths::thinking_dir();
+        std::fs::create_dir_all(&thinking_dir).unwrap();
         for marker in &markers {
-            std::fs::write(Path::new("/tmp/aiw-thinking").join(marker), "").unwrap();
+            std::fs::write(thinking_dir.join(marker), "").unwrap();
         }
         let app = app_for(store_with(vec![running, stopped], dir.path()));
 
         let sidebar = project_sidebar(&app, &app.store.projects);
         for marker in &markers {
-            let _ = std::fs::remove_file(Path::new("/tmp/aiw-thinking").join(marker));
+            let _ = std::fs::remove_file(thinking_dir.join(marker));
         }
 
         assert!(sidebar.features["running"].thinking);

@@ -59,5 +59,12 @@ send --type attention --event-kind completed
 # the dashboard prefers its IPC state, and a stale sentinel would otherwise sit
 # there until its 2-second freshness window lapsed.
 if [ -n "${AIW_SESSION:-}" ]; then
-    rm -f "/tmp/aiw-thinking/${AIW_SESSION}"
+    # The marker lives under AIW's state dir (Linux: $XDG_STATE_HOME or
+    # ~/.local/state; macOS: /tmp); the old /tmp/aiw-thinking is cleared too.
+    if [ "$(uname -s 2>/dev/null)" = Darwin ]; then
+        aiw_state_dir="/tmp/ai_workstation"
+    else
+        aiw_state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/ai_workstation"
+    fi
+    rm -f "$aiw_state_dir/thinking/${AIW_SESSION}" "/tmp/aiw-thinking/${AIW_SESSION}"
 fi

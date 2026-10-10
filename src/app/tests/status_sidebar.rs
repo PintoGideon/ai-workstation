@@ -2894,3 +2894,24 @@ fn ipc_change_reason_adds_default_request_when_message_is_missing() {
         )
     );
 }
+
+// FORK: thinking markers moved under the state dir; the legacy `/tmp`
+// directory is still read for one release.
+#[test]
+fn thinking_marker_is_read_from_the_state_dir_and_the_legacy_dir() {
+    let session = format!("aiw-thinking-dirs-{}", std::process::id());
+    let [current, legacy] = crate::fork::paths::thinking_dirs();
+    assert!(!App::is_session_marked_thinking(&session));
+
+    std::fs::create_dir_all(&current).unwrap();
+    std::fs::write(current.join(&session), "").unwrap();
+    assert!(App::is_session_marked_thinking(&session));
+    std::fs::remove_file(current.join(&session)).unwrap();
+    assert!(!App::is_session_marked_thinking(&session));
+
+    if std::fs::create_dir_all(&legacy).is_ok() && std::fs::write(legacy.join(&session), "").is_ok()
+    {
+        assert!(App::is_session_marked_thinking(&session));
+        let _ = std::fs::remove_file(legacy.join(&session));
+    }
+}

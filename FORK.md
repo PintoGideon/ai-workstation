@@ -31,7 +31,8 @@ commands. A local source build avoids the unsigned-download Gatekeeper warning.
 |---|---|---|
 | `~/.config/ai_workstation/` | settings (`config.json`), database (`aiw.db`), port reservations, notifications | first launch |
 | `~/.config/ai_workstation/hooks/` | Claude hook scripts | first launch |
-| `~/.local/state/ai_workstation/` (Linux) · `/tmp/ai_workstation/` (macOS) | private tmux socket, IPC socket, debug log — your own tmux is untouched | first launch |
+| `~/.local/state/ai_workstation/` (Linux) · `/tmp/ai_workstation/` (macOS) | private tmux socket, IPC socket, debug log, `thinking/` markers, `notifications/bad/` quarantine — your own tmux is untouched | first launch |
+| `~/.config/ai_workstation/aiw.lock` | instance lock held while the TUI runs (a second `aiw` exits; `doctor`/`grid` still work) | every TUI launch |
 | `~/.local/share/ai_workstation/worktrees/` | feature worktrees | when a feature starts |
 | inside each project repo | `.aiw/`, `.claude/settings.local.json`, `.claude/skills/aiw-*`, `.codex/aiw-codex-notify.sh`, `.agents/skills/aiw-*`, `.gemini/`, `.cursor/hooks.json` — all added to `.git/info/exclude` | when features start |
 
