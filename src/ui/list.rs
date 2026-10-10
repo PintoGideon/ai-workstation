@@ -10,6 +10,7 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+use crate::app::attention::AttentionState; // FORK: G11 pill glyphs on rows
 use crate::app::{App, Selection, VisibleItem};
 use crate::context_display::{ContextIndicator, format_context_indicator};
 use crate::context_tracking::ContextBand;
@@ -151,6 +152,9 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
     // FORK: borrowed rather than cloned per frame; every `&mut app` call is above.
     let theme = &app.theme;
     let guide = super::fork_chrome::guide_style(theme);
+    // FORK: G11 borders + one column of padding each side; a row wider than
+    // this ends in `…` rather than being cut at the border.
+    let row_width = usize::from(area.width.saturating_sub(4));
 
     let items: Vec<ListItem> = visible_slice
         .iter()
@@ -273,8 +277,14 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         span
                     } else if let Some(state) = attention {
                         // Why the session stopped, when the harness could say.
+                        // FORK: G11 — the header pills' glyphs (`⚠` needs
+                        // you, `✓` finished), so the row and the pills agree.
+                        let glyph = match state {
+                            AttentionState::CompletedAwaitingReview => "✓",
+                            AttentionState::Question | AttentionState::Waiting => "⚠",
+                        };
                         Span::styled(
-                            format!(" {} ", state.glyph(app.config.nerd_font)),
+                            format!(" {glyph} "),
                             Style::default()
                                 .fg(state.color(theme))
                                 .add_modifier(Modifier::BOLD),
@@ -284,7 +294,7 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         // signal, kept for harnesses that report no lifecycle
                         // events at all.
                         Span::styled(
-                            " ? ",
+                            " ⚠ ",
                             Style::default()
                                 .fg(theme.status_waiting.to_color())
                                 .add_modifier(Modifier::BOLD),
@@ -310,21 +320,15 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                                 .fg(theme.success.to_color())
                                 .add_modifier(Modifier::BOLD),
                         )
+                    } else if feature.status == ProjectStatus::Stopped {
+                        Span::styled(" ■ ", Style::default().fg(theme.status_stopped.to_color()))
+                    } else if feature.sessions.iter().any(|s| s.runs_with_feature()) {
+                        // FORK: G11 — the roll-up of the session rows below:
+                        // `●` while any of them runs, whatever the stored
+                        // Active/Idle status says.
+                        Span::styled(" ● ", Style::default().fg(theme.status_active.to_color()))
                     } else {
-                        match feature.status {
-                            ProjectStatus::Active => Span::styled(
-                                " ● ",
-                                Style::default().fg(theme.status_active.to_color()),
-                            ),
-                            ProjectStatus::Idle => Span::styled(
-                                " ○ ",
-                                Style::default().fg(theme.status_idle.to_color()),
-                            ),
-                            ProjectStatus::Stopped => Span::styled(
-                                " ■ ",
-                                Style::default().fg(theme.status_stopped.to_color()),
-                            ),
-                        }
+                        Span::styled(" ○ ", Style::default().fg(theme.status_idle.to_color()))
                     };
 
                     let collapse_icon = if feature.sessions.is_empty() {
@@ -374,12 +378,6 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                             spans
                         }
                     };
-
-                    let has_pending_input = app.pending_inputs.iter().any(|p| {
-                        p.project_name.as_deref() == Some(&project.name)
-                            && p.feature_name.as_deref() == Some(&feature.name)
-                            && p.notification_type != "diff-review"
-                    });
 
                     let display_name = feature.nickname.as_ref().unwrap_or(&feature.name);
                     let mut line_spans = vec![
@@ -539,14 +537,8 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                             Style::default().fg(theme.status_stopped.to_color()),
                         ));
                     }
-                    if has_pending_input {
-                        line_spans.push(Span::styled(
-                            " ?",
-                            Style::default()
-                                .fg(theme.warning.to_color())
-                                .add_modifier(Modifier::BOLD),
-                        ));
-                    }
+                    // FORK: G11 — the bare ` ?` that marked a pending input
+                    // here is gone: the status glyph (`⚠`) already says it.
                     line_spans.push(Span::styled(
                         format!("  {}", shorten_path(&feature.workdir)),
                         Style::default().fg(muted),
@@ -715,8 +707,6 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         + UnicodeWidthStr::width(branch)
                         + UnicodeWidthStr::width(state_icon.content.as_ref())
                         + UnicodeWidthStr::width(kind_icon.content.as_ref());
-                    // FORK: G11 borders + one column of padding each side.
-                    let row_width = usize::from(area.width.saturating_sub(4));
                     let (display_label, show_context_indicator) = fit_session_label(
                         &session.label,
                         prefix_width,
@@ -752,11 +742,16 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                                 Style::default().fg(theme.status_detail.to_color()),
                             ),
                         ]);
+                        // FORK: G11 `…` instead of a hard cut at the border.
+                        let lines = vec![
+                            super::fork_text::fit_line(main_line, row_width),
+                            super::fork_text::fit_line(status_line, row_width),
+                        ];
                         return if is_selected {
-                            ListItem::new(vec![main_line, status_line])
+                            ListItem::new(lines)
                                 .style(Style::default().bg(theme.effective_selection_bg()))
                         } else {
-                            ListItem::new(vec![main_line, status_line])
+                            ListItem::new(lines)
                         };
                     }
 
@@ -764,6 +759,8 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                 }
             };
 
+            // FORK: G11 `…` instead of a hard cut at the border.
+            let line = super::fork_text::fit_line(line, row_width);
             if is_selected {
                 ListItem::new(line).style(Style::default().bg(theme.effective_selection_bg()))
             } else {
@@ -784,8 +781,12 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
         }
         offset += height;
     }
-    let block = super::fork_chrome::padded_panel(" Projects ", theme)
-        .title(list_totals(app, theme).right_aligned());
+    let mut block = super::fork_chrome::padded_panel(" Projects ", theme);
+    let totals = list_totals(app, theme);
+    // The totals give way before they would paint over the panel's name.
+    if usize::from(area.width) >= " Projects ".len() + totals.width() + 4 {
+        block = block.title(totals.right_aligned());
+    }
     let list = List::new(items).block(block);
 
     frame.render_widget(list, area);
