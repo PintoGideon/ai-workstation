@@ -450,11 +450,14 @@ pub(crate) fn footer_hints(app: &App) -> Line<'static> {
         return Line::from(spans);
     }
     let on_session = matches!(app.selection, Selection::Session(..));
-    let mut spans = if app.desired_live_target_exists() {
-        vec![Span::styled(" Enter", key), hint(" attach  ")]
+    let mut spans = if app.pending_permission_for_selection().is_some() {
+        super::fork_permissions::row_hint_spans(theme)
     } else {
         Vec::new()
     };
+    if app.desired_live_target_exists() {
+        spans.extend([Span::styled(" Enter", key), hint(" attach  ")]);
+    }
     spans.extend([Span::styled("Tab", key), hint(" type here  ")]);
     if on_session {
         spans.extend([Span::styled("o", key), hint(" full view  ")]);

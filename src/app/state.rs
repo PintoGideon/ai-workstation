@@ -1812,6 +1812,8 @@ pub enum AppMode {
     HookPrompt(HookPromptState),
     // FORK: one-time approval of a repository's lifecycle hook.
     ApprovingRepoHook(Box<crate::fork::hook_approval::HookApprovalState>),
+    // FORK: a pending permission request's tool and full input (P6).
+    PermissionDetail(Box<super::fork_permissions::PermissionDetailState>),
     LatestPrompt(LatestPromptState),
     PromptLibrary(PromptLibraryState),
     PromptEditor(PromptEditorState),

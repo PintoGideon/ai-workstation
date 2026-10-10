@@ -20,6 +20,7 @@ pub(crate) mod feature_ops;
 pub(crate) mod feature_setup;
 pub(crate) mod fix_cost;
 pub(crate) mod fork_attach; // FORK: native attach (DESIGN.md §15.4)
+pub(crate) mod fork_permissions; // FORK: permission approvals (P6, DESIGN.md §16)
 mod fork_render_memo; // FORK: per-frame dialog values (DESIGN.md §12.3)
 pub(crate) mod fork_split; // FORK: split view (DESIGN.md §4.1)
 #[cfg(test)]
@@ -1260,6 +1261,9 @@ pub struct App {
     /// FORK: a session the user asked to attach to natively; drained by the
     /// main loop like `pending_editor` (DESIGN.md §15.4).
     pub pending_attach: Option<crate::fork::attach::PendingAttach>,
+    /// FORK: permission requests parked on their IPC connection until the
+    /// user answers (P6, DESIGN.md §16).
+    pub pending_permissions: Vec<fork_permissions::PendingPermission>,
     pub ipc_tool_sessions: std::collections::HashSet<String>,
     /// Feature-session IDs currently reported as thinking by hook/plugin IPC.
     /// Unlike `ipc_thinking_sessions`, this distinguishes agent windows that
@@ -2715,7 +2719,8 @@ impl App {
             ipc_thinking_sessions: std::collections::HashSet::new(),
             awaiting_review_fixes: HashMap::new(),
             pending_editor: None,
-            pending_attach: None, // FORK: native attach
+            pending_attach: None,            // FORK: native attach
+            pending_permissions: Vec::new(), // FORK: P6
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
             ipc_tool_feature_sessions: std::collections::HashSet::new(),
@@ -2980,7 +2985,8 @@ impl App {
             ipc_thinking_sessions: std::collections::HashSet::new(),
             awaiting_review_fixes: HashMap::new(),
             pending_editor: None,
-            pending_attach: None, // FORK: native attach
+            pending_attach: None,            // FORK: native attach
+            pending_permissions: Vec::new(), // FORK: P6
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
             ipc_tool_feature_sessions: std::collections::HashSet::new(),

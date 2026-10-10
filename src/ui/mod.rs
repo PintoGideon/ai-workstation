@@ -1,6 +1,7 @@
 mod dashboard;
 mod dialogs;
 pub(crate) mod fork_chrome; // FORK: G11 dashboard chrome
+pub(crate) mod fork_permissions; // FORK: permission approvals (P6)
 mod fork_split; // FORK: split view
 pub(crate) mod fork_text; // FORK: `…` fitting, hint cutting, path wrapping
 pub(crate) mod fork_workspace; // FORK: workspace layout (DESIGN.md §15)

@@ -33,6 +33,8 @@ pub const HOOKS_FILE: &str = ".cursor/hooks.json";
 
 /// Per-hook timeout, in seconds (Cursor's unit).
 const HOOK_TIMEOUT_SECS: u64 = 10;
+/// Timeout for hooks that wait for an answer from the dashboard (P6).
+const WAIT_TIMEOUT_SECS: u64 = 600;
 
 /// The binary to launch: the first of [`BINARIES`] on `path_var`, else
 /// `agent` (so a missing install fails visibly in the pane).
@@ -87,7 +89,29 @@ pub const EVENTS: &[(&str, &[Step], Option<&str>)] = &[
         None,
     ),
     ("sessionEnd", &[("thinking-stop.sh", &[])], None),
+    // FORK(P6): the dashboard answers the prompt; the script prints
+    // `permission` allow/deny, or `ask` when nobody answered.
+    (
+        "beforeShellExecution",
+        &[("permission-request.sh", &["cursor", "beforeShellExecution"])],
+        None,
+    ),
+    (
+        "beforeMCPExecution",
+        &[("permission-request.sh", &["cursor", "beforeMCPExecution"])],
+        None,
+    ),
 ];
+
+/// Per-hook timeout in seconds (Cursor's unit): hooks that wait on the user
+/// get the long one.
+fn timeout_for(event: &str) -> u64 {
+    if event.starts_with("before") && event != "beforeSubmitPrompt" {
+        WAIT_TIMEOUT_SECS
+    } else {
+        HOOK_TIMEOUT_SECS
+    }
+}
 
 /// One shell command per event: the scripts in order (each reads the same
 /// stdin, so it is saved first), then the event's required JSON answer.
@@ -152,7 +176,7 @@ pub fn merge_hooks(mut config: Value, hooks_dir: &Path) -> Value {
         }
         entries.as_array_mut().expect("array").push(json!({
             "command": event_command(hooks_dir, steps, *answer),
-            "timeout": HOOK_TIMEOUT_SECS,
+            "timeout": timeout_for(event),
         }));
     }
     config
@@ -237,6 +261,16 @@ mod tests {
         }
         // preToolUse is a permission hook; AIW must not answer it.
         assert!(config["hooks"].get("preToolUse").is_none());
+        // FORK(P6): the permission hooks wait on the dashboard.
+        for event in ["beforeShellExecution", "beforeMCPExecution"] {
+            let entries = config["hooks"][event].as_array().unwrap();
+            assert_eq!(entries.len(), 1, "{event}");
+            assert_eq!(entries[0]["timeout"], WAIT_TIMEOUT_SECS);
+            assert_eq!(
+                entries[0]["command"],
+                format!("'/home/u/.aiw/hooks/permission-request.sh' cursor {event}")
+            );
+        }
 
         let submit = config["hooks"]["beforeSubmitPrompt"][0]["command"]
             .as_str()

@@ -104,25 +104,40 @@ pub fn start_with_wakeup(path: &Path, wakeup: Option<Arc<OwnedFd>>) -> Result<Ip
                     let wakeup = wakeup.clone();
                     std::thread::spawn(move || {
                         use std::io::BufRead;
+                        // FORK: a request that waits for the app's answer
+                        // keeps this stream (see fork::ipc_reply).
+                        let reply_stream = s.try_clone().ok();
+                        let mut awaited: Vec<String> = Vec::new();
+                        let deliver = |v: serde_json::Value| -> bool {
+                            // Channel closed means App is shutting down.
+                            if tx.send(v).is_err() {
+                                return false;
+                            }
+                            if let Some(fd) = &wakeup {
+                                let byte = 1u8;
+                                unsafe {
+                                    libc::write(fd.as_raw_fd(), &byte as *const u8 as *const _, 1);
+                                }
+                            }
+                            true
+                        };
                         for line in std::io::BufReader::new(s).lines() {
                             match line {
                                 Ok(l) if !l.trim().is_empty() => {
                                     match serde_json::from_str::<serde_json::Value>(&l) {
                                         Ok(v) => {
-                                            // Channel closed means
-                                            // App is shutting down.
-                                            if tx.send(v).is_err() {
-                                                return;
+                                            // FORK: park the stream for an inline reply.
+                                            if let Some(id) =
+                                                crate::fork::ipc_reply::awaited_request_id(&v)
+                                                && let Some(stream) = reply_stream
+                                                    .as_ref()
+                                                    .and_then(|s| s.try_clone().ok())
+                                            {
+                                                crate::fork::ipc_reply::register(&id, stream);
+                                                awaited.push(id);
                                             }
-                                            if let Some(fd) = &wakeup {
-                                                let byte = 1u8;
-                                                unsafe {
-                                                    libc::write(
-                                                        fd.as_raw_fd(),
-                                                        &byte as *const u8 as *const _,
-                                                        1,
-                                                    );
-                                                }
+                                            if !deliver(v) {
+                                                return;
                                             }
                                         }
                                         Err(e) => {
@@ -143,6 +158,16 @@ pub fn start_with_wakeup(path: &Path, wakeup: Option<Arc<OwnedFd>>) -> Result<Ip
                                     );
                                     break;
                                 }
+                            }
+                        }
+                        // FORK: the client hung up; anything still waiting
+                        // for an answer is reported so the app drops it.
+                        for id in awaited {
+                            if crate::fork::ipc_reply::abandon(&id) {
+                                let _ = deliver(serde_json::json!({
+                                    "type": crate::fork::ipc_reply::ABANDONED_TYPE,
+                                    "request_id": id,
+                                }));
                             }
                         }
                     });

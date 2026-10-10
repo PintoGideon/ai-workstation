@@ -15,6 +15,8 @@ const ATTENTION_SH: &str = include_str!("../../scripts/attention.sh");
 const CODEX_NOTIFY_SH: &str = include_str!("../../scripts/codex-notify.sh");
 const CODEX_DIFF_REVIEW_SH: &str = include_str!("../../scripts/codex-diff-review.sh");
 const SET_SESSION_STATUS_SH: &str = include_str!("../../scripts/set-session-status.sh");
+// FORK: hook-driven productivity scripts (DESIGN.md §16).
+const PERMISSION_REQUEST_SH: &str = include_str!("../../scripts/permission-request.sh");
 const CUSTOM_DIFF_REVIEW_SH: &str =
     include_str!("../../plugins/diff-review/scripts/custom-diff-review.sh");
 
@@ -48,6 +50,20 @@ const CLAUDE_SETTINGS_LOCAL_JSON: &str = "settings.local.json";
 const CLAUDE_SETTINGS_JSON: &str = "settings.json";
 const CLAUDE_STATE_JSON: &str = "aiw-hook-state.json";
 const HOOK_REFRESH_STAMP: &str = concat!(env!("CARGO_PKG_VERSION"), ":jqless-hooks-v9");
+/// The Claude hook events AIW writes entries for (and cleans up again).
+const CLAUDE_MANAGED_EVENTS: &[&str] = &[
+    "Stop",
+    "Notification",
+    "PreToolUse",
+    "PostToolUse",
+    "UserPromptSubmit",
+    // FORK: DESIGN.md §16
+    "PermissionRequest",
+    "PreCompact",
+    "SessionEnd",
+    "SubagentStart",
+    "SubagentStop",
+];
 const CLAUDE_MANAGED_SCRIPT_NAMES: &[&str] = &[
     "notify.sh",
     "clear-notify.sh",
@@ -57,6 +73,8 @@ const CLAUDE_MANAGED_SCRIPT_NAMES: &[&str] = &[
     "tool-start.sh",
     "tool-stop.sh",
     "attention.sh",
+    // FORK: DESIGN.md §16
+    "permission-request.sh",
 ];
 
 #[derive(Default)]
@@ -190,6 +208,18 @@ pub(crate) fn claude_exec_hook_with_args(path: &Path, args: &[&str]) -> serde_js
     })
 }
 
+/// FORK: `claude_exec_hook_with_args` with a per-hook `timeout` (seconds) for
+/// hooks that wait on the user (DESIGN.md §16).
+pub(crate) fn claude_exec_hook_with_timeout(
+    path: &Path,
+    args: &[&str],
+    timeout_secs: u64,
+) -> serde_json::Value {
+    let mut hook = claude_exec_hook_with_args(path, args);
+    hook["timeout"] = serde_json::json!(timeout_secs);
+    hook
+}
+
 pub(crate) fn is_aiw_claude_hook_command(command: &str, managed_commands: &[String]) -> bool {
     let normalized = shell_unquote_single(command);
     if managed_commands
@@ -287,15 +317,9 @@ fn remove_aiw_claude_hooks(settings: &mut serde_json::Value, managed_commands: &
     };
 
     let mut changed = false;
-    for event in [
-        "Stop",
-        "Notification",
-        "PreToolUse",
-        "PostToolUse",
-        "UserPromptSubmit",
-    ] {
+    for event in CLAUDE_MANAGED_EVENTS {
         let Some(entries) = hooks_obj
-            .get_mut(event)
+            .get_mut(*event)
             .and_then(|value| value.as_array_mut())
         else {
             continue;
@@ -616,6 +640,11 @@ pub fn ensure_notify_scripts() {
     write_executable_if_changed(&claude_hooks_dir.join("tool-start.sh"), TOOL_START_SH);
     write_executable_if_changed(&claude_hooks_dir.join("tool-stop.sh"), TOOL_STOP_SH);
     write_executable_if_changed(&claude_hooks_dir.join("attention.sh"), ATTENTION_SH);
+    // FORK: DESIGN.md §16
+    write_executable_if_changed(
+        &claude_hooks_dir.join("permission-request.sh"),
+        PERMISSION_REQUEST_SH,
+    );
     write_executable_if_changed(
         &config_dir.join("codex-diff-review.sh"),
         CODEX_DIFF_REVIEW_SH,
@@ -912,6 +941,8 @@ fn cleanup_claude_notification_hooks(workdir: &Path) {
 }
 
 fn cleanup_codex_notify_hook(workdir: &Path) {
+    // FORK: the hooks AIW merged into .codex/hooks.json go too.
+    crate::fork::codex_hooks::cleanup_hooks_file(workdir, &crate::project::aiw_claude_hooks_dir());
     let codex_dir = workdir.join(".codex");
     let hook_path = codex_dir.join("aiw-codex-notify.sh");
 
@@ -986,6 +1017,11 @@ pub fn ensure_notification_hooks(
 
     if matches!(agent, AgentKind::Codex) {
         ensure_codex_notify_hook(workdir);
+        // FORK: Codex hooks (permission requests, …) in .codex/hooks.json.
+        crate::fork::codex_hooks::ensure_hooks_file(
+            workdir,
+            &crate::project::aiw_claude_hooks_dir(),
+        );
         ensure_aiw_skills(workdir, agent);
         return;
     }
@@ -1011,6 +1047,7 @@ pub fn ensure_notification_hooks(
     let tool_start_path = hooks_dir.join("tool-start.sh");
     let tool_stop_path = hooks_dir.join("tool-stop.sh");
     let attention_path = hooks_dir.join("attention.sh");
+    let permission_request_path = hooks_dir.join("permission-request.sh"); // FORK
 
     let wants_diff_review = matches!(mode, VibeMode::Vibeless);
     let diff_review_cmd = if wants_diff_review {
@@ -1104,6 +1141,18 @@ pub fn ensure_notification_hooks(
             "hooks": [
                 claude_exec_hook(&thinking_start_path),
                 claude_exec_hook(&save_prompt_path)
+            ]
+        }),
+    );
+
+    // FORK: PermissionRequest — the dashboard answers the prompt (P6).
+    push_claude_hook_entry(
+        &mut settings,
+        "PermissionRequest",
+        serde_json::json!({
+            "matcher": "",
+            "hooks": [
+                claude_exec_hook_with_timeout(&permission_request_path, &["claude"], 600)
             ]
         }),
     );

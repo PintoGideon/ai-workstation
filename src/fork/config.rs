@@ -29,6 +29,9 @@ pub struct AiwConfig {
     /// pane, DESIGN.md §15 — the default) or the project tree. `b` on the
     /// dashboard toggles it and saves at once.
     pub dashboard_layout: DashboardLayout,
+    /// How long a permission hook waits for an answer from the dashboard
+    /// before letting the harness show its own prompt (P6).
+    pub permission_wait_seconds: u64,
 }
 
 impl Default for AiwConfig {
@@ -38,6 +41,7 @@ impl Default for AiwConfig {
             worktree_include: default_worktree_include(),
             confirm_quit: false,
             dashboard_layout: DashboardLayout::Workspace,
+            permission_wait_seconds: crate::fork::permissions::DEFAULT_WAIT_SECONDS,
         }
     }
 }

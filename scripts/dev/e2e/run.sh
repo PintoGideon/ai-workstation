@@ -57,7 +57,7 @@ cap | grep -q '\[x\] Cursor (installed)'; check "all five fake CLIs detected as 
 keys c; wait_for 'No projects yet' 5; check "empty dashboard" $?
 # no concurrency guard for the rest of the run: every start would otherwise ask
 aiw_quit; python3 - <<EOF
-import json; p="$XDG_CONFIG_HOME/ai_workstation/config.json"; c=json.load(open(p)); c["max_concurrent_agents"]=0; json.dump(c,open(p,"w"),indent=2)
+import json; p="$XDG_CONFIG_HOME/ai_workstation/config.json"; c=json.load(open(p)); c["max_concurrent_agents"]=0; c["permission_wait_seconds"]=5; json.dump(c,open(p,"w"),indent=2)
 EOF
 aiw_start 200 60; wait_for 'No projects yet' 8; check "relaunch after first run" $?
 
@@ -281,6 +281,27 @@ resize 200 60; sleep 0.8; no_panic; check "ws: no panic across the resizes" $?
 aiw_quit; aiw_start 200 60; wait_for '╭ Sessions' 8; check "relaunch: the workspace layout persists" $?
 keys b; sleep 0.5; cap | grep -q '╭ Projects'; check "b: back to the tree" $?
 
+echo "=== Part 2c: hooks (DESIGN.md §16)"
+# ws-1's Claude agent exited above (/crash); relaunch it and use the pane
+keys b; wait_for '╭ Sessions' 3
+select_row 'ws-1' >/dev/null; keys j; sleep 0.4; keys c; sleep 3; hook_prompts; sleep 1
+wait_sel_glyph '○' 10 || wait_sel_glyph '●' 5; check "hooks: Claude agent relaunched for the hook checks" $?
+keys Tab; sleep 0.4; keys -l '/perm cargo test'; keys Enter
+wait_for 'permission: Bash' 8; check "perm: PermissionRequest hook → ⛔ row says permission: Bash" $?
+wait_sel_glyph '⛔' 3; check "perm: the row's glyph is ⛔" $?
+keys C-q; sleep 0.4; cap | tail -1 | grep -q 'a allow'; check "perm: footer offers a allow / X deny" $?
+keys a; wait_for 'permission: allow' 8; check "perm: a → the hook answered allow (fake prints permission: allow)" $?
+for i in $(seq 1 50); do cap | grep '▎' | grep -q 'permission: Bash' || break; sleep 0.1; done
+! cap | grep '▎' | grep -q 'permission: Bash'; check "perm: the ⛔ reason line is gone after allowing" $?
+keys Tab; sleep 0.3; keys -l '/perm rm -rf build'; keys Enter
+wait_for 'permission: Bash' 8; keys C-q; sleep 0.4; keys X
+wait_for 'permission: deny' 8; check "perm: X → the hook answered deny" $?
+keys Tab; sleep 0.3; keys -l '/perm sleep 1'; keys Enter
+wait_for 'permission: Bash' 8; check "perm: third request shows ⛔ again" $?
+wait_for 'permission: prompt' 20; check "perm: no answer within permission_wait_seconds → the agent prompts itself" $?
+keys C-q; sleep 0.5
+grep -q '"allowed Bash' "$XDG_STATE_HOME/ai_workstation/debug.log" 2>/dev/null || grep -qE 'permission.*allowed' "$XDG_STATE_HOME/ai_workstation/debug.log"; check "perm: decisions are in the debug log" $?
+no_panic; check "perm: no panic" $?
 aiw_quit; doctor_clean; check "doctor clean after the adversarial run" $?
 
 echo "=== Part 3: AMF migration cases"

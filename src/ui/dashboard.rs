@@ -1053,6 +1053,11 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         super::dialogs::draw_hook_prompt_dialog(frame, state, &app.theme);
     }
 
+    // FORK: permission detail overlay (P6).
+    if let AppMode::PermissionDetail(state) = &app.mode {
+        super::fork_permissions::draw_detail(frame, app, state);
+    }
+
     // FORK: repo hook approval dialog.
     if let AppMode::ApprovingRepoHook(state) = &app.mode {
         crate::fork::hook_approval::draw(frame, state, &app.theme);

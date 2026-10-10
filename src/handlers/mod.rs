@@ -10,6 +10,7 @@ pub(crate) mod diff_review;
 mod dormant;
 mod feature_creation;
 mod fork;
+pub(crate) mod fork_permissions; // FORK: permission approvals (P6)
 mod fork_split; // FORK: split view
 pub(crate) mod fork_workspace; // FORK: workspace layout
 mod handoff;
@@ -188,6 +189,8 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::HookPrompt(_) => handle_hook_prompt_key(app, key.code),
         // FORK: repo hook approval dialog.
         AppMode::ApprovingRepoHook(_) => crate::fork::hook_approval::handle_key(app, key.code),
+        // FORK: permission detail overlay (P6).
+        AppMode::PermissionDetail(_) => fork_permissions::handle_detail_key(app, key),
         AppMode::LatestPrompt(_) => handle_latest_prompt_key(app, key.code),
         AppMode::PromptLibrary(_) => handle_prompt_library_key(app, key.code),
         AppMode::PromptOverrides(_) => handle_prompt_overrides_key(app, key, visible_rows),

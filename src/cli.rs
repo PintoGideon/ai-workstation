@@ -168,6 +168,20 @@ enum Commands {
         #[arg(long)]
         request_id: String,
     },
+    // FORK: hook-driven productivity (DESIGN.md §16). Each reads the harness's
+    // hook JSON from stdin and talks to the dashboard socket; see
+    // `fork::hook_cli`.
+    /// Ask the dashboard to allow or deny a tool call and print the harness's
+    /// decision JSON (nothing when the dashboard did not answer).
+    #[command(name = "permission-request", hide = true)]
+    PermissionRequest {
+        /// claude, codex or cursor.
+        #[arg(long)]
+        harness: String,
+        /// The Cursor hook event (beforeShellExecution, beforeMCPExecution).
+        #[arg(long)]
+        event: Option<String>,
+    },
     /// Write a custom session status into the AIW database.
     /// Used by hook scripts for custom sessions.
     #[command(name = "set-status", hide = true)]
@@ -501,9 +515,16 @@ pub fn run() -> Result<()> {
                 | Commands::HookPayload { .. }
                 | Commands::HookField { .. }
                 | Commands::NotifyWait { .. }
+                | Commands::PermissionRequest { .. } // FORK: hook commands skip it too
         )
     ) {
         run_first_run_migration()?;
+    }
+
+    // FORK: hook commands (DESIGN.md §16); never fail the agent's turn.
+    if let Some(Commands::PermissionRequest { harness, event }) = &cli.command {
+        crate::fork::hook_cli::run_permission_request(harness, event.as_deref());
+        return Ok(());
     }
 
     // FORK: `aiw fonts`

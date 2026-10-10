@@ -859,6 +859,18 @@ impl App {
             return;
         }
 
+        // FORK: a permission request keeps its connection open for the
+        // answer; a hook that stopped waiting says so (DESIGN.md §16).
+        if self.handle_permission_request_message(&raw) {
+            return;
+        }
+        if msg_type == crate::fork::ipc_reply::ABANDONED_TYPE {
+            if let Some(id) = raw.get("request_id").and_then(|v| v.as_str()) {
+                self.handle_reply_abandoned(id);
+            }
+            return;
+        }
+
         if matches!(msg_type.as_str(), "sidebar-updated") {
             let cwd = raw.get("cwd").and_then(|v| v.as_str()).unwrap_or_default();
             let cwd_path = PathBuf::from(cwd);

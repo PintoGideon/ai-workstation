@@ -439,6 +439,9 @@ impl App {
 }
 
 #[cfg(test)]
+pub(crate) use tests::workspace_app;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::project::{AgentKind, Feature, Project, ProjectStore};

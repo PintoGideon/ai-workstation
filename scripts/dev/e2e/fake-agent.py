@@ -6,7 +6,8 @@ on a PATH prefix. It behaves like an interactive REPL and fires the hooks AIW
 installs into the checkout exactly the way the real CLIs do:
 
 - claude       reads `.claude/settings.local.json`  (hooks.<Event>[].hooks[].command + args)
-- codex        takes `-c notify=[...]` and runs that argv with the JSON payload appended
+- codex        takes `-c notify=[...]` and runs that argv with the JSON payload appended,
+               and reads `.codex/hooks.json`       (hooks.<Event>[].hooks[].command)
 - gemini       reads `.gemini/settings.json`        (hooks.<Event>[].hooks[].command)
 - cursor-agent reads `.cursor/hooks.json`           (hooks.<event>[].command)
 - pi           has no hooks
@@ -14,6 +15,8 @@ installs into the checkout exactly the way the real CLIs do:
 Commands typed into the REPL (deterministic, scriptable):
 
   /ask     emit a permission request (Notification), print a yes/no prompt
+  /perm C  run the PermissionRequest hook for `Bash C` and print
+           `permission: allow|deny|prompt` from its answer
   /done    emit the turn-end hook (Stop / AfterAgent / stop / codex notify)
   /work    emit prompt-submit + tool-start and stay "working"
   /tool    emit tool-start then tool-stop
@@ -177,6 +180,14 @@ def hook_commands(event):
                     cmd = cmd + " " + " ".join(shlex.quote(str(a)) for a in args)
                 cmds.append(cmd)
         return cmds
+    if NAME == "codex":
+        cfg = read_json(os.path.join(CWD, ".codex", "hooks.json")) or {}
+        cmds = []
+        for group in (cfg.get("hooks") or {}).get(event, []) or []:
+            for h in group.get("hooks", []) or []:
+                if h.get("type", "command") == "command" and h.get("command"):
+                    cmds.append(h["command"])
+        return cmds
     if NAME == "gemini":
         cfg = read_json(os.path.join(CWD, ".gemini", "settings.json")) or {}
         cmds = []
@@ -195,6 +206,9 @@ def base_payload(event):
     if NAME == "claude":
         return {"session_id": SESSION_ID, "transcript_path": transcript_path(), "cwd": CWD,
                 "hook_event_name": event, "permission_mode": "default"}
+    if NAME == "codex":
+        return {"session_id": SESSION_ID, "transcript_path": transcript_path(), "cwd": CWD,
+                "hook_event_name": event, "model": "fake-model-1", "turn_id": str(uuid.uuid4())}
     if NAME == "gemini":
         return {"session_id": SESSION_ID, "transcript_path": transcript_path(), "cwd": CWD,
                 "hook_event_name": event, "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
@@ -212,12 +226,53 @@ def run_hook(cmd, payload_text, event):
         proc = subprocess.run(["sh", "-c", cmd], input=payload_text.encode("utf-8"),
                               capture_output=True, timeout=HOOK_TIMEOUT, cwd=CWD)
         rec = {"ts": time.time(), "event": event, "cmd": cmd, "code": proc.returncode,
-               "stdout": proc.stdout.decode("utf-8", "replace")[:400],
+               "stdout": proc.stdout.decode("utf-8", "replace")[:2000],
                "stderr": proc.stderr.decode("utf-8", "replace")[:400]}
     except subprocess.TimeoutExpired:
         rec = {"ts": time.time(), "event": event, "cmd": cmd, "code": None, "timeout": True}
     log("hooks", rec)
     return rec
+
+
+def fire_collect(event, extra=None):
+    """Fire `event` through the hook files (never the Codex notify argv) and
+    return the stdout of every hook, in order."""
+    cmds = hook_commands(event)
+    if not cmds:
+        log("hooks", {"ts": time.time(), "event": event, "cmd": None, "note": "no hook configured"})
+        return []
+    payload = base_payload(event)
+    payload.update(extra or {})
+    text = json.dumps(payload)
+    return [run_hook(cmd, text, event).get("stdout", "") for cmd in cmds]
+
+
+def first_json(outputs):
+    for text in outputs:
+        text = (text or "").strip()
+        if not text:
+            continue
+        try:
+            return json.loads(text)
+        except ValueError:
+            continue
+    return None
+
+
+def permission_request(command):
+    """Run the harness's permission hook for `Bash <command>` and say what it decided."""
+    if NAME == "claude" or NAME == "codex":
+        answer = first_json(fire_collect("PermissionRequest", {
+            "tool_name": "Bash", "tool_input": {"command": command, "description": "e2e"}}))
+        behavior = ((answer or {}).get("hookSpecificOutput") or {}).get("decision", {}).get("behavior")
+        return {"allow": "allow", "deny": "deny"}.get(behavior, "prompt")
+    if NAME == "cursor-agent":
+        answer = first_json(fire_collect("beforeShellExecution", {"command": command, "cwd": CWD}))
+        permission = (answer or {}).get("permission")
+        return {"allow": "allow", "deny": "deny"}.get(permission, "prompt")
+    if NAME == "gemini":
+        ev("ask", ask_extra())
+    return "prompt"
 
 
 def fire(event, extra=None):
@@ -304,7 +359,7 @@ def banner():
     out(f"│ args    {' '.join(shlex.quote(a) for a in ARGS) or '(none)'}")
     if resume_id:
         out(f"│ resumed conversation {resume_id}")
-    out("│ commands: /ask /done /work /tool /crash /spam /wide /slow /exit")
+    out("│ commands: /ask /perm /done /work /tool /crash /spam /wide /slow /exit")
     out("╰──────────────────────────────────────────────────────────────╯")
 
 
@@ -359,7 +414,11 @@ def main():
         if not line:
             continue
         cmd, _, rest = line.partition(" ")
-        if cmd == "/ask":
+        if cmd == "/perm":
+            command = rest or "cargo test"
+            out(f"⏺ Bash({command})")
+            out(f"permission: {permission_request(command)}")
+        elif cmd == "/ask":
             out("⏺ Bash(rm -rf build/)")
             out("Do you want to proceed?")
             out("❯ 1. Yes   2. Yes, and don't ask again   3. No")

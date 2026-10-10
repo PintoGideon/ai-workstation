@@ -98,6 +98,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                     }
                 });
                 let mut spans = filter_spans;
+                // FORK: a row with a permission request waiting (P6).
+                if app.pending_permission_for_selection().is_some() {
+                    spans.extend(super::fork_permissions::row_hint_spans(theme));
+                }
                 spans.extend(vec![
                     Span::styled(" Enter", key_style()),
                     Span::raw(" view  "),
@@ -598,6 +602,8 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("Esc", key_style()),
             Span::raw(" cancel"),
         ]),
+        // FORK: permission detail overlay (P6).
+        AppMode::PermissionDetail(_) => super::fork_permissions::detail_hints(theme),
         // FORK: repo hook approval dialog.
         AppMode::ApprovingRepoHook(_) => Line::from(vec![
             Span::styled(" y", key_style()),

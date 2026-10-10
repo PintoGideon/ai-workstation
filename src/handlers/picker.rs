@@ -493,6 +493,14 @@ pub fn handle_markdown_file_picker_key(app: &mut App, key: KeyEvent) -> Result<(
 }
 
 pub fn handle_notification_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
+    // FORK: a row whose session asks permission answers with `a` / `X`;
+    // Enter shows the request (P6).
+    if super::fork_permissions::handle_picker_key(
+        app,
+        crossterm::event::KeyEvent::new(key, crossterm::event::KeyModifiers::NONE),
+    )? {
+        return Ok(());
+    }
     match key {
         KeyCode::Esc | KeyCode::Char('q') => {
             let from_view = match std::mem::replace(&mut app.mode, AppMode::Normal) {
