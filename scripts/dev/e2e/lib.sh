@@ -14,14 +14,51 @@
 #   aiw_tmux <args…>                            tmux on AIW's private socket (read-only use)
 #   check <name> <cond-exit-code>               record pass/fail
 #   drive_kill                                  kill the driver tmux server
+#   ck <args…>                                  tmux on the cockpit server's socket (DESIGN.md §18)
+#   cockpit_alive                               the cockpit server has its `aiw` session
+#   pane_active                                 index of the focused cockpit pane (0 sidebar, 1 agent)
+#   agent_title                                 the agent pane's border title
+#   focus_sidebar / focus_agent                 Ctrl+Q until the wanted pane has focus
+#   agent_cap                                   capture the agent pane (plain text)
+#   wait_agent_for <regex> [seconds]            poll the agent pane until it matches
+#   wait_title <regex> [seconds]                poll the agent pane's title
+#   zoomed                                      1 while a dialog has the sidebar zoomed
 
 DRIVE_SOCK=${DRIVE_SOCK:-$S/drive.sock}
 DRIVE_SESSION=${DRIVE_SESSION:-drive}
 AIW_SOCK=${AIW_SOCK:-$XDG_STATE_HOME/ai_workstation/tmux.sock}
+COCKPIT_SOCK=${COCKPIT_SOCK:-$XDG_STATE_HOME/ai_workstation/cockpit.sock}
 RESULTS=${RESULTS:-$S/results.tsv}
 
 dt() { tmux -S "$DRIVE_SOCK" "$@"; }
 aiw_tmux() { tmux -S "$AIW_SOCK" "$@"; }
+# The cockpit: the tmux server `aiw` builds for itself (sidebar pane 0,
+# agent pane 1). Keys sent to the drive pane reach whichever pane has focus.
+ck() { tmux -S "$COCKPIT_SOCK" "$@"; }
+cockpit_alive() { [ -S "$COCKPIT_SOCK" ] && ck has-session -t =aiw 2>/dev/null; }
+pane_active() { ck list-panes -t aiw:0 -F '#{pane_index} #{pane_active}' 2>/dev/null | awk '$2==1{print $1}'; }
+agent_title() { ck display-message -p -t aiw:0.1 '#{@aiw_title}' 2>/dev/null; }
+zoomed() { ck display-message -p -t aiw:0.0 '#{window_zoomed_flag}' 2>/dev/null; }
+focus_sidebar() { local i; for i in 1 2 3; do [ "$(pane_active)" = 0 ] && return 0; keys C-q; sleep 0.3; done; [ "$(pane_active)" = 0 ]; }
+focus_agent() { local i; for i in 1 2 3; do [ "$(pane_active)" = 1 ] && return 0; keys C-q; sleep 0.3; done; [ "$(pane_active)" = 1 ]; }
+# with scrollback: an agent's earlier lines scroll off its screen fast
+agent_cap() { ck capture-pane -p -S -300 -t aiw:0.1 2>/dev/null; }
+wait_agent_for() {
+    local re=$1 secs=${2:-10} i=0
+    while ! agent_cap | grep -Eq -- "$re"; do
+        i=$((i + 1))
+        if [ "$i" -ge $((secs * 10)) ]; then return 1; fi
+        sleep 0.1
+    done
+}
+wait_title() {
+    local re=$1 secs=${2:-10} i=0
+    while ! agent_title | grep -Eq -- "$re"; do
+        i=$((i + 1))
+        if [ "$i" -ge $((secs * 10)) ]; then return 1; fi
+        sleep 0.1
+    done
+}
 
 aiw_start() {
     local cols=${1:-200} rows=${2:-60}
@@ -42,8 +79,12 @@ aiw_start() {
 }
 
 keys() { dt send-keys -t "$DRIVE_SESSION" "$@"; }
-cap() { dt capture-pane -p -t "$DRIVE_SESSION"; }
-cap_ansi() { dt capture-pane -p -e -t "$DRIVE_SESSION"; }
+# The sidebar pane while the cockpit is up (a dialog zooms it, so this is the
+# whole window then); the drive pane before the cockpit exists or after it
+# went. `cap_all` is the whole screen, both panes, for the review captures.
+cap() { if cockpit_alive; then ck capture-pane -p -t aiw:0.0; else dt capture-pane -p -t "$DRIVE_SESSION"; fi; }
+cap_ansi() { if cockpit_alive; then ck capture-pane -p -e -t aiw:0.0; else dt capture-pane -p -e -t "$DRIVE_SESSION"; fi; }
+cap_all() { dt capture-pane -p -t "$DRIVE_SESSION"; }
 
 wait_for() {
     local re=$1 secs=${2:-10} i=0
@@ -64,8 +105,8 @@ wait_gone() {
 }
 
 snap() {
-    cap >"$S/captures/$1.txt"
-    cap_ansi >"$S/captures/$1.ansi"
+    cap_all >"$S/captures/$1.txt"
+    dt capture-pane -p -e -t "$DRIVE_SESSION" >"$S/captures/$1.ansi"
 }
 
 check() {
@@ -80,10 +121,14 @@ check() {
 
 # q quits from the dashboard; it first closes a result dialog (e.g. the
 # "Feature deleted" acknowledgement), so press it again if AIW is still up.
+# In the cockpit the key has to reach the sidebar pane.
 aiw_quit() {
     local i
     for i in $(seq 1 100); do
-        [ $((i % 30)) -eq 1 ] && keys q
+        if [ $((i % 30)) -eq 1 ]; then
+            if cockpit_alive; then focus_sidebar; close_dialogs; fi
+            keys q
+        fi
         [ -z "$(aiw_pid)" ] && return 0
         sleep 0.1
     done
@@ -138,6 +183,7 @@ wait_row_glyph() {
 }
 
 drive_kill() { dt kill-server 2>/dev/null || true; }
+cockpit_kill() { ck kill-server 2>/dev/null || true; }
 
 # pid of the aiw TUI running in this sandbox (the one whose HOME is $S)
 aiw_pid() { pgrep -x aiw -u "$(id -u)" | while read -r p; do
@@ -155,6 +201,9 @@ add_project() {
     for i in $(seq 1 "$idx"); do keys j; done
     keys Enter
     wait_for "Created project '$name'" 5
+    local rc=$?
+    cockpit_alive && focus_sidebar
+    return $rc
 }
 
 # new_feature <name> <worktree y|n> <agent-index 0..4 (claude codex pi gemini cursor)> [mode-index 0..2]
@@ -181,16 +230,21 @@ new_feature() {
     if cap | grep -q 'SuperVibe'; then keys y; sleep 0.3; fi
     # session name step
     keys Enter
+    # a spare Enter lands on the new feature's row and would focus the
+    # agent pane; the rest of the run types into the sidebar
+    sleep 0.6; cockpit_alive && focus_sidebar
 }
 
 # select_row <text>: jump the dashboard cursor to the first row matching <text>
 # via the search dialog (`/`), falling back to walking the list with j.
 select_row() {
     local text=$1 i
+    cockpit_alive && focus_sidebar
     keys /; sleep 0.2
     keys -l "$text"; sleep 0.3
     keys Enter; sleep 0.2
     if cap | grep -q '┌ Search'; then keys Escape; sleep 0.2; fi
+    settle
     cap | grep '▎' | grep -Fq -- "$text" && return 0
     for i in $(seq 1 60); do keys k; done
     for i in $(seq 1 80); do
@@ -200,11 +254,24 @@ select_row() {
     return 1
 }
 
+# settle: a dialog just closed — wait for the sidebar pane to un-zoom and
+# repaint (the zoom toggle is a resize the app redraws for) before reading it
+settle() {
+    local i
+    for i in $(seq 1 20); do
+        if ! cockpit_alive || [ "$(zoomed)" = 0 ]; then
+            cap | grep -qE '╭ (Projects|Sessions)|No projects yet' && return 0
+        fi
+        sleep 0.1
+    done
+    return 1
+}
+
 # close_dialogs: Esc out of any open dialog (Esc on the dashboard itself is a no-op)
 close_dialogs() {
     local i
     for i in $(seq 1 10); do
-        cap | grep -qE '╭ (Projects|Sessions)' && return 0
+        if cap | grep -qE '╭ (Projects|Sessions)|No projects yet'; then settle; return 0; fi
         keys Escape; sleep 0.25
     done
 }
