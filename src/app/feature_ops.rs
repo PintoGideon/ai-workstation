@@ -827,32 +827,19 @@ impl App {
                     return self.finish_todo_spawn_in_new_feature(&origin, pi, fi, prompt);
                 }
                 if let Some(prompt) = prepared.startup_prompt {
+                    // FORK(cockpit): pasted unsent into the agent's pane
+                    // (DESIGN.md §18); never sent on its own.
                     self.selection = Selection::Feature(pi, fi);
-                    match self.enter_view_without_auto_compose() {
-                        Ok(()) => match self.open_compose_seeded(prompt) {
-                            Ok(()) => return Ok(()),
-                            Err(error) => {
-                                let notice = format!(
-                                    "Feature '{}' started, but its prompt was not opened; {}: {error}",
-                                    feature_name,
-                                    Self::startup_prompt_fallback_note(startup_prompt_persisted)
-                                );
-                                self.log_warn("feature_create", notice.clone());
-                                self.push_toast_warning(notice);
-                                return Ok(());
-                            }
-                        },
-                        Err(error) => {
-                            let notice = format!(
-                                "Feature '{}' started, but its prompt was not opened; {}: {error}",
-                                feature_name,
-                                Self::startup_prompt_fallback_note(startup_prompt_persisted)
-                            );
-                            self.log_warn("feature_create", notice.clone());
-                            self.push_toast_warning(notice);
-                            return Ok(());
-                        }
+                    if let Err(error) = self.paste_prompt_unsent_to_feature(pi, fi, &prompt) {
+                        let notice = format!(
+                            "Feature '{}' started, but its prompt was not pasted; {}: {error}",
+                            feature_name,
+                            Self::startup_prompt_fallback_note(startup_prompt_persisted)
+                        );
+                        self.log_warn("feature_create", notice.clone());
+                        self.push_toast_warning(notice);
                     }
+                    return Ok(());
                 } else if prepared.steering_enabled {
                     self.open_startup_steering_prompt(pi, fi)?;
                     return Ok(());
@@ -977,14 +964,10 @@ impl App {
 
     pub fn open_startup_steering_prompt(&mut self, pi: usize, fi: usize) -> Result<()> {
         self.selection = Selection::Feature(pi, fi);
-        self.enter_view_without_auto_compose()?;
-
-        let view = match std::mem::replace(&mut self.mode, AppMode::Normal) {
-            AppMode::Viewing(view) => view,
-            other => {
-                self.mode = other;
-                return Ok(());
-            }
+        // FORK(cockpit): the dialog describes the feature's running agent;
+        // nothing is opened (DESIGN.md §18).
+        let Some(view) = self.desired_live_target().map(|t| t.view_state()) else {
+            return Ok(());
         };
 
         let workdir = self.store.projects[pi].features[fi].workdir.clone();
@@ -1071,7 +1054,13 @@ impl App {
         self.tmux
             .send_key_name(&state.view.session, &state.view.window, "Enter")?;
 
-        self.mode = AppMode::Viewing(state.view);
+        // FORK(cockpit): back to the sidebar, the agent pane on the session
+        // the prompt went to (DESIGN.md §18).
+        self.mode = AppMode::Normal;
+        self.workspace_select_window(&state.view.session, &state.view.window);
+        if self.cockpit_active() {
+            self.cockpit_focus_agent();
+        }
         self.message = Some("Injected steering prompt".into());
         Ok(())
     }

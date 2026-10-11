@@ -250,13 +250,12 @@ fn submit_steering_prompt_pastes_into_running_session() {
 
     app.submit_steering_prompt().unwrap();
 
-    match &app.mode {
-        AppMode::Viewing(view) => {
-            assert_eq!(view.session, "aiw-coached");
-            assert_eq!(view.window, "claude");
-        }
-        _ => panic!("expected Viewing mode"),
-    }
+    // FORK(cockpit): back on the dashboard, the row on the session the
+    // prompt went to.
+    assert!(
+        matches!(app.mode, AppMode::Normal),
+        "expected the dashboard"
+    );
 
     let prompt_path = workdir.join(".claude").join("latest-prompt.txt");
     assert_eq!(

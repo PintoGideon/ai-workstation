@@ -574,16 +574,9 @@ impl App {
             _ => None,
         };
         let seed = escalation_seed(&qa, drift);
-        self.selection = Selection::Session(pi, fi, si);
-        if let Err(e) = self.enter_view_without_auto_compose() {
-            self.log_error("learning", format!("couldn't open the new session: {e}"));
-            self.push_toast_error(format!(
-                "The session started, but AIW couldn't open it: {e}"
-            ));
-            return Some(session_id);
-        }
-        if let Err(e) = self.open_compose_seeded(seed) {
-            self.log_error("learning", format!("couldn't seed the composer: {e}"));
+        // FORK(cockpit): pasted unsent into the new agent's pane (DESIGN.md §18).
+        if let Err(e) = self.paste_prompt_unsent(pi, fi, si, &seed) {
+            self.log_error("learning", format!("couldn't paste the prompt: {e}"));
             self.push_toast_error(format!(
                 "The session started, but the prompt wasn't loaded: {e}"
             ));

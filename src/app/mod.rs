@@ -24,6 +24,7 @@ pub mod fork_cockpit; // FORK: the cockpit sidebar (DESIGN.md §18)
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7, DESIGN.md §16)
 pub(crate) mod fork_launch; // FORK: launch-time arguments from the store (DESIGN.md §16)
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6, DESIGN.md §16)
+pub(crate) mod fork_prompt_paste; // FORK: prompts pasted unsent into the agent pane (DESIGN.md §18)
 mod fork_render_memo; // FORK: per-frame dialog values (DESIGN.md §12.3)
 pub(crate) mod fork_session_info; // FORK: the session info block (DESIGN.md §18)
 pub(crate) mod fork_split; // FORK: split view (DESIGN.md §4.1)
@@ -1019,6 +1020,8 @@ pub struct App {
     pub fork_cockpit: fork_cockpit::CockpitRuntime,
     /// FORK: the session info block's cache and sweep (DESIGN.md §18).
     pub fork_session_info: fork_session_info::SessionInfoRuntime,
+    /// FORK: a prompt an embedding frontend (the GUI) still shows, unsent.
+    pub unsent_prompt_handoff: Option<fork_prompt_paste::UnsentPromptHandoff>,
     /// FORK: ids of sessions whose finished turn has been looked at (their
     /// `✓` is dim). Not persisted; a new finished event clears the id.
     pub finished_seen: std::collections::HashSet<String>,
@@ -2667,6 +2670,7 @@ impl App {
             fork_workspace: Default::default(),    // FORK: workspace layout
             fork_cockpit: Default::default(),      // FORK: cockpit
             fork_session_info: Default::default(), // FORK: session info block
+            unsent_prompt_handoff: None,           // FORK: GUI prompt hand-off
             finished_seen: std::collections::HashSet::new(), // FORK: badges
             badge_ages: Default::default(),        // FORK: badges
             fork_render_memo: Default::default(),  // FORK: render memo
@@ -2942,6 +2946,7 @@ impl App {
             fork_workspace: Default::default(),    // FORK: workspace layout
             fork_cockpit: Default::default(),      // FORK: cockpit
             fork_session_info: Default::default(), // FORK: session info block
+            unsent_prompt_handoff: None,           // FORK: GUI prompt hand-off
             finished_seen: std::collections::HashSet::new(), // FORK: badges
             badge_ages: Default::default(),        // FORK: badges
             fork_render_memo: Default::default(),  // FORK: render memo

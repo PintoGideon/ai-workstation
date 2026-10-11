@@ -864,14 +864,10 @@ mod tests {
         app
     }
 
-    fn composed_text(app: &App) -> String {
-        match &app.mode {
-            AppMode::Compose(state) => state.editor.text().to_string(),
-            other => panic!(
-                "expected Compose mode, got {:?}",
-                std::mem::discriminant(other)
-            ),
-        }
+    fn composed_text(app: &mut App) -> String {
+        app.take_unsent_prompt()
+            .expect("the prompt was left for the frontend, unsent")
+            .text
     }
 
     /// Press leader `F`, type `instruction`, then Enter -- the two-step flow
@@ -971,7 +967,7 @@ mod tests {
 
         open_and_submit_fresh_context_prompt(&mut app, "Fix the login bug.");
 
-        let text = composed_text(&app);
+        let text = composed_text(&mut app);
         assert!(text.starts_with("Read AIW_PLAN.md for full context on this feature. "));
         assert!(text.contains("Changed/new files to look at:"));
         assert!(text.contains("src.txt"));
@@ -1019,7 +1015,7 @@ mod tests {
         assert!(matches!(app.mode, AppMode::FreshContextPrompt(_)));
         crate::handlers::handle_fresh_context_prompt_key(&mut app, key(KeyCode::Enter)).unwrap();
 
-        let text = composed_text(&app);
+        let text = composed_text(&mut app);
         assert!(text.contains("Read AIW_PLAN.md for full context on this feature."));
         assert!(text.contains("Changed/new files to look at:"));
         assert!(text.contains("Feature summary: Finish the sidebar work."));
@@ -1045,7 +1041,7 @@ mod tests {
 
         open_and_submit_fresh_context_prompt(&mut app, "Fix the login bug.");
 
-        let text = composed_text(&app);
+        let text = composed_text(&mut app);
         assert!(!text.contains("Read "));
         assert!(text.starts_with("Changed/new files to look at:"));
         assert_eq!(
@@ -1065,7 +1061,7 @@ mod tests {
 
         open_and_submit_fresh_context_prompt(&mut app, "Fix the login bug.");
 
-        let text = composed_text(&app);
+        let text = composed_text(&mut app);
         assert_eq!(
             text,
             "Read AIW_PLAN.md for full context on this feature. Fix the login bug. \

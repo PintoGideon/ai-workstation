@@ -227,9 +227,8 @@ impl App {
             StartIntent::Warn("the fresh-context agent"),
         )?;
 
-        self.selection = Selection::Session(pi, fi, si);
-        self.enter_view_without_auto_compose()?;
-        self.open_compose_seeded(prompt)?;
+        // FORK(cockpit): pasted unsent into the new agent's pane (DESIGN.md §18).
+        self.paste_prompt_unsent(pi, fi, si, &prompt)?;
         Ok(())
     }
 }

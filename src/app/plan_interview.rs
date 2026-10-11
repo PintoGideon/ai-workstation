@@ -2948,11 +2948,8 @@ impl App {
             self.message = Some(format!("Plan written to {}", plan_path.display()));
             return Ok(());
         };
-        self.selection = Selection::Session(pi, fi, si);
-        if let Err(e) = self
-            .enter_view_without_auto_compose()
-            .and_then(|_| self.open_compose_seeded(todo_plan_kickoff_prompt(plan_file)))
-        {
+        // FORK(cockpit): pasted unsent into the agent's pane (DESIGN.md §18).
+        if let Err(e) = self.paste_prompt_unsent(pi, fi, si, &todo_plan_kickoff_prompt(plan_file)) {
             if rollback_on_failure {
                 self.todos_rollback_launch_best_effort(&origin.todo_id, Some(&session_id));
             }
@@ -3095,27 +3092,17 @@ impl App {
             return Ok(());
         }
 
-        self.selection = Selection::Session(pi, fi, si);
-        if let Err(e) = self.enter_view_without_auto_compose() {
+        // FORK(cockpit): the kickoff is pasted unsent into the agent's pane
+        // (DESIGN.md §18). The seed is the whole point of saying yes, so a
+        // failure has to be visible: silence would read as "the agent has
+        // the plan".
+        if let Err(e) =
+            self.paste_prompt_unsent(pi, fi, si, &plan_kickoff_prompt(expert_brief.as_deref()))
+        {
             self.report_logged_error(
                 "plan_interview",
                 format!(
-                    "could not open '{}' for the plan kickoff prompt ({e}) — the plan is written \
-                     to {}",
-                    target.session_label,
-                    target.plan_path.display()
-                ),
-            );
-            return Ok(());
-        }
-        // The seed is the whole point of saying yes, so a failure here has to be
-        // visible: the session is open but its composer is empty, and silence
-        // would read as "the agent has the plan".
-        if let Err(e) = self.open_compose_seeded(plan_kickoff_prompt(expert_brief.as_deref())) {
-            self.report_logged_error(
-                "plan_interview",
-                format!(
-                    "could not seed the plan kickoff prompt ({e}) — tell '{}' to read {} yourself",
+                    "could not paste the plan kickoff prompt ({e}) — tell '{}' to read {} yourself",
                     target.session_label,
                     target.plan_path.display()
                 ),

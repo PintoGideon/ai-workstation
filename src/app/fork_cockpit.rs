@@ -153,7 +153,7 @@ impl App {
         if !self.cockpit_active() {
             return false;
         }
-        self.workspace_commit_pending();
+        self.workspace_commit_now();
         let Some(live) = self.fork_workspace.live.clone() else {
             self.message = Some(match self.selection {
                 Selection::Session(..) => "Nothing to open — the session is not running".into(),

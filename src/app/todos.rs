@@ -1681,10 +1681,8 @@ impl App {
         // Cloned up front: `prompt` moves into the closure below, but a
         // failure there still needs the text to stash rather than lose it.
         let prompt_for_recovery = prompt.clone();
-        if let Err(e) = self
-            .enter_view_without_auto_compose()
-            .and_then(|_| self.open_compose_seeded(prompt))
-        {
+        // FORK(cockpit): pasted unsent into the agent's pane (DESIGN.md §18).
+        if let Err(e) = self.paste_prompt_unsent(pi, fi, si, &prompt) {
             if reserved_here {
                 self.todos_rollback_launch_best_effort(&todo.id, Some(&session_id));
             }
@@ -1814,10 +1812,8 @@ impl App {
         // Cloned up front: `prompt` moves into the closure below, but a
         // failure there still needs the text to stash rather than lose it.
         let prompt_for_recovery = prompt.clone();
-        if let Err(e) = self
-            .enter_view_without_auto_compose()
-            .and_then(|_| self.open_compose_seeded(prompt))
-        {
+        // FORK(cockpit): pasted unsent into the agent's pane (DESIGN.md §18).
+        if let Err(e) = self.paste_prompt_unsent(pi, fi, si, &prompt) {
             if reserved_here {
                 self.todos_rollback_launch_best_effort(&origin.todo_id, Some(&session_id));
             }

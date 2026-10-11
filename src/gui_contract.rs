@@ -1350,10 +1350,12 @@ impl GuiHandle {
                 "Feature was created, but the TODO agent could not be linked; refresh",
             ));
         };
-        let draft_prompt = match &self.app.mode {
-            AppMode::Compose(state) => state.editor.text().to_string(),
-            _ => String::new(),
-        };
+        // FORK(cockpit): the seed is an unsent hand-off, not a TUI composer.
+        let draft_prompt = self
+            .app
+            .take_unsent_prompt()
+            .map(|handoff| handoff.text)
+            .unwrap_or_default();
         self.app.exit_view_without_resuming_plan_interview();
         Ok(TodoAgentLaunchResponse {
             target: SessionTarget {

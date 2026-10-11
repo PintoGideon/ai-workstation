@@ -889,10 +889,12 @@ pub fn act(
                             message: "Plan saved, but its TODO agent did not start".into(),
                         });
                     };
-                    let draft_prompt = match &app.mode {
-                        AppMode::Compose(state) => state.editor.text().to_string(),
-                        _ => String::new(),
-                    };
+                    // FORK(cockpit): the shared launch leaves the seed as an
+                    // unsent hand-off instead of a TUI composer.
+                    let draft_prompt = app
+                        .take_unsent_prompt()
+                        .map(|handoff| handoff.text)
+                        .unwrap_or_default();
                     if let Some((pi, fi, _)) = app.session_indices_by_id(&session_id) {
                         handoff = Some(PlanHandoff {
                             target: SessionTarget {
@@ -911,14 +913,16 @@ pub fn act(
             }
             completed.map_err(GuiError::from)?;
             if let Some((project_name, branch)) = pending_feature {
-                if let AppMode::Compose(state) = &app.mode
+                // FORK(cockpit): the kickoff is an unsent hand-off, not a
+                // TUI composer.
+                if let Some(unsent) = app.take_unsent_prompt()
                     && let Some(project) =
                         app.store.projects.iter().find(|p| p.name == project_name)
                     && let Some(feature) = project.features.iter().find(|f| f.name == branch)
                     && let Some(session) = feature
                         .sessions
                         .iter()
-                        .find(|session| session.tmux_window == state.view.window)
+                        .find(|session| session.tmux_window == unsent.view.window)
                 {
                     handoff = Some(PlanHandoff {
                         target: SessionTarget {
@@ -926,7 +930,7 @@ pub fn act(
                             feature_id: feature.id.clone(),
                             session_id: session.id.clone(),
                         },
-                        draft_prompt: state.editor.text().to_string(),
+                        draft_prompt: unsent.text,
                     });
                 }
                 if matches!(&app.mode, AppMode::Compose(_) | AppMode::Viewing(_)) {

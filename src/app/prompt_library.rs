@@ -303,13 +303,18 @@ impl App {
         self.open_prompt_library(from_view);
     }
 
-    /// Shared delivery step. Seeds the compose box when compose
-    /// interception is on (so the user reviews/edits before sending);
-    /// otherwise pastes into the agent window with no trailing Enter, so
-    /// nothing is sent automatically. With no session context, copies to
-    /// the clipboard instead.
+    /// Shared delivery step. FORK(cockpit): pastes into the agent window
+    /// with no trailing Enter — the session the library was opened from,
+    /// else the agent under the dashboard selection — and focuses the agent
+    /// pane (DESIGN.md §18). With no running agent, copies to the clipboard.
     pub fn deliver_prompt(&mut self, rendered: String, from_view: Option<ViewState>) -> Result<()> {
-        let Some(view) = from_view else {
+        let target = from_view
+            .map(|view| (view.session, view.window))
+            .or_else(|| {
+                self.desired_live_target()
+                    .map(|target| (target.session, target.window))
+            });
+        let Some((session, window)) = target else {
             match crate::app::util::copy_to_clipboard(&rendered) {
                 Ok(()) => self.push_toast_success("Copied prompt to clipboard"),
                 Err(e) => self.push_toast_warning(format!("Clipboard error: {e}")),
@@ -317,17 +322,7 @@ impl App {
             self.mode = AppMode::Normal;
             return Ok(());
         };
-
-        if self.compose_intercept_active(&view) {
-            self.mode = AppMode::Viewing(view);
-            self.open_compose_seeded(rendered)?;
-        } else {
-            self.tmux
-                .paste_text(&view.session, &view.window, &rendered)?;
-            self.mode = AppMode::Viewing(view);
-            self.push_toast_success("Pasted prompt (not sent)");
-        }
-        Ok(())
+        self.paste_prompt_unsent_to_window(&session, &window, &rendered)
     }
 
     // ── CRUD ─────────────────────────────────────────────────────

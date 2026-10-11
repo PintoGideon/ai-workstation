@@ -834,10 +834,17 @@ impl App {
             self.push_toast_warning("No PR Triage pane to return to");
             return;
         };
-        let matches_current = matches!(
-            &self.mode,
-            AppMode::Viewing(view) if view.session == stash.session && view.window == stash.window
-        );
+        // FORK(cockpit): the dashboard with the stashed session selected
+        // counts as "on that session" (DESIGN.md §18).
+        let on_dashboard_row = matches!(self.mode, AppMode::Normal)
+            && self.session_indices_by_window(&stash.session, &stash.window).is_some_and(
+                |(pi, fi, si)| matches!(self.selection, Selection::Session(a, b, c) if (a, b, c) == (pi, fi, si)),
+            );
+        let matches_current = on_dashboard_row
+            || matches!(
+                &self.mode,
+                AppMode::Viewing(view) if view.session == stash.session && view.window == stash.window
+            );
         if !matches_current {
             self.push_toast_warning("No PR Triage pane linked to this session");
             return;

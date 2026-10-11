@@ -512,14 +512,14 @@ fn accepting_the_kickoff_handoff_seeds_the_running_sessions_composer() {
 
     // Seeded, never submitted: the session may be mid-task, so when the prompt
     // lands stays the user's call.
-    match &app.mode {
-        AppMode::Compose(state) => {
-            let seed = state.editor.text();
+    match app.take_unsent_prompt() {
+        Some(handoff) => {
+            let seed = handoff.text.as_str();
             assert!(seed.contains("AIW_PLAN.md"));
             assert!(seed.contains("decisions are settled"));
-            assert_eq!(state.view.feature_name, "my-feat");
+            assert_eq!(handoff.view.feature_name, "my-feat");
         }
-        _ => panic!("expected the live session's composer to be seeded"),
+        None => panic!("expected the live session's prompt to be handed over"),
     }
 }
 
@@ -764,9 +764,10 @@ fn accepting_a_codex_plan_seeds_the_approved_plan_kickoff_prompt() {
     app.continue_plan_interview_after_done().unwrap();
     crate::handlers::handle_plan_interview_key(&mut app, ke(KeyCode::Enter)).unwrap();
 
+    let kickoff = app.take_unsent_prompt();
     assert!(
-        matches!(app.mode, AppMode::Compose(_)),
-        "expected composer after Codex launch; message: {:?}",
+        kickoff.is_some(),
+        "expected an unsent kickoff after Codex launch; message: {:?}",
         app.message
     );
     assert!(workdir.join("AIW_PLAN.md").is_file());
@@ -778,14 +779,10 @@ fn accepting_a_codex_plan_seeds_the_approved_plan_kickoff_prompt() {
             .unwrap()
             .contains("`AIW_PLAN.md`")
     );
-    match &app.mode {
-        AppMode::Compose(state) => {
-            assert_eq!(state.view.session_kind, SessionKind::Codex);
-            assert!(state.editor.text().contains("Read `AIW_PLAN.md`"));
-            assert!(state.editor.text().contains("decisions are settled"));
-        }
-        _ => panic!("expected Codex's composer to contain the kickoff prompt"),
-    }
+    let kickoff = kickoff.unwrap();
+    assert_eq!(kickoff.view.session_kind, SessionKind::Codex);
+    assert!(kickoff.text.contains("Read `AIW_PLAN.md`"));
+    assert!(kickoff.text.contains("decisions are settled"));
 }
 
 /// Keep completion-path tests deterministic and offline. `Some(None)` means
@@ -917,12 +914,12 @@ fn accepted_plan_over_limit_asks_then_resumes_exact_launch_once() {
             .count(),
         1
     );
-    match &app.mode {
-        AppMode::Compose(state) => {
-            assert_eq!(state.editor.text(), PLAN_KICKOFF_PROMPT);
-            assert_eq!(state.view.feature_name, "planned-feature");
+    match app.take_unsent_prompt() {
+        Some(handoff) => {
+            assert_eq!(handoff.text, PLAN_KICKOFF_PROMPT);
+            assert_eq!(handoff.view.feature_name, "planned-feature");
         }
-        _ => panic!("confirmed plan should land in the seeded composer"),
+        None => panic!("confirmed plan should leave the kickoff prompt unsent"),
     }
 
     // The dialog payload was consumed before replay. A repeated confirmation
@@ -1768,14 +1765,14 @@ fn poll_plan_interview_synthesis_bg_pauses_for_review_then_accepts() {
     );
     // Accepting lands in the launched session's composer with an editable
     // kickoff prompt — seeded, never submitted.
-    match &app.mode {
-        AppMode::Compose(state) => {
-            let seed = state.editor.text();
+    match app.take_unsent_prompt() {
+        Some(handoff) => {
+            let seed = handoff.text.as_str();
             assert!(seed.contains("AIW_PLAN.md"));
             assert!(seed.contains("decisions are settled"));
-            assert_eq!(state.view.feature_name, "planned-feature");
+            assert_eq!(handoff.view.feature_name, "planned-feature");
         }
-        _ => panic!("expected the composer to be seeded"),
+        None => panic!("expected the kickoff prompt to be handed over unsent"),
     }
 }
 

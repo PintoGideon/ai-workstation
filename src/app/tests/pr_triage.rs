@@ -607,13 +607,13 @@ fn pr_review_inject_fix_also_stashes_return_state() {
             .unwrap()
     );
 
-    // Compose intercept is on by default, so `f` lands in the compose box
-    // (seeded with the fix prompt) rather than bare Viewing — the stash must
-    // still be keyed to the same session/window either way.
-    let compose_view = match &app.mode {
-        AppMode::Compose(state) => state.view.clone(),
-        other => panic!("expected Compose, got {:?}", std::mem::discriminant(other)),
-    };
+    // FORK(cockpit): `f` hands the fix prompt over unsent (pasted into the
+    // agent's pane in the cockpit) — the stash must still be keyed to the
+    // same session/window.
+    let compose_view = app
+        .take_unsent_prompt()
+        .expect("the fix prompt is handed over unsent")
+        .view;
     let stash = app
         .pr_review_return
         .as_ref()
@@ -623,11 +623,10 @@ fn pr_review_inject_fix_also_stashes_return_state() {
     assert_eq!(stash.state.selected, 1);
     let stash_session = stash.session.clone();
 
-    // Ctrl+Space from the compose box cancels it back to the underlying
-    // Viewing session (handlers/compose.rs) before handing off to the leader
-    // chord — the real path `leader+P` is reached through after `f`.
-    app.cancel_compose();
-    assert!(matches!(&app.mode, AppMode::Viewing(view) if view.session == stash_session));
+    // FORK(cockpit): the prompt hand-off lands on the dashboard; the stash
+    // still names the session it came from.
+    assert!(matches!(&app.mode, AppMode::Normal));
+    assert!(!stash_session.is_empty());
 
     app.pr_review_return_to_pane();
 

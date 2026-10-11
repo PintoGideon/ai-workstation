@@ -1026,9 +1026,11 @@ fn startup_prompt_overlay_test(agent: AgentKind, expected_window: &'static str) 
     };
 
     let mut tmux = MockTmuxOps::new();
+    // FORK(cockpit): the steering dialog no longer opens a view, so only
+    // the launch itself asks whether the session exists.
     tmux.expect_session_exists()
         .withf(move |session| session == expected_session)
-        .times(2)
+        .times(1..=2)
         .returning({
             let mut calls = 0;
             move |_| {

@@ -322,6 +322,16 @@ impl App {
         }
     }
 
+    /// Commit what the selection asks for right now, debounce or not (the
+    /// user acted on the row: `Enter`, a pasted prompt).
+    pub(crate) fn workspace_commit_now(&mut self) {
+        if !self.workspace_active() {
+            return;
+        }
+        let desired = self.desired_live_target();
+        self.commit_live_target(desired);
+    }
+
     fn commit_live_target(&mut self, target: Option<LiveTarget>) {
         self.fork_workspace.pending = None;
         if self.fork_workspace.live != target {

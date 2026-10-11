@@ -4232,9 +4232,9 @@ fn escalating_opens_a_session_with_the_prompt_filled_in_and_unsent() {
 
     // The prompt is sitting in the composer, unsent: the seed is the
     // editor's text, and only Enter would hand it over.
-    match &app.mode {
-        AppMode::Compose(state) => {
-            let text = state.editor.text();
+    match app.take_unsent_prompt() {
+        Some(handoff) => {
+            let text = handoff.text.as_str();
             assert!(text.contains("What does this do?"), "{text}");
             assert!(text.contains("It is the entry point."), "{text}");
             // The composer opens with the cursor after the last line, so
@@ -4245,9 +4245,9 @@ fn escalating_opens_a_session_with_the_prompt_filled_in_and_unsent() {
                 "the last thing they see says this session can change files: {text}"
             );
         }
-        other => panic!(
-            "expected the composer, got {:?}",
-            std::mem::discriminant(other)
+        None => panic!(
+            "expected an unsent prompt, mode {:?}",
+            std::mem::discriminant(&app.mode)
         ),
     }
 

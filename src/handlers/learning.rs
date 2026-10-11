@@ -622,15 +622,17 @@ mod tests {
         handle_learning_key(&mut app, key(KeyCode::Char('S'))).unwrap();
 
         assert_eq!(app.store.projects[0].features[0].sessions.len(), 1);
-        match &app.mode {
-            AppMode::Compose(state) => assert!(
-                state.editor.text().contains("What does this do?"),
-                "the composer is pre-filled: {}",
-                state.editor.text()
+        // FORK(cockpit): the prompt is handed over unsent (pasted into the
+        // agent's pane in the cockpit; kept for the frontend here).
+        match app.take_unsent_prompt() {
+            Some(handoff) => assert!(
+                handoff.text.contains("What does this do?"),
+                "the prompt is pre-filled: {}",
+                handoff.text
             ),
-            other => panic!(
-                "expected the composer, got {:?}",
-                std::mem::discriminant(other)
+            None => panic!(
+                "expected an unsent prompt, mode {:?}",
+                std::mem::discriminant(&app.mode)
             ),
         }
     }
