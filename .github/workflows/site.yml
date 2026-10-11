@@ -1,15 +1,11 @@
-name: Deploy site
+name: Build site
 
-# Builds site/ with Zola and deploys the result to Cloudflare Pages.
-#
-# Requires repo secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, and a
-# Cloudflare Pages project matching `projectName` below (see site/README.md).
-# The build always runs (it's a useful check on its own), but the deploy step
-# is skipped — not failed — until CLOUDFLARE_API_TOKEN is set. That check is
-# routed through the job-level `env.CF_TOKEN_SET` rather than referencing
-# `secrets` directly in the step's `if:`, because GitHub Actions fails to
-# parse a workflow that does the latter (the crates.io publish job in
-# release.yml has the same bug — not yet fixed there).
+# Builds site/ with Zola as a check that the docs pages still render. This is
+# a private fork with no Cloudflare Pages project: the upstream deploy step
+# was removed because a private repository cannot resolve the third-party
+# `cloudflare/pages-action` at job setup, which failed the run before any
+# `if:` guard could skip it. Publishing, if ever wanted, is a separate
+# workflow with its own secrets (see site/README.md).
 
 on:
   push:
@@ -19,15 +15,10 @@ on:
 
 permissions:
   contents: read
-  deployments: write
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    env:
-      # Secrets can't be referenced directly in an `if:` conditional (GitHub
-      # silently fails to parse the workflow); route through a plain env var.
-      CF_TOKEN_SET: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,13 +31,3 @@ jobs:
       - name: Build
         working-directory: site
         run: zola build
-
-      - name: Deploy to Cloudflare Pages
-        if: ${{ env.CF_TOKEN_SET == 'true' }}
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: aiw-site
-          directory: site/public
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
