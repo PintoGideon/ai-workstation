@@ -127,8 +127,26 @@ mod tests {
         // nothing on its own.
         assert!(path.exists());
         std::fs::write(&path, "424242\n").unwrap();
-        let again = acquire(dir.path()).unwrap();
+        // A child another test is spawning right now inherits our descriptor
+        // until it execs, and `flock` follows the open file description, so
+        // the lock can look held for a few milliseconds after the drop
+        // (seen on the macOS runners). Nothing in the code under test is
+        // racing; give that window time to close.
+        let again = retry_acquire(dir.path());
         assert_eq!(read_pid(again.path()), Some(std::process::id()));
+    }
+
+    fn retry_acquire(dir: &Path) -> InstanceLock {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            match acquire(dir) {
+                Ok(lock) => return lock,
+                Err(LockError::Held { .. }) if std::time::Instant::now() < deadline => {
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                Err(err) => panic!("lock still refused after the drop: {err:?}"),
+            }
+        }
     }
 
     #[test]
