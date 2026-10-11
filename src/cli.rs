@@ -212,6 +212,15 @@ enum Commands {
         #[arg(long)]
         harness: String,
     },
+    // FORK: the cockpit (DESIGN.md §18). `aiw` is a launcher; the dashboard
+    // itself runs as `aiw sidebar` in the cockpit's left tmux pane.
+    /// The dashboard app, run by `aiw` inside its tmux cockpit (internal).
+    #[command(hide = true)]
+    Sidebar {
+        /// Show the "select a session" pane instead of the dashboard.
+        #[arg(long)]
+        placeholder: bool,
+    },
     /// Write a custom session status into the AIW database.
     /// Used by hook scripts for custom sessions.
     #[command(name = "set-status", hide = true)]
@@ -806,6 +815,20 @@ pub fn run() -> Result<()> {
         return Ok(());
     }
 
+    // FORK: the cockpit (DESIGN.md §18). `aiw` builds (or finds) the tmux
+    // cockpit and attaches this terminal to it; the dashboard below runs as
+    // `aiw sidebar` in its left pane.
+    match cli.command {
+        None => {
+            let width = app::setup::read_config().aiw.sidebar_width;
+            let code = crate::fork::cockpit::launch(width)?;
+            std::process::exit(code);
+        }
+        Some(Commands::Sidebar { placeholder: true }) => crate::fork::cockpit::run_placeholder(),
+        Some(Commands::Sidebar { placeholder: false }) => {}
+        Some(_) => unreachable!("every other subcommand returned above"),
+    }
+
     // FORK: one TUI per config dir. Taken before anything below touches the
     // database or the IPC socket; released by the kernel when this process
     // exits, so a crash never leaves a stale lock behind.
@@ -874,8 +897,21 @@ pub fn run() -> Result<()> {
         }
         // FORK: followed theme, then the one-time icon check.
         appearance.apply(&mut app);
+        // FORK: the cockpit link (DESIGN.md §18): the agent pane follows the
+        // selection from here on; the one-time icon check gets the whole
+        // window.
+        let cockpit_socket = crate::fork::cockpit::socket_path();
+        app.cockpit_attach(
+            crate::fork::cockpit::Link::spawn(cockpit_socket.clone()),
+            std::env::current_exe()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_else(|_| "aiw".to_string()),
+            cockpit_socket,
+        );
         if appearance.icon_check {
+            app.cockpit_zoom(true);
             crate::fork::icon_check::run(&mut terminal, &mut app)?;
+            app.cockpit_zoom(false);
         }
 
         // Check for VS Code availability in the background so it doesn't
@@ -929,6 +965,20 @@ pub fn run() -> Result<()> {
         LeaveAlternateScreen
     )?;
     terminal.show_cursor()?;
+
+    // FORK(cockpit): a clean `q` takes the cockpit server down with it (the
+    // sidebar's own pane goes too, so the hang-up is ignored); a panic
+    // leaves the pane up with the message on it.
+    if matches!(result, Ok(Ok(()))) {
+        // SAFETY: setting a signal disposition to SIG_IGN has no preconditions.
+        unsafe {
+            libc::signal(libc::SIGHUP, libc::SIG_IGN);
+        }
+        crate::fork::cockpit::teardown(
+            &crate::fork::cockpit::socket_path(),
+            &app::fork_cockpit::CockpitRuntime::view_prefix(),
+        );
+    }
 
     match result {
         Ok(result) => result,
@@ -2367,6 +2417,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         // selection (debounced).
         app.refresh_badge_ages();
         force_redraw |= app.workspace_tick();
+        // FORK(cockpit): the agent pane and the zoom follow (DESIGN.md §18).
+        force_redraw |= app.cockpit_tick();
 
         // FORK: the workspace layout's live pane is sized and captured
         // exactly like the single view, at the pane's inner size.

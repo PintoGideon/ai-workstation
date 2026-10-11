@@ -58,6 +58,14 @@ pub struct LiveTarget {
 }
 
 impl LiveTarget {
+    /// `project › feature › session`: the agent pane's title.
+    pub fn pane_title(&self) -> String {
+        format!(
+            "{} › {} › {}",
+            self.project_name, self.feature_label, self.label
+        )
+    }
+
     /// The single view's description of the same session, for the compose
     /// and leader rules that take one.
     pub fn view_state(&self) -> ViewState {
@@ -161,14 +169,23 @@ impl App {
         self.config.aiw.dashboard_layout == DashboardLayout::Workspace
     }
 
-    /// The layout is on and fits the current terminal.
+    /// The layout is on and fits the current terminal. In the cockpit the
+    /// sidebar is the whole pane, whatever its width (DESIGN.md §18).
     pub fn workspace_active(&self) -> bool {
+        if self.cockpit_active() {
+            return !self.store.projects.is_empty();
+        }
         self.workspace_layout_enabled()
             && !self.store.projects.is_empty()
             && self.viewport_cols >= MIN_WIDTH
     }
 
     pub fn workspace_compact(&self) -> bool {
+        // FORK(cockpit): the sidebar is a 28+ column pane; only a narrower
+        // one drops to glyph and name (DESIGN.md §18).
+        if self.cockpit_active() {
+            return self.viewport_cols < crate::fork::cockpit::MIN_SIDEBAR_WIDTH;
+        }
         self.viewport_cols < COMPACT_BELOW
     }
 
@@ -182,7 +199,8 @@ impl App {
     /// The pane is showing a captured window (the main loop treats the
     /// dashboard as a live pane then).
     pub fn workspace_pane_live(&self) -> bool {
-        matches!(self.mode, AppMode::Normal)
+        !self.cockpit_active() // FORK(cockpit): tmux shows the pane; nothing is captured
+            && matches!(self.mode, AppMode::Normal)
             && self.workspace_active()
             && self.fork_workspace.live.is_some()
     }
@@ -263,6 +281,11 @@ impl App {
     /// Main-loop step: follow the selection once it has rested for
     /// [`SELECTION_DEBOUNCE`]. Returns whether the pane target changed.
     pub fn workspace_tick(&mut self) -> bool {
+        // FORK(cockpit): a dialog freezes the selection; the pane keeps
+        // showing the agent behind it.
+        if self.cockpit_active() && !matches!(self.mode, AppMode::Normal) {
+            return false;
+        }
         if !self.workspace_active() || !matches!(self.mode, AppMode::Normal) {
             let had = self.fork_workspace.live.is_some() || self.fork_workspace.pending.is_some();
             self.fork_workspace.live = None;
@@ -292,6 +315,13 @@ impl App {
         }
     }
 
+    /// Commit a pending selection at once (the user asked for it).
+    pub(crate) fn workspace_commit_pending(&mut self) {
+        if let Some((target, _)) = self.fork_workspace.pending.take() {
+            self.commit_live_target(target);
+        }
+    }
+
     fn commit_live_target(&mut self, target: Option<LiveTarget>) {
         self.fork_workspace.pending = None;
         if self.fork_workspace.live != target {
@@ -312,7 +342,7 @@ impl App {
     /// The capture target while the dashboard shows the live pane (see
     /// `App::current_view_snapshot_target`).
     pub(crate) fn workspace_snapshot_target(&self) -> Option<(String, String, u16, u16)> {
-        if !self.workspace_active() {
+        if !self.workspace_active() || self.cockpit_active() {
             return None;
         }
         let live = self.fork_workspace.live.as_ref()?;
@@ -334,7 +364,10 @@ impl App {
         width: u16,
         height: u16,
     ) -> Option<(String, String, u16, u16)> {
-        if !matches!(self.mode, AppMode::Normal) || !self.workspace_layout_enabled() {
+        if !matches!(self.mode, AppMode::Normal)
+            || !self.workspace_layout_enabled()
+            || self.cockpit_active()
+        {
             return None;
         }
         let live = self.fork_workspace.live.as_ref()?;
@@ -357,9 +390,7 @@ impl App {
         if !self.workspace_active() {
             return false;
         }
-        if let Some((target, _)) = self.fork_workspace.pending.take() {
-            self.commit_live_target(target);
-        }
+        self.workspace_commit_pending();
         let Some(live) = self.fork_workspace.live.clone() else {
             self.fork_workspace.focus = WorkspaceFocus::Sidebar;
             return false;

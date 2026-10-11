@@ -55,6 +55,10 @@ impl App {
     }
 
     fn enter_view_with_options(&mut self, auto_compose: bool) -> Result<()> {
+        // FORK(cockpit): the agent's real pane is the view (DESIGN.md §18).
+        if self.cockpit_active() {
+            return self.cockpit_open_selected();
+        }
         // Opening a stopped feature starts it, which launches its saved
         // agents — the same claim on the machine that `c` makes, so it asks
         // the same question.

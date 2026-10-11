@@ -20,6 +20,7 @@ pub(crate) mod feature_ops;
 pub(crate) mod feature_setup;
 pub(crate) mod fix_cost;
 pub(crate) mod fork_attach; // FORK: native attach (DESIGN.md §15.4)
+pub mod fork_cockpit; // FORK: the cockpit sidebar (DESIGN.md §18)
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7, DESIGN.md §16)
 pub(crate) mod fork_launch; // FORK: launch-time arguments from the store (DESIGN.md §16)
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6, DESIGN.md §16)
@@ -1013,6 +1014,8 @@ pub struct App {
     pub fork_split: fork_split::SplitRuntime,
     /// FORK: workspace layout (sidebar + live pane) runtime, DESIGN.md §15.
     pub fork_workspace: fork_workspace::WorkspaceRuntime,
+    /// FORK: the cockpit link (DESIGN.md §18).
+    pub fork_cockpit: fork_cockpit::CockpitRuntime,
     /// FORK: ids of sessions whose finished turn has been looked at (their
     /// `✓` is dim). Not persisted; a new finished event clears the id.
     pub finished_seen: std::collections::HashSet<String>,
@@ -2659,6 +2662,7 @@ impl App {
             pane_content: String::new(),
             fork_split: Default::default(),     // FORK: split view
             fork_workspace: Default::default(), // FORK: workspace layout
+            fork_cockpit: Default::default(),   // FORK: cockpit
             finished_seen: std::collections::HashSet::new(), // FORK: badges
             badge_ages: Default::default(),     // FORK: badges
             fork_render_memo: Default::default(), // FORK: render memo
@@ -2932,6 +2936,7 @@ impl App {
             pane_content: String::new(),
             fork_split: Default::default(),     // FORK: split view
             fork_workspace: Default::default(), // FORK: workspace layout
+            fork_cockpit: Default::default(),   // FORK: cockpit
             finished_seen: std::collections::HashSet::new(), // FORK: badges
             badge_ages: Default::default(),     // FORK: badges
             fork_render_memo: Default::default(), // FORK: render memo

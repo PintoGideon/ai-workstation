@@ -13,6 +13,9 @@ pub mod split;
 pub(crate) mod attach;
 pub(crate) mod badges;
 
+// The cockpit: tmux draws the dashboard (DESIGN.md §18).
+pub mod cockpit;
+
 // G9 — sessions whose tmux window closed on its own.
 pub mod session_reconcile;
 

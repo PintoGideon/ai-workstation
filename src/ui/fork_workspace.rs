@@ -31,6 +31,20 @@ use super::fork_text::fit_line;
 /// the tree should be drawn instead (layout off, no projects, or the
 /// terminal is too narrow — then the footer gets a one-time note).
 pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) -> bool {
+    // FORK(cockpit): the sidebar is the whole pane; tmux draws the agent
+    // beside it (DESIGN.md §18).
+    if app.cockpit_active() {
+        if app.store.projects.is_empty() {
+            app.fork_workspace.sidebar_rect = None;
+            app.fork_workspace.pane_rect = None;
+            return false;
+        }
+        app.fork_workspace.sidebar_rect = Some(area);
+        app.fork_workspace.pane_rect = None;
+        let compact = app.workspace_compact();
+        draw_sidebar(frame, app, area, compact);
+        return true;
+    }
     if !app.workspace_layout_enabled() || app.store.projects.is_empty() {
         app.fork_workspace.sidebar_rect = None;
         app.fork_workspace.pane_rect = None;
@@ -476,6 +490,23 @@ pub(crate) fn footer_hints(app: &App) -> Line<'static> {
     } else {
         Vec::new()
     };
+    // FORK(cockpit): a narrow pane, a short line (DESIGN.md §18).
+    if app.cockpit_active() {
+        if app.desired_live_target_exists() {
+            spans.extend([Span::styled(" Enter", key), hint(" agent  ")]);
+        }
+        spans.extend([
+            Span::styled("i", key),
+            hint(" needs you  "),
+            Span::styled("v", key),
+            hint(" tiles  "),
+            Span::styled("?", key),
+            hint(" help  "),
+            Span::styled("q", key),
+            hint(" quit"),
+        ]);
+        return Line::from(spans);
+    }
     if app.desired_live_target_exists() {
         spans.extend([Span::styled(" Enter", key), hint(" attach  ")]);
     }

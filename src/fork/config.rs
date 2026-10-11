@@ -39,6 +39,9 @@ pub struct AiwConfig {
     /// instead of writing hook entries into the repo's
     /// `.claude/settings.local.json` (item 7, DESIGN.md §16.6).
     pub claude_hooks_via_settings_flag: bool,
+    /// Width of the cockpit's sidebar pane in columns (DESIGN.md §18);
+    /// at least 28.
+    pub sidebar_width: u16,
 }
 
 impl Default for AiwConfig {
@@ -51,6 +54,7 @@ impl Default for AiwConfig {
             permission_wait_seconds: crate::fork::permissions::DEFAULT_WAIT_SECONDS,
             agent_context_prompt: true,
             claude_hooks_via_settings_flag: true,
+            sidebar_width: crate::fork::cockpit::DEFAULT_SIDEBAR_WIDTH,
         }
     }
 }
@@ -113,6 +117,23 @@ mod tests {
         assert!(rendered.get("worktree_base_dir").is_none());
         assert_eq!(rendered["worktree_include"][0], ".env*");
         assert_eq!(rendered["dashboard_layout"], "workspace");
+    }
+
+    #[test]
+    fn unknown_keys_are_ignored_and_the_sidebar_width_has_a_floor() {
+        let config: crate::app::AppConfig = serde_json::from_str(
+            r#"{"dashboard_layout":"tree","compose_box":true,"view_auto_refresh":false,"no_such_key":1,"sidebar_width":40}"#,
+        )
+        .unwrap();
+        assert_eq!(config.aiw.sidebar_width, 40);
+        let config: crate::app::AppConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(config.aiw.sidebar_width, 36);
+        assert_eq!(
+            crate::fork::cockpit::sidebar_width(config.aiw.sidebar_width),
+            36
+        );
+        let rendered = serde_json::to_value(&config).unwrap();
+        assert_eq!(rendered["sidebar_width"], 36);
     }
 
     #[test]

@@ -27,6 +27,36 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
         handle_pane_key(app, key)?;
         return Ok(true);
     }
+    // FORK(cockpit): the sidebar's own keys (DESIGN.md §18). Nothing is
+    // typed through AIW: `Enter` focuses the agent's real pane, `v` puts
+    // `aiw grid` there; `b`, `o` and `Tab` have no layout to switch to.
+    if app.cockpit_active()
+        && !app.leader_active
+        && !key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+    {
+        match key.code {
+            KeyCode::Enter
+                if matches!(
+                    app.selection,
+                    Selection::Session(..) | Selection::Feature(..)
+                ) && !app.paused_plan_interview_matches_selection()
+                    && app.desired_live_target_exists() =>
+            {
+                app.cockpit_focus_agent();
+                return Ok(true);
+            }
+            KeyCode::Char('v') => {
+                app.cockpit_show_grid();
+                return Ok(true);
+            }
+            KeyCode::Char(LAYOUT_TOGGLE_KEY) | KeyCode::Char('o') | KeyCode::Tab => {
+                return Ok(true);
+            }
+            _ => return Ok(false),
+        }
+    }
     if app.leader_active
         || key
             .modifiers
