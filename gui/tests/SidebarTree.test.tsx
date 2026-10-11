@@ -69,7 +69,7 @@ it("labels PR badges like the TUI for open, unknown-thread, merged and closed PR
 
 it("shows every feature badge and keeps the name as the row's accessible name", () => {
   const nick = feature("round-totals", {
-    nickname: "Round totals", is_worktree: false, mode: "supervibe", collapsed: false, review: true,
+    nickname: "Round totals", is_worktree: false, mode: "supervibe", collapsed: false,
     pending_worktree_script: true, summary: "Rounds invoice totals to cents",
     sessions: [session("Claude 1", "claude"), session("Shell", "terminal", { stopped: true })],
   });
@@ -86,7 +86,7 @@ it("shows every feature badge and keeps the name as the row's accessible name", 
   const meta = document.getElementById(name.getAttribute("aria-describedby")!)!;
   const chips = Array.from(meta.querySelectorAll(".tree-chip")).map((chip) => chip.textContent);
   expect(chips).toEqual([
-    "repo", "github.com/acme/invoice#42", "PR #321 · 4 open", "usage 21.8k eff · $0.07", "supervibe", "review",
+    "repo", "github.com/acme/invoice#42", "PR #321 · 4 open", "usage 21.8k eff · $0.07", "supervibe",
     "deleting…", "running worktree script…", "5m ago", "2 sessions", "1 stopped",
   ]);
   expect(meta.querySelector(".mode-supervibe")).toBeTruthy();
@@ -102,7 +102,7 @@ it.each(["vibeless", "vibe", "supervibe"] as const)(
   "shows the %s mode badge only on expanded feature rows and retains its tooltip",
   (mode) => {
     for (const collapsed of [true, false, undefined]) {
-      renderTree([project([feature("f", { mode, collapsed, review: true, sessions: [session("Claude 1", "claude")] })])]);
+      renderTree([project([feature("f", { mode, collapsed, sessions: [session("Claude 1", "claude")] })])]);
       const name = screen.getByRole("button", { name: "f", exact: true });
       const row = name.closest(".tree-feature") as HTMLElement;
       if (collapsed === false) {
@@ -111,7 +111,6 @@ it.each(["vibeless", "vibe", "supervibe"] as const)(
         expect(within(row).queryByText(mode)).toBeNull();
       }
       expect(name.getAttribute("title")).toContain(`Mode: ${mode}`);
-      expect(within(row).getByText("review")).toBeTruthy();
       cleanup();
     }
   },
@@ -129,7 +128,6 @@ it("colours PR states and omits optional badges that do not apply", () => {
   expect(screen.getByText("PR #2 merged").className).toContain("pr-merged");
   expect(screen.getByText("PR #3 closed").className).toContain("pr-closed");
   expect(screen.queryByText("repo")).toBeNull();
-  expect(screen.queryByText("review")).toBeNull();
   expect(screen.queryByRole("img", { name: "Input requested" })).toBeNull();
 });
 

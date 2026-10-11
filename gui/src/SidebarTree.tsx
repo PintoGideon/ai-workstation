@@ -237,7 +237,6 @@ function FeatureNode({
     className: `tree-chip-mode mode-${feature.mode}`,
     title: `Mode: ${feature.mode}`,
   });
-  if (feature.review) chips.push({ key: "review", text: "review", className: "tree-chip-review" });
   if (deleting) chips.push({ key: "deleting", text: "deleting…", className: "tree-chip-danger" });
   if (feature.pending_worktree_script) chips.push({ key: "script", text: "running worktree script…", className: "tree-chip-info" });
   if (derived) chips.push({ key: "age", text: derived.created_age, className: "tree-chip-age", title: feature.created_at ? `Created ${feature.created_at}` : undefined });

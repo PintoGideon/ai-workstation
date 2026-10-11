@@ -26,29 +26,28 @@ function mount(element: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{element}</QueryClientProvider>);
 }
 
-it.each(["none", "quick", "full"] as const)("includes a chosen hook for ordinary %s creation", async (kind) => {
+it("includes a chosen hook for ordinary creation", async () => {
   const onSubmit = vi.fn();
   mount(<CreateFeatureForm projectId="one" projectName="one" agents={agents} modes={modes}
     isGit defaultUseWorktree pending={false} onCancel={vi.fn()} onSubmit={onSubmit} />);
   fireEvent.change(screen.getByLabelText("Branch / feature name"), { target: { value: "new-work" } });
   const select = await screen.findByLabelText("Choose stack");
-  if (kind !== "none") fireEvent.click(screen.getByRole("radio", { name: kind === "quick" ? "Quick Plan" : "Full Plan" }));
-  const button = screen.getByRole("button", { name: kind === "none" ? "Create feature" : "Create and plan" });
+  const button = screen.getByRole("button", { name: "Create feature" });
   expect((button as HTMLButtonElement).disabled).toBe(true);
   fireEvent.change(select, { target: { value: "rust & tools" } });
   fireEvent.click(button);
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-    branch: "new-work", use_worktree: true, hook_choice: "rust & tools", plan_mode: kind !== "none",
-  }), kind);
+    branch: "new-work", use_worktree: true, hook_choice: "rust & tools",
+  }));
 });
 
-it.each(["plan", "launch"] as const)("includes the choice for a TODO %s", async (kind) => {
+it("includes the choice for a TODO launch", async () => {
   const onSubmit = vi.fn();
-  mount(<TodoNewFeatureForm kind={kind} todoTitle="Improve API" projects={[projects[0]]} agents={agents} modes={modes}
+  mount(<TodoNewFeatureForm kind="launch" todoTitle="Improve API" projects={[projects[0]]} agents={agents} modes={modes}
     pending={false} onCancel={vi.fn()} onSubmit={onSubmit} />);
   const select = await screen.findByLabelText("Choose stack");
   fireEvent.change(select, { target: { value: "rust & tools" } });
-  fireEvent.click(screen.getByRole("button", { name: kind === "plan" ? "Start plan" : "Create and start" }));
+  fireEvent.click(screen.getByRole("button", { name: "Create and start" }));
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ hook_choice: "rust & tools", project_name: "one" }));
 });
 
@@ -86,7 +85,7 @@ it("blocks a failed prompt lookup until retry succeeds", async () => {
 it("cancel applies neither the selected hook nor feature creation", async () => {
   const onSubmit = vi.fn();
   const onCancel = vi.fn();
-  mount(<TodoNewFeatureForm kind="plan" todoTitle="Improve API" projects={[projects[0]]} agents={agents} modes={modes}
+  mount(<TodoNewFeatureForm kind="launch" todoTitle="Improve API" projects={[projects[0]]} agents={agents} modes={modes}
     pending={false} onCancel={onCancel} onSubmit={onSubmit} />);
   fireEvent.change(await screen.findByLabelText("Choose stack"), { target: { value: "node" } });
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -101,6 +100,6 @@ it("does not request or send a worktree hook for the repository checkout", () =>
     isGit defaultUseWorktree={false} pending={false} onCancel={vi.fn()} onSubmit={onSubmit} />);
   fireEvent.change(screen.getByLabelText("Branch / feature name"), { target: { value: "new-work" } });
   fireEvent.click(screen.getByRole("button", { name: "Create feature" }));
-  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ use_worktree: false, hook_choice: null }), "none");
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ use_worktree: false, hook_choice: null }));
   expect(invoke).not.toHaveBeenCalled();
 });
