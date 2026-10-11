@@ -76,11 +76,11 @@ pub fn reply(request_id: &str, payload: &Value) -> bool {
         return false;
     };
     let line = serde_json::to_string(payload).unwrap_or_else(|_| "{}".to_string());
-    let written = writeln!(stream, "{line}")
+    // The client reads one line and hangs up; dropping this clone of the
+    // stream is enough (the accept thread's reader sees the hang-up).
+    writeln!(stream, "{line}")
         .and_then(|_| stream.flush())
-        .is_ok();
-    let _ = stream.shutdown(std::net::Shutdown::Both);
-    written
+        .is_ok()
 }
 
 /// Whether a reply for `request_id` is still possible.

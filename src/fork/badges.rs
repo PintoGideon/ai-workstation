@@ -149,28 +149,43 @@ impl SessionBadge {
     }
 
     /// Short reason text for a second sidebar line or a tile title:
-    /// `working 6m · 42% ctx · 2 subagents · Edit src/auth.rs · ⏭ 2 queued`.
+    /// `working 6m · 2 subagents · 42% ctx · Edit src/auth.rs · ⏭ 2 queued`.
     pub fn label(&self, now: DateTime<Utc>) -> String {
+        self.label_with_age(Some(now))
+    }
+
+    /// [`Self::label`] without the age — for the sidebar's reason line, whose
+    /// row already shows the age at its right edge and has little room.
+    pub fn label_compact(&self) -> String {
+        self.label_with_age(None)
+    }
+
+    fn label_with_age(&self, now: Option<DateTime<Utc>>) -> String {
+        let age = |text: &str| match now {
+            Some(now) => format!("{text} {}", self.age(now)),
+            None => text.to_string(),
+        };
         let mut label = match self.kind {
             BadgeKind::NeedsYou => self.detail.clone().unwrap_or_else(|| "needs you".into()),
             BadgeKind::Working => {
-                let mut parts = vec![format!("working {}", self.age(now))];
-                if let Some(pct) = self.context {
-                    parts.push(format!("{pct}% ctx"));
-                }
+                let mut parts = vec![age("working")];
                 match self.subagents {
                     0 => {}
                     1 => parts.push("1 subagent".into()),
                     n => parts.push(format!("{n} subagents")),
+                }
+                if let Some(pct) = self.context {
+                    parts.push(format!("{pct}% ctx"));
                 }
                 if let Some(detail) = &self.detail {
                     parts.push(detail.clone());
                 }
                 parts.join(" · ")
             }
-            BadgeKind::FinishedUnread | BadgeKind::FinishedRead => {
-                format!("done · {}", self.age(now))
-            }
+            BadgeKind::FinishedUnread | BadgeKind::FinishedRead => match now {
+                Some(now) => format!("done · {}", self.age(now)),
+                None => "done".into(),
+            },
             BadgeKind::Exited => "exited".into(),
             BadgeKind::Stopped => "stopped".into(),
             BadgeKind::Idle => match &self.detail {

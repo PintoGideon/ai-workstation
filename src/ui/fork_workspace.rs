@@ -303,7 +303,7 @@ fn sidebar_item_lines(
                 lines.push(fit_line(
                     Line::from(vec![
                         Span::raw("     "),
-                        Span::styled(badge.label(now), reason_style),
+                        Span::styled(badge.label_compact(), reason_style),
                     ]),
                     row_width,
                 ));

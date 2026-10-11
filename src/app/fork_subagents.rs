@@ -155,6 +155,18 @@ mod tests {
     }
 
     #[test]
+    fn a_subagent_event_is_a_new_frame() {
+        let mut app = crate::app::fork_workspace::workspace_app(&[SessionKind::Claude]);
+        let claude = app.store.projects[0].features[0].sessions[0].id.clone();
+        let before = app.redraw_signature();
+        app.handle_subagent_message(&event(&claude, "start"));
+        assert_ne!(before, app.redraw_signature());
+        let one = app.redraw_signature();
+        app.queue_followup(&claude, "next").unwrap();
+        assert_ne!(one, app.redraw_signature());
+    }
+
+    #[test]
     fn the_turn_end_clears_a_count_a_missed_stop_left_behind() {
         let mut app = crate::app::fork_workspace::workspace_app(&[SessionKind::Claude]);
         let claude = app.store.projects[0].features[0].sessions[0].id.clone();

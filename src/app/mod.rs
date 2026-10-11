@@ -1550,6 +1550,7 @@ impl App {
         }
 
         self.fork_workspace.signature().hash(&mut hasher); // FORK: workspace layout
+        self.fork_hook_state_signature().hash(&mut hasher); // FORK: DESIGN.md §16 badges
 
         if let AppMode::Viewing(view) = &self.mode {
             view.project_name.hash(&mut hasher);

@@ -219,6 +219,34 @@ impl App {
             .and_then(|t| t.context_label())
     }
 
+    /// Part of `App::redraw_signature`: what the hook-fed state (DESIGN.md
+    /// §16) draws on the rows — context use, subagent counts, queued
+    /// follow-ups, pending permissions — so an IPC update is a frame.
+    pub(crate) fn fork_hook_state_signature(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let mut sessions: Vec<&String> = self.telemetry.keys().collect();
+        sessions.sort();
+        for id in sessions {
+            let t = &self.telemetry[id];
+            id.hash(&mut hasher);
+            t.context_pct.hash(&mut hasher);
+            t.context_used_tokens.hash(&mut hasher);
+            t.model.hash(&mut hasher);
+        }
+        let mut counts: Vec<(&String, &usize)> = self.subagent_counts.iter().collect();
+        counts.sort();
+        counts.hash(&mut hasher);
+        let mut queues: Vec<(&String, usize)> =
+            self.followups.iter().map(|(id, q)| (id, q.len())).collect();
+        queues.sort();
+        queues.hash(&mut hasher);
+        for pending in &self.pending_permissions {
+            pending.request_id.hash(&mut hasher);
+        }
+        hasher.finish()
+    }
+
     /// Claude's status-line payloads for the context collector, keyed by
     /// session id.
     pub(crate) fn claude_runtime_payloads(&self) -> HashMap<String, Value> {
