@@ -54,7 +54,6 @@ export interface Feature {
   nickname?: string | null;
   review?: boolean;
   plan_mode?: boolean;
-  remote_control?: boolean;
   pending_worktree_script?: boolean;
   ready?: boolean;
   created_at?: string;

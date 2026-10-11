@@ -340,7 +340,6 @@ impl App {
             false,
             agent.clone(),
             setup.enable_chrome,
-            false,
         );
         // The primary session carries the triage label, so the same
         // `pr_triage_session_index` lookup the in-feature dedicated target uses

@@ -1,8 +1,7 @@
 use crate::app::{
     CreateFeatureState, CreateFeatureStep, DeleteStage, DeletingFeatureState, ForkFeatureState,
-    ForkFeatureStep, PromptAnalysis, SteeringPromptState,
+    ForkFeatureStep,
 };
-use crate::editor::VimMode;
 use crate::extension::FeaturePreset;
 use crate::project::{AgentKind, VibeMode};
 use crate::theme::Theme;
@@ -11,10 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{
-        Block, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
-        ScrollbarState, Wrap,
-    },
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
 };
 
 use super::super::dashboard::centered_rect;
@@ -36,9 +32,6 @@ pub fn draw_create_feature_dialog(
         }
         CreateFeatureStep::SelectPreset => {
             draw_create_feature_preset_picker(frame, state, presets, theme);
-        }
-        CreateFeatureStep::TaskPrompt => {
-            draw_create_feature_prompt_coach(frame, state, theme);
         }
         CreateFeatureStep::SessionName => {
             draw_create_feature_session_name(frame, state, theme);
@@ -418,7 +411,6 @@ fn draw_create_feature_branch_mode(
     let area = centered_rect(60, 90, frame.area());
     crate::ui::draw_modal_overlay(frame, area, theme);
     let has_chrome_row = state.agent == AgentKind::Claude;
-    let has_rc_row = state.agent == AgentKind::Claude;
 
     let title = format!(" New Feature ({}) ", state.project_name);
     let block = Block::default()
@@ -450,10 +442,8 @@ fn draw_create_feature_branch_mode(
         + 1 + 5 + 1 // [5..7] spacer, mode, spacer
         + 1 + 1 // [8][10] review, plan checkboxes
         + if has_chrome_row { 1 } else { 0 } // [12] chrome checkbox
-        + if has_rc_row { 1 } else { 0 } // [14] remote_control checkbox
-        + 1 // [16] steering coach checkbox
-        + 1 // [17] spacer before focused help
-        + 1; // [19] hints
+        + 1 // [13] spacer before focused help
+        + 1; // [15] hints
     let min_agent_block_height = 1 + allowed_agents.len() as u16;
     let agent_block_height = wanted_agent_block_height.min(
         inner
@@ -478,13 +468,9 @@ fn draw_create_feature_branch_mode(
             Constraint::Length(1),                                  // [10] plan_mode checkbox
             Constraint::Length(0),                                  // [11] spacer
             Constraint::Length(if has_chrome_row { 1 } else { 0 }), // [12] chrome checkbox
-            Constraint::Length(0),                                  // [13] spacer
-            Constraint::Length(if has_rc_row { 1 } else { 0 }),     // [14] remote_control
-            Constraint::Length(0),                                  // [15] spacer
-            Constraint::Length(1),                                  // [16] steering coach checkbox
-            Constraint::Length(1), // [17] spacer before focused help
-            Constraint::Min(0),    // [18] focused option help
-            Constraint::Length(1), // [19] hints
+            Constraint::Length(1), // [13] spacer before focused help
+            Constraint::Min(0),    // [14] focused option help
+            Constraint::Length(1), // [15] hints
         ])
         .split(inner);
 
@@ -733,85 +719,18 @@ fn draw_create_feature_branch_mode(
         ])];
         let chrome_widget = Paragraph::new(chrome_lines);
         frame.render_widget(chrome_widget, chunks[12]);
-
-        // Remote Control checkbox (chunks[14]) — Claude only.
-        // Requires claude.ai OAuth; unavailable for z.ai / third-party
-        // provider sessions, in which case it renders disabled with a reason.
-        let rc_available = state.remote_control_available;
-        let rc_active =
-            rc_available && state.step == CreateFeatureStep::Mode && state.mode_focus == 5;
-        let rc_check = if state.remote_control && rc_available {
-            "[x]"
-        } else {
-            "[ ]"
-        };
-        let rc_label_style = if rc_active {
-            Style::default().fg(theme.primary.to_color())
-        } else {
-            Style::default().fg(theme.text_muted.to_color())
-        };
-        let rc_value_style = if rc_active {
-            Style::default().fg(theme.text.to_color())
-        } else {
-            Style::default().fg(theme.text_muted.to_color())
-        };
-        let rc_value = if rc_available {
-            format!("{} Enable claude.ai/mobile sync", rc_check)
-        } else {
-            let reason = state
-                .remote_control_block_reason
-                .as_deref()
-                .unwrap_or("Unavailable");
-            format!("{} {}", rc_check, reason)
-        };
-        let rc_lines = vec![Line::from(vec![
-            Span::styled(" Remote Control: ", rc_label_style),
-            Span::styled(rc_value, rc_value_style),
-        ])];
-        let rc_widget = Paragraph::new(rc_lines);
-        frame.render_widget(rc_widget, chunks[14]);
     }
-
-    // Steering coach — focus 6 for Claude, 4 for others.
-    let steering_focus = if state.agent == AgentKind::Claude {
-        6
-    } else {
-        4
-    };
-    let steering_active =
-        state.step == CreateFeatureStep::Mode && state.mode_focus == steering_focus;
-    let steering_check = if state.steering_enabled { "[x]" } else { "[ ]" };
-    let steering_lines = vec![Line::from(vec![
-        Span::styled(
-            " Steering: ",
-            if steering_active {
-                Style::default().fg(theme.primary.to_color())
-            } else {
-                Style::default().fg(theme.text_muted.to_color())
-            },
-        ),
-        Span::styled(
-            format!("{} Prompt coach (experimental)", steering_check),
-            if steering_active {
-                Style::default().fg(theme.text.to_color())
-            } else {
-                Style::default().fg(theme.text_muted.to_color())
-            },
-        ),
-    ])];
-    let steering_widget = Paragraph::new(steering_lines);
-    frame.render_widget(steering_widget, chunks[16]);
 
     if state.step == CreateFeatureStep::Mode
         && let Some(description) = state.focused_mode_description()
     {
-        let help_area = if chunks[18].height > 3 {
+        let help_area = if chunks[14].height > 3 {
             Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Length(3), Constraint::Min(0)])
-                .split(chunks[18])[0]
+                .split(chunks[14])[0]
         } else {
-            chunks[18]
+            chunks[14]
         };
         let help = Paragraph::new(Line::from(vec![
             Span::styled("  Details  ", Style::default().fg(theme.primary.to_color())),
@@ -860,184 +779,7 @@ fn draw_create_feature_branch_mode(
             Span::raw(" cancel"),
         ]))
     };
-    frame.render_widget(hints, chunks[19]);
-}
-
-fn draw_create_feature_prompt_coach(frame: &mut Frame, state: &CreateFeatureState, theme: &Theme) {
-    let area = centered_rect(84, 82, frame.area());
-    crate::ui::draw_modal_overlay(frame, area, theme);
-
-    let score_color = if state.prompt_analysis.score >= 8 {
-        theme.success.to_color()
-    } else if state.prompt_analysis.score >= 4 {
-        theme.warning.to_color()
-    } else {
-        theme.danger.to_color()
-    };
-
-    let title = format!(
-        " Steering Coach ({})  {} / {} ",
-        state.project_name, state.prompt_analysis.score, state.prompt_analysis.max_score
-    );
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .style(Style::default().bg(theme.effective_bg()))
-        .border_style(Style::default().fg(score_color));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Length(8),
-            Constraint::Length(1),
-            Constraint::Length(8),
-            Constraint::Length(1),
-            Constraint::Min(5),
-            Constraint::Length(1),
-        ])
-        .split(inner);
-
-    let summary = Paragraph::new(vec![
-        Line::from(vec![
-            Span::styled(" Score: ", Style::default().fg(theme.text_muted.to_color())),
-            Span::styled(
-                format!(
-                    "{} / {}",
-                    state.prompt_analysis.score, state.prompt_analysis.max_score
-                ),
-                Style::default()
-                    .fg(score_color)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(Span::styled(
-            state.prompt_analysis.summary.as_str(),
-            Style::default().fg(theme.text.to_color()),
-        )),
-    ])
-    .wrap(Wrap { trim: false });
-    frame.render_widget(summary, chunks[0]);
-
-    let prompt_text = if state.task_prompt.is_empty() {
-        vec![Line::from(Span::styled(
-            "Describe the task, then add boundaries, validation, and watch-outs.",
-            Style::default().fg(theme.text_muted.to_color()),
-        ))]
-    } else {
-        let mut lines = state
-            .task_prompt
-            .lines()
-            .map(|line| {
-                Line::from(Span::styled(
-                    line,
-                    Style::default().fg(theme.text.to_color()),
-                ))
-            })
-            .collect::<Vec<_>>();
-        if state.task_prompt.ends_with('\n') || lines.is_empty() {
-            lines.push(Line::from(""));
-        }
-        if let Some(last) = lines.last_mut() {
-            last.spans.push(Span::styled(
-                "\u{2588}",
-                Style::default().fg(theme.primary.to_color()),
-            ));
-        }
-        lines
-    };
-
-    let prompt = Paragraph::new(prompt_text)
-        .block(
-            Block::default()
-                .title(" Draft Task Prompt ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme.primary.to_color())),
-        )
-        .wrap(Wrap { trim: false });
-    frame.render_widget(prompt, chunks[1]);
-
-    let checklist = Paragraph::new(prompt_checklist_lines(&state.prompt_analysis, theme))
-        .block(
-            Block::default()
-                .title(" Constraint Checklist ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme.primary.to_color())),
-        )
-        .wrap(Wrap { trim: false });
-    frame.render_widget(checklist, chunks[3]);
-
-    let mut tip_lines = Vec::new();
-    if state.prompt_analysis.teaching_tips.is_empty() {
-        tip_lines.push(Line::from(Span::styled(
-            "Your draft already covers the core steering constraints. Launch when the wording is precise enough for this repo.",
-            Style::default().fg(theme.text.to_color()),
-        )));
-    } else {
-        for tip in &state.prompt_analysis.teaching_tips {
-            tip_lines.push(Line::from(vec![
-                Span::styled(" - ", Style::default().fg(theme.warning.to_color())),
-                Span::styled(tip, Style::default().fg(theme.text.to_color())),
-            ]));
-        }
-    }
-    let tips = Paragraph::new(tip_lines)
-        .block(
-            Block::default()
-                .title(" How To Strengthen It ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme.primary.to_color())),
-        )
-        .wrap(Wrap { trim: false });
-    frame.render_widget(tips, chunks[5]);
-
-    let hints = Paragraph::new(Line::from(vec![
-        Span::styled(
-            "Type / Paste",
-            Style::default().fg(theme.warning.to_color()),
-        ),
-        Span::raw(" edit  "),
-        Span::styled("Enter", Style::default().fg(theme.warning.to_color())),
-        Span::raw(" newline  "),
-        Span::styled("Tab", Style::default().fg(theme.warning.to_color())),
-        Span::raw(" launch"),
-    ]));
-    frame.render_widget(hints, chunks[6]);
-}
-
-fn prompt_checklist_lines(analysis: &PromptAnalysis, theme: &Theme) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
-
-    for check in &analysis.checks {
-        let (marker, color, detail) = if check.present {
-            ("[x]", theme.success.to_color(), "covered")
-        } else {
-            (
-                "[ ]",
-                theme.warning.to_color(),
-                check.constraint.missing_explanation(),
-            )
-        };
-
-        lines.push(Line::from(vec![
-            Span::styled(format!(" {} ", marker), Style::default().fg(color)),
-            Span::styled(
-                check.constraint.label(),
-                Style::default()
-                    .fg(theme.text.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!(" - {}", detail),
-                Style::default().fg(theme.text_muted.to_color()),
-            ),
-        ]));
-    }
-
-    lines
+    frame.render_widget(hints, chunks[15]);
 }
 
 pub fn draw_confirm_supervibe_dialog(frame: &mut Frame, theme: &Theme) {
@@ -1107,208 +849,6 @@ pub fn draw_confirm_supervibe_dialog(frame: &mut Frame, theme: &Theme) {
         Span::raw(" back"),
     ]));
     frame.render_widget(hints, chunks[5]);
-}
-
-pub fn draw_steering_prompt_dialog(
-    frame: &mut Frame,
-    state: &mut SteeringPromptState,
-    theme: &Theme,
-) {
-    let area = centered_rect(84, 82, frame.area());
-    crate::ui::draw_modal_overlay(frame, area, theme);
-
-    let score_color = if state.prompt_analysis.score >= 8 {
-        theme.success.to_color()
-    } else if state.prompt_analysis.score >= 4 {
-        theme.warning.to_color()
-    } else {
-        theme.danger.to_color()
-    };
-
-    let title = format!(
-        " Steering Coach ({})  {} / {} ",
-        state.view.feature_name, state.prompt_analysis.score, state.prompt_analysis.max_score
-    );
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .style(Style::default().bg(theme.effective_bg()))
-        .border_style(Style::default().fg(score_color));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Length(8),
-            Constraint::Length(1),
-            Constraint::Length(8),
-            Constraint::Length(1),
-            Constraint::Min(5),
-            Constraint::Length(1),
-        ])
-        .split(inner);
-
-    let summary = Paragraph::new(vec![
-        Line::from(""),
-        Line::from(vec![
-            Span::styled(
-                " Session: ",
-                Style::default().fg(theme.text_muted.to_color()),
-            ),
-            Span::styled(
-                state.view.session_label.as_str(),
-                Style::default()
-                    .fg(theme.primary.to_color())
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(Span::styled(
-            state.prompt_analysis.summary.as_str(),
-            Style::default().fg(theme.text.to_color()),
-        )),
-    ])
-    .wrap(Wrap { trim: false });
-    frame.render_widget(summary, chunks[0]);
-
-    let prompt_text = super::editor_view::editor_lines(
-        &state.editor,
-        theme,
-        "Describe the task, then add boundaries, validation, and watch-outs.",
-    );
-    let prompt_title = match state.editor.vim_mode() {
-        Some(VimMode::Insert) => " Prompt To Inject [Vim Insert] ",
-        Some(VimMode::Normal) => " Prompt To Inject [Vim Normal] ",
-        None => " Prompt To Inject ",
-    };
-
-    let prompt_block = Block::default()
-        .title(prompt_title)
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme.primary.to_color()));
-    let prompt_inner = prompt_block.inner(chunks[1]);
-    let visible_lines = prompt_inner.height as usize;
-    let mut wrap_width = prompt_inner.width as usize;
-    let mut total_visual_lines =
-        super::editor_view::count_wrapped_editor_lines(&prompt_text, wrap_width);
-    if total_visual_lines > visible_lines && wrap_width > 1 {
-        wrap_width -= 1;
-        total_visual_lines =
-            super::editor_view::count_wrapped_editor_lines(&prompt_text, wrap_width);
-    }
-    super::editor_view::sync_editor_scroll(
-        &state.editor,
-        &mut state.scroll_offset,
-        &mut state.sync_scroll_to_cursor,
-        visible_lines,
-        wrap_width,
-        total_visual_lines,
-    );
-
-    let prompt = Paragraph::new(prompt_text)
-        .block(prompt_block)
-        .wrap(Wrap { trim: false })
-        .scroll((state.scroll_offset.min(u16::MAX as usize) as u16, 0));
-    frame.render_widget(prompt, chunks[1]);
-
-    if total_visual_lines > visible_lines {
-        let scrollbar = Scrollbar::default()
-            .orientation(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("↑"))
-            .end_symbol(Some("↓"));
-        let mut scrollbar_state = ScrollbarState::new(total_visual_lines)
-            .position(state.scroll_offset)
-            .viewport_content_length(visible_lines);
-        frame.render_stateful_widget(scrollbar, chunks[1], &mut scrollbar_state);
-    }
-
-    let checklist = Paragraph::new(prompt_checklist_lines(&state.prompt_analysis, theme))
-        .block(
-            Block::default()
-                .title(" Constraint Checklist ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme.primary.to_color())),
-        )
-        .wrap(Wrap { trim: false });
-    frame.render_widget(checklist, chunks[3]);
-
-    let mut tip_lines = Vec::new();
-    if state.prompt_analysis.teaching_tips.is_empty() {
-        tip_lines.push(Line::from(Span::styled(
-            "Your draft covers the main steering constraints. Press Tab to inject it into the running agent session.",
-            Style::default().fg(theme.text.to_color()),
-        )));
-    } else {
-        for tip in &state.prompt_analysis.teaching_tips {
-            tip_lines.push(Line::from(vec![
-                Span::styled(" - ", Style::default().fg(theme.warning.to_color())),
-                Span::styled(tip, Style::default().fg(theme.text.to_color())),
-            ]));
-        }
-    }
-    let tips = Paragraph::new(tip_lines)
-        .block(
-            Block::default()
-                .title(" How To Strengthen It ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme.primary.to_color())),
-        )
-        .wrap(Wrap { trim: false });
-    frame.render_widget(tips, chunks[5]);
-
-    let hints = Paragraph::new(Line::from(vec![
-        Span::styled(
-            if matches!(state.editor.vim_mode(), Some(VimMode::Normal)) {
-                "i / a / o"
-            } else {
-                "Type / Paste"
-            },
-            Style::default().fg(theme.warning.to_color()),
-        ),
-        Span::raw(" edit  "),
-        Span::styled(
-            if matches!(state.editor.vim_mode(), Some(VimMode::Normal)) {
-                "h/j/k/l"
-            } else {
-                "Esc"
-            },
-            Style::default().fg(theme.warning.to_color()),
-        ),
-        Span::raw(
-            if matches!(state.editor.vim_mode(), Some(VimMode::Normal)) {
-                " move  "
-            } else {
-                " normal  "
-            },
-        ),
-        Span::styled("Enter", Style::default().fg(theme.warning.to_color())),
-        Span::raw(
-            if matches!(state.editor.vim_mode(), Some(VimMode::Normal)) {
-                " ignored  "
-            } else {
-                " newline  "
-            },
-        ),
-        Span::styled("Ctrl+J/K", Style::default().fg(theme.warning.to_color())),
-        Span::raw(" scroll  "),
-        Span::styled("PgUp/PgDn", Style::default().fg(theme.warning.to_color())),
-        Span::raw(" page  "),
-        Span::styled("Ctrl+L", Style::default().fg(theme.warning.to_color())),
-        Span::raw(" clear  "),
-        Span::styled("Ctrl+T", Style::default().fg(theme.warning.to_color())),
-        Span::raw(if state.editor.vim_mode().is_some() {
-            " vim off  "
-        } else {
-            " vim on  "
-        }),
-        Span::styled("Tab", Style::default().fg(theme.warning.to_color())),
-        Span::raw(" inject  "),
-        Span::styled("Ctrl+Q", Style::default().fg(theme.warning.to_color())),
-        Span::raw(" close"),
-    ]));
-    frame.render_widget(hints, chunks[6]);
 }
 
 pub fn draw_delete_feature_confirm(

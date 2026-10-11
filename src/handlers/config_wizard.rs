@@ -670,7 +670,7 @@ fn adjust_selection(selected: usize, len: usize) -> usize {
 fn edit_field_count(category: &ConfigCategory) -> usize {
     match category {
         ConfigCategory::CustomSessions => 10,
-        ConfigCategory::FeaturePresets => 8,
+        ConfigCategory::FeaturePresets => 7,
         ConfigCategory::PlanQuestions => 4,
         ConfigCategory::LifecycleHooks => 4,
         ConfigCategory::Keybindings => 2,

@@ -141,12 +141,8 @@ impl App {
                         mode_to_index(&preset.mode).to_string(),
                         agent_to_index(&preset.agent).to_string(),
                     ];
-                    state.field_toggles = vec![
-                        preset.review,
-                        preset.plan_mode,
-                        preset.enable_chrome,
-                        preset.remote_control,
-                    ];
+                    state.field_toggles =
+                        vec![preset.review, preset.plan_mode, preset.enable_chrome];
                 }
                 ConfigCategory::PlanQuestions => {
                     let question = index
@@ -263,7 +259,6 @@ impl App {
                         // here always defers to full Plan mode, never Quick Plan.
                         quick_plan: false,
                         enable_chrome: *state.field_toggles.get(2).unwrap_or(&false),
-                        remote_control: *state.field_toggles.get(3).unwrap_or(&false),
                     };
 
                     upsert_or_push(&mut state.presets, state.editing_index, preset);

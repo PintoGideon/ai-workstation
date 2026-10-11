@@ -771,11 +771,6 @@ fn feature_preset_field_help(field_focus: usize) -> (&'static str, &'static str,
             "Use Enter to toggle.",
         ),
         7 => (
-            "Remote control",
-            "Enable remote-control support for features created from this preset.",
-            "Use Enter to toggle.",
-        ),
-        8 => (
             "Save",
             "Validate this preset and open the config diff preview.",
             "Press Enter on Save to continue.",
@@ -987,14 +982,8 @@ fn edit_lines(state: &ConfigWizardState, theme: &Theme) -> Vec<Line<'static>> {
                     state.field_focus == 6,
                     theme,
                 ),
-                toggle_field_line(
-                    "Remote control",
-                    state.field_toggles.get(3).copied().unwrap_or(false),
-                    state.field_focus == 7,
-                    theme,
-                ),
             ];
-            lines.push(button_line("Save", state.field_focus == 8, theme));
+            lines.push(button_line("Save", state.field_focus == 7, theme));
             lines
         }
         ConfigCategory::PlanQuestions => {

@@ -639,7 +639,6 @@ mod tests {
             plan_mode: false,
             agent: Default::default(),
             enable_chrome: false,
-            remote_control: false,
             pending_worktree_script: false,
             ready: true,
             status,

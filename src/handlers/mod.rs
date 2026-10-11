@@ -48,8 +48,8 @@ pub use dialog::{
     handle_create_project_key, handle_debug_log_key, handle_delete_feature_key,
     handle_delete_project_key, handle_help_key, handle_latest_prompt_key,
     handle_markdown_viewer_key, handle_rename_feature_key, handle_rename_session_key,
-    handle_resource_confirm_key, handle_session_config_key, handle_steering_prompt_key,
-    handle_stopped_session_dialog_key, handle_theme_picker_key,
+    handle_resource_confirm_key, handle_session_config_key, handle_stopped_session_dialog_key,
+    handle_theme_picker_key,
 };
 pub use diff::{
     handle_diff_picker_key, handle_diff_viewer_key, handle_diff_viewer_wheel,
@@ -136,7 +136,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::ConfirmResourceStart(_) => handle_resource_confirm_key(app, key.code),
         AppMode::Dormant(_) => handle_dormant_key(app, key),
         AppMode::Help(_) => handle_help_key(app, key),
-        AppMode::SteeringPrompt(_) => handle_steering_prompt_key(app, key),
         AppMode::NotificationPicker(_, _) => handle_notification_picker_key(app, key.code),
         AppMode::RenamingSession(_) => handle_rename_session_key(app, key.code),
         AppMode::RenamingFeature(_) => handle_rename_feature_key(app, key.code),

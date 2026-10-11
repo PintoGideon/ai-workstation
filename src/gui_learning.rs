@@ -859,7 +859,6 @@ mod tests {
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         let target = FeatureTarget {
             project_id: project.id.clone(),

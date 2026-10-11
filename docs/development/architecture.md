@@ -36,7 +36,7 @@ configuration, session and TODO/plan state, with compatibility re-exports of the
 three extracted features' types. Cross-feature mode transitions remain on App.
 
 The desktop prompt-library adapter in `src/gui_prompts.rs` reads the same
-source merge as Remote Control and the TUI, and calls the shared search,
+source merge as the TUI, and calls the shared search,
 placeholder/default and substitution helpers in `src/prompt_library.rs`.
 Content keys exclude generated config IDs/dates and include checkout paths;
 insertion reloads templates and allowed session targets before returning an

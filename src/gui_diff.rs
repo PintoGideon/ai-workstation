@@ -277,7 +277,6 @@ pub(crate) mod tests {
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         feature.status = ProjectStatus::Stopped;
         let target = FeatureTarget {

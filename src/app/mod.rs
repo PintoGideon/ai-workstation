@@ -60,7 +60,6 @@ mod session_tools; // FORK: the view's tools, now on the selection (DESIGN.md §
 pub mod setup;
 mod skill_picker;
 mod state;
-mod steering;
 pub(crate) mod supervised_edits;
 mod sync;
 mod syntax;
@@ -113,7 +112,6 @@ pub use issue_fixer::{IssueBrowserState, IssueBrowserStatus};
 pub(crate) use resource_gate::{StartIntent, Started};
 pub(crate) use session_ops::session_kind_for_agent;
 pub use state::*;
-pub use steering::{PromptAnalysis, analyze_prompt};
 pub use toast::{Toast, ToastKind};
 pub(crate) use todos::ReferencedTodoDeleted;
 
@@ -301,11 +299,6 @@ pub struct AppConfig {
     pub appearance: crate::fork::appearance::AppearanceConfig,
     #[serde(default)]
     pub token_pricing: TokenPricingConfig,
-    /// Default state of the Remote Control toggle for new Claude features.
-    /// Still subject to the availability guard (z.ai / provider / version),
-    /// so enabling this never forces RC onto an incompatible session.
-    #[serde(default)]
-    pub remote_control_default: bool,
     /// Maximum number of saved agent harness panes AIW auto-launches when a
     /// stopped feature is started. Extra saved agent panes are recreated as
     /// tmux windows but left at the shell prompt to avoid process stampedes.
@@ -584,7 +577,6 @@ impl Default for AppConfig {
             transparent_background: false,
             appearance: Default::default(), // FORK
             token_pricing: TokenPricingConfig::default(),
-            remote_control_default: false,
             max_agent_autostart_sessions: default_agent_restart_limit(),
             final_review_submit_prompt: true,
             final_review_post_to_pr: false,

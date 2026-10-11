@@ -618,7 +618,6 @@ mod tests {
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         feature.status = ProjectStatus::Active;
         for kind in kinds {

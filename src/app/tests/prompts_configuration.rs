@@ -1,5 +1,4 @@
 use super::support::*;
-use crate::app::steering::PromptConstraint;
 use crate::app::*;
 use crate::project::AgentKind;
 use crate::traits::{MockTmuxOps, MockWorktreeOps};
@@ -582,40 +581,6 @@ fn context_settings_focus_cycles_through_all_fields_and_wraps() {
         &app.mode,
         AppMode::ContextSettings(s) if s.field == ContextSettingsField::CriticalPercent
     ));
-}
-
-// ── prompt steering analysis ──────────────────────────────
-
-#[test]
-fn analyze_prompt_flags_missing_constraint_categories() {
-    let analysis = analyze_prompt("Add a steering coach dialog before launch.");
-
-    assert_eq!(analysis.score, 0);
-    assert_eq!(analysis.checks.len(), 5);
-    assert!(
-        analysis
-            .missing_checks()
-            .any(|check| check.constraint == PromptConstraint::FileScope)
-    );
-    assert!(
-        analysis
-            .missing_checks()
-            .any(|check| check.constraint == PromptConstraint::ValidationCommands)
-    );
-}
-
-#[test]
-fn analyze_prompt_rewards_concrete_constraints() {
-    let analysis = analyze_prompt(
-        "Update only src/app/feature_ops.rs and src/ui/dialogs/feature.rs. \
-         Done when the feature creation flow shows coaching before launch. \
-         Do not change the session picker flow. \
-         Run `cargo check`. \
-         Watch out for SuperVibe confirmation and tmux launch behavior.",
-    );
-
-    assert_eq!(analysis.score, analysis.max_score);
-    assert_eq!(analysis.missing_checks().count(), 0);
 }
 
 // ── ZaiPlanConfig::get_monthly_limit ─────────────────────

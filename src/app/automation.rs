@@ -393,7 +393,6 @@ impl App {
             request.plan_mode,
             request.agent.clone(),
             request.enable_chrome,
-            false, // remote_control not supported via automation API yet
         );
         let mut feature = feature;
         Self::initialize_feature_sessions(&mut feature, request.create_terminal, None);
@@ -552,7 +551,6 @@ impl App {
                 false,
                 request.agent.clone(),
                 request.enable_chrome,
-                false, // remote_control not supported via automation API yet
             );
 
             self.store.add_feature(&request.project_name, feature);

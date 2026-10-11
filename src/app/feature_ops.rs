@@ -67,16 +67,6 @@ impl App {
         Ok(())
     }
 
-    /// Whether Remote Control may be enabled for a launch given the current
-    /// config and environment (z.ai / third-party provider, Claude Code
-    /// version). Mirrors the wizard's availability check so a feature flagged
-    /// for Remote Control never passes `--remote-control` to an
-    /// incompatible session.
-    pub(crate) fn remote_control_allowed(&self) -> bool {
-        crate::claude::ClaudeLauncher::remote_control_block_reason(self.config.zai.is_some())
-            .is_none()
-    }
-
     pub(crate) fn default_session_name_for_agent(agent: &AgentKind) -> String {
         match agent {
             AgentKind::Claude => "Claude 1".to_string(),
@@ -251,16 +241,6 @@ impl App {
         state.session_name = Self::default_session_name_for_agent(&state.agent);
         state.allowed_agents = available;
         state.feature_presets = self.active_extension.allowed_feature_presets();
-        // Remote Control requires claude.ai OAuth and a recent Claude Code.
-        // Resolve the reason it's blocked (z.ai / third-party provider /
-        // version) so the wizard can show the toggle disabled with context.
-        let rc_reason =
-            crate::claude::ClaudeLauncher::remote_control_block_reason(self.config.zai.is_some());
-        state.remote_control_available = rc_reason.is_none();
-        state.remote_control_block_reason = rc_reason;
-        // Apply the global default, but never enable when unavailable.
-        state.remote_control = self.config.remote_control_default && state.remote_control_available;
-
         self.mode = AppMode::CreatingFeature(state);
         self.message = None;
     }
@@ -289,8 +269,6 @@ impl App {
         let session_name = state.session_name.trim().to_string();
         let use_worktree = state.use_worktree;
         let enable_chrome = state.enable_chrome;
-        let remote_control = state.remote_control;
-        let steering_enabled = state.steering_enabled;
         let todo_origin = state.todo_origin.clone();
         let issue_source = state.issue_source.clone();
         let startup_prompt =
@@ -418,8 +396,6 @@ impl App {
                             agent: agent.clone(),
                             create_terminal,
                             enable_chrome,
-                            remote_control,
-                            steering_enabled,
                             startup_prompt: startup_prompt.clone(),
                             session_name,
                             todo_origin: todo_origin.clone(),
@@ -441,8 +417,6 @@ impl App {
                         create_terminal,
                         session_name,
                         enable_chrome,
-                        remote_control,
-                        steering_enabled,
                         startup_prompt,
                         todo_origin,
                         issue_source,
@@ -472,8 +446,6 @@ impl App {
             create_terminal,
             session_name,
             enable_chrome,
-            remote_control,
-            steering_enabled,
             hook_succeeded: None,
             startup_prompt,
             todo_origin,
@@ -610,7 +582,6 @@ impl App {
             feature.plan_mode = prepared.plan_mode;
             feature.agent = prepared.agent.clone();
             feature.enable_chrome = prepared.enable_chrome;
-            feature.remote_control = prepared.remote_control;
             feature.issue_source = prepared.issue_source.clone();
             feature.pending_worktree_script = false;
         };
@@ -640,7 +611,6 @@ impl App {
                 prepared.plan_mode,
                 prepared.agent.clone(),
                 prepared.enable_chrome,
-                prepared.remote_control,
             );
 
             let mut feature = feature;
@@ -839,9 +809,6 @@ impl App {
                         self.push_toast_warning(notice);
                     }
                     return Ok(());
-                } else if prepared.steering_enabled {
-                    self.open_startup_steering_prompt(pi, fi)?;
-                    return Ok(());
                 }
             }
         }
@@ -933,7 +900,7 @@ impl App {
         let claude_dir = workdir.join(".claude");
         if let Err(err) = std::fs::create_dir_all(&claude_dir) {
             self.log_warn(
-                "steering",
+                "feature_create",
                 format!("Failed to create .claude dir for startup prompt: {err}"),
             );
             return false;
@@ -942,7 +909,7 @@ impl App {
         let path = claude_dir.join("latest-prompt.txt");
         if let Err(err) = std::fs::write(&path, prompt) {
             self.log_warn(
-                "steering",
+                "feature_create",
                 format!(
                     "Failed to persist startup prompt at {}: {err}",
                     path.display()
@@ -959,68 +926,6 @@ impl App {
         } else {
             "it could not be saved to .claude/latest-prompt.txt either; the prompt has been lost"
         }
-    }
-
-    pub fn open_startup_steering_prompt(&mut self, pi: usize, fi: usize) -> Result<()> {
-        self.selection = Selection::Feature(pi, fi);
-        // FORK(cockpit): the dialog describes the feature's running agent;
-        // nothing is opened (DESIGN.md §18).
-        let Some(view) = self.desired_live_target().map(|t| t.view_state()) else {
-            return Ok(());
-        };
-
-        let workdir = self.store.projects[pi].features[fi].workdir.clone();
-        self.mode = AppMode::SteeringPrompt(SteeringPromptState::new(view, workdir, String::new()));
-        self.message =
-            Some("Agent started. Write the steering prompt, then press Tab to inject.".into());
-
-        Ok(())
-    }
-
-    pub fn cancel_steering_prompt(&mut self) {
-        let view = match std::mem::replace(&mut self.mode, AppMode::Normal) {
-            AppMode::SteeringPrompt(state) => state.view,
-            other => {
-                self.mode = other;
-                return;
-            }
-        };
-
-        self.return_to_dashboard(&view);
-        self.message = Some("Steering prompt closed".into());
-    }
-
-    pub fn submit_steering_prompt(&mut self) -> Result<()> {
-        let state = match std::mem::replace(&mut self.mode, AppMode::Normal) {
-            AppMode::SteeringPrompt(state) => state,
-            other => {
-                self.mode = other;
-                return Ok(());
-            }
-        };
-
-        let prompt = state.editor.text().trim().to_string();
-        if prompt.is_empty() {
-            self.mode = AppMode::SteeringPrompt(state);
-            self.message = Some("Task prompt cannot be empty".into());
-            return Ok(());
-        }
-
-        self.persist_startup_prompt(&state.workdir, &prompt);
-        self.tmux
-            .paste_text(&state.view.session, &state.view.window, &prompt)?;
-        self.tmux
-            .send_key_name(&state.view.session, &state.view.window, "Enter")?;
-
-        // FORK(cockpit): back to the sidebar, the agent pane on the session
-        // the prompt went to (DESIGN.md §18).
-        self.mode = AppMode::Normal;
-        self.workspace_select_window(&state.view.session, &state.view.window);
-        if self.cockpit_active() {
-            self.cockpit_focus_agent();
-        }
-        self.message = Some("Injected steering prompt".into());
-        Ok(())
     }
 
     /// Bring `(pi, fi)`'s tmux session up, launching its saved agent
@@ -1181,8 +1086,6 @@ impl App {
             }
         }
 
-        // Resolve before the mutable borrow of `feature` below.
-        let rc_allowed = self.remote_control_allowed();
         let mut screenshot_owners = std::collections::HashMap::new();
         if !already_running {
             for session in &self.store.projects[pi].features[fi].sessions {
@@ -1289,18 +1192,8 @@ impl App {
             &windows,
         )?;
 
-        // Remote Control requires claude.ai OAuth and is incompatible with
-        // z.ai / third-party provider sessions and pre-v2.1.51 Claude Code.
-        // Suppress the flag when it can't be used.
-        let use_remote_control = feature.remote_control && rc_allowed;
         let launch_opts = LaunchOpts {
             enable_chrome: feature.enable_chrome,
-            remote_control: use_remote_control,
-            session_name: if use_remote_control {
-                Some(feature.name.clone())
-            } else {
-                None
-            },
         };
         let extra_args: Vec<String> = feature.mode.cli_flags(launch_opts);
         let max_agent_autostart_sessions = self.config.max_agent_autostart_sessions;
@@ -2325,7 +2218,6 @@ impl App {
             mode: feature.mode.clone(),
             review: feature.review,
             enable_chrome: feature.enable_chrome,
-            remote_control: feature.remote_control,
             include_context: true,
         };
 
@@ -2347,7 +2239,6 @@ impl App {
         let review = state.review;
         let agent = state.agent.clone();
         let enable_chrome = state.enable_chrome;
-        let remote_control = state.remote_control;
         let include_context = state.include_context;
         let source_workdir = self
             .store
@@ -2439,8 +2330,6 @@ impl App {
                         create_terminal: false,
                         session_name: Self::default_session_name_for_agent(&agent),
                         enable_chrome,
-                        remote_control,
-                        steering_enabled: false,
                         startup_prompt: None,
                         // Not reachable from a TODO: this is the fork/batch path.
                         todo_origin: None,
@@ -2464,8 +2353,6 @@ impl App {
                 false,
                 Self::default_session_name_for_agent(&agent),
                 enable_chrome,
-                remote_control,
-                false,
                 None,
                 // Not reachable from a TODO: this is the fork path.
                 None,
@@ -2486,7 +2373,6 @@ impl App {
             false,
             agent,
             enable_chrome,
-            remote_control,
         );
 
         self.store.add_feature(&project_name, feature);

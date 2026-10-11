@@ -289,8 +289,6 @@ fn start_worktree_hook_adds_pending_feature_immediately() {
         false,
         "Claude 1".to_string(),
         false,
-        false,
-        false,
         None,
         None,
         None,
@@ -335,8 +333,6 @@ fn start_worktree_hook_clears_sidebar_state_for_reused_feature() {
         AgentKind::Claude,
         false,
         "Claude 1".to_string(),
-        false,
-        false,
         false,
         None,
         None,
@@ -392,7 +388,6 @@ fn complete_running_hook_clears_pending_state_and_starts_feature() {
         false,
         false,
         AgentKind::Claude,
-        false,
         false,
     );
     feature.pending_worktree_script = true;
@@ -478,8 +473,6 @@ fn complete_running_hook_clears_pending_state_and_starts_feature() {
         create_terminal: false,
         session_name: "Claude 1".to_string(),
         enable_chrome: false,
-        remote_control: false,
-        steering_enabled: false,
         startup_prompt: None,
         child: None,
         output: String::new(),
@@ -1113,7 +1106,6 @@ fn repair_unquoted_claude_hooks_refreshes_stale_stored_features() {
         false,
         AgentKind::Claude,
         false,
-        false,
     );
     feature.status = ProjectStatus::Active;
     let store = ProjectStore {
@@ -1179,7 +1171,6 @@ fn repair_unquoted_claude_hooks_refreshes_legacy_settings_json() {
         false,
         false,
         AgentKind::Codex,
-        false,
         false,
     );
     feature.add_session_named(SessionKind::Claude, "Pairing Claude".to_string());

@@ -277,8 +277,6 @@ impl App {
         let repo = self.store.projects[pi].repo.clone();
         let launch_project_name = self.store.projects[pi].name.clone(); // FORK: launch context
         let viewport = self.view_pane_viewport();
-        // Resolve before the mutable borrow of `feature` below.
-        let rc_allowed = self.remote_control_allowed();
         let feature = match self
             .store
             .projects
@@ -397,15 +395,8 @@ impl App {
                     )?;
                 }
                 SessionKind::Claude => {
-                    let use_rc = feature.remote_control && rc_allowed;
                     let extra_args: Vec<String> = feature.mode.cli_flags(LaunchOpts {
                         enable_chrome: feature.enable_chrome,
-                        remote_control: use_rc,
-                        session_name: if use_rc {
-                            Some(feature.name.clone())
-                        } else {
-                            None
-                        },
                     });
                     // FORK: --settings and the launch context (DESIGN.md §16).
                     let launch_ctx = crate::fork::launch::LaunchContext {

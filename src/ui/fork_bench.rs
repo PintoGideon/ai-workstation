@@ -99,7 +99,6 @@ pub(crate) fn realistic_store() -> ProjectStore {
                         plan_mode: false,
                         agent: AgentKind::Claude,
                         enable_chrome: false,
-                        remote_control: false,
                         pending_worktree_script: false,
                         ready: fi == 2,
                         status: [

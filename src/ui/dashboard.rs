@@ -103,7 +103,6 @@ fn mode_view_context(mode: &AppMode) -> Option<&crate::app::ViewState> {
         AppMode::BookmarkPicker(state) => state.from_view.as_ref(),
         AppMode::DiffPicker(state) => Some(&state.from_view),
         AppMode::DiffViewerLoading(state) | AppMode::DiffViewer(state) => Some(&state.from_view),
-        AppMode::SteeringPrompt(state) => Some(&state.view),
         AppMode::TodoQuickCapture(state) => Some(&state.view),
         AppMode::FreshContextPrompt(state) => Some(&state.view),
         AppMode::SessionPicker(state) => state.from_view.as_ref(),
@@ -363,7 +362,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             | AppMode::MarkdownViewer(_)
             | AppMode::TodoQuickCapture(_)
             | AppMode::FreshContextPrompt(_)
-            | AppMode::SteeringPrompt(_)
     );
     if over_dashboard {
         draw_dashboard_chrome(frame, app);
@@ -413,12 +411,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     if let AppMode::FreshContextPrompt(state) = &app.mode {
         super::dialogs::draw_fresh_context_prompt_dialog(frame, state, &app.theme);
-        draw_mode_context_bar(frame, &app.mode, &app.theme);
-        return;
-    }
-
-    if let AppMode::SteeringPrompt(state) = &mut app.mode {
-        super::dialogs::draw_steering_prompt_dialog(frame, state, &app.theme);
         draw_mode_context_bar(frame, &app.mode, &app.theme);
         return;
     }
@@ -1087,7 +1079,6 @@ mod tests {
             plan_mode: false,
             agent: AgentKind::Claude,
             enable_chrome: false,
-            remote_control: false,
             pending_worktree_script: false,
             ready: false,
             status: ProjectStatus::Active,

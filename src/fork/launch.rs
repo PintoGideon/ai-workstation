@@ -197,7 +197,6 @@ mod tests {
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         LaunchContext::for_feature("RS", Path::new("/tmp/repo"), &feature, "fs-1")
     }

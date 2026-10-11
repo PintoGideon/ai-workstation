@@ -1057,7 +1057,6 @@ mod tests {
             plan_mode: false,
             agent: AgentKind::Codex,
             enable_chrome: false,
-            remote_control: false,
             pending_worktree_script: false,
             ready: false,
             status: ProjectStatus::Idle,
@@ -1323,7 +1322,6 @@ mod tests {
             false,
             AgentKind::Codex,
             false,
-            false,
         );
         first.id = "feat-1".into();
         let mut second = Feature::new(
@@ -1335,7 +1333,6 @@ mod tests {
             false,
             false,
             AgentKind::Codex,
-            false,
             false,
         );
         second.id = "feat-2".into();

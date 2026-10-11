@@ -411,12 +411,6 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                                 .add_modifier(Modifier::BOLD),
                         ));
                     }
-                    if feature.remote_control {
-                        line_spans.push(Span::styled(
-                            " [remote]",
-                            Style::default().fg(theme.info.to_color()),
-                        ));
-                    }
                     if is_being_deleted {
                         line_spans.push(Span::styled(
                             " [deleting...]",
@@ -922,7 +916,6 @@ mod tests {
             plan_mode: false,
             agent: AgentKind::Claude,
             enable_chrome: false,
-            remote_control: false,
             pending_worktree_script: false,
             ready: false,
             status: ProjectStatus::Idle,
@@ -1025,7 +1018,6 @@ mod tests {
             plan_mode: false,
             agent: AgentKind::Claude,
             enable_chrome: false,
-            remote_control: false,
             pending_worktree_script: false,
             ready: false,
             status: ProjectStatus::Idle,
@@ -1387,8 +1379,6 @@ mod tests {
                     create_terminal: false,
                     session_name: "Claude 1".into(),
                     enable_chrome: false,
-                    remote_control: false,
-                    steering_enabled: false,
                     hook_succeeded: None,
                     startup_prompt: None,
                     todo_origin: None,

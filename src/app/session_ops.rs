@@ -1317,9 +1317,6 @@ impl App {
             anyhow::bail!("unsupported agent session type");
         };
 
-        // Resolve before the mutable borrow of `feature` below.
-        let rc_allowed = self.remote_control_allowed();
-
         let feature = match self
             .store
             .projects
@@ -1335,15 +1332,8 @@ impl App {
         let feature_name = feature.name.clone();
         let mode = feature.mode.clone();
         let review = feature.review;
-        let use_rc = feature.remote_control && rc_allowed;
         let extra_args: Vec<String> = feature.mode.cli_flags(LaunchOpts {
             enable_chrome: feature.enable_chrome,
-            remote_control: use_rc,
-            session_name: if use_rc {
-                Some(feature.name.clone())
-            } else {
-                None
-            },
         });
         ensure_notification_hooks(&workdir, &repo, &mode, &agent, feature.is_worktree);
         ensure_review_claude_md(&workdir, feature.review);
@@ -1484,9 +1474,6 @@ impl App {
         let agent = harness.unwrap_or_else(|| self.store.projects[pi].preferred_agent.clone());
         let kind = session_kind_for_agent(&agent);
 
-        // Resolve before the mutable borrow of `feature` below.
-        let rc_allowed = self.remote_control_allowed();
-
         let feature = match self
             .store
             .projects
@@ -1500,15 +1487,8 @@ impl App {
         let workdir = feature.workdir.clone();
         let tmux_session = feature.tmux_session.clone();
         let mode = feature.mode.clone();
-        let use_rc = feature.remote_control && rc_allowed;
         let extra_args: Vec<String> = feature.mode.cli_flags(LaunchOpts {
             enable_chrome: feature.enable_chrome,
-            remote_control: use_rc,
-            session_name: if use_rc {
-                Some(feature.name.clone())
-            } else {
-                None
-            },
         });
         ensure_notification_hooks(&workdir, &repo, &mode, &agent, feature.is_worktree);
         ensure_review_claude_md(&workdir, feature.review);
@@ -2055,7 +2035,7 @@ impl App {
         si: usize,
         resume_override: Option<Option<String>>,
     ) -> Result<bool> {
-        let Some((tmux_session, workdir, mode, remote_control, enable_chrome, feature_name)) = self
+        let Some((tmux_session, workdir, mode, enable_chrome)) = self
             .store
             .projects
             .get(pi)
@@ -2065,9 +2045,7 @@ impl App {
                     f.tmux_session.clone(),
                     f.workdir.clone(),
                     f.mode.clone(),
-                    f.remote_control,
                     f.enable_chrome,
-                    f.name.clone(),
                 )
             })
         else {
@@ -2123,12 +2101,7 @@ impl App {
         let reuse_window = exited_pane.is_some();
 
         if let Some(agent) = agent_for_session_kind(&session.kind) {
-            let use_rc = remote_control && self.remote_control_allowed();
-            let extra_args: Vec<String> = mode.cli_flags(LaunchOpts {
-                enable_chrome,
-                remote_control: use_rc,
-                session_name: if use_rc { Some(feature_name) } else { None },
-            });
+            let extra_args: Vec<String> = mode.cli_flags(LaunchOpts { enable_chrome });
             // FORK: see `recent_launches` — the sweep must not read the
             // launch script's shell as another exit.
             self.recent_launches

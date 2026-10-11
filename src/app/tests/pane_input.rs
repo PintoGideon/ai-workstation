@@ -8,66 +8,6 @@ use tempfile::NamedTempFile;
 use tempfile::TempDir;
 
 #[test]
-fn submit_steering_prompt_pastes_into_running_session() {
-    let repo = TempDir::new().unwrap();
-    let workdir = repo.path().join(".worktrees").join("coached");
-    std::fs::create_dir_all(&workdir).unwrap();
-
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_paste_text()
-        .withf(|session, window, text| {
-            session == "aiw-coached"
-                && window == "claude"
-                && text == "Implement steering coach automatically."
-        })
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_send_key_name()
-        .withf(|session, window, key| {
-            session == "aiw-coached" && window == "claude" && key == "Enter"
-        })
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-
-    let tmp = NamedTempFile::new().unwrap();
-    let mut app = App::new_for_test(
-        store_with_repo(repo.path().to_path_buf(), ProjectStatus::Stopped),
-        Box::new(tmux),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.store_path = tmp.path().to_path_buf();
-    app.mode = AppMode::SteeringPrompt(SteeringPromptState::new(
-        ViewState::new(
-            "my-project".to_string(),
-            "coached".to_string(),
-            "aiw-coached".to_string(),
-            "claude".to_string(),
-            "Claude 1".to_string(),
-            SessionKind::Claude,
-            VibeMode::Vibeless,
-            false,
-        ),
-        workdir.clone(),
-        "Implement steering coach automatically.".to_string(),
-    ));
-
-    app.submit_steering_prompt().unwrap();
-
-    // FORK(cockpit): back on the dashboard, the row on the session the
-    // prompt went to.
-    assert!(
-        matches!(app.mode, AppMode::Normal),
-        "expected the dashboard"
-    );
-
-    let prompt_path = workdir.join(".claude").join("latest-prompt.txt");
-    assert_eq!(
-        std::fs::read_to_string(prompt_path).unwrap(),
-        "Implement steering coach automatically."
-    );
-}
-
-#[test]
 fn open_command_picker_prepends_codex_debug_commands() {
     let workdir = TempDir::new().unwrap();
     let store = store_with_codex_session(workdir.path(), false);
@@ -410,7 +350,6 @@ fn sync_session_status_skips_non_custom_sessions() {
         plan_mode: false,
         agent: AgentKind::default(),
         enable_chrome: false,
-        remote_control: false,
         pending_worktree_script: false,
         ready: false,
         status: ProjectStatus::Idle,
@@ -474,7 +413,6 @@ fn on_stop_persists_on_feature_session() {
         false,
         AgentKind::default(),
         false,
-        false,
     );
     let s = feat.add_custom_session_named(
         "Dev Servers".to_string(),
@@ -498,7 +436,6 @@ fn on_stop_none_when_not_provided() {
         false,
         false,
         AgentKind::default(),
-        false,
         false,
     );
     let s =

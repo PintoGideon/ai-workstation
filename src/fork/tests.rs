@@ -354,7 +354,6 @@ fn port_block_is_reserved_for_the_session_and_released_on_delete() {
         false,
         AgentKind::default(),
         false,
-        false,
     );
     feature.tmux_session = "aiw-aiw-ports-test-session".into();
     let (id, session) = (feature.id.clone(), feature.tmux_session.clone());
@@ -405,7 +404,6 @@ fn starting_a_feature_whose_worktree_vanished_recreates_it_first() {
         false,
         false,
         AgentKind::Claude,
-        false,
         false,
     );
     feature.add_session(crate::project::SessionKind::Claude);
@@ -598,8 +596,6 @@ fn running_hook_state(child: Option<std::process::Child>) -> crate::app::Running
         create_terminal: false,
         session_name: "Claude 1".to_string(),
         enable_chrome: false,
-        remote_control: false,
-        steering_enabled: false,
         startup_prompt: None,
         child,
         output: String::new(),

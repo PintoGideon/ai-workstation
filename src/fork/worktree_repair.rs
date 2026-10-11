@@ -158,7 +158,6 @@ mod tests {
             false,
             AgentKind::Claude,
             false,
-            false,
         )
     }
 

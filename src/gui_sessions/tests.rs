@@ -53,7 +53,6 @@ fn store(root: &Path, status: ProjectStatus) -> ProjectStore {
         false,
         AgentKind::default(),
         false,
-        false,
     );
     feature.id = FEATURE_ID.to_string();
     feature.status = status;

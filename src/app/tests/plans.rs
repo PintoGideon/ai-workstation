@@ -158,8 +158,6 @@ fn plan_interview_abort_can_resume_or_cancel_feature_creation() {
         create_terminal: false,
         session_name: "Claude 1".into(),
         enable_chrome: false,
-        remote_control: false,
-        steering_enabled: false,
         hook_succeeded: None,
         startup_prompt: None,
         todo_origin: None,
@@ -706,8 +704,6 @@ fn plan_interview_app_for_agent(
         agent,
         create_terminal: false,
         enable_chrome: false,
-        remote_control: false,
-        steering_enabled: false,
         hook_succeeded: None,
         startup_prompt: None,
         todo_origin: None,
@@ -728,9 +724,6 @@ fn accepting_a_codex_plan_seeds_the_approved_plan_kickoff_prompt() {
 
     let workdir = match &mut app.mode {
         AppMode::PlanInterview(state) => {
-            // The approved plan is itself the startup direction, so its
-            // kickoff must win over the wizard's optional blank steering box.
-            state.pending_launch.as_mut().unwrap().steering_enabled = true;
             state.brief = "Implement this with Codex".into();
             state.synthesis_requested = true;
             state.phase = PlanInterviewPhase::Done;
@@ -2352,8 +2345,6 @@ fn re_entering_an_abandoned_plan_interview_offers_to_resume_it() {
         create_terminal: false,
         session_name: "Claude 1".into(),
         enable_chrome: false,
-        remote_control: false,
-        steering_enabled: false,
         hook_succeeded: None,
         startup_prompt: None,
         todo_origin: None,

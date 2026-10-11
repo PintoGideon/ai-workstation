@@ -111,5 +111,4 @@ windows and leaves nothing behind when it closes.
 - [Prompts and TODOs](@/docs/prompts-and-todos.md) — the TODO list's own
   scope-toggle, move/copy, and work-the-queue keys.
 - [More Session Tools](@/docs/session-tools.md) — bookmark slots, resuming
-  a harness's saved transcripts, the fresh-context handoff keys, and
-  Remote Control's status badge and keys.
+  a harness's saved transcripts and the fresh-context handoff keys.

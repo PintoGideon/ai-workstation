@@ -257,7 +257,6 @@ function FeatureNode({
   if (feature.review) chips.push({ key: "review", text: "review", className: "tree-chip-review" });
   if (feature.plan_mode) chips.push({ key: "plan", text: "plan", className: "tree-chip-info" });
   if (paused) chips.push({ key: "paused", text: "plan paused · Resume", className: "tree-chip-warning tree-chip-action", onClick: props.onResumePlan, title: "Resume the minimized plan interview" });
-  if (feature.remote_control) chips.push({ key: "remote", text: "remote", className: "tree-chip-info" });
   if (deleting) chips.push({ key: "deleting", text: "deleting…", className: "tree-chip-danger" });
   if (feature.pending_worktree_script) chips.push({ key: "script", text: "running worktree script…", className: "tree-chip-info" });
   if (derived) chips.push({ key: "age", text: derived.created_age, className: "tree-chip-age", title: feature.created_at ? `Created ${feature.created_at}` : undefined });

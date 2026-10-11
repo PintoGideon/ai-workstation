@@ -1333,7 +1333,6 @@ fn fix_session_index_prefers_dedicated_else_creates() {
         false,
         AgentKind::Claude,
         false,
-        false,
     );
 
     // Nothing running yet: both strategies report "must create / nothing to
@@ -1391,7 +1390,6 @@ fn named_triage_sessions_resolve_independently() {
         false,
         AgentKind::default(),
         false,
-        false,
     );
     feature.add_session_named(SessionKind::Claude, TRIAGE_SESSION_LABEL.into());
     feature.add_session_named(SessionKind::Codex, "PR 321 security".into());
@@ -1423,7 +1421,6 @@ fn named_triage_session_rejects_a_different_selected_harness() {
         false,
         false,
         AgentKind::default(),
-        false,
         false,
     );
     feature.add_session_named(SessionKind::Claude, "PR 321 security".into());
@@ -1462,7 +1459,6 @@ fn fix_session_index_ignores_non_agent_sessions() {
         false,
         false,
         AgentKind::Claude,
-        false,
         false,
     );
     // A terminal window is not an agent harness, so it is never a fix target.

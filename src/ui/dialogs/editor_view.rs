@@ -1,4 +1,4 @@
-//! Shared rendering helpers for `TextEditor`-backed dialogs (steering
+//! Shared rendering helpers for `TextEditor`-backed dialogs (fresh-context
 //! prompt, compose input): cursor overlay, wrap-aware line counting,
 //! and scroll synchronization.
 

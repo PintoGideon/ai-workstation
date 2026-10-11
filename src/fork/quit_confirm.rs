@@ -91,7 +91,6 @@ mod tests {
             false,
             crate::project::AgentKind::default(),
             false,
-            false,
         );
         feature.status = ProjectStatus::Active;
         feature.add_session(SessionKind::Claude);

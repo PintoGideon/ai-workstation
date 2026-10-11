@@ -109,7 +109,6 @@ pub struct FeaturePreset {
     /// unchanged full-Plan-mode (or no-plan) behavior.
     pub quick_plan: bool,
     pub enable_chrome: bool,
-    pub remote_control: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -123,7 +122,6 @@ struct FeaturePresetDe {
     plan_mode: bool,
     quick_plan: bool,
     enable_chrome: bool,
-    remote_control: bool,
 }
 
 impl<'de> Deserialize<'de> for FeaturePreset {
@@ -142,7 +140,6 @@ impl<'de> Deserialize<'de> for FeaturePreset {
             plan_mode: preset.plan_mode,
             quick_plan: preset.quick_plan,
             enable_chrome: preset.enable_chrome,
-            remote_control: preset.remote_control,
         })
     }
 }

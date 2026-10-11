@@ -39,10 +39,6 @@ pub fn handle_paste(app: &mut App, text: &str) -> Result<()> {
                         state.branch.push_str(text);
                         state.branch_error = None;
                     }
-                    CreateFeatureStep::TaskPrompt => {
-                        state.task_prompt.push_str(text);
-                        state.refresh_prompt_analysis();
-                    }
                     CreateFeatureStep::SessionName => {
                         state.session_name.push_str(text);
                     }
@@ -88,14 +84,6 @@ pub fn handle_paste(app: &mut App, text: &str) -> Result<()> {
             if let AppMode::Searching(state) = &mut app.mode {
                 state.query.push_str(text);
                 app.perform_search();
-            }
-        }
-        AppMode::SteeringPrompt(_) => {
-            if let AppMode::SteeringPrompt(state) = &mut app.mode {
-                let outcome = state.editor.insert_str(text);
-                if outcome.text_changed {
-                    state.refresh_prompt_analysis();
-                }
             }
         }
         AppMode::PromptEditor(_) => {

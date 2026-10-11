@@ -2060,7 +2060,6 @@ mod tests {
             false,
             AgentKind::default(),
             false,
-            false,
         );
         feature.id = FEATURE_ID.to_string();
         feature.status = status;
@@ -4151,7 +4150,6 @@ mod tests {
             false,
             false,
             AgentKind::default(),
-            false,
             false,
         );
         feature.tmux_session = tmux_session.clone();

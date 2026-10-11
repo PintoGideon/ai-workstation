@@ -987,7 +987,6 @@ mod tests {
             false,
             AgentKind::default(),
             false,
-            false,
         );
         feature.id = "feature-1".into();
         feature.status = ProjectStatus::Stopped;

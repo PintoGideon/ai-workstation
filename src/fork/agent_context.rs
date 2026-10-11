@@ -123,7 +123,6 @@ mod tests {
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         LaunchContext::for_feature("RS", Path::new("/repo"), &feature, "fs-1")
     }
@@ -189,7 +188,6 @@ mod tests {
             false,
             false,
             AgentKind::Gemini,
-            false,
             false,
         );
         feature.add_session(crate::project::SessionKind::Gemini);

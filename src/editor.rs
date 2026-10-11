@@ -298,6 +298,7 @@ impl TextEditor {
         EditorOutcome::changed()
     }
 
+    #[cfg(test)]
     pub fn clear(&mut self) -> EditorOutcome {
         if self.text.is_empty() {
             return EditorOutcome::default();

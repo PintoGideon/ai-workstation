@@ -110,8 +110,6 @@ fn fixture(tmux: MockTmuxOps) -> (App, tempfile::TempDir) {
         create_terminal: false,
         session_name: "Codex 1".into(),
         enable_chrome: false,
-        remote_control: false,
-        steering_enabled: false,
         hook_succeeded: None,
         startup_prompt: None,
         todo_origin: None,
@@ -138,7 +136,6 @@ fn session_fixture(kind: SessionKind) -> (App, tempfile::TempDir) {
         false,
         false,
         AgentKind::Codex,
-        false,
         false,
     );
     feature.summary = Some("Handle malformed input without panicking".into());

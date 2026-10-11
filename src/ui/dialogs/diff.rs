@@ -3422,7 +3422,7 @@ fn review_hint_lines(state: &DiffViewerState, theme: &Theme) -> [Line<'static>; 
 
 /// Render the multi-line feedback editor (per-file rejection or general
 /// feedback) into the review footer: a titled box with the editor text and a
-/// key hint, mirroring the steering-prompt dialog.
+/// key hint.
 fn draw_feedback_editor(frame: &mut Frame, area: Rect, state: &mut DiffViewerState, theme: &Theme) {
     let key = |k: &'static str| Span::styled(k, Style::default().fg(theme.warning.to_color()));
 

@@ -367,7 +367,6 @@ mod tests {
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         feature.tmux_session = tmux_session.to_string();
         project.features.push(feature);

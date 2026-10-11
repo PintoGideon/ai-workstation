@@ -46,7 +46,6 @@ fn store_at(workdir: &Path, is_git: bool) -> ProjectStore {
         plan_mode: false,
         agent: AgentKind::default(),
         enable_chrome: false,
-        remote_control: false,
         pending_worktree_script: false,
         ready: false,
         status: ProjectStatus::Stopped,

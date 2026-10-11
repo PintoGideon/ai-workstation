@@ -455,7 +455,6 @@ impl App {
             false,
             agent.clone(),
             setup.enable_chrome,
-            false,
         );
         // The primary session carries the `Final Review` label, so
         // `fix_session_index(.., FINAL_REVIEW_SESSION_LABEL)` finds it inside
@@ -714,7 +713,6 @@ mod tests {
             false,
             false,
             AgentKind::Claude,
-            false,
             false,
         );
         f.review_source = Some(ReviewSource {

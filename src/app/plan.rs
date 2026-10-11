@@ -127,7 +127,6 @@ mod tests {
             false,
             AgentKind::Codex,
             false,
-            false,
         );
         feature.selected_plan_path = selected_plan_path;
         feature

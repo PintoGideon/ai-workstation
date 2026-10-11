@@ -1660,7 +1660,6 @@ index 1111111..2222222 100644
             false,
             AgentKind::Claude,
             false,
-            false,
         ));
         app.store.projects.push(project);
         app.store.available_harnesses = vec![AgentKind::Claude, AgentKind::Codex];
@@ -2023,7 +2022,6 @@ index 1111111..2222222 100644
             false,
             AgentKind::Claude,
             false,
-            false,
         ));
         let mut other = Feature::new(
             "other".into(),
@@ -2034,7 +2032,6 @@ index 1111111..2222222 100644
             false,
             false,
             AgentKind::Claude,
-            false,
             false,
         );
         other.add_session(SessionKind::Claude);
@@ -2094,7 +2091,6 @@ index 1111111..2222222 100644
             false,
             AgentKind::Claude,
             false,
-            false,
         ));
         app.store.projects.push(project);
 
@@ -2137,7 +2133,6 @@ index 1111111..2222222 100644
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         // A separate feature whose agent session must receive the prompt.
         let mut other = Feature::new(
@@ -2149,7 +2144,6 @@ index 1111111..2222222 100644
             false,
             false,
             AgentKind::Claude,
-            false,
             false,
         );
         other.status = ProjectStatus::Active;
@@ -2250,7 +2244,6 @@ index 1111111..2222222 100644
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         let mut project = Project::new(
             "demo".to_string(),
@@ -2342,7 +2335,6 @@ index 1111111..2222222 100644
             false,
             false,
             AgentKind::Claude,
-            false,
             false,
         );
         feature.status = ProjectStatus::Active;
@@ -2437,7 +2429,6 @@ index 1111111..2222222 100644
             false,
             false,
             AgentKind::Claude,
-            false,
             false,
         );
         feature.status = ProjectStatus::Active;

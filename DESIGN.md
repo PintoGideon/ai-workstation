@@ -754,7 +754,7 @@ the agent pane. The task prompt is never sent on its own. A failed paste is an e
 before (`stash_lost_prompt`, the `unsent_prompts` table; `Ctrl+Space l` lists them first). The `App` embedded
 in the desktop GUI has no cockpit, so the same call keeps the text as an `UnsentPromptHandoff` the GUI collects
 with `take_unsent_prompt` — the GUI contract (`PlanHandoff.draft_prompt`, `TodoAgentLaunchResponse.draft_prompt`)
-is unchanged. The steering-prompt dialog still sends on `Tab` because the user wrote and sent it.
+is unchanged.
 
 **Session info block (`src/fork/session_info.rs`, `src/app/fork_session_info.rs`,
 `src/ui/fork_session_info.rs`).** The bottom 8 rows of the sidebar when it is ≥ 24 rows tall, for the selected
@@ -777,7 +777,7 @@ prompt (`latest-prompt.txt`) → the feature name. Tests use fixtures under a te
 new.
 
 **Also removed as bloat (2026-10-11).** The session switcher (redundant with the sidebar), the Remote Control URL
-detection (`src/app/remote_control.rs`; the `--remote-control` launch flag is still passed), the compose-only
+detection (`src/app/remote_control.rs`), the compose-only
 clipboard helpers, the TUI's agent-sidebar runtime, the dead `DASHBOARD_SESSION_FILTER_ENABLED` paths in view
 code. The GUI contract, `aiw-gui`, automation, hooks and IPC are unchanged.
 

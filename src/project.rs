@@ -441,21 +441,6 @@ impl VibeMode {
         if opts.enable_chrome {
             flags.push("--chrome".into());
         }
-        // Remote Control requires claude.ai OAuth and is not compatible
-        // with z.ai / third-party provider sessions. The z.ai guard is
-        // applied at the call site before constructing LaunchOpts.
-        //
-        // TODO(remote-control): also gate on API-key / Bedrock / Vertex /
-        // Foundry auth (plan section 3.8). For now only the z.ai case is
-        // blocked at the call site.
-        if opts.remote_control {
-            flags.push("--remote-control".into());
-            if let Some(name) = opts.session_name
-                && !name.is_empty()
-            {
-                flags.push(name);
-            }
-        }
         flags
     }
 
@@ -475,10 +460,6 @@ fn is_false(value: &bool) -> bool {
 #[derive(Debug, Clone, Default)]
 pub struct LaunchOpts {
     pub enable_chrome: bool,
-    pub remote_control: bool,
-    /// Human-readable session name passed to `--remote-control`.
-    /// Ignored when `remote_control` is false.
-    pub session_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -503,8 +484,6 @@ pub struct Feature {
     pub agent: AgentKind,
     #[serde(default)]
     pub enable_chrome: bool,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub remote_control: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub pending_worktree_script: bool,
     #[serde(default)]
@@ -630,8 +609,6 @@ struct FeatureDe {
     #[serde(default)]
     enable_chrome: bool,
     #[serde(default)]
-    remote_control: bool,
-    #[serde(default)]
     ready: bool,
     status: ProjectStatus,
     created_at: DateTime<Utc>,
@@ -673,7 +650,6 @@ impl<'de> Deserialize<'de> for Feature {
             plan_mode: feature.plan_mode,
             agent: feature.agent,
             enable_chrome: feature.enable_chrome,
-            remote_control: feature.remote_control,
             pending_worktree_script: false,
             ready: feature.ready,
             status: feature.status,
@@ -757,7 +733,6 @@ impl Feature {
         plan_mode: bool,
         agent: AgentKind,
         enable_chrome: bool,
-        remote_control: bool,
     ) -> Self {
         let tmux_session = format!("aiw-{}", name);
         Self::new_with_tmux_session(
@@ -770,7 +745,6 @@ impl Feature {
             plan_mode,
             agent,
             enable_chrome,
-            remote_control,
             tmux_session,
         )
     }
@@ -787,7 +761,6 @@ impl Feature {
         plan_mode: bool,
         agent: AgentKind,
         enable_chrome: bool,
-        remote_control: bool,
     ) -> Self {
         let tmux_session = tmux_session_name(project_name, &name);
         Self::new_with_tmux_session(
@@ -800,7 +773,6 @@ impl Feature {
             plan_mode,
             agent,
             enable_chrome,
-            remote_control,
             tmux_session,
         )
     }
@@ -816,7 +788,6 @@ impl Feature {
         plan_mode: bool,
         agent: AgentKind,
         enable_chrome: bool,
-        remote_control: bool,
         tmux_session: String,
     ) -> Self {
         let now = Utc::now();
@@ -834,7 +805,6 @@ impl Feature {
             plan_mode,
             agent,
             enable_chrome,
-            remote_control,
             pending_worktree_script: false,
             ready: false,
             status: ProjectStatus::Stopped,
@@ -1136,7 +1106,6 @@ fn merge_feature(target: &mut Feature, incoming: Feature) {
     target.plan_mode = incoming.plan_mode;
     target.agent = incoming.agent;
     target.enable_chrome = incoming.enable_chrome;
-    target.remote_control = incoming.remote_control;
     target.pending_worktree_script = incoming.pending_worktree_script;
     target.ready = incoming.ready;
     target.status = incoming.status;
@@ -1446,7 +1415,6 @@ impl ProjectStore {
                             plan_mode: false,
                             agent: AgentKind::default(),
                             enable_chrome: false,
-                            remote_control: false,
                             pending_worktree_script: false,
                             ready: false,
                             status: f.status,
@@ -1833,7 +1801,6 @@ mod tests {
             false,
             AgentKind::Codex,
             false,
-            false,
         );
         feature.triage_source = Some(TriageSource {
             pr_number: 7,
@@ -1859,7 +1826,6 @@ mod tests {
             false,
             false,
             AgentKind::Codex,
-            false,
             false,
         );
         feature.issue_source = Some(IssueSource {
@@ -1952,7 +1918,6 @@ mod tests {
             plan_mode: false,
             agent: AgentKind::default(),
             enable_chrome: false,
-            remote_control: false,
             pending_worktree_script: false,
             ready: false,
             status: ProjectStatus::Stopped,
@@ -2017,7 +1982,6 @@ mod tests {
                     plan_mode: false,
                     agent: AgentKind::Claude,
                     enable_chrome: false,
-                    remote_control: false,
                     pending_worktree_script: false,
                     ready: false,
                     status: ProjectStatus::Stopped,
@@ -2102,7 +2066,6 @@ mod tests {
                         plan_mode: true,
                         agent: AgentKind::Codex,
                         enable_chrome: true,
-                        remote_control: false,
                         pending_worktree_script: true,
                         ready: true,
                         status: ProjectStatus::Active,
@@ -2130,7 +2093,6 @@ mod tests {
                         plan_mode: false,
                         agent: AgentKind::Pi,
                         enable_chrome: false,
-                        remote_control: false,
                         pending_worktree_script: false,
                         ready: false,
                         status: ProjectStatus::Idle,
@@ -2271,7 +2233,6 @@ mod tests {
             false,
             false,
             AgentKind::Claude,
-            false,
             false,
         );
         let keep = feature.add_session(SessionKind::Claude).id.clone();
@@ -2631,19 +2592,7 @@ mod tests {
     // ── VibeMode::cli_flags ───────────────────────────────────
 
     fn opts(enable_chrome: bool) -> LaunchOpts {
-        LaunchOpts {
-            enable_chrome,
-            remote_control: false,
-            session_name: None,
-        }
-    }
-
-    fn opts_rc(name: Option<&str>) -> LaunchOpts {
-        LaunchOpts {
-            enable_chrome: false,
-            remote_control: true,
-            session_name: name.map(str::to_string),
-        }
+        LaunchOpts { enable_chrome }
     }
 
     #[test]
@@ -2677,56 +2626,6 @@ mod tests {
             VibeMode::SuperVibe.cli_flags(opts(true)),
             vec!["--dangerously-skip-permissions", "--chrome"]
         );
-    }
-
-    // ── LaunchOpts / remote_control flag tests ────────────────
-
-    #[test]
-    fn launch_opts_rc_off_produces_no_rc_flag() {
-        let flags = VibeMode::Vibeless.cli_flags(opts(false));
-        assert!(!flags.iter().any(|f| f == "--remote-control"));
-    }
-
-    #[test]
-    fn launch_opts_rc_on_no_name() {
-        let flags = VibeMode::Vibeless.cli_flags(opts_rc(None));
-        assert_eq!(flags, vec!["--remote-control"]);
-    }
-
-    #[test]
-    fn launch_opts_rc_on_with_name() {
-        let flags = VibeMode::Vibeless.cli_flags(opts_rc(Some("my-feature")));
-        assert_eq!(flags, vec!["--remote-control", "my-feature"]);
-    }
-
-    #[test]
-    fn launch_opts_rc_on_with_chrome_and_name() {
-        let flags = VibeMode::Vibeless.cli_flags(LaunchOpts {
-            enable_chrome: true,
-            remote_control: true,
-            session_name: Some("my-feature".to_string()),
-        });
-        assert_eq!(flags, vec!["--chrome", "--remote-control", "my-feature"]);
-    }
-
-    #[test]
-    fn launch_opts_supervibe_rc_on() {
-        let flags = VibeMode::SuperVibe.cli_flags(opts_rc(Some("feat")));
-        assert_eq!(
-            flags,
-            vec!["--dangerously-skip-permissions", "--remote-control", "feat"]
-        );
-    }
-
-    #[test]
-    fn launch_opts_rc_empty_name_omitted() {
-        // An empty name string should not be appended.
-        let flags = VibeMode::Vibeless.cli_flags(LaunchOpts {
-            enable_chrome: false,
-            remote_control: true,
-            session_name: Some(String::new()),
-        });
-        assert_eq!(flags, vec!["--remote-control"]);
     }
 
     #[test]

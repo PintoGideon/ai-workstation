@@ -5,8 +5,6 @@ use crate::app::{
     App, AppMode, CreateProjectStep, StoppedSessionChoice, ThemePickerEntry, ThemePickerGroupState,
 };
 
-const STEERING_PROMPT_PAGE_SCROLL: usize = 6;
-
 pub fn handle_create_project_key(app: &mut App, key: KeyEvent) -> Result<()> {
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('b') {
         let is_path_step = matches!(
@@ -318,77 +316,6 @@ pub fn handle_markdown_viewer_key(app: &mut App, key: KeyEvent) -> Result<()> {
             }
         }
         _ => {}
-    }
-    Ok(())
-}
-
-pub fn handle_steering_prompt_key(app: &mut App, key: KeyEvent) -> Result<()> {
-    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
-        app.cancel_steering_prompt();
-        return Ok(());
-    }
-
-    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('t') {
-        if let AppMode::SteeringPrompt(state) = &mut app.mode {
-            state.editor.toggle_vim();
-            app.message = Some(if state.editor.vim_mode().is_some() {
-                "Vim mode enabled".into()
-            } else {
-                "Vim mode disabled".into()
-            });
-        }
-        return Ok(());
-    }
-
-    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('l') {
-        if let AppMode::SteeringPrompt(state) = &mut app.mode {
-            state.clear_prompt();
-            app.push_toast_success("Steering prompt cleared");
-        }
-        return Ok(());
-    }
-
-    if let AppMode::SteeringPrompt(state) = &mut app.mode {
-        match key.code {
-            KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                state.scroll_down(1);
-                return Ok(());
-            }
-            KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                state.scroll_up(1);
-                return Ok(());
-            }
-            KeyCode::PageDown => {
-                state.scroll_down(STEERING_PROMPT_PAGE_SCROLL);
-                return Ok(());
-            }
-            KeyCode::PageUp => {
-                state.scroll_up(STEERING_PROMPT_PAGE_SCROLL);
-                return Ok(());
-            }
-            _ => {}
-        }
-    }
-
-    match key.code {
-        KeyCode::Tab => {
-            app.submit_steering_prompt()?;
-        }
-        KeyCode::Esc if matches!(&app.mode, AppMode::SteeringPrompt(state) if state.editor.vim_mode().is_none()) =>
-        {
-            app.cancel_steering_prompt();
-        }
-        _ => {
-            if let AppMode::SteeringPrompt(state) = &mut app.mode {
-                let outcome = state.editor.handle_key(key);
-                if outcome.text_changed {
-                    state.refresh_prompt_analysis();
-                }
-                if outcome.text_changed || outcome.cursor_moved {
-                    state.request_cursor_scroll();
-                }
-            }
-        }
     }
     Ok(())
 }
@@ -787,44 +714,11 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::app::{
-        CommandAction, MarkdownFilePickerState, MarkdownViewerState, SteeringPromptState, ViewState,
-    };
+    use crate::app::{CommandAction, MarkdownFilePickerState, MarkdownViewerState, ViewState};
     use crate::project::{AgentKind, Feature, Project, ProjectStore, VibeMode};
     use crate::theme::{Theme, ThemeName};
     use crate::traits::{MockTmuxOps, MockWorktreeOps};
     use tempfile::TempDir;
-
-    fn steering_app(workdir: &std::path::Path, prompt: &str) -> App {
-        let store = ProjectStore {
-            version: 5,
-            projects: vec![],
-            session_bookmarks: vec![],
-            available_harnesses: vec![],
-            prompt_templates: Vec::new(),
-            extra: HashMap::new(),
-        };
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.mode = AppMode::SteeringPrompt(SteeringPromptState::new(
-            ViewState::new(
-                "demo".to_string(),
-                "feature".to_string(),
-                "aiw-feature".to_string(),
-                "claude".to_string(),
-                "Claude 1".to_string(),
-                crate::project::SessionKind::Claude,
-                VibeMode::Vibeless,
-                false,
-            ),
-            workdir.to_path_buf(),
-            prompt.to_string(),
-        ));
-        app
-    }
 
     fn markdown_view() -> ViewState {
         ViewState::new(
@@ -860,142 +754,6 @@ mod tests {
         )
     }
 
-    #[test]
-    fn steering_prompt_escape_enters_vim_normal_mode() {
-        let repo = TempDir::new().unwrap();
-        let mut app = steering_app(repo.path(), "draft");
-
-        handle_steering_prompt_key(&mut app, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
-            .unwrap();
-
-        match &app.mode {
-            AppMode::SteeringPrompt(state) => {
-                assert_eq!(
-                    state.editor.vim_mode(),
-                    Some(crate::editor::VimMode::Normal)
-                );
-                assert_eq!(state.editor.text(), "draft");
-            }
-            _ => panic!("expected steering prompt to stay open"),
-        }
-    }
-
-    #[test]
-    fn steering_prompt_ctrl_q_closes_dialog() {
-        let repo = TempDir::new().unwrap();
-        let mut app = steering_app(repo.path(), "draft");
-
-        handle_steering_prompt_key(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL),
-        )
-        .unwrap();
-
-        assert!(matches!(app.mode, AppMode::Normal));
-    }
-
-    #[test]
-    fn steering_prompt_ctrl_t_toggles_vim_mode() {
-        let repo = TempDir::new().unwrap();
-        let mut app = steering_app(repo.path(), "draft");
-
-        handle_steering_prompt_key(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
-        )
-        .unwrap();
-
-        match &app.mode {
-            AppMode::SteeringPrompt(state) => {
-                assert_eq!(state.editor.vim_mode(), None);
-                assert_eq!(state.editor.text(), "draft");
-            }
-            _ => panic!("expected steering prompt to stay open"),
-        }
-
-        handle_steering_prompt_key(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
-        )
-        .unwrap();
-
-        match &app.mode {
-            AppMode::SteeringPrompt(state) => {
-                assert_eq!(
-                    state.editor.vim_mode(),
-                    Some(crate::editor::VimMode::Insert)
-                );
-                assert_eq!(state.editor.text(), "draft");
-            }
-            _ => panic!("expected steering prompt to stay open"),
-        }
-    }
-
-    #[test]
-    fn steering_prompt_scroll_keys_adjust_offset() {
-        let repo = TempDir::new().unwrap();
-        let mut app = steering_app(repo.path(), "draft");
-
-        if let AppMode::SteeringPrompt(state) = &mut app.mode {
-            state.scroll_offset = 4;
-        }
-
-        handle_steering_prompt_key(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL),
-        )
-        .unwrap();
-        handle_steering_prompt_key(
-            &mut app,
-            KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE),
-        )
-        .unwrap();
-        handle_steering_prompt_key(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL),
-        )
-        .unwrap();
-        handle_steering_prompt_key(&mut app, KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE))
-            .unwrap();
-
-        match &app.mode {
-            AppMode::SteeringPrompt(state) => assert_eq!(state.scroll_offset, 4),
-            _ => panic!("expected steering prompt to stay open"),
-        }
-    }
-
-    #[test]
-    fn steering_prompt_ctrl_l_clears_editor() {
-        let repo = TempDir::new().unwrap();
-        let mut app = steering_app(repo.path(), "draft\nwith details");
-
-        if let AppMode::SteeringPrompt(state) = &mut app.mode {
-            state.scroll_offset = 8;
-        }
-
-        handle_steering_prompt_key(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL),
-        )
-        .unwrap();
-
-        match &app.mode {
-            AppMode::SteeringPrompt(state) => {
-                assert_eq!(state.editor.text(), "");
-                assert_eq!(state.scroll_offset, 0);
-                assert_eq!(
-                    state.prompt_analysis.score,
-                    crate::app::analyze_prompt("").score
-                );
-            }
-            _ => panic!("expected steering prompt to stay open"),
-        }
-        assert_eq!(
-            app.toasts.last().map(|t| t.message.as_str()),
-            Some("Steering prompt cleared")
-        );
-    }
-
     fn markdown_app_with_feature(workdir: &std::path::Path, repo_root: &std::path::Path) -> App {
         let mut project = Project::new(
             "demo".into(),
@@ -1012,7 +770,6 @@ mod tests {
             false,
             false,
             AgentKind::Claude,
-            false,
             false,
         ));
         let store = ProjectStore {

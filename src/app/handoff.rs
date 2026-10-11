@@ -544,7 +544,6 @@ mod tests {
             false,
             AgentKind::Codex,
             false,
-            false,
         );
         assert_eq!(fresh_context_session_label(&feature), "Fresh Context");
 

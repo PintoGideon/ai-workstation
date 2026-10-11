@@ -273,7 +273,6 @@ mod tests {
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         let session_id = feature.add_session(SessionKind::Claude).id.clone();
         for kind in [

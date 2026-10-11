@@ -21,10 +21,10 @@
 //!
 //! Deliberately absent (TUI-process state with no shared form): the attention
 //! reason, a hook the TUI moved to the background, a TUI-side deletion in
-//! progress, TUI summary generation and a TUI AI PR review. `remote_control`
-//! and `pending_worktree_script` are on the snapshot's `Feature`, but the
-//! store does not persist them (`db/store.rs` loads both as `false`), so only
-//! the process that set them ever sees them. While a TUI owns the IPC socket
+//! progress, TUI summary generation and a TUI AI PR review.
+//! `pending_worktree_script` is on the snapshot's `Feature`, but the store
+//! does not persist it (`db/store.rs` loads it as `false`), so only the
+//! process that set it ever sees it. While a TUI owns the IPC socket
 //! the hooks report to it instead of the marker/notification files, so the GUI
 //! under-reports thinking/waiting rather than guessing.
 
@@ -600,7 +600,6 @@ mod tests {
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         feature.id = id.to_string();
         feature.tmux_session = format!("aiw-sidebar-test-{}-{id}", std::process::id());
@@ -686,7 +685,6 @@ mod tests {
         });
         feat.summary = Some("Rounded totals".into());
         feat.summary_updated_at = Some(Utc::now());
-        feat.remote_control = true;
         feat.pending_worktree_script = true;
         feat.review = true;
         feat.plan_mode = true;
@@ -723,7 +721,6 @@ mod tests {
             "review",
             "plan_mode",
             "agent",
-            "remote_control",
             "pending_worktree_script",
             "ready",
             "status",

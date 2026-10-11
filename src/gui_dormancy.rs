@@ -394,7 +394,6 @@ mod tests {
             false,
             AgentKind::default(),
             false,
-            false,
         );
         feature.id = id.to_string();
         feature.tmux_session = format!("aiw-{id}");

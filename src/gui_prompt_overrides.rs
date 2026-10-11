@@ -630,7 +630,6 @@ mod tests {
             false,
             AgentKind::Codex,
             false,
-            false,
         );
         let feature_context = OverrideContext::Feature {
             project_id: project.id.clone(),
@@ -1036,8 +1035,6 @@ mod tests {
                 create_terminal: false,
                 session_name: "Pi 1".into(),
                 enable_chrome: false,
-                remote_control: false,
-                steering_enabled: false,
                 hook_succeeded: None,
                 startup_prompt: None,
                 todo_origin: None,

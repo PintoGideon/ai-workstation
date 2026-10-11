@@ -98,8 +98,6 @@ pub(crate) struct IssueSetupState {
     pub plan_mode: bool,
     pub quick_plan: bool,
     pub create_terminal: bool,
-    pub steering_enabled: bool,
-    pub remote_control: bool,
     pub session_name: String,
     pub prompt: TextEditor,
     pub prompt_editing: bool,
@@ -589,8 +587,6 @@ impl App {
             plan_mode: false,
             quick_plan: false,
             create_terminal: false,
-            steering_enabled: false,
-            remote_control: self.config.remote_control_default,
             session_name: App::default_session_name_for_agent(&agent),
             prompt: TextEditor::new(prompt),
             prompt_editing: false,
@@ -755,14 +751,11 @@ impl App {
         create.mode = state.mode();
         create.review = state.settings.review;
         create.enable_chrome = state.settings.enable_chrome;
-        create.remote_control = state.remote_control;
-        create.steering_enabled = state.steering_enabled;
         create.plan_mode = state.plan_mode;
         create.quick_plan = state.quick_plan;
         create.create_terminal = state.create_terminal;
         create.session_name = state.session_name;
         create.task_prompt = state.prompt.text().to_string();
-        create.refresh_prompt_analysis();
         create.step = crate::app::CreateFeatureStep::SessionName;
         self.create_feature()
     }
@@ -1351,7 +1344,6 @@ mod tests {
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         let feature_id = feature.id.clone();
         let source = issue_source(crate::project::IssueCommentStatus::Pending);
@@ -1411,7 +1403,6 @@ mod tests {
                 false,
                 false,
                 AgentKind::Claude,
-                false,
                 false,
             );
             let mut source = issue_source(status);
@@ -1561,7 +1552,6 @@ mod tests {
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         existing.issue_source = Some(crate::project::IssueSource {
             host: "GITHUB.COM".to_string(),
@@ -1628,8 +1618,6 @@ mod tests {
             create_terminal: false,
             session_name: "Claude 1".to_string(),
             enable_chrome: false,
-            remote_control: false,
-            steering_enabled: false,
             hook_succeeded: None,
             startup_prompt: Some("edited prompt".to_string()),
             todo_origin: None,
@@ -1697,7 +1685,6 @@ mod tests {
             false,
             AgentKind::Claude,
             false,
-            false,
         );
         pending.pending_worktree_script = true;
         let pending_id = pending.id.clone();
@@ -1715,7 +1702,6 @@ mod tests {
             false,
             false,
             AgentKind::Claude,
-            false,
             false,
         );
         other.issue_source = Some(crate::project::IssueSource {
@@ -1742,8 +1728,6 @@ mod tests {
             create_terminal: false,
             session_name: "Claude 1".to_string(),
             enable_chrome: false,
-            remote_control: false,
-            steering_enabled: false,
             hook_succeeded: None,
             startup_prompt: None,
             todo_origin: None,

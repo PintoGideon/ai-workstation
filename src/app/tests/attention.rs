@@ -31,7 +31,6 @@ fn store_with_agents(agents: &[AgentKind]) -> ProjectStore {
             plan_mode: false,
             agent: agent.clone(),
             enable_chrome: false,
-            remote_control: false,
             pending_worktree_script: false,
             ready: false,
             status: ProjectStatus::Active,

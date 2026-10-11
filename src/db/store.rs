@@ -367,7 +367,6 @@ fn load_features(
                 agent_from_str(&agent_str)
             },
             enable_chrome,
-            remote_control: false, // not yet in DB schema; default false
             pending_worktree_script: false,
             ready,
             status: status_from_str(&status_str),
@@ -800,7 +799,6 @@ mod tests {
             plan_mode: false,
             agent: crate::project::AgentKind::Claude,
             enable_chrome: false,
-            remote_control: false,
             pending_worktree_script: false,
             ready: true,
             status: crate::project::ProjectStatus::Idle,
@@ -1009,7 +1007,6 @@ mod tests {
                     plan_mode: false,
                     agent: crate::project::AgentKind::Claude,
                     enable_chrome: false,
-                    remote_control: false,
                     pending_worktree_script: false,
                     ready: false,
                     status: crate::project::ProjectStatus::Stopped,
@@ -1037,7 +1034,6 @@ mod tests {
                     plan_mode: false,
                     agent: crate::project::AgentKind::Claude,
                     enable_chrome: false,
-                    remote_control: false,
                     pending_worktree_script: true, // should be excluded
                     ready: false,
                     status: crate::project::ProjectStatus::Stopped,
@@ -1203,7 +1199,6 @@ mod tests {
             false,
             false,
             AgentKind::Claude,
-            false,
             false,
         );
         let keep = feature.add_session(SessionKind::Claude).id.clone();

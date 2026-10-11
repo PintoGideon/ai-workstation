@@ -9,7 +9,6 @@ use std::path::PathBuf;
 use std::process::Child;
 use std::time::{Duration, Instant};
 
-use super::PromptAnalysis;
 use crate::db::plan_interviews::{PlanInterviewRecord, PlanInterviewStage};
 use crate::editor::TextEditor;
 use crate::extension::{
@@ -41,7 +40,6 @@ pub struct ForkFeatureState {
     pub mode: VibeMode,
     pub review: bool,
     pub enable_chrome: bool,
-    pub remote_control: bool,
     pub include_context: bool,
 }
 
@@ -372,59 +370,6 @@ pub struct DiffPickerState {
 
 // Not `Clone`: holds a `std::process::Child` for the in-flight walkthrough
 // generation (matching `DiffReviewState`). Nothing clones this state wholesale.
-
-#[derive(Clone)]
-pub struct SteeringPromptState {
-    pub view: ViewState,
-    pub workdir: PathBuf,
-    pub editor: TextEditor,
-    pub prompt_analysis: PromptAnalysis,
-    pub scroll_offset: usize,
-    pub sync_scroll_to_cursor: bool,
-}
-
-impl SteeringPromptState {
-    pub fn new(view: ViewState, workdir: PathBuf, prompt: String) -> Self {
-        let editor = TextEditor::with_vim(prompt);
-        let prompt_analysis = crate::app::analyze_prompt(editor.text());
-        Self {
-            view,
-            workdir,
-            editor,
-            prompt_analysis,
-            scroll_offset: 0,
-            sync_scroll_to_cursor: true,
-        }
-    }
-
-    pub fn refresh_prompt_analysis(&mut self) {
-        self.prompt_analysis = crate::app::analyze_prompt(self.editor.text());
-    }
-
-    pub fn request_cursor_scroll(&mut self) {
-        self.sync_scroll_to_cursor = true;
-    }
-
-    pub fn scroll_up(&mut self, lines: usize) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(lines);
-        self.sync_scroll_to_cursor = false;
-    }
-
-    pub fn scroll_down(&mut self, lines: usize) {
-        self.scroll_offset = self.scroll_offset.saturating_add(lines);
-        self.sync_scroll_to_cursor = false;
-    }
-
-    pub fn clear_prompt(&mut self) -> bool {
-        let cleared = self.editor.clear().text_changed;
-        if cleared {
-            self.refresh_prompt_analysis();
-        }
-        self.scroll_offset = 0;
-        self.sync_scroll_to_cursor = false;
-        cleared
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct ComposeCommandEntry {
@@ -1517,7 +1462,6 @@ pub enum AppMode {
     /// Running the AI PR review's diff-fetch + review pass off the UI thread
     /// (`A`); shows a loading frame with the current stage.
     AiReviewRunning(AiReviewRunState),
-    SteeringPrompt(SteeringPromptState),
     SessionPicker(SessionPickerState),
     DiffReviewPrompt(DiffReviewState),
     RunningHook(RunningHookState),
@@ -1982,8 +1926,6 @@ pub enum HookNext {
         create_terminal: bool,
         session_name: String,
         enable_chrome: bool,
-        remote_control: bool,
-        steering_enabled: bool,
         startup_prompt: Option<String>,
         /// Carried across the hook detour, which rebuilds the launch from
         /// scratch and would otherwise drop the TODO link on any project with
@@ -2029,8 +1971,6 @@ pub struct RunningHookState {
     pub create_terminal: bool,
     pub session_name: String,
     pub enable_chrome: bool,
-    pub remote_control: bool,
-    pub steering_enabled: bool,
     pub startup_prompt: Option<String>,
     pub child: Option<Child>,
     pub output: String,
@@ -2127,8 +2067,6 @@ pub struct BackgroundHook {
     pub create_terminal: bool,
     pub session_name: String,
     pub enable_chrome: bool,
-    pub remote_control: bool,
-    pub steering_enabled: bool,
     pub startup_prompt: Option<String>,
     pub child: Option<Child>,
     pub output: String,
@@ -2154,8 +2092,6 @@ impl BackgroundHook {
             create_terminal: state.create_terminal,
             session_name: state.session_name,
             enable_chrome: state.enable_chrome,
-            remote_control: state.remote_control,
-            steering_enabled: state.steering_enabled,
             startup_prompt: state.startup_prompt,
             child: state.child,
             output: state.output,
@@ -2235,8 +2171,6 @@ pub enum CreateFeatureStep {
     Worktree,
     Mode,
     SessionName,
-    #[allow(dead_code)] // not constructed yet
-    TaskPrompt,
     ConfirmSuperVibe,
 }
 
@@ -2293,21 +2227,8 @@ pub struct CreateFeatureState {
     pub worktree_query: String,
     pub use_worktree: bool,
     pub enable_chrome: bool,
-    pub remote_control: bool,
-    /// Whether Remote Control can be enabled for this feature. False when
-    /// the resolved auth is incompatible (e.g. a z.ai / third-party
-    /// provider session). When false the wizard shows the toggle disabled
-    /// with a reason rather than letting the user enable something that
-    /// would be silently dropped at launch.
-    pub remote_control_available: bool,
-    /// When `remote_control_available` is false, a short reason shown in
-    /// the wizard (e.g. "Unavailable with z.ai provider" or a version
-    /// requirement). `None` when Remote Control is available.
-    pub remote_control_block_reason: Option<String>,
-    pub steering_enabled: bool,
     pub preset_index: usize,
     pub task_prompt: String,
-    pub prompt_analysis: PromptAnalysis,
 }
 
 impl CreateFeatureState {
@@ -2355,15 +2276,8 @@ impl CreateFeatureState {
             worktree_query: String::new(),
             use_worktree: !is_first_feature,
             enable_chrome: false,
-            remote_control: false,
-            // Assume available; the caller refines this from the resolved
-            // auth (see feature_ops.rs) when opening the wizard.
-            remote_control_available: true,
-            remote_control_block_reason: None,
-            steering_enabled: false,
             preset_index: 0,
             task_prompt: String::new(),
-            prompt_analysis: crate::app::analyze_prompt(""),
         }
     }
 
@@ -2385,14 +2299,7 @@ impl CreateFeatureState {
             4 if self.agent == AgentKind::Claude => {
                 Some("Enable browser automation for features that need Chrome.")
             }
-            4 => Some("Use the prompt coach to sharpen the feature request before launch."),
-            5 if self.agent == AgentKind::Claude && self.remote_control_available => {
-                Some("Enable claude.ai and mobile sync for this Claude session.")
-            }
-            5 if self.agent == AgentKind::Claude => {
-                Some("Remote Control is unavailable for the selected Claude auth provider.")
-            }
-            _ => Some("Use the prompt coach to sharpen the feature request before launch."),
+            _ => None,
         }
     }
 
@@ -2409,10 +2316,6 @@ impl CreateFeatureState {
             (true, true, false) => (false, false),
         };
         (self.plan_mode, self.quick_plan) = next;
-    }
-
-    pub fn refresh_prompt_analysis(&mut self) {
-        self.prompt_analysis = crate::app::analyze_prompt(&self.task_prompt);
     }
 
     pub fn visible_worktree_indices(&self) -> Vec<usize> {
@@ -2464,8 +2367,6 @@ pub struct PreparedFeatureLaunch {
     pub create_terminal: bool,
     pub session_name: String,
     pub enable_chrome: bool,
-    pub remote_control: bool,
-    pub steering_enabled: bool,
     pub hook_succeeded: Option<bool>,
     /// Optional composer seed to show immediately after the agent starts.
     pub startup_prompt: Option<String>,
@@ -4927,8 +4828,6 @@ mod tests {
             create_terminal: false,
             session_name: "Claude 1".into(),
             enable_chrome: false,
-            remote_control: false,
-            steering_enabled: false,
             hook_succeeded: None,
             startup_prompt: None,
             todo_origin: None,

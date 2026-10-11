@@ -6556,7 +6556,6 @@ fn triage_setup_preset_fills_in_the_rows_below_it() {
         plan_mode: true,
         quick_plan: false,
         enable_chrome: true,
-        remote_control: false,
     }];
     enter_pr_review_for_feature(&mut app, 1);
     app.pr_review_open_fix_confirm();

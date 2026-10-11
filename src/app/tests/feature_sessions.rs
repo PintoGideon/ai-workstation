@@ -446,13 +446,8 @@ fn app_in_creating_feature_mode(
         worktree_query: String::new(),
         use_worktree,
         enable_chrome: false,
-        remote_control: false,
-        remote_control_available: true,
-        remote_control_block_reason: None,
-        steering_enabled: true,
         preset_index: 0,
         task_prompt: String::new(),
-        prompt_analysis: analyze_prompt(""),
     };
     let mut app = App::new_for_test(
         store,
@@ -810,258 +805,9 @@ fn start_create_feature_defaults_to_first_allowed_agent() {
             assert_eq!(state.agent, AgentKind::Codex);
             assert_eq!(state.agent_index, 0);
             assert!(!state.create_terminal);
-            assert!(!state.steering_enabled);
         }
         _ => panic!("expected CreatingFeature mode"),
     }
-}
-
-fn project_only_store(repo: &std::path::Path) -> ProjectStore {
-    let now = Utc::now();
-    let project = Project {
-        id: "proj-1".to_string(),
-        name: "my-project".to_string(),
-        repo: repo.to_path_buf(),
-        collapsed: false,
-        features: vec![],
-        created_at: now,
-        preferred_agent: AgentKind::Claude,
-        is_git: false,
-    };
-    ProjectStore {
-        version: 2,
-        projects: vec![project],
-        session_bookmarks: vec![],
-        available_harnesses: vec![],
-        prompt_templates: Vec::new(),
-        extra: HashMap::new(),
-    }
-}
-
-#[test]
-fn create_feature_default_remote_control_matches_availability() {
-    let repo = TempDir::new().unwrap();
-    let store = project_only_store(repo.path());
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.selection = Selection::Project(0);
-    app.config.remote_control_default = true;
-
-    app.start_create_feature();
-
-    match &app.mode {
-        AppMode::CreatingFeature(state) => {
-            // With the default on, the toggle follows availability exactly —
-            // it is never forced on when Remote Control can't be used.
-            assert_eq!(state.remote_control, state.remote_control_available);
-        }
-        _ => panic!("expected CreatingFeature mode"),
-    }
-}
-
-#[test]
-fn create_feature_default_remote_control_blocked_by_zai() {
-    let repo = TempDir::new().unwrap();
-    let store = project_only_store(repo.path());
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.selection = Selection::Project(0);
-    app.config.remote_control_default = true;
-    app.config.zai = Some(ZaiPlanConfig {
-        plan: "coding".to_string(),
-        ..Default::default()
-    });
-
-    app.start_create_feature();
-
-    match &app.mode {
-        AppMode::CreatingFeature(state) => {
-            assert!(!state.remote_control_available);
-            assert!(
-                !state.remote_control,
-                "default must not override z.ai guard"
-            );
-            assert_eq!(
-                state.remote_control_block_reason.as_deref(),
-                Some("Unavailable with z.ai provider")
-            );
-        }
-        _ => panic!("expected CreatingFeature mode"),
-    }
-}
-
-fn startup_prompt_overlay_test(agent: AgentKind, expected_window: &'static str) {
-    let repo = TempDir::new().unwrap();
-    let workdir = repo.path().join(".worktrees").join("coached");
-    std::fs::create_dir_all(&workdir).unwrap();
-    let expected_session = "aiw-my-project-coached";
-    let mode = if agent == AgentKind::Codex {
-        VibeMode::Vibe
-    } else {
-        VibeMode::Vibeless
-    };
-
-    let now = Utc::now();
-    let project = Project {
-        id: "proj-1".to_string(),
-        name: "my-project".to_string(),
-        repo: repo.path().to_path_buf(),
-        collapsed: false,
-        features: vec![],
-        created_at: now,
-        preferred_agent: agent.clone(),
-        is_git: true,
-    };
-    let store = ProjectStore {
-        version: 2,
-        projects: vec![project],
-        session_bookmarks: vec![],
-        available_harnesses: vec![],
-        prompt_templates: Vec::new(),
-        extra: std::collections::HashMap::new(),
-    };
-
-    let mut tmux = MockTmuxOps::new();
-    // FORK(cockpit): the steering dialog no longer opens a view, so only
-    // the launch itself asks whether the session exists.
-    tmux.expect_session_exists()
-        .withf(move |session| session == expected_session)
-        .times(1..=2)
-        .returning({
-            let mut calls = 0;
-            move |_| {
-                calls += 1;
-                calls > 1
-            }
-        });
-    tmux.expect_create_session_with_window()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_set_session_env()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_create_window()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    match &agent {
-        AgentKind::Claude => {
-            tmux.expect_launch_claude()
-                .times(1)
-                .returning(|_, _, _, _, _| Ok(()));
-        }
-        AgentKind::Codex => {
-            tmux.expect_launch_codex()
-                .times(1)
-                .withf(|session, window, feature_session_id, resume, extra_args| {
-                    session == "aiw-my-project-coached"
-                        && window == "codex"
-                        && !feature_session_id.is_empty()
-                        && resume.is_none()
-                        && extra_args.iter().any(|arg| arg == "--add-dir")
-                })
-                .returning(|_, _, _, _, _| Ok(()));
-        }
-        AgentKind::Pi => {
-            tmux.expect_launch_pi().times(1).returning(|_, _, _| Ok(()));
-        }
-        // FORK
-        AgentKind::Gemini | AgentKind::Cursor => {
-            tmux.expect_launch_program()
-                .times(1)
-                .returning(|_, _, _, _, _| Ok(()));
-        }
-    }
-    tmux.expect_select_window()
-        .times(1)
-        .returning(|_, _| Ok(()));
-
-    let tmp = NamedTempFile::new().unwrap();
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.store_path = tmp.path().to_path_buf();
-    app.mode = AppMode::CreatingFeature(CreateFeatureState {
-        project_name: "my-project".to_string(),
-        project_repo: repo.path().to_path_buf(),
-        todo_origin: None,
-        issue_source: None,
-        feature_name: None,
-        branch: "coached".to_string(),
-        branch_error: None,
-        allowed_agents: AgentKind::ALL.to_vec(),
-        feature_presets: Vec::new(),
-        step: CreateFeatureStep::Mode,
-        agent: agent.clone(),
-        agent_index: 0,
-        mode: mode.clone(),
-        mode_index: 0,
-        mode_focus: 0,
-        review: false,
-        plan_mode: false,
-        quick_plan: false,
-        create_terminal: false,
-        session_name: "Claude 1".to_string(),
-        source_index: 0,
-        worktrees: vec![],
-        worktree_index: 0,
-        worktree_search_active: false,
-        worktree_query: String::new(),
-        use_worktree: true,
-        enable_chrome: false,
-        remote_control: false,
-        remote_control_available: true,
-        remote_control_block_reason: None,
-        steering_enabled: true,
-        preset_index: 0,
-        task_prompt: String::new(),
-        prompt_analysis: analyze_prompt(""),
-    });
-
-    app.finish_feature_launch(PreparedFeatureLaunch {
-        model_selection: None,
-        project_name: "my-project".to_string(),
-        feature_name: None,
-        branch: "coached".to_string(),
-        workdir: workdir.clone(),
-        is_worktree: true,
-        mode,
-        review: false,
-        plan_mode: false,
-        quick_plan: false,
-        agent: agent.clone(),
-        create_terminal: true,
-        session_name: "Claude 1".to_string(),
-        enable_chrome: false,
-        remote_control: false,
-        steering_enabled: true,
-        hook_succeeded: None,
-        startup_prompt: None,
-        todo_origin: None,
-        issue_source: None,
-    })
-    .unwrap();
-
-    match &app.mode {
-        AppMode::SteeringPrompt(state) => {
-            assert_eq!(state.view.window, expected_window);
-            assert_eq!(state.workdir, workdir);
-        }
-        _ => panic!("expected SteeringPrompt mode"),
-    }
-}
-
-#[test]
-fn finish_feature_launch_opens_startup_prompt_for_claude() {
-    startup_prompt_overlay_test(AgentKind::Claude, "claude");
-}
-
-#[test]
-fn finish_feature_launch_opens_startup_prompt_for_codex() {
-    startup_prompt_overlay_test(AgentKind::Codex, "codex");
 }
 
 /// Regression test for issue #633: restoring a historical claude session for
@@ -1088,7 +834,6 @@ fn restore_claude_session_only_affects_the_targeted_session() {
         plan_mode: false,
         agent: AgentKind::Claude,
         enable_chrome: false,
-        remote_control: false,
         pending_worktree_script: false,
         ready: false,
         status: ProjectStatus::Stopped,
@@ -1229,8 +974,6 @@ fn finish_feature_launch_vibeless_injects_custom_diff_review_hook_on_worktree_cr
         create_terminal: false,
         session_name: "Claude 1".to_string(),
         enable_chrome: false,
-        remote_control: false,
-        steering_enabled: false,
         hook_succeeded: None,
         startup_prompt: None,
         todo_origin: None,
@@ -1322,56 +1065,6 @@ fn start_create_feature_uses_project_preferred_agent_when_allowed() {
         AppMode::CreatingFeature(state) => {
             assert_eq!(state.agent, AgentKind::Codex);
             assert_eq!(state.agent_index, 1);
-            assert!(!state.steering_enabled);
-        }
-        _ => panic!("expected CreatingFeature mode"),
-    }
-}
-
-#[test]
-fn create_feature_mode_allows_toggling_steering_for_claude() {
-    use crossterm::event::KeyCode;
-
-    let store = store_with_feature(ProjectStatus::Stopped);
-    let mut app = app_in_creating_feature_mode(store, "my-project", "other-feat", true);
-    if let AppMode::CreatingFeature(state) = &mut app.mode {
-        state.step = CreateFeatureStep::Mode;
-        state.agent = AgentKind::Claude;
-        // Steering coach is focus 6 for Claude (focus 5 is Remote Control).
-        state.mode_focus = 6;
-        state.steering_enabled = false;
-    }
-
-    crate::handlers::handle_create_feature_key(&mut app, KeyCode::Char('j')).unwrap();
-
-    match &app.mode {
-        AppMode::CreatingFeature(state) => assert!(state.steering_enabled),
-        _ => panic!("expected CreatingFeature mode"),
-    }
-}
-
-#[test]
-fn create_feature_mode_allows_toggling_remote_control_for_claude() {
-    use crossterm::event::KeyCode;
-
-    let store = store_with_feature(ProjectStatus::Stopped);
-    let mut app = app_in_creating_feature_mode(store, "my-project", "other-feat", true);
-    if let AppMode::CreatingFeature(state) = &mut app.mode {
-        state.step = CreateFeatureStep::Mode;
-        state.agent = AgentKind::Claude;
-        // Remote Control is focus 5 for Claude.
-        state.mode_focus = 5;
-        state.remote_control = false;
-        state.steering_enabled = false;
-    }
-
-    crate::handlers::handle_create_feature_key(&mut app, KeyCode::Char('j')).unwrap();
-
-    match &app.mode {
-        AppMode::CreatingFeature(state) => {
-            assert!(state.remote_control);
-            // Toggling Remote Control must not affect steering.
-            assert!(!state.steering_enabled);
         }
         _ => panic!("expected CreatingFeature mode"),
     }
@@ -1441,29 +1134,6 @@ fn create_feature_mouse_hover_over_review_updates_mode_focus() {
 }
 
 #[test]
-fn create_feature_mode_remote_control_toggle_inert_when_unavailable() {
-    use crossterm::event::KeyCode;
-
-    let store = store_with_feature(ProjectStatus::Stopped);
-    let mut app = app_in_creating_feature_mode(store, "my-project", "other-feat", true);
-    if let AppMode::CreatingFeature(state) = &mut app.mode {
-        state.step = CreateFeatureStep::Mode;
-        state.agent = AgentKind::Claude;
-        state.mode_focus = 5;
-        state.remote_control = false;
-        // Simulate a z.ai / third-party provider session.
-        state.remote_control_available = false;
-    }
-
-    crate::handlers::handle_create_feature_key(&mut app, KeyCode::Char('j')).unwrap();
-
-    match &app.mode {
-        AppMode::CreatingFeature(state) => assert!(!state.remote_control),
-        _ => panic!("expected CreatingFeature mode"),
-    }
-}
-
-#[test]
 fn open_session_picker_selects_project_preferred_agent_by_default() {
     let repo = TempDir::new().unwrap();
     let amf_dir = repo.path().join(".amf");
@@ -1493,7 +1163,6 @@ fn open_session_picker_selects_project_preferred_agent_by_default() {
         plan_mode: false,
         agent: AgentKind::Claude,
         enable_chrome: false,
-        remote_control: false,
         pending_worktree_script: false,
         ready: false,
         status: ProjectStatus::Stopped,
@@ -1648,13 +1317,8 @@ fn create_feature_session_name_enter_creates_and_starts_feature() {
         worktree_query: String::new(),
         use_worktree: false,
         enable_chrome: false,
-        remote_control: false,
-        remote_control_available: true,
-        remote_control_block_reason: None,
-        steering_enabled: false,
         preset_index: 0,
         task_prompt: String::new(),
-        prompt_analysis: analyze_prompt(""),
     });
 
     crate::handlers::handle_create_feature_key(&mut app, KeyCode::Enter).unwrap();
@@ -1959,7 +1623,6 @@ fn feature_add_session_named_uses_custom_label_and_default_window() {
         false,
         AgentKind::Claude,
         false,
-        false,
     );
 
     let session = feature.add_session_named(SessionKind::Claude, "Review Claude".to_string());
@@ -2001,7 +1664,6 @@ fn reload_extension_config_uses_project_repo_for_worktree_feature() {
         plan_mode: false,
         agent: AgentKind::default(),
         enable_chrome: false,
-        remote_control: false,
         pending_worktree_script: false,
         ready: false,
         status: ProjectStatus::Stopped,
@@ -3041,7 +2703,6 @@ fn store_with_single_claude_session() -> ProjectStore {
         plan_mode: false,
         agent: AgentKind::default(),
         enable_chrome: false,
-        remote_control: false,
         pending_worktree_script: false,
         ready: false,
         status: ProjectStatus::Idle,

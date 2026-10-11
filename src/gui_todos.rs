@@ -212,7 +212,6 @@ mod tests {
             false,
             AgentKind::default(),
             false,
-            false,
         );
         feature.id = "feat-1".to_string();
         let feature_id = feature.id.clone();

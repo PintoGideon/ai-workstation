@@ -75,7 +75,6 @@ fn store_with_review_project(repo: &std::path::Path) -> ProjectStore {
         plan_mode: false,
         agent: AgentKind::default(),
         enable_chrome: false,
-        remote_control: false,
         pending_worktree_script: false,
         ready: false,
         status: ProjectStatus::Active,

@@ -612,7 +612,6 @@ mod tests {
             false,
             agent,
             false,
-            false,
         );
         feature.id = "feat-1".into();
         feature.tmux_session = format!("aiw-session-sidebar-{}", std::process::id());
