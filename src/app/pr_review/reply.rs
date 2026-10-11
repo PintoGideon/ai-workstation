@@ -257,7 +257,7 @@ impl App {
                     .selected_comment()
                     .is_some_and(PrComment::is_local_finding)
                 {
-                    self.message = Some("This AI finding is not posted to GitHub — there is nothing to reply to (post it with W in AI Review first)".to_string());
+                    self.message = Some("This AI finding is not posted to GitHub — there is nothing to reply to (it was never published)".to_string());
                     return;
                 }
                 state.selected_comment().map(PrComment::is_actionable)
@@ -381,7 +381,7 @@ impl App {
             return;
         };
         if comment.is_local_finding() {
-            self.message = Some("This AI finding is not posted to GitHub — there is nothing to reply to (post it with W in AI Review first)".to_string());
+            self.message = Some("This AI finding is not posted to GitHub — there is nothing to reply to (it was never published)".to_string());
             return;
         }
         if !comment.is_actionable() {
@@ -605,8 +605,8 @@ impl App {
         );
         // A batched comment resolving: capture the run's shared cost durably
         // now, before `clear_reply_draft` deletes the draft the live figure is
-        // derived from — so every sibling and the AI Review pane can show the
-        // same number afterwards.
+        // derived from — so every sibling can show the same number
+        // afterwards.
         if let Some(meta) = &generation_metadata
             && meta.combined_batch.is_some()
             && let Some(cost) = meta.estimated_cost.clone()

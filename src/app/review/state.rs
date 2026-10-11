@@ -1,7 +1,4 @@
-use crate::app::{
-    AppMode, DiffScope, DiffViewerFocus, DiffViewerLayout, ReviewDestinationPickState,
-    TriageFeatureSetupState, ViewState,
-};
+use crate::app::{AppMode, DiffScope, DiffViewerFocus, DiffViewerLayout, ViewState};
 use crate::editor::TextEditor;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -552,7 +549,6 @@ pub enum PrSubmitStatus {
 }
 
 pub struct DiffViewerState {
-    pub(crate) questions: crate::app::review_questions::Questions,
     /// The session view to return to. A PR review has none (it is opened from
     /// the PR picker, with no feature involved) and carries a placeholder here
     /// that nothing reads: every exit from a PR review goes through
@@ -745,15 +741,6 @@ pub struct DiffViewerState {
     /// picker resolved one up front. `None` for the in-feature targets and for
     /// the dedicated target when the harness is still to be picked at finish.
     pub review_harness: Option<crate::project::AgentKind>,
-    /// When `Some`, the destination picker is open over the review viewer (`t`):
-    /// choosing where the finished review's "address the feedback" prompt is
-    /// dispatched. A sub-state, like PR Triage's `harness_pick`.
-    pub destination_pick: Option<ReviewDestinationPickState>,
-    /// When `Some`, the compact companion-feature setup overlay is open: the
-    /// reviewer picked "New feature…" in the destination picker and is choosing
-    /// the companion's preset / harness / vibe mode / branch before it is
-    /// created. Reuses PR Triage's [`TriageFeatureSetupState`].
-    pub review_feature_setup: Option<TriageFeatureSetupState>,
     /// True while the reviewer is typing a diff search query in the prompt
     /// (opened with `/`). Takes precedence over every other key binding.
     pub editing_search: bool,
@@ -899,7 +886,6 @@ impl DiffViewerState {
             pr_submit: None,
             workdir,
             scope: DiffScope::CurrentChanges,
-            questions: Default::default(),
             branch: String::new(),
             base_ref: String::new(),
             base_commit: String::new(),
@@ -959,8 +945,6 @@ impl DiffViewerState {
             fix_target: crate::app::pr_review::FixTarget::ExistingLive,
             fix_target_feature_id: None,
             review_harness: None,
-            destination_pick: None,
-            review_feature_setup: None,
             editing_search: false,
             search_query: String::new(),
             search_matches: Vec::new(),

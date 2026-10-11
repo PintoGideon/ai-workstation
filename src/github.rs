@@ -451,15 +451,6 @@ struct CreatedPrReviewResponse {
     id: u64,
 }
 
-/// Refs needed to reconstruct a PR's diff locally (`GhCli::pr_diff_local`).
-/// The PR head is fetched by its `pull/<n>/head` ref, so only the base branch
-/// name is needed here.
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PrDiffRefs {
-    base_ref_name: String,
-}
-
 impl GhCli {
     /// Check that a working `gh` binary is on PATH. Mirrors
     /// `TmuxManager::check_available` / `ClaudeLauncher::check_available`.
@@ -589,137 +580,12 @@ impl GhCli {
         parse_pr_json(&output.stdout)
     }
 
-    /// Fetch the PR's unified diff (`gh pr diff <number>`), plain patch text —
-    /// not `--json`. Used as the AI reviewer's input; zero agent tokens by
-    /// itself (one `gh` call). Only the whole string's leading/trailing
-    /// whitespace is trimmed ([`Self::gh_stdout`]); interior diff content is
-    /// untouched.
-    ///
-    /// `gh pr diff` fetches the diff from GitHub's REST API, which caps the
-    /// response for very large PRs (`HTTP 406`, "the diff exceeded the maximum
-    /// number of lines"). There is no `gh` flag to lift that cap, so on exactly
-    /// that failure we fall back to computing the diff locally with `git`, which
-    /// has no such limit — see [`Self::pr_diff_local`].
-    pub fn pr_diff(workdir: &Path, number: u32) -> Result<String> {
-        match Self::gh_stdout(workdir, &["pr", "diff", &number.to_string()]) {
-            Ok(diff) => Ok(diff),
-            Err(e) if is_diff_too_large_error(&e.to_string()) => {
-                match Self::pr_diff_local(workdir, number) {
-                    Ok(diff) if !diff.is_empty() => Ok(diff),
-                    // An empty `base...head` range means head is already an
-                    // ancestor of the base branch tip — i.e. the PR was merged
-                    // (with a merge commit) and the base branch now contains its
-                    // commits. `gh pr diff` still renders these; the local
-                    // fallback cannot, so re-surface the original refusal rather
-                    // than hand `run_ai_pr_review` an empty diff to review.
-                    Ok(_) => Err(e).with_context(|| {
-                        format!(
-                            "`gh pr diff` refused PR #{number} as too large, and the local git \
-                             fallback produced an empty diff (the PR is likely already merged)"
-                        )
-                    }),
-                    Err(fallback_err) => Err(fallback_err).with_context(|| {
-                        format!(
-                            "`gh pr diff` refused PR #{number} as too large, and the local git \
-                             fallback also failed"
-                        )
-                    }),
-                }
-            }
-            Err(e) => Err(e),
-        }
-    }
-
     /// The URL of the repository `gh` resolves PRs against — honouring `gh repo
     /// set-default`, an `upstream` remote, and fork checkouts — which is where
     /// `pull/<n>/head` lives. Fetching `origin` blind would miss it in a fork
     /// clone, whose `origin` is the fork.
     pub fn base_repo_url(workdir: &Path) -> Result<String> {
         Self::gh_stdout(workdir, &["repo", "view", "--json", "url", "-q", ".url"])
-    }
-
-    /// Compute a PR's merge-base diff locally, bypassing the API line cap that
-    /// makes `gh pr diff` fail on huge PRs.
-    ///
-    /// Fetches the PR head (`pull/<n>/head`) and the base branch into private
-    /// `refs/aiw/` refs so nothing about the working tree, checked-out branch,
-    /// or `origin/*` tracking refs changes, diffs `base...head` (the same
-    /// merge-base three-dot range `gh pr diff` shows), then deletes the temp
-    /// refs.
-    ///
-    /// The fetch source is the repository `gh` itself resolved for this PR
-    /// (`gh repo view --json url -q .url`), not a hardcoded `origin` — in a fork clone
-    /// `origin` is the fork and would not carry `pull/<n>/head` or the base
-    /// branch. The temp refs carry this process's pid so two AIW features
-    /// reviewing the same PR number concurrently don't fetch into, and delete,
-    /// each other's refs. The `git diff` invocation mirrors the flags every
-    /// other `git diff` in the codebase uses (`src/diff.rs`) so a repo-local
-    /// `diff.external` / textconv / `diff.context` setting can't reshape the
-    /// patch out from under `parse_unified_diff`.
-    fn pr_diff_local(workdir: &Path, number: u32) -> Result<String> {
-        let json = Self::gh_stdout(
-            workdir,
-            &["pr", "view", &number.to_string(), "--json", "baseRefName"],
-        )?;
-        let refs: PrDiffRefs = serde_json::from_str(&json)
-            .context("Failed to parse `gh pr view` output for the local diff fallback.")?;
-
-        // The repo `gh` resolves the PR against (honours `gh repo set-default`,
-        // an `upstream` remote, a fork checkout). Fetching `origin` blind would
-        // fail on exactly the fork clones `gh pr diff` handled fine.
-        let repo_url = Self::base_repo_url(workdir)
-            .context("Failed to resolve the PR's base repository for the local diff fallback.")?;
-
-        let pid = std::process::id();
-        let head_ref = format!("refs/aiw/pr-{number}-{pid}-head");
-        let base_ref = format!("refs/aiw/pr-{number}-{pid}-base");
-
-        let fetch = without_git_prompts(&mut Command::new("git"))
-            .args(["fetch", "--quiet", "--no-tags", &repo_url])
-            .arg(format!("+pull/{number}/head:{head_ref}"))
-            .arg(format!("+refs/heads/{}:{base_ref}", refs.base_ref_name))
-            .current_dir(workdir)
-            .output()
-            .context("Failed to run `git fetch` for the local diff fallback.")?;
-        if !fetch.status.success() {
-            let stderr = String::from_utf8_lossy(&fetch.stderr);
-            match git_credentials_hint(&stderr) {
-                Some(hint) => bail!("`git fetch` for PR #{number} failed: {hint}"),
-                None => bail!("`git fetch` for PR #{number} failed: {}", stderr.trim()),
-            }
-        }
-
-        let diff = Command::new("git")
-            .args([
-                "-c",
-                "core.pager=cat",
-                "diff",
-                "--find-renames",
-                "--no-ext-diff",
-                "--no-color",
-                "--unified=3",
-                &format!("{base_ref}...{head_ref}"),
-            ])
-            .current_dir(workdir)
-            .output()
-            .context("Failed to run `git diff` for the local diff fallback.");
-
-        // Best-effort cleanup regardless of whether the diff succeeded.
-        for r in [&head_ref, &base_ref] {
-            let _ = Command::new("git")
-                .args(["update-ref", "-d", r])
-                .current_dir(workdir)
-                .status();
-        }
-
-        let diff = diff?;
-        if !diff.status.success() {
-            bail!(
-                "`git diff` for PR #{number} failed: {}",
-                String::from_utf8_lossy(&diff.stderr).trim()
-            );
-        }
-        Ok(String::from_utf8_lossy(&diff.stdout).trim().to_string())
     }
 
     /// The PR's title, description body, and changed-file list — the minimal
@@ -904,36 +770,6 @@ impl GhCli {
         cmd.arg(endpoint).args(["-f", &format!("body={body}")]);
         cmd.current_dir(workdir);
         run_write(cmd, "post issue feature comment")
-    }
-
-    /// List the repository's most-recently-updated merged/closed pull
-    /// requests, for the review-memory lookback bootstrap (Epic E): it needs
-    /// PR history, not open work in progress. `gh`'s `--state closed` filter
-    /// already covers both closed-without-merge and merged PRs (a merged
-    /// PR's underlying state is `CLOSED`), so no client-side filtering is
-    /// needed. `limit` bounds how many to fetch. Zero agent tokens (one
-    /// `gh pr list` call).
-    pub fn list_recent_closed_prs(workdir: &Path, limit: u32) -> Result<Vec<PrListEntry>> {
-        let output = Command::new("gh")
-            .args([
-                "pr",
-                "list",
-                "--state",
-                "closed",
-                "--limit",
-                &limit.to_string(),
-                "--json",
-                "number,title,author,headRefName,updatedAt,isDraft,state",
-            ])
-            .current_dir(workdir)
-            .output()
-            .context("Failed to run `gh pr list`.")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("`gh pr list` failed: {}", stderr.trim());
-        }
-        parse_pr_list_json(&output.stdout)
     }
 
     /// Inline review comments for a PR (file/line-anchored), all pages.
@@ -1165,9 +1001,8 @@ impl GhCli {
             if is_review_rejected_entity_error(&stderr) {
                 bail!(
                     "GitHub rejected the review (422) — most likely one of the inline comments \
-                     no longer lines up with the current diff (the PR moved since the AI review \
-                     ran). Refresh (r) and re-run the AI review (A), or skip the stale finding \
-                     and try W again. Raw: {}",
+                     no longer lines up with the current diff (the PR moved since the review \
+                     was prepared). Reopen the PR at its current head and try again. Raw: {}",
                     stderr.trim()
                 );
             }
@@ -1880,31 +1715,6 @@ fn is_rate_limited(text: &str) -> bool {
         || (lowered.contains("rate limit") && lowered.contains("exceeded"))
 }
 
-/// Whether a `gh pr diff` failure is GitHub refusing the diff for being too
-/// large, rather than a transient or auth error.
-///
-/// The REST API caps the `application/vnd.github.diff` media type and answers
-/// an oversized PR with `HTTP 406` and a body like *"the diff exceeded the
-/// maximum number of lines"* / *"Sorry, this diff is taking too long to
-/// generate"*. Matched on text because `gh` only forwards the message; the
-/// exit code alone can't tell this apart from other failures.
-///
-/// This only ever sees the error from a failed `gh pr diff <n>` (see
-/// [`GhCli::pr_diff`], the sole caller), so it can read `HTTP 406` — the
-/// media-type cap — as the size refusal directly: an ordinary `gh pr diff`
-/// failure is a `404` (no such PR), a `401` (not authenticated), or a network
-/// error, none of which are `406` or carry *"too large"*. (A previous version
-/// `&&`-ed those two clauses with `contains("diff")`, which is vacuous here —
-/// `gh_stdout` prefixes every message with `` `gh pr diff <n>` failed: ``.)
-fn is_diff_too_large_error(text: &str) -> bool {
-    let lowered = text.to_ascii_lowercase();
-    lowered.contains("maximum number of lines")
-        || lowered.contains("diff exceeded the maximum")
-        || lowered.contains("diff is taking too long")
-        || lowered.contains("http 406")
-        || lowered.contains("too large")
-}
-
 fn parse_review_threads_page(stdout: &[u8]) -> Result<(Vec<ReviewThread>, Option<String>)> {
     let v: serde_json::Value =
         serde_json::from_slice(stdout).context("Failed to parse review-threads GraphQL JSON.")?;
@@ -2571,41 +2381,6 @@ mod tests {
         assert!(is_rate_limited("API rate limit exceeded for user ID 1."));
         assert!(is_rate_limited("You have exceeded a secondary rate limit."));
         assert!(is_rate_limited("HTTP 403: rate limit exceeded"));
-    }
-
-    #[test]
-    fn diff_too_large_detection_covers_how_gh_forwards_it() {
-        // Full messages as the caller sees them: `gh_stdout` wraps every
-        // failure as "`gh pr diff <n>` failed: <stderr>".
-        assert!(is_diff_too_large_error(
-            "`gh pr diff 1234` failed: the diff exceeded the maximum number of lines (20000)"
-        ));
-        assert!(is_diff_too_large_error(
-            "`gh pr diff 1234` failed: HTTP 406: Sorry, this diff is taking too long to generate. (https://api.github.com/repos/o/r/pulls/1234)"
-        ));
-        assert!(is_diff_too_large_error(
-            "`gh pr diff 1234` failed: HTTP 406: the diff is too large to render (https://api.github.com/repos/o/r/pulls/1234)"
-        ));
-    }
-
-    /// The local-diff fallback must fire *only* for the size cap. A missing PR
-    /// or an auth failure has to keep bubbling up as the real error — tested on
-    /// the wrapped form the caller actually receives.
-    #[test]
-    fn ordinary_diff_failures_do_not_trigger_the_local_fallback() {
-        assert!(!is_diff_too_large_error(
-            "`gh pr diff 42` failed: no pull requests found for branch"
-        ));
-        assert!(!is_diff_too_large_error(
-            "`gh pr diff 42` failed: HTTP 404: Not Found (https://api.github.com/repos/o/r/pulls/42)"
-        ));
-        assert!(!is_diff_too_large_error(
-            "`gh pr diff 999999` failed: could not resolve to a PullRequest with the number of 999999"
-        ));
-        assert!(!is_diff_too_large_error(
-            "`gh pr diff 42` failed: HTTP 401: Bad credentials"
-        ));
-        assert!(!is_diff_too_large_error(""));
     }
 
     /// An ordinary failure must not be mistaken for a rate limit: that would

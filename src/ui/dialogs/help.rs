@@ -152,7 +152,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("E", "Edit headless AI prompt templates (overrides)"),
         ("G", "Open PR Triage (experimental)"),
         ("", "(on a project row: Review a PR instead)"),
-        ("W", "Open AI Review for this feature (experimental)"),
         ("T", "Theme picker"),
         (
             "t",
@@ -257,7 +256,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("/", "Command picker (slash + AIW actions)"),
         ("a", "AIW local actions picker"),
         ("c", "Config wizard"),
-        ("C", "Compact review memory"),
         ("r", "Refresh statuses + PR badges (runs gh)"),
     ];
 
@@ -335,7 +333,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("i", "Download + install syntax parser for file (git clone)"),
         ("r", "Refresh comments from GitHub"),
         ("g", "Pick a different PR to triage"),
-        ("A", "Open the AI Review pane for this PR"),
         ("I", "Land the triage feature's commits on the PR"),
         ("", "(push to the PR branch, or cherry-pick into the"),
         ("", "source worktree — never while it's dirty)"),
@@ -348,41 +345,13 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
-    lines.extend(section_header("  In AI Review:", columns, theme)); // FORK: G11
-
-    let ai_review_keybinds: Vec<(&str, &str)> = vec![
-        ("j/k", "Navigate findings"),
-        ("Ctrl+D/U", "Scroll detail down/up"),
-        ("s", "Skip/unskip finding (excludes it from W)"),
-        ("e", "Edit finding body"),
-        ("A", "Generate/regenerate the AI review"),
-        ("", "(first run picks harness + model)"),
-        ("W", "Post kept findings to GitHub as a review"),
-        ("", "(e edit summary)"),
-        (
-            "q / Esc",
-            "Close AI Review (back to PR Triage if opened from there)",
-        ),
-    ];
-
-    lines.extend(
-        ai_review_keybinds
-            .iter()
-            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
-    ); // FORK: G11
-
     lines.extend(section_header("  In the PR picker:", columns, theme)); // FORK: G11
 
     let pr_picker_keybinds: Vec<(&str, &str)> = vec![
         ("j/k", "Navigate PRs"),
         ("Enter", "Open highlighted PR in PR Triage"),
-        ("W", "Open highlighted PR in AI Review"),
         ("a", "Include/hide closed & merged PRs"),
         ("#", "Enter a PR number instead"),
-        ("b", "Bootstrap review memory from recent PRs"),
-        ("", "(g picks the project or global doc)"),
-        ("c", "Compact review memory (merge dupes, prune stale)"),
-        ("", "(g picks the project or global doc)"),
         ("Tab", "Switch to the Review tab (review a PR yourself)"),
         ("q / Esc", "Close picker"),
     ];

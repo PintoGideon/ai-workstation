@@ -1368,28 +1368,6 @@ pub enum AppMode {
     /// Running a strictly read-only investigation of one review comment off the
     /// UI thread; shows a modal loading frame over the stashed PR Triage pane.
     PrInvestigationLoading(PrInvestigationLoadState),
-    /// Running the review-memory lookback bootstrap's fetch + distill pass off
-    /// the UI thread; shows a loading frame with the current stage.
-    ReviewMemoryBootstrapRunning(BootstrapRunState),
-    /// Confirming the review-memory compact pass (`c` in the PR picker, PR
-    /// Triage, or the dashboard leader key) before spending an agent pass on
-    /// it. Reachable from several screens, so it stashes `prior_mode` — see
-    /// [`ReviewMemoryCompactConfirmState`].
-    ReviewMemoryCompactConfirm(Box<ReviewMemoryCompactConfirmState>),
-    /// Running the review-memory compact pass off the UI thread ("prevent
-    /// review-memory rot"); shows a loading frame with the current stage.
-    /// The mode to restore lives in [`App::review_memory_compact_pending`]
-    /// rather than here — see [`CompactRunView`].
-    ReviewMemoryCompactRunning(CompactRunView),
-    /// Reviewing the compact pass's proposed replacement doc before it's
-    /// written — full-screen, editable, nothing written until confirmed.
-    ReviewMemoryCompactReview(CompactReviewState),
-    /// Reviewing/triaging findings from AIW's own AI review of a PR's diff —
-    /// its own workflow, independent of `PrReview` (see `crate::app::ai_review`).
-    AiReview(AiReviewState),
-    /// Running the AI PR review's diff-fetch + review pass off the UI thread
-    /// (`A`); shows a loading frame with the current stage.
-    AiReviewRunning(AiReviewRunState),
     SessionPicker(SessionPickerState),
     DiffReviewPrompt(DiffReviewState),
     RunningHook(RunningHookState),
@@ -1429,12 +1407,6 @@ pub enum AppMode {
     /// no review session exists yet). The feedback file is already written; this
     /// only governs where the "address the feedback" prompt is dispatched.
     ReviewHarnessPick(ReviewHarnessPickState),
-    /// Landing a companion review feature's commits back on the source feature's
-    /// branch (push or cherry-pick). Opened with `t` on the dashboard for a
-    /// feature carrying a [`crate::project::ReviewSource`] link. Reuses PR
-    /// Triage's [`TriageIntegrateState`] (`triage_branch` = the companion
-    /// branch, `pr_branch` = the source feature's branch).
-    ReviewIntegrate(TriageIntegrateState),
     /// Soft warning shown before starting an agent when the machine is already
     /// at the concurrency cap and/or low on memory. Confirming starts anyway.
     ConfirmResourceStart(Box<ResourceConfirmState>),

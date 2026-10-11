@@ -310,7 +310,7 @@ it("opens Final Review on a stopped feature and pauses with its workflow identit
       workflow_id: "review-id", revision: 7, target: { project_id: "project", feature_id: "feature" },
       feature_name: "my-feat", branch: "my-feat", base_ref: "main", files: [], selected_path: null,
         general_feedback: "", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null, summary: null,
-        ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, question_running: false, questions: [], question_error: null, comment_draft: null, ready_comment: null, harnesses: ["claude"], message: null },
+        ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude"], message: null },
     });
     if (command === "review_act") return new Promise((resolve) => { finishPause = () => resolve(null); });
     return original(command, args, options);
@@ -336,9 +336,9 @@ it("polls review completions by workflow/revision and cannot resurrect a paused 
     workflow_id: "review-poll", revision: 7, target: { project_id: "project", feature_id: "feature" },
     feature_name: "my-feat", branch: "my-feat", base_ref: "main", files: [], selected_path: null,
     general_feedback: "", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null, summary: null,
-    ai: { precall: null, running: true, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null as string | null, question_running: true, questions: [], question_error: null, comment_draft: null, ready_comment: null, harnesses: ["claude"], message: null },
+    ai: { precall: null, running: true, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null as string | null, harnesses: ["claude"], message: null },
   };
-  // The overview landed while a question is still running, so polling continues.
+  // The overview landed while another AI request is still running, so polling continues.
   let response: Promise<typeof base> = Promise.resolve({ ...base, revision: 8, ai: { ...base.ai, overview: "Completed overview" } });
   vi.mocked(invoke).mockImplementation((command, args, options) => {
     if (command === "review_begin") return Promise.resolve(base);
@@ -375,7 +375,7 @@ it("does not poll a review with no AI work in flight", async () => {
     workflow_id: "review-idle", revision: 1, target: { project_id: "project", feature_id: "feature" },
     feature_name: "my-feat", branch: "my-feat", base_ref: "main", files: [], selected_path: null,
     general_feedback: "", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null, summary: null,
-    ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, question_running: false, questions: [], question_error: null, comment_draft: null, ready_comment: null, harnesses: ["claude"], message: null },
+    ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude"], message: null },
   };
   vi.mocked(invoke).mockImplementation((command, args, options) => {
     if (command === "review_begin") return Promise.resolve(idle);
@@ -469,8 +469,7 @@ it("polls a running project check without AI work and stops when its result arri
     general_feedback: "", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null,
     summary: { rows: [], undecided: 0, pending_suggestions: 0, failures: [] }, check_command: "cargo test",
     check: { command: "cargo test", status: "running", output: "" },
-    ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null,
-      question_running: false, questions: [], question_error: null, comment_draft: null, ready_comment: null, harnesses: ["claude"], message: null },
+    ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude"], message: null },
   };
   vi.mocked(invoke).mockImplementation((command, args, options) => {
     if (command === "review_begin") return Promise.resolve(base);
@@ -497,8 +496,7 @@ const completionBase = {
   summary: { rows: [], undecided: 0, pending_suggestions: 0, failures: [] }, check_command: null, check: null,
   finish: { approved: 0, needs_work: 1, skipped: 0, file_comments: 0, line_comments: 0, general_feedback: true, apply_suggestions: 0,
     post_to_pr: false, submit_prompt: false, handoff: { session_id: "Agent", label: "Agent", stopped: false }, completing: false },
-  ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null,
-    question_running: false, questions: [], question_error: null, comment_draft: null, ready_comment: null, harnesses: ["claude"], message: null },
+  ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude"], message: null },
 };
 
 it("completes once and appends the unsent feedback prompt to the agent's composer draft", async () => {
@@ -694,8 +692,7 @@ it("opens prompt overrides from navigation and from a pending review AI call wit
       feature_name: "my-feat", branch: "my-feat", base_ref: "main", files: [], selected_path: null,
       general_feedback: "", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null, summary: null,
       ai: { precall: { title: "Final Review: AI co-review", harness: "Claude", preview: "rendered", viewing: false },
-        running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, question_running: false,
-        questions: [], question_error: null, comment_draft: null, ready_comment: null, harnesses: ["claude"], message: null },
+        running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude"], message: null },
     });
     return original(command, args, options);
   });

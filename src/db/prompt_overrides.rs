@@ -75,7 +75,7 @@ impl OverrideScope {
 /// One stored override row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptOverride {
-    /// Stable [`crate::prompts::PromptId`] key, e.g. `"pr_review.ai_review"`.
+    /// Stable [`crate::prompts::PromptId`] key, e.g. `"review.walkthrough"`.
     pub prompt_id: String,
     pub scope: OverrideScope,
     /// `None` = shared across every harness; `Some(_)` = specific to one.
@@ -350,7 +350,7 @@ mod tests {
         let conn = conn();
         upsert(
             &conn,
-            "pr_review.ai_review",
+            "review.walkthrough",
             &OverrideScope::Global,
             None,
             "my template {{annotated_diff}}",
@@ -359,12 +359,12 @@ mod tests {
 
         let all = load_all(&conn).unwrap();
         assert_eq!(all.len(), 1);
-        assert_eq!(all[0].prompt_id, "pr_review.ai_review");
+        assert_eq!(all[0].prompt_id, "review.walkthrough");
         assert_eq!(all[0].scope, OverrideScope::Global);
         assert_eq!(all[0].harness, None);
         assert_eq!(all[0].template, "my template {{annotated_diff}}");
 
-        let one = load_one(&conn, "pr_review.ai_review", &OverrideScope::Global, None)
+        let one = load_one(&conn, "review.walkthrough", &OverrideScope::Global, None)
             .unwrap()
             .unwrap();
         assert_eq!(one, all[0]);

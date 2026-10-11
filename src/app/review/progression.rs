@@ -786,18 +786,6 @@ impl App {
         };
         self.message = Some(msg);
     }
-
-    /// Open the destination picker (`t`): choose where a finished review's
-    /// "address the feedback" prompt is dispatched — the feature's existing
-    /// agent pane, a fresh dedicated review session, another existing feature's
-    /// session, or a brand-new companion feature. Replaces the old two-state
-    /// toggle; see [`Self::review_destination_pick_confirm`].
-    pub fn diff_review_toggle_fix_target(&mut self) {
-        if self.refuse_in_pr_review("a PR review is posted to GitHub, not sent to an agent") {
-            return;
-        }
-        self.open_review_destination_picker();
-    }
 }
 
 /// Indices into `file.addressable_lines()` whose text contains `query`

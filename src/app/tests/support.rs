@@ -404,12 +404,9 @@ pub(super) fn enter_pr_review(app: &mut App, n: u64) {
         mark_pick: None,
         reply_kind_pick: None,
         reply: None,
-        memory_add: None,
         marked: std::collections::HashSet::new(),
         pending_batch: false,
         checked_out_branch: Some("main".to_string()),
-        pending_ai_review_findings: 0,
-        ai_review_last_run: None,
         investigations: Vec::new(),
         investigation_harness_pick: None,
         investigation_action_pick: None,
@@ -443,12 +440,9 @@ pub(super) fn enter_pr_review_for_feature(app: &mut App, n: u64) {
         mark_pick: None,
         reply_kind_pick: None,
         reply: None,
-        memory_add: None,
         marked: std::collections::HashSet::new(),
         pending_batch: false,
         checked_out_branch: Some("main".to_string()),
-        pending_ai_review_findings: 0,
-        ai_review_last_run: None,
         investigations: Vec::new(),
         investigation_harness_pick: None,
         investigation_action_pick: None,
@@ -456,53 +450,6 @@ pub(super) fn enter_pr_review_for_feature(app: &mut App, n: u64) {
         pending_follow_up: None,
         investigation_context: Default::default(),
     });
-}
-
-/// A minimal, freshly-opened `AiReviewState` for `workdir`/`pr` — no findings,
-/// no picker/dialog overlays open.
-pub(super) fn sample_ai_review_state(
-    workdir: std::path::PathBuf,
-    pr: crate::github::PrRef,
-) -> crate::app::AiReviewState {
-    crate::app::AiReviewState {
-        questions: Default::default(),
-        workdir,
-        pr,
-        findings: Vec::new(),
-        summary: None,
-        attribution: None,
-        selected: 0,
-        detail_scroll: 0,
-        detail_content_lines: 0,
-        last_run: None,
-        harness: None,
-        harness_pick: None,
-        harness_pick_origin: None,
-        model: None,
-        model_picked: false,
-        reasoning: None,
-        model_pick: None,
-        finding_editor: None,
-        post_confirm: None,
-        marked: Default::default(),
-    }
-}
-
-/// Enter the AI Review pane against the `store_with_feature` feature so tests
-/// can exercise its lifecycle without a real `gh` call.
-pub(super) fn enter_ai_review_for_feature(app: &mut App) {
-    let pr = crate::github::PrRef {
-        number: 321,
-        head_sha: "abc123".to_string(),
-        url: "https://github.com/o/r/pull/321".to_string(),
-        owner: "o".to_string(),
-        repo: "r".to_string(),
-        head_ref: "main".to_string(),
-    };
-    app.mode = AppMode::AiReview(sample_ai_review_state(
-        std::path::PathBuf::from("/tmp/test-workdir"),
-        pr,
-    ));
 }
 
 /// Enter the PR picker directly (bypassing the real `gh pr list` call
@@ -515,7 +462,6 @@ pub(super) fn enter_pr_picker_for_test(app: &mut App) {
         selected: 0,
         include_closed: false,
         error: None,
-        bootstrap_pick: None,
         current_user: None,
     });
 }

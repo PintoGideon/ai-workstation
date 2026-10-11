@@ -1,9 +1,9 @@
 # Batched review of oversized diffs
 
-AIW's AI reviews send the whole diff to a headless agent in one prompt.
-When that diff is larger than the review model's context window the call
-used to fail outright ("prompt is too long"), or — for the final-review
-co-reviewer — the diff was silently truncated to a fixed byte budget.
+AIW's final-review co-reviewer sends a file's diff to a headless agent in
+one prompt. When that diff is larger than the review model's context window
+the call used to fail outright ("prompt is too long"), or the diff was
+silently truncated to a fixed byte budget.
 
 Batched review replaces both failure modes: an oversized diff is split
 into bounded pieces, each piece is reviewed on its own, and the results
@@ -14,7 +14,6 @@ saying so.
 
 | Entry point | Trigger | Output |
 | --- | --- | --- |
-| `W` — AI PR review | The rendered `pr_review.ai_review` prompt is estimated to exceed the size budget | One combined review (summary + `path\|side\|line` findings), parsed and shown in the AI Review pane exactly as an un-batched run |
 | Final-review AI co-review (`Ctrl+Space`, `f`, then the co-review key) | The current file's annotated body exceeds `CO_REVIEW_MAX_BODY` (~8000 bytes), or the rendered `review.co_review` prompt exceeds the size budget | The per-hunk-group `<line>\|<comment>` outputs, concatenated and parsed into draft line comments as usual |
 
 Everything else — the plain-language walkthrough, the changeset overview,
@@ -36,14 +35,7 @@ batched.
    into groups of consecutive hunks — the file header is repeated in
    front of each group so a slice keeps file context. A single hunk that
    overflows even alone cannot be divided further.
-5. **Recombine.** For `W`, every batch's findings are concatenated and
-   run through a synthesis pass (`review.synthesis`) that merges
-   duplicates and produces one summary + findings block. If the
-   synthesis prompt itself overflows, each batch's findings are shrunk
-   with `review.findings_summary` and synthesis is retried; if it still
-   overflows the synthesis input is halved. If synthesis cannot run at
-   all, the findings are concatenated verbatim under a stub summary.
-   For co-review, the per-slice `<line>|<comment>` lines are simply
+5. **Recombine.** For co-review, the per-slice `<line>|<comment>` lines are simply
    concatenated — no synthesis pass.
 
 Per-slice review loses cross-file context (a symbol that moved between
@@ -60,18 +52,6 @@ Coverage is never reduced silently.
 - A hunk that exceeds the budget even as the only thing in its prompt, or
   a slice whose run failed, is recorded as **not reviewed** with the
   reason.
-- For `W`, the review summary — in the AI Review pane, the post dialog,
-  and any review posted to GitHub — is prefixed with a blockquote:
-
-  ```
-  > ⚠ Partial coverage — this diff was too large to review in one pass,
-  > so it was split into slices.
-  > N slice(s) could not be reviewed even after splitting:
-  >   • `src/huge.rs` hunk 7 — exceeds the size budget even as a single hunk
-  ```
-
-  A line is added when the synthesis pass could not run and the findings
-  were combined verbatim.
 - For co-review, the status line appends `N hunk group(s) could not be
   reviewed` when any slice failed.
 
@@ -97,9 +77,7 @@ Override:
   `~/.config/ai_workstation/config.json` (a number of tokens).
 - **Per repository** — `review_prompt_budget_tokens` in the repo's
   `aiw.json`, which overrides the global value.
-- `0` disables the pre-send split entirely. For the `W` review AIW then
-  only reacts to an actual "prompt too long" error, retrying that run as a
-  batched review with adaptive halving. Co-review has no post-failure
+- `0` disables the pre-send split entirely. Co-review has no post-failure
   retry, so with `0` an oversized file is sent in one pass with its body
   bounded by a visible "diff truncated" marker.
 
@@ -128,6 +106,6 @@ first place:
 - Land the change as a series of focused commits and open a PR per
   commit, or
 - `git rebase -i` an existing branch to split one megacommit into
-  reviewable steps, then run `W` (or a commit-scoped review) on each.
+  reviewable steps, then review each on its own.
 
 Each commit then fits in one prompt with its full context intact.

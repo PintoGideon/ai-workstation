@@ -20,7 +20,6 @@ is the field reference for what it can hold.
 | `prompt_templates` | Reusable [prompt-library](@/docs/prompts-and-todos.md#reuse-prompts) templates | Prompt library (`L`) export | Merged by name: project wins on collision |
 | `prompt_overrides` | Project-scope [headless AI prompt overrides](@/docs/custom-prompts.md) | Prompt-override manager (`E`) | Project-only — never inherited from global |
 | `final_review_check_command` | A build/test command run when finishing a [final review](@/docs/review-and-pr-feedback.md) | Hand-edit | Project overrides global when set |
-| `review_memory_path` | Path to the [review-findings memory doc](@/docs/review-and-pr-feedback.md) | Hand-edit | Project overrides global when set |
 | `review_prompt_budget_tokens` | Token ceiling before [batched review](@/docs/review-and-pr-feedback.md) kicks in | Hand-edit | Project overrides global when set |
 
 The config wizard (`Ctrl+Space`, then `c`) covers everything marked

@@ -64,10 +64,7 @@ pub(super) fn start(gui: &mut GuiHandle, expected: &str) -> GuiResult<()> {
         ));
     }
     let context = gui.review_context.as_ref().unwrap();
-    if context.check_run.is_some()
-        || context.save_error.is_some()
-        || context.ready_comment.is_some()
-    {
+    if context.check_run.is_some() || context.save_error.is_some() {
         return Err(GuiError::conflict(
             "Wait for the check and save or discard pending review edits first",
         ));
@@ -79,10 +76,8 @@ pub(super) fn start(gui: &mut GuiHandle, expected: &str) -> GuiResult<()> {
             "Open the pre-finish summary before running checks",
         ));
     }
-    if ai::view(app)?.running || state.questions.draft.is_some() {
-        return Err(GuiError::conflict(
-            "Wait for AI work and transfer or discard generated drafts first",
-        ));
+    if ai::view(app)?.running {
+        return Err(GuiError::conflict("Wait for AI work to finish first"));
     }
     ai::fresh(state)?;
     let run = ReviewCheckRun::spawn(&state.workdir, &actual);

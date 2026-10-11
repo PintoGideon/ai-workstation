@@ -52,7 +52,7 @@ Lineup checked 2026-10-09. Prices are per million input/output tokens, Anthropic
 
 - Harness-neutral one-shot runs for Claude, Codex, and Pi
 - Restricted no-tools mode for context-complete prompts
-- Read-only repository commands for review questions and PR investigations
+- Read-only repository commands for PR investigations
 
 **Prompt registry** (`src/prompts/`): the single home for every headless
 prompt AIW sends (see "Editable Headless Prompts" below). `mod.rs` holds
@@ -249,11 +249,8 @@ registry that the user can view and override. See
 `docs/backlog/editable-prompts-call-site-inventory.md` for the call-site map
 and `AIW_PLAN.md` for the design decisions.
 
-- **Registry (`src/prompts/`).** `PromptId::ALL` is the 15 stable ids
+- **Registry (`src/prompts/`).** `PromptId::ALL` is the 9 stable ids
   (`review.walkthrough`/`.co_review`/`.changeset_overview`/`.diff_explain`,
-  `review.question`/`.question_draft` (review questions,
-  `app/review_questions/`),
-  `pr_review.ai_review`, `review_memory.bootstrap`/`.compact`/`.ai_summary`,
   `session.summary`, and the batched-review set
   `review.batch`/`.hunk_split`/`.synthesis`/`.findings_summary`). `defaults.rs`
   holds the built-in text; every template uses granular tokens.
@@ -313,22 +310,13 @@ the model thinks.
 - **`ModelSel`** (`model` + `reasoning`) is what every `HeadlessRunner` entry and
   `ClaudeLauncher::spawn_headless` accept via `impl Into<ModelSel>`, so a
   caller with only a model (`Option<&str>`) is unchanged.
-- **Pickers.** The AI Review (`A`) and Expert plan review model pickers carry
-  `AiModelPickState::{reasoning_levels, reasoning}`; `h`/`l` (or ←/→) cycle
-  Default → each level on the same screen. The row is hidden for a harness
-  with no levels. Expert reasoning is **not persisted** with the interview
-  draft (it would need a migration on the shared `aiw.db`); a resumed draft
-  falls back to the `plan_preflight` config entry.
 - **Config.** `review_reasoning` / `review_reasonings` mirror `review_model` /
-  `review_models` (`AppConfig::review_reasoning_for`; Expert plan review never
-  inherits the shared default). Applies to the picker seed, Final Review
-  (walkthrough, co-review, overview, diff explain) and review memory.
-- **Attribution** records the level (`AiReviewAttribution::reasoning`) only when
-  the harness could use it.
+  `review_models` (`AppConfig::review_reasoning_for`). Applies to Final Review
+  (walkthrough, co-review, overview, diff explain).
 
 ### Batched Review of Oversized Diffs
 
-When an AI review's diff would overflow the model, it is split into bounded
+When a co-review's diff would overflow the model, it is split into bounded
 prompts and the findings recombined. Full rationale in
 `docs/batched-review.md`; `AIW_PLAN.md` has the design decisions.
 
@@ -358,19 +346,12 @@ prompts and the findings recombined. Full rationale in
   `will_overflow` / `will_overflow_with_budget` (budget `0` = gate off), and
   `PromptTooLong` + `is_prompt_too_long_message` / `as_prompt_too_long`
   (best-effort classifier over the four CLIs' overflow phrasings), emitted by
-  `run_command` / `run_jsonl_command`.
-- **Wired into** the `W` AI PR review (`app/ai_review.rs`: `begin_ai_pr_review`
-  resolves `review.batch`/`.hunk_split`/`.synthesis`/`.findings_summary` +
-  `App::review_prompt_budget`; `run_ai_pr_review` branches to
-  `run_batched_ai_pr_review` when the pre-send estimate overflows **and** when
-  the single pass itself returns `PromptTooLong` — so a `0` budget still gets
-  the batched fallback with adaptive halving; `batched_coverage_note` prepends
-  the "⚠ Partial coverage" banner to `AiReviewOutcome::summary`) and
-  final-review co-review (`app/review.rs`: `generate_co_review` → worker thread
-  `run_batched_co_review` → `DiffViewerState::co_review_bg` → `poll_co_review`
-  → `apply_co_review_text`; a `0` budget skips the pre-send hunk-split entirely
-  and the single pass truncates the body with a visible marker).
-  `review_destination.rs` is untouched.
+  `run_command`.
+- **Wired into** final-review co-review (`app/review.rs`: `generate_co_review`
+  → worker thread `run_batched_co_review` → `DiffViewerState::co_review_bg` →
+  `poll_co_review` → `apply_co_review_text`; a `0` budget skips the pre-send
+  hunk-split entirely and the single pass truncates the body with a visible
+  marker).
 - **Config**: `AppConfig::review_prompt_budget_tokens` (global) /
   `ExtensionConfig::review_prompt_budget_tokens` (project `aiw.json`,
   project-over-global), resolved by `App::review_prompt_budget(repo, harness)`.

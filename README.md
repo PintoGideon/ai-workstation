@@ -53,7 +53,7 @@ non-git directories without it.
 Optional tools:
 
 - An authenticated [GitHub CLI](https://cli.github.com/) (`gh`) enables PR
-  triage, AI review, posting final-review feedback, and the dashboard's
+  triage, posting final-review feedback, and the dashboard's
   open/merged/closed PR badge.
 - A [Nerd Font](https://www.nerdfonts.com/) provides the best icon rendering.
 - The `code` command enables VS Code sessions.
@@ -160,7 +160,7 @@ agent-mainframe (AMF) install without touching it:
 
 **First launch.** When `~/.config/ai_workstation` does not exist yet and
 `~/.config/amf` does, AIW *copies* (never moves or edits) AMF's settings,
-database, port reservations, custom themes, syntax parsers and review memory
+database, port reservations, custom themes and syntax parsers
 into its own folder, and says so once in a toast. The database is copied only
 while AMF is not writing to it (a busy AMF gets a few retries; if it keeps
 writing, AIW stops and asks you to start it again) and is integrity-checked.
@@ -267,7 +267,6 @@ receive AIW permission-mode flags.
 | `I` | On a TODOs session row: start an agent on the next TODO in priority order, across the lists currently showing |
 | `z` | Show dormant features: idle and unattended |
 | `G` | Open GitHub PR triage; on a project row, review a PR yourself |
-| `W` | Run AIW's AI review of a PR diff |
 | `L` | Open the prompt library |
 | `E` | Edit headless AI prompt templates (overrides) |
 | `T` | Choose a theme |
@@ -401,7 +400,7 @@ all.
 
 Select a feature and press `G` to open PR Triage. You can inspect review
 threads, send an individual or batched fix prompt to an agent, reply, and mark
-threads done. Press `W` to have AIW run its own review of the PR diff. GitHub
+threads done. GitHub
 actions are presented for confirmation before AIW writes to the pull request.
 When `f` or `B` targets a dedicated session, AIW lets you name it so multiple
 PR Triage agents can run simultaneously; leave the name blank to reuse the
@@ -422,36 +421,6 @@ investigation to act on it:
 post an editable reply, ask a follow-up (re-runs read-only with the prior answer
 as context), dismiss it, or keep it as a TODO.
 An unchanged AI-drafted reply discloses the harness, best-effort model,
-estimated tokens, and estimated cost of the session that wrote it. AIW's own
-AI review (`W`) carries the same attribution: once a run finishes, the pane
-shows which harness and model produced it and the run's token usage and
-estimated cost, and that line is included above the `— AI review via AIW`
-marker on the posted summary and every inline comment. A harness that reports
-no usage degrades to model-only attribution rather than showing a fake `$0.00`.
-
-When a PR diff is too large to review in one prompt, `W` splits it into
-per-file batches, reviews each on its own (splitting an oversized file hunk by
-hunk), and combines the findings with a synthesis pass — the running screen
-shows the batch progress. Coverage stays complete: any slice that still will
-not fit is listed rather than dropped, and the review summary is prefixed with
-a "⚠ Partial coverage" note whenever the diff had to be split. The size
-threshold is a per-harness default; set `review_prompt_budget_tokens` in
-`~/.config/ai_workstation/config.json` (or per repo in `aiw.json`) to change it, or to
-`0` to turn pre-send splitting off. For a sprawling refactor, reviewing the
-branch commit by commit still gives the sharpest results — per-slice review
-cannot see across files.
-
-To seed review memory from earlier reviews, open the PR picker and press `b`.
-If `G` opened the feature's pull request directly, press `g` from PR Triage to
-return to the picker first. Choose a lookback of 20, 50, 100, or all recent
-closed and merged pull requests with `j`/`k`, then press `Enter`. The default is
-50. Press `g` in the lookback dialog to switch between the project's
-`.aiw/review-memory.md` and the cross-project memory at
-`~/.config/ai_workstation/review-memory.md`; project memory is the default. This requires
-authenticated `gh` and an available Claude CLI. Fetching the review history
-does not use agent tokens; AIW then makes one agent pass to distill recurring
-findings and appends only new ones. You can press `Esc` while it runs to return
-to the picker without cancelling the background job.
 
 ### Review a teammate's pull request
 
@@ -486,29 +455,6 @@ the diff, such as outdated ones, are included in the summary instead of being
 dropped. The walkthrough, AI co-review, and changeset-overview passes, and the
 keys that need a local checkout (`E`, `b`, `t`, `X`), aren't available in this
 mode.
-
-### Ask questions during review
-
-Press `Q` in Final Review, manual PR review (`G`), or AI PR review (`W`) to ask
-about the reviewed code. `Ctrl+S` sends a question (`Ctrl+Enter` also works in
-terminals that report it); `Ctrl+H` changes the harness. As with AIW's other
-AI calls, a notice first shows which prompt will run and lets you view or edit it
-(`review.question`, and `review.question_draft` for comment drafts). While a
-request runs, the overlay shows a spinner, the harness, and the elapsed time. The AI can inspect repository code beyond the selected file or lines,
-including unchanged helpers. PR questions require a clean local checkout at the
-reviewed PR head. If that checkout is unavailable, AIW explains the mismatch and
-keeps the review and question intact.
-
-After an answer, `e` starts a follow-up, `r` retries, `[`/`]` browse the
-conversation, and `j`/`k` scroll the answer. `Esc` returns to the same review
-position; a running question continues while the overlay is closed. `Ctrl+X`
-cancels its request. Conversation history clears when the review closes.
-
-Use `i` to draft an inline comment at the question's selected diff line, or `g`
-to draft a general review comment. Edit the generated text, then `Ctrl+S`
-opens the existing comment editor. `Esc` discards the generated draft. Existing
-comments are preserved, changed code invalidates old draft anchors, and posting
-still requires the review's explicit submit action.
 
 ### Reuse prompts and track TODOs
 
@@ -581,8 +527,7 @@ the deletion. Nothing is killed or removed until you answer.
 
 ### Override the AI prompts AIW sends
 
-Behind the final-review diff helpers, the AI PR review, and the
-review-memory bootstrap/compaction, AIW makes one-shot
+Behind the final-review diff helpers and session summaries, AIW makes one-shot
 ("headless") AI calls with prompts it builds for you. Press `E` on the
 dashboard — or `Ctrl+Space`, then `E` from a session — to open the
 **prompt-override manager**. It lists every template with its effective source
@@ -612,12 +557,12 @@ the stable prompt id (shown in the manager):
 ```json
 {
   "prompt_overrides": {
-    "pr_review.ai_review": {
-      "template": "You are reviewing a diff... {{annotated_diff}} ..."
+    "review.walkthrough": {
+      "template": "Explain this change... {{patch}} ..."
     },
-    "review.question": {
-      "template": "shared text with {{question}}",
-      "harnesses": { "codex": "codex-specific text with {{question}}" }
+    "session.summary": {
+      "template": "shared text with {{recent_lines}}",
+      "harnesses": { "codex": "codex-specific text with {{recent_lines}}" }
     }
   }
 }

@@ -18,9 +18,8 @@
 //! explicit "not reviewed" list; `synthesize` folds those into one combined
 //! payload (`review.synthesis`, with a `review.findings_summary` /
 //! halving / deterministic-concat fallback chain). `batched_review` chains the
-//! two. The `W` AI PR review (`app/ai_review.rs`) and final-review co-review
-//! (`app/review.rs`) call in once they estimate a diff will not fit one
-//! prompt.
+//! two. The final-review co-review (`app/review.rs`) calls in once it
+//! estimates a diff will not fit one prompt.
 //!
 //! `allow(dead_code)`: a few forward-looking helpers on the public types
 //! (`byte_len`, `is_empty`, …) have no caller yet.

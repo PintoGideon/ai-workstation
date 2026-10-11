@@ -281,8 +281,7 @@ editable prompt overrides have their own manager (below). Native desktop
 interaction and macOS runtime validation for this library increment remain open.
 
 Open **Prompt overrides** in workspace navigation to change the prompts AIW
-sends for headless AI calls (plan interviews, Final Review walkthroughs and
-questions, AI PR review, review memory, Learning answers and session
+sends for headless AI calls (Final Review walkthroughs and session
 summaries). It is separate from the prompt library: library templates are text
 you insert into an agent draft, while overrides replace AIW's own built-in
 prompts. Choose a context (global, a project, or a feature) and the harness to
@@ -658,7 +657,7 @@ composer** rechecks the PR head and session identity, closes triage and appends
 the edited prompt to that agent's existing unsent draft. No agent is started or
 sent a message, and preparing a draft does not mark the comment Fixing. Edited
 text is protected on cancel/close and retained after failures. Dedicated or
-companion fix sessions, batch fixes, integration, review memory, AI Review,
+companion fix sessions, batch fixes, integration,
 keep-as-TODO and fixing-agent reply receipts remain in the TUI. Command and component tests cover
 these flows; seven asserted native WSLg frames from `gui-pr-triage.txt` use an
 offline `gh` that refuses every write and offline harness fixtures. The

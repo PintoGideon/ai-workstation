@@ -406,13 +406,6 @@ enum AutomationCommands {
         #[arg(long, default_value_t = 120000)]
         timeout_ms: u64,
     },
-    /// Seed deterministic completed AI-review findings for a screenshot fixture
-    SeedAiReview {
-        #[arg(long)]
-        file: Option<PathBuf>,
-        #[arg(long, default_value_t = 120000)]
-        timeout_ms: u64,
-    },
     // FORK: queued follow-ups (P7, DESIGN.md §16).
     /// Queue a follow-up for an agent session; it is delivered when the agent
     /// finishes its current turn (never typed into a busy agent).
@@ -1232,19 +1225,6 @@ fn run_automation_command(command: AutomationCommands) -> Result<()> {
             );
             Ok(())
         }
-        AutomationCommands::SeedAiReview { file, timeout_ms } => {
-            let payload = read_json_input(file.as_ref())?;
-            let request: automation::SeedAiReviewRequest =
-                serde_json::from_str(&payload).context("Invalid seed_ai_review JSON payload")?;
-            let socket = ipc::socket_path();
-            let outbound = serde_json::to_string(&request.ipc_payload())?;
-            let reply = ipc::send_wait(&socket, &outbound, Duration::from_millis(timeout_ms))?;
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&reply).unwrap_or_else(|_| "{}".to_string())
-            );
-            Ok(())
-        }
         // FORK: P7
         AutomationCommands::Queue {
             session,
@@ -1680,35 +1660,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             force_redraw = true;
         }
 
-        if app.review_memory_bootstrap_bg.is_some() && app.poll_review_memory_bootstrap_bg() {
-            force_redraw = true;
-        }
-
-        if app.review_memory_compact_bg.is_some() && app.poll_review_memory_compact_bg() {
-            force_redraw = true;
-        }
-
-        if app.memory_ai_summary_bg.is_some() && app.poll_memory_ai_summary_bg() {
-            force_redraw = true;
-        }
-
-        if app.ai_review_run.is_pending() && app.poll_ai_pr_review_bg() {
-            force_redraw = true;
-        }
-
-        if app.ai_review_triage_refresh_bg.is_some() && app.poll_ai_review_triage_refresh_bg() {
-            force_redraw = true;
-        }
-
-        if app.codex_models_cli_bg.is_some() && app.poll_codex_models_cli_bg() {
-            force_redraw = true;
-        }
-
         // FORK: a broken aiw.json read by any action is announced here.
         if app.report_config_errors() {
-            force_redraw = true;
-        }
-        if app.poll_review_questions() {
             force_redraw = true;
         }
 
@@ -1778,9 +1731,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             };
             deadlines.register_after(last_statuses_sync, statuses_fallback);
             if animating {
-                deadlines.register_after(now, ANIMATED_REDRAW_INTERVAL);
-            }
-            if app.review_question_work.job.is_some() {
                 deadlines.register_after(now, ANIMATED_REDRAW_INTERVAL);
             }
             if app.leader_active

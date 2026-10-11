@@ -1,5 +1,4 @@
 pub(crate) mod agent_sidebar;
-pub(crate) mod ai_review;
 pub(crate) mod attention;
 mod automation;
 mod bookmarks;
@@ -43,9 +42,6 @@ pub(crate) mod prompt_overrides;
 mod rename;
 pub(crate) mod resource_gate;
 pub(crate) mod review;
-pub(crate) mod review_destination;
-pub(crate) mod review_memory;
-pub(crate) mod review_questions;
 pub(crate) mod screenshots;
 mod search;
 mod session_config;
@@ -312,28 +308,6 @@ pub struct AppConfig {
     /// written regardless. Requires an authenticated `gh` CLI.
     #[serde(default)]
     pub final_review_post_to_pr: bool,
-    /// Repo-relative (or absolute) path to the review-findings memory doc
-    /// (Epic E of `pr-comment-review-plan.md`). Defaults to
-    /// [`review_memory::DEFAULT_REVIEW_MEMORY_PATH`] when unset.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub review_memory_path: Option<String>,
-    /// Path to the **cross-project** review-findings memory doc, read by the
-    /// AI reviewer in addition to each repo's own doc and writable from the
-    /// `M` / bootstrap flows' "global" scope. Relative values resolve against
-    /// the AIW config dir; absolute ones are used as-is. Defaults to
-    /// [`review_memory::DEFAULT_GLOBAL_REVIEW_MEMORY_FILE`] there (i.e.
-    /// `~/.config/ai_workstation/review-memory.md`) when unset. Global-only by nature —
-    /// unlike [`Self::review_memory_path`] there is no per-project override.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub global_review_memory_path: Option<String>,
-    /// Name of an existing Claude Code skill/command (without the leading `/`,
-    /// e.g. `"review"`) to lead the AI PR-review prompt (`A` in the PR-review
-    /// pane, Epic E of `pr-comment-review-plan.md`) with, so its review
-    /// methodology runs before AIW's own structured-findings instructions.
-    /// `None` (default) skips this — AIW ships no bundled skill for reviewing a
-    /// PR diff, so the feature must work without assuming one is installed.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ai_review_skill: Option<String>,
     /// Default explicit model name/id passed as `--model` to the headless CLI
     /// for every review action listed on [`ReviewAction`], independent of
     /// whatever model the feature's own interactive session runs. Format
@@ -432,10 +406,7 @@ pub struct AppConfig {
 }
 
 /// The distinct headless review call sites that each read `review_model`
-/// (optionally overridden per-action via `review_models`). Bootstrapping and
-/// compacting the review-memory doc share the `review_memory` key: both
-/// operate on the same doc with the same cost/quality tradeoff, so splitting
-/// them would just be two knobs for one decision.
+/// (optionally overridden per-action via `review_models`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReviewAction {
     /// Explicit Expert review of a synthesized implementation plan.
@@ -448,10 +419,6 @@ pub enum ReviewAction {
     ChangesetOverview,
     /// Config-wizard / hook diff-review explanation.
     DiffExplain,
-    /// AI PR review pane (`A` in PR Triage / the AI Review pane).
-    PrReview,
-    /// Review-memory lookback bootstrap and compaction (PR picker).
-    ReviewMemory,
 }
 
 impl ReviewAction {
@@ -462,8 +429,6 @@ impl ReviewAction {
             ReviewAction::CoReview => "co_review",
             ReviewAction::ChangesetOverview => "changeset_overview",
             ReviewAction::DiffExplain => "diff_explain",
-            ReviewAction::PrReview => "pr_review",
-            ReviewAction::ReviewMemory => "review_memory",
         }
     }
 }
@@ -568,9 +533,6 @@ impl Default for AppConfig {
             max_agent_autostart_sessions: default_agent_restart_limit(),
             final_review_submit_prompt: true,
             final_review_post_to_pr: false,
-            review_memory_path: None,
-            global_review_memory_path: None,
-            ai_review_skill: None,
             review_model: None,
             review_models: std::collections::BTreeMap::new(),
             review_reasoning: None,
@@ -832,59 +794,6 @@ pub struct App {
     /// user watches the linked fix session; `leader+P` pops it back without a
     /// re-fetch. See [`PrReviewReturn`].
     pub pr_review_return: Option<PrReviewReturn>,
-    /// AI review findings handed to PR Triage for fixing that haven't been
-    /// installed yet (PR Triage may still be loading). See
-    /// [`App::apply_pending_local_findings`].
-    pub(crate) pr_review_pending_local: Option<pr_review::PendingLocalFindings>,
-    /// Receiver for the background review-memory lookback bootstrap (fetch +
-    /// distill pass). See `app::pr_review::run_review_memory_bootstrap`.
-    pub review_memory_bootstrap_bg: Option<Receiver<pr_review::BootstrapProgress>>,
-    /// Receiver for the background review-memory compact pass ("prevent
-    /// review-memory rot"). See `app::pr_review::run_review_memory_compact`.
-    pub review_memory_compact_bg: Option<Receiver<pr_review::CompactProgress>>,
-    /// The origin picker + resolved doc path a background compact pass
-    /// ([`Self::review_memory_compact_bg`]) was started against, kept alive
-    /// independent of `self.mode` — in particular across
-    /// `cancel_review_memory_compact` (`esc`), which restores `self.mode` to
-    /// `PrPicker` well before the background pass finishes. Without this, a
-    /// `Done` arriving after a cancel would find `self.mode` is no longer
-    /// `ReviewMemoryCompactRunning` and has nowhere to land the proposed
-    /// rewrite — mirrors the pending AI-review run origin. `Some` exactly while
-    /// `review_memory_compact_bg` is `Some`; both are cleared together once
-    /// `Done` is processed.
-    pub review_memory_compact_pending: Option<CompactRunState>,
-    /// Receiver for the background "summarize with AI" run started from the
-    /// memory-add dialog (`s`). See `app::pr_review::pr_review_start_memory_ai_summary`.
-    pub memory_ai_summary_bg: Option<Receiver<pr_review::MemoryAiSummaryDone>>,
-    pub(crate) ai_review_run: pr_review::runtime::AiReviewRun,
-    pub(crate) review_question_work: review_questions::Work,
-    /// The mode to restore when the AI Review pane closes (`esc`/`q`),
-    /// stashed by `open_ai_review_from_triage` so returning from a review
-    /// started inside PR Triage lands back in that same pane rather than the
-    /// dashboard. `None` for the other three entry points (dashboard, an
-    /// agent session, the PR picker), which close straight to `Normal` —
-    /// matching how `close_pr_review` already behaves for those.
-    pub ai_review_return_to: Option<Box<AppMode>>,
-    /// Memoized result of [`Self::ai_review_finding_fix_costs`], valid only
-    /// while its key still matches the open AI Review pane. Recomputed lazily
-    /// (a triage DB load + a full cached-review JSON parse + a sibling query
-    /// per correlated finding) when the key changes, instead of every render
-    /// tick; cleared on pane (re)open and when an `A` run lands.
-    pub(crate) ai_review_fix_cost_cache:
-        Option<(ai_review::AiReviewFixCostKey, Vec<Option<String>>)>,
-    /// Background PR Triage refresh kicked off only after GitHub confirms an
-    /// AI Review post. Separate from the PR fetch slot so it can update a stashed
-    /// pane without changing the current AI Review mode.
-    pub ai_review_triage_refresh_bg: Option<Receiver<Result<pr_review::PrReview>>>,
-    /// PR/workdir identity paired with `ai_review_triage_refresh_bg`.
-    pub ai_review_triage_refresh_pending: Option<AiReviewTriageRefresh>,
-    /// Background `codex debug models` catalog probe
-    /// (`codex_config::spawn_cli_catalog_probe`), kicked off when a Codex
-    /// model picker opens with no preset rows (cache and availability table
-    /// both empty — a fresh install). Polled and, once it resolves, merged
-    /// into whichever model picker is still open; never awaited inline, since
-    /// that would block the event loop on the `codex` CLI.
-    pub codex_models_cli_bg: Option<Receiver<Option<Vec<String>>>>,
     /// Memoized `GhCli::current_user` result for the session, so opening or
     /// refreshing the PR picker doesn't repeat the `gh api user` call every
     /// time. `None` = not yet resolved; `Some(None)` = resolution was
@@ -1077,12 +986,6 @@ impl App {
     }
 
     pub(crate) fn has_visible_animation(&self) -> bool {
-        if self
-            .review_questions()
-            .is_some_and(|q| q.open && q.request.is_some())
-        {
-            return true;
-        }
         let base = match &self.mode {
             AppMode::Normal => self.has_dashboard_animation(),
             AppMode::RunningHook(state) => state.child.is_some(),
@@ -1097,10 +1000,6 @@ impl App {
                 .harnesses
                 .iter()
                 .any(|h| h.status == HarnessCheckStatus::Checking),
-            // The AI review keeps running in the background after `esc`
-            // returns here; animate the header's throbber for as long as it
-            // is in flight (see `ui::dialogs::draw_ai_review`).
-            AppMode::AiReview(_) => self.ai_review_run.is_pending(),
             // Full-screen loading/running views: `redraw_signature()` only
             // hashes the mode's discriminant, not its stage, so without this
             // the throbber only advances on the rare frame something else
@@ -1108,11 +1007,7 @@ impl App {
             // stretch in between (the blocking `gh`/`claude` call) it just
             // sits frozen, reading as "nothing is happening" even though the
             // background thread is working.
-            AppMode::PrReviewLoading(_)
-            | AppMode::PrInvestigationLoading(_)
-            | AppMode::ReviewMemoryBootstrapRunning(_)
-            | AppMode::ReviewMemoryCompactRunning(_)
-            | AppMode::AiReviewRunning(_) => true,
+            AppMode::PrReviewLoading(_) | AppMode::PrInvestigationLoading(_) => true,
             _ => false,
         };
         base || self.has_active_toasts()
@@ -1369,18 +1264,6 @@ impl App {
             issue_comment_work: issue_fixer::IssueCommentWork::default(),
             latest_prompt_menu_bg: None,
             pr_review_return: None,
-            pr_review_pending_local: None,
-            review_memory_bootstrap_bg: None,
-            review_memory_compact_bg: None,
-            review_memory_compact_pending: None,
-            memory_ai_summary_bg: None,
-            ai_review_run: pr_review::runtime::AiReviewRun::default(),
-            review_question_work: Default::default(),
-            ai_review_return_to: None,
-            ai_review_fix_cost_cache: None,
-            ai_review_triage_refresh_bg: None,
-            ai_review_triage_refresh_pending: None,
-            codex_models_cli_bg: None,
             gh_current_user: None,
             scroll_offset: 0,
             session_filter: SessionFilter::default(),
@@ -1457,7 +1340,6 @@ impl App {
             let _ = db.evict_stale_token_cache();
             let _ = db.evict_stale_pr_review_cache();
             let _ = db.evict_stale_pr_comment_triage();
-            let _ = db.evict_stale_ai_review_cache();
             if let Ok(entries) = db.load_token_cache() {
                 app.token_tracker.seed_from_db_cache(entries);
             }
@@ -1509,8 +1391,7 @@ impl App {
         worktree: Box<dyn WorktreeOps>,
     ) -> Self {
         use crate::extension::ExtensionConfig;
-        // `extension_for_repo` (and anything it feeds, e.g.
-        // `configured_review_memory_path`) re-reads
+        // `extension_for_repo` (and anything it feeds) re-reads
         // `~/.config/ai_workstation/config.json` from disk regardless of this
         // constructor's in-memory setup, which would otherwise make tests
         // depend on whatever happens to be in that file on the machine
@@ -1610,18 +1491,6 @@ impl App {
             issue_comment_work: issue_fixer::IssueCommentWork::default(),
             latest_prompt_menu_bg: None,
             pr_review_return: None,
-            pr_review_pending_local: None,
-            review_memory_bootstrap_bg: None,
-            review_memory_compact_bg: None,
-            review_memory_compact_pending: None,
-            memory_ai_summary_bg: None,
-            ai_review_run: pr_review::runtime::AiReviewRun::default(),
-            review_question_work: Default::default(),
-            ai_review_return_to: None,
-            ai_review_fix_cost_cache: None,
-            ai_review_triage_refresh_bg: None,
-            ai_review_triage_refresh_pending: None,
-            codex_models_cli_bg: None,
             gh_current_user: None,
             scroll_offset: 0,
             session_filter: SessionFilter::default(),
@@ -2084,44 +1953,6 @@ impl App {
         self.worktree
             .repo_root(path)
             .unwrap_or_else(|_| path.to_path_buf())
-    }
-
-    /// Resolve the configured review-memory path override for `repo`, in
-    /// precedence order:
-    ///
-    /// 1. `{repo}/aiw.json` `review_memory_path` (project scope).
-    /// 2. The `"extension"` block's `review_memory_path` in the global
-    ///    `~/.config/ai_workstation/config.json` (set via the config wizard's global
-    ///    scope).
-    /// 3. The top-level `review_memory_path` key in that same global
-    ///    `~/.config/ai_workstation/config.json` — an older setting
-    ///    (`AppConfig::review_memory_path`) that predates the `"extension"`
-    ///    block gaining this field. It has no wizard UI of its own, and a
-    ///    value set here is silently shadowed by #2 if both are present in
-    ///    the file.
-    ///
-    /// None of the above set means the caller should fall back to
-    /// [`review_memory::DEFAULT_REVIEW_MEMORY_PATH`].
-    pub(crate) fn configured_review_memory_path(&self, repo: &Path) -> Option<String> {
-        self.extension_for_repo(repo)
-            .review_memory_path
-            .or_else(|| self.config.review_memory_path.clone())
-    }
-
-    /// Both review-memory doc paths for `repo`: its own committed doc (via
-    /// [`Self::configured_review_memory_path`]) and the user's cross-project
-    /// one. Every review-memory flow resolves through this, so a scope toggle
-    /// is just a lookup rather than a second round of config plumbing.
-    pub(crate) fn review_memory_paths(&self, repo: &Path) -> review_memory::ReviewMemoryPaths {
-        review_memory::ReviewMemoryPaths {
-            project: review_memory::review_memory_path(
-                repo,
-                self.configured_review_memory_path(repo).as_deref(),
-            ),
-            global: review_memory::global_review_memory_path(
-                self.config.global_review_memory_path.as_deref(),
-            ),
-        }
     }
 
     pub(crate) fn allowed_agents_for_project_path(&self, path: &Path) -> Vec<AgentKind> {

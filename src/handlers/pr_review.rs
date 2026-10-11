@@ -16,11 +16,9 @@ const FIX_PAGE_STEP: isize = 10;
 /// fixed together in one combined batch. Action keys: `f` fix, `v` run a
 /// strictly read-only investigation of the selected comment, `space` mark /
 /// `B` inject one combined prompt for all marked comments, `R` opens the
-/// reply-kind picker (Done / not-needed), `M` add to memory, `m` opens the
-/// "Mark" picker (Done (local) / Skip (local) / Resolve on GitHub), `c`
-/// compact the review-memory doc, `i` install syntax highlighting for the
-/// selected comment's file, `A` opens the dedicated AI Review pane for this
-/// PR (its own workflow — see `crate::app::ai_review`).
+/// reply-kind picker (Done / not-needed), `m` opens the "Mark" picker
+/// (Done (local) / Skip (local) / Resolve on GitHub), `i` install syntax
+/// highlighting for the selected comment's file.
 pub fn handle_pr_review_key(app: &mut App, key: KeyEvent) -> Result<()> {
     // The per-run investigation harness picker, when open, captures all keys.
     if app.pr_review_investigation_harness_picking() {
@@ -68,10 +66,6 @@ pub fn handle_pr_review_key(app: &mut App, key: KeyEvent) -> Result<()> {
     if let Some(editing) = app.pr_review_reply_view() {
         return handle_reply_key(app, key, editing);
     }
-    // The "add to memory" dialog, when open, captures all keys.
-    if let Some(editing) = app.pr_review_memory_add_view() {
-        return handle_memory_add_key(app, key, editing);
-    }
 
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     match key.code {
@@ -93,13 +87,10 @@ pub fn handle_pr_review_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char('e') => app.pr_review_investigation_context_open(),
         KeyCode::Char('B') => app.pr_review_open_batch_confirm(),
         KeyCode::Char('R') => app.pr_review_open_reply_pick(),
-        KeyCode::Char('M') => app.pr_review_open_memory_add(),
         KeyCode::Char('m') => app.pr_review_open_mark_pick(),
-        KeyCode::Char('c') => app.open_review_memory_compact_confirm(),
         KeyCode::Char('r') => app.refresh_pr_review(),
         KeyCode::Char('i') => app.open_syntax_language_picker_for_selected_diff_file(),
         KeyCode::Char('g') => app.open_pr_picker_from_pane(),
-        KeyCode::Char('A') => app.open_ai_review_from_triage(),
         KeyCode::Char('I') => app.pr_review_open_integrate(),
         KeyCode::Char('a') => app.pr_review_open_investigation_actions(),
         _ => {}
@@ -242,29 +233,16 @@ fn handle_mark_pick_key(app: &mut App, key: KeyEvent) -> Result<()> {
 }
 
 /// Key handling for the PR picker: navigate the list, `⏎` open the highlighted
-/// PR in PR Triage, `W` open it in the AI Review pane instead, `a` toggle
-/// closed/merged PRs, `#` switch to typing a number, `b` open the
-/// review-memory lookback bootstrap, `c` compact the review-memory doc,
-/// `esc` close.
+/// PR in PR Triage, `a` toggle closed/merged PRs, `#` switch to typing a
+/// number, `esc` close.
 pub fn handle_pr_picker_key(app: &mut App, key: KeyEvent) -> Result<()> {
-    // The lookback-bootstrap depth picker, when open, captures all keys.
-    // (The compact confirm overlay is its own top-level `AppMode` — reachable
-    // from more than just the picker — and dispatched straight from
-    // `handlers::handle_key`, so there's no analogous check here.)
-    if app.review_memory_bootstrap_picking() {
-        return handle_bootstrap_pick_key(app, key);
-    }
-
     match key.code {
         KeyCode::Esc | KeyCode::Char('q') => app.close_pr_review(),
         KeyCode::Down | KeyCode::Char('j') => app.pr_picker_select_next(),
         KeyCode::Up | KeyCode::Char('k') => app.pr_picker_select_prev(),
         KeyCode::Enter => app.pr_picker_choose(),
-        KeyCode::Char('W') => app.pr_picker_choose_ai_review(),
         KeyCode::Char('a') => app.pr_picker_toggle_closed(),
         KeyCode::Char('#') | KeyCode::Char('g') => app.pr_picker_to_number_prompt(),
-        KeyCode::Char('b') => app.open_review_memory_bootstrap_pick(),
-        KeyCode::Char('c') => app.open_review_memory_compact_confirm(),
         KeyCode::Tab | KeyCode::BackTab => app.pr_picker_switch_to_review_tab(),
         _ => {}
     }
@@ -272,7 +250,7 @@ pub fn handle_pr_picker_key(app: &mut App, key: KeyEvent) -> Result<()> {
 }
 
 /// Key handling for the PR picker's Review tab. Only its own keys: the
-/// Triage tab's `W`/`a`/`#`/`b`/`c` act on triage and are not offered here.
+/// Triage tab's `a`/`#` act on triage and are not offered here.
 pub fn handle_pr_review_list_key(app: &mut App, key: KeyEvent) -> Result<()> {
     match key.code {
         KeyCode::Esc | KeyCode::Char('q') => app.close_pr_review_list(),
@@ -281,86 +259,6 @@ pub fn handle_pr_review_list_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Tab | KeyCode::BackTab => app.pr_review_list_switch_to_triage_tab(),
         KeyCode::Char('r') => app.pr_review_list_retry(),
         KeyCode::Enter => app.pr_review_list_open_selected(),
-        _ => {}
-    }
-    Ok(())
-}
-
-/// Key handling for the lookback-bootstrap depth picker: `j/k` move, `g`
-/// toggles the destination doc (this repo's / cross-project), `⏎` run,
-/// `esc`/`q` cancel back to the PR picker.
-fn handle_bootstrap_pick_key(app: &mut App, key: KeyEvent) -> Result<()> {
-    match key.code {
-        KeyCode::Esc | KeyCode::Char('q') => app.review_memory_bootstrap_pick_cancel(),
-        KeyCode::Down | KeyCode::Char('j') => app.review_memory_bootstrap_pick_move(1),
-        KeyCode::Up | KeyCode::Char('k') => app.review_memory_bootstrap_pick_move(-1),
-        KeyCode::Char('g') => app.review_memory_bootstrap_toggle_scope(),
-        KeyCode::Enter => app.review_memory_bootstrap_pick_confirm(),
-        _ => {}
-    }
-    Ok(())
-}
-
-/// Key handling for the review-memory compact confirm overlay: `⏎` run, `g`
-/// toggles which doc gets compacted (this repo's / cross-project — the same
-/// gesture the bootstrap picker and `M` use), `esc`/`q` cancel back to
-/// whichever screen opened it.
-pub fn handle_compact_confirm_key(app: &mut App, key: KeyEvent) -> Result<()> {
-    match key.code {
-        KeyCode::Esc | KeyCode::Char('q') => app.review_memory_compact_confirm_cancel(),
-        KeyCode::Char('g') => app.review_memory_compact_toggle_scope(),
-        KeyCode::Enter => app.review_memory_compact_confirm_run(),
-        _ => {}
-    }
-    Ok(())
-}
-
-/// Key handling for the full-screen lookback-bootstrap running view: `esc`/`q`
-/// return to the PR picker (the background thread keeps running to
-/// completion; its result still lands via `poll_review_memory_bootstrap_bg`).
-pub fn handle_review_memory_bootstrap_running_key(app: &mut App, key: KeyEvent) -> Result<()> {
-    if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) {
-        app.cancel_review_memory_bootstrap();
-    }
-    Ok(())
-}
-
-/// Key handling for the full-screen compact running view: `esc`/`q` return to
-/// the PR picker (the background thread keeps running to completion; its
-/// result still lands via `poll_review_memory_compact_bg`).
-pub fn handle_review_memory_compact_running_key(app: &mut App, key: KeyEvent) -> Result<()> {
-    if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) {
-        app.cancel_review_memory_compact();
-    }
-    Ok(())
-}
-
-/// Key handling while the compact review dialog is open.
-///
-/// Confirm view: `⏎`/`w` writes the proposed doc, `e` edits, `esc`/`q`
-/// discards without writing. Edit mode: keystrokes flow to the editor; `esc`
-/// returns to the confirm view.
-pub fn handle_review_memory_compact_review_key(app: &mut App, key: KeyEvent) -> Result<()> {
-    if app.pr_review_compact_review_editing() == Some(true) {
-        match key.code {
-            KeyCode::Esc => app.pr_review_compact_review_stop_edit(),
-            _ => app.pr_review_compact_review_editor_key(key),
-        }
-        return Ok(());
-    }
-
-    match key.code {
-        KeyCode::Enter | KeyCode::Char('w') => app.pr_review_compact_write()?,
-        KeyCode::Char('e') => app.pr_review_compact_review_edit(),
-        KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.pr_review_compact_review_scroll(DETAIL_SCROLL_STEP as isize)
-        }
-        KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.pr_review_compact_review_scroll(-(DETAIL_SCROLL_STEP as isize))
-        }
-        KeyCode::PageDown => app.pr_review_compact_review_scroll(FIX_PAGE_STEP),
-        KeyCode::PageUp => app.pr_review_compact_review_scroll(-FIX_PAGE_STEP),
-        KeyCode::Esc | KeyCode::Char('q') => app.pr_review_compact_discard(),
         _ => {}
     }
     Ok(())
@@ -384,68 +282,6 @@ fn handle_reply_key(app: &mut App, key: KeyEvent, editing: bool) -> Result<()> {
         KeyCode::Enter => app.pr_review_post_reply()?,
         KeyCode::Char('e') => app.pr_review_reply_edit(),
         KeyCode::Esc | KeyCode::Char('q') => app.pr_review_cancel_reply(),
-        _ => {}
-    }
-    Ok(())
-}
-
-/// Key handling while the "add to memory" dialog is open.
-///
-/// Confirm view: `⏎` appends, `e` edits, `s` summarizes the finding with AI
-/// (opens the per-use harness picker below), `Tab` cycles the category, `g`
-/// toggles the destination doc (this repo's / cross-project), `esc`/`q`
-/// cancels. Edit mode: keystrokes flow to the finding editor; `esc` returns to
-/// the confirm view.
-fn handle_memory_add_key(app: &mut App, key: KeyEvent, editing: bool) -> Result<()> {
-    // The per-use AI-summary harness picker (`s`), when open, captures all keys.
-    if app.pr_review_memory_ai_summary_picking() {
-        return handle_memory_ai_summary_pick_key(app, key);
-    }
-    // While a summary is generating, only stop-watching is meaningful — the
-    // background thread itself is left running (see
-    // `App::pr_review_cancel_watching_memory_ai_summary`).
-    if app.pr_review_memory_ai_summary_generating() {
-        if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) {
-            app.pr_review_cancel_watching_memory_ai_summary();
-        }
-        return Ok(());
-    }
-    // A failed run's inline error is dismissed by the next keypress, which
-    // then falls through to act on the dialog as normal (so e.g. pressing `s`
-    // again immediately retries, and `esc` both dismisses and cancels).
-    if app.pr_review_memory_ai_summary_error().is_some() {
-        app.pr_review_dismiss_memory_ai_summary_error();
-    }
-
-    if editing {
-        match key.code {
-            KeyCode::Esc => app.pr_review_memory_add_stop_edit(),
-            _ => app.pr_review_memory_add_editor_key(key),
-        }
-        return Ok(());
-    }
-
-    match key.code {
-        KeyCode::Enter => app.pr_review_append_memory()?,
-        KeyCode::Char('e') => app.pr_review_memory_add_edit(),
-        KeyCode::Char('s') => app.pr_review_open_memory_ai_summary_pick(),
-        KeyCode::Tab => app.pr_review_cycle_memory_category(),
-        KeyCode::Char('g') => app.pr_review_toggle_memory_scope(),
-        KeyCode::Esc | KeyCode::Char('q') => app.pr_review_cancel_memory_add(),
-        _ => {}
-    }
-    Ok(())
-}
-
-/// Key handling while the memory-add dialog's per-use "summarize with AI"
-/// harness picker is open: `j/k` (or arrows) move, `⏎` confirms (starts the
-/// run), `esc`/`q` cancels back to the ordinary confirm view.
-fn handle_memory_ai_summary_pick_key(app: &mut App, key: KeyEvent) -> Result<()> {
-    match key.code {
-        KeyCode::Esc | KeyCode::Char('q') => app.pr_review_memory_ai_summary_pick_cancel(),
-        KeyCode::Down | KeyCode::Char('j') => app.pr_review_memory_ai_summary_pick_move(1),
-        KeyCode::Up | KeyCode::Char('k') => app.pr_review_memory_ai_summary_pick_move(-1),
-        KeyCode::Enter => app.pr_review_memory_ai_summary_pick_confirm(),
         _ => {}
     }
     Ok(())

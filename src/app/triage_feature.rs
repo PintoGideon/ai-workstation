@@ -487,7 +487,6 @@ impl App {
                 selected: 0,
                 error: None,
                 done: None,
-                companion_feature_id: None,
             });
         }
     }

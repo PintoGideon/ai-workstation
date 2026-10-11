@@ -15,7 +15,7 @@ use crate::project::{ProjectStatus, ProjectStore, SessionKind};
 use crate::resources::procs::{self, ProcInfo};
 use crate::traits::TmuxOps;
 
-/// In-flight headless harness runs (plan interviews, AI review, final review).
+/// In-flight headless harness runs (final review, summaries).
 /// They are invisible to tmux but cost the same memory as an interactive
 /// harness, so they count toward the limit while they run.
 static IN_FLIGHT_HEADLESS: AtomicUsize = AtomicUsize::new(0);

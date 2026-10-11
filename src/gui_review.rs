@@ -14,10 +14,7 @@ mod ai;
 mod checks;
 mod complete;
 mod summary;
-pub use ai::{
-    ReviewAiView, ReviewCommentDraftView, ReviewCommentEditorView, ReviewDraftDestination,
-    ReviewQuestionView,
-};
+pub use ai::ReviewAiView;
 pub use checks::{ReviewCheckStatus, ReviewCheckView, poll, poll_open};
 pub use complete::{
     ReviewCompletion, ReviewFinishView, ReviewHandoff, ReviewHandoffTarget, take_completion,
@@ -33,7 +30,6 @@ pub(crate) struct ReviewContext {
     revision: u64,
     progress: Option<Vec<u8>>,
     save_error: Option<String>,
-    ready_comment: Option<ReviewCommentEditorView>,
     check_run: Option<crate::app::review::ReviewCheckRun>,
     check: Option<ReviewCheckView>,
     /// A confirmed completion waiting for `check_run`.
@@ -143,22 +139,6 @@ pub enum ReviewAction {
         path: String,
     },
     Overview,
-    Ask {
-        path: String,
-        start: Option<DiffLineLocation>,
-        end: Option<DiffLineLocation>,
-        question: String,
-        harness: crate::project::AgentKind,
-    },
-    DraftQuestion {
-        turn: usize,
-        destination: ReviewDraftDestination,
-    },
-    TransferQuestionDraft {
-        request: u64,
-        text: String,
-    },
-    DiscardQuestionDraft,
     AcceptDraft {
         path: String,
         start: DiffLineLocation,
@@ -315,7 +295,6 @@ pub fn begin(gui: &mut GuiHandle, target: FeatureTarget) -> GuiResult<ReviewView
         revision: 0,
         progress,
         save_error: None,
-        ready_comment: None,
         check_run: None,
         check: None,
         completion: None,
@@ -334,14 +313,12 @@ pub fn snapshot(gui: &mut GuiHandle) -> GuiResult<ReviewView> {
         context.target.clone(),
         context.save_error.clone(),
     );
-    let ready_comment = context.ready_comment.clone();
     let check = context.check.clone();
     let check_command = checks::command(gui);
     let finish = complete::preview(gui);
     let app = gui.app_for_workflow();
     let state = ai::state(&app.mode)?;
-    let mut ai = ai::view(app)?;
-    ai.ready_comment = ready_comment;
+    let ai = ai::view(app)?;
     let mut budget = HighlightBudget::view();
     let files = state
         .files
@@ -452,18 +429,6 @@ pub fn act(
     revision: u64,
     action: ReviewAction,
 ) -> GuiResult<Option<ReviewView>> {
-    let preserve_draft = matches!(
-        action,
-        ReviewAction::DraftQuestion { .. }
-            | ReviewAction::TransferQuestionDraft { .. }
-            | ReviewAction::PrecallConfirm
-            | ReviewAction::PrecallCancel
-            | ReviewAction::PrecallToggleView
-            | ReviewAction::CancelAi
-            | ReviewAction::RetrySave
-            | ReviewAction::SummaryOpen
-            | ReviewAction::SummaryClose
-    );
     let pause = matches!(action, ReviewAction::Pause);
     let reload = matches!(action, ReviewAction::Reload);
     let refresh = matches!(action, ReviewAction::Refresh);
@@ -472,19 +437,6 @@ pub fn act(
         .as_ref()
         .filter(|c| c.id == workflow_id && c.revision == revision)
         .ok_or_else(|| GuiError::conflict("Review changed; retry from the current view"))?;
-    if context.ready_comment.is_some()
-        && matches!(
-            action,
-            ReviewAction::Ask { .. }
-                | ReviewAction::DraftQuestion { .. }
-                | ReviewAction::ApplyFinishSuggestions
-                | ReviewAction::Complete { .. }
-        )
-    {
-        return Err(GuiError::conflict(
-            "Save or discard the transferred comment draft first",
-        ));
-    }
     // A completion in progress keeps its summary open: the check result
     // decides whether anything is recorded.
     if context.completion.is_some()
@@ -551,7 +503,6 @@ pub fn act(
         ReviewAction::PrecallCancel
             | ReviewAction::PrecallToggleView
             | ReviewAction::CancelAi
-            | ReviewAction::DiscardQuestionDraft
             | ReviewAction::HistoryClose
             | ReviewAction::SummaryClose
     ) {
@@ -565,9 +516,6 @@ pub fn act(
             ai::apply(app, &action)?;
         }
         let context = gui.review_context.as_mut().unwrap();
-        if matches!(action, ReviewAction::DiscardQuestionDraft) {
-            context.ready_comment = None;
-        }
         context.revision += 1;
         return snapshot(gui).map(Some);
     }
@@ -728,7 +676,6 @@ pub fn act(
                 | ReviewAction::ToggleLineResolved { path, .. } => Some(path.clone()),
                 ReviewAction::Walkthrough { path }
                 | ReviewAction::CoReview { path }
-                | ReviewAction::Ask { path, .. }
                 | ReviewAction::AcceptDraft { path, .. }
                 | ReviewAction::DismissDraft { path, .. } => Some(path.clone()),
                 ReviewAction::Undo => state.verdict_undo.last().map(|entry| entry.path.clone()),
@@ -771,12 +718,7 @@ pub fn act(
                     set_span(state, *start, *end)?;
                 }
                 ReviewAction::AcceptDraft { start, end, .. }
-                | ReviewAction::DismissDraft { start, end, .. }
-                | ReviewAction::Ask {
-                    start: Some(start),
-                    end: Some(end),
-                    ..
-                } => {
+                | ReviewAction::DismissDraft { start, end, .. } => {
                     set_span(state, *start, *end)?;
                 }
                 _ => {}
@@ -910,12 +852,6 @@ pub fn act(
             ReviewCheckStatus::Stale,
             "Reviewed changes were refreshed or suggestions applied; run the check again".into(),
         );
-    }
-    if !preserve_draft {
-        gui.review_context.as_mut().unwrap().ready_comment = None;
-        if let Some(q) = gui.app_for_workflow().review_questions_mut() {
-            q.draft = None;
-        }
     }
     if reload {
         let context = gui.review_context.as_mut().unwrap();
@@ -1073,15 +1009,6 @@ mod tests {
             comments.push(resolved);
         }
         gui.review_context.as_mut().unwrap().save_error = Some("Retain save failure".into());
-        gui.review_context.as_mut().unwrap().ready_comment = Some(ReviewCommentEditorView {
-            request: 1,
-            original: "".into(),
-            text: "Retain draft".into(),
-            path: None,
-            start: None,
-            end: None,
-            severity: Severity::Nit,
-        });
         let view = action(&mut gui, &view, ReviewAction::SummaryOpen);
         let summary = view.summary.as_ref().unwrap();
         assert_eq!(summary.rows.len(), 4);
@@ -1096,11 +1023,9 @@ mod tests {
         );
         assert_eq!(summary.rows[2].text, "File feedback");
         assert_eq!(summary.rows[3].text, "Overall feedback");
-        assert_eq!(view.ai.ready_comment.as_ref().unwrap().text, "Retain draft");
         let view = action(&mut gui, &view, ReviewAction::SummaryClose);
         assert!(view.summary.is_none());
         assert!(view.save_error.is_some());
-        assert!(view.ai.ready_comment.is_some());
         assert_eq!(progress_bytes(&repo).unwrap(), before);
         assert_eq!(std::fs::read(repo.join("code.txt")).unwrap(), source);
         assert!(!repo.join(".claude/final-review-feedback.md").exists());
@@ -1396,28 +1321,6 @@ mod tests {
             .message
             .contains("running AI request")
         );
-        ai::cancel(gui.app_for_workflow());
-        gui.review_context.as_mut().unwrap().ready_comment = Some(ReviewCommentEditorView {
-            request: 1,
-            original: "".into(),
-            text: "Draft".into(),
-            path: None,
-            start: None,
-            end: None,
-            severity: Severity::Nit,
-        });
-        assert!(
-            act(
-                &mut gui,
-                &view.workflow_id,
-                view.revision,
-                ReviewAction::ApplyFinishSuggestions
-            )
-            .unwrap_err()
-            .message
-            .contains("transferred comment draft")
-        );
-        assert!(snapshot(&mut gui).unwrap().ai.ready_comment.is_some());
         assert_eq!(std::fs::read(source).unwrap(), before);
     }
 
@@ -1613,28 +1516,18 @@ mod tests {
     }
 
     #[test]
-    fn history_preserves_unsaved_progress_and_transferred_drafts_after_external_save() {
+    fn history_preserves_unsaved_progress_after_external_save() {
         let (dir, mut gui, target) = fixture();
         let repo = dir.path().join("repo");
         let view = begin(&mut gui, target).unwrap();
         let context = gui.review_context.as_mut().unwrap();
         context.save_error = Some("Retry this save".into());
-        context.ready_comment = Some(ReviewCommentEditorView {
-            request: 4,
-            original: String::new(),
-            path: None,
-            start: None,
-            end: None,
-            text: "Transferred draft".into(),
-            severity: Severity::Nit,
-        });
         std::fs::create_dir_all(repo.join(".claude")).unwrap();
         let external = b"{\"general_feedback\":\"external\"}";
         std::fs::write(crate::app::review::review_progress_path(&repo), external).unwrap();
         let view = action(&mut gui, &view, ReviewAction::HistoryOpen);
         let view = action(&mut gui, &view, ReviewAction::HistoryClose);
         assert_eq!(view.save_error.as_deref(), Some("Retry this save"));
-        assert_eq!(view.ai.ready_comment.unwrap().text, "Transferred draft");
         assert_eq!(progress_bytes(&repo).unwrap().unwrap(), external);
         assert!(gui.review_context.as_ref().unwrap().progress.is_none());
     }

@@ -169,7 +169,6 @@ rules; the module signals no process itself. Terminal attachment records
 | | `pr_review/reply.rs` | Reply drafting, provenance and posting |
 | | `pr_review/investigation.rs` | Read-only investigation requests, results and follow-ups |
 | | `pr_review/integration.rs` | Fix target/harness selection, injection and linked session navigation |
-| | `pr_review/memory.rs` | Review-memory bootstrap, compact and append workflows |
 | | `pr_review/review_tab.rs` | "Review a PR" tab: open-PR list, tab switching, opening a PR into the viewer and leaving it |
 | | `pr_review/revisions.rs` | Object-only PR fetch into `refs/aiw/review/N/*`, head check, merge-base, ref cleanup |
 | | `pr_review/github_access.rs` | `TriageGithub` read/write boundary (`gh` in production, fixtures in tests) and the investigation runner seam |
@@ -191,9 +190,8 @@ Pure transformations take data rather than an all-purpose App/context object.
 State/domain code does not import handlers or renderers. Orchestration may use
 existing cross-feature APIs for TODO/plan/session handoffs.
 
-The neighboring `ai_review.rs`, `review_destination.rs`, `review_memory.rs` and
-`triage_feature.rs` retain their existing responsibilities. Extraction does not
-absorb them just to shrink a file. Shared DiffScope/layout concepts remain
+The neighboring `triage_feature.rs` retains its existing responsibilities.
+Extraction does not absorb it just to shrink a file. Shared DiffScope/layout concepts remain
 available to ordinary diff browsing rather than becoming private to Final Review.
 
 ## Runtime ownership and stale results
@@ -208,17 +206,12 @@ boundaries with private fields and shared production/test defaults:
   PR" list, open, and post slots tag each result with a request id so a retry
   or a closed tab drops a stale one; their blocking loaders are plain `fn`s,
   swapped in tests. A finished post is recorded even with no live target.
-- `AiReviewRun`: receiver, pending origin and live progress. Completion or PR
-  invalidation clears them together; closing the running screen preserves them
-  for later result application and reopening. Existing PR/workdir/head matching
-  stays in feature orchestration, including successor invalidation.
-
 
 Final Review already owns its children in mode state; it keeps that boundary.
 No second authoritative copy was added. Shared routing/store/configuration,
 manager injection, IPC/watcher/observer guards, pane/sidebar queues and debug/perf
-remain on App. Review-memory jobs, refresh caches and cross-feature notification
-state remain available for later incremental ownership work.
+remain on App. Refresh caches and cross-feature notification state remain
+available for later incremental ownership work.
 
 ## Data and side effects
 
@@ -226,7 +219,7 @@ state remain available for later incremental ownership work.
 SQLite connection and open/seed entrypoints; `migrations.rs` owns schema changes;
 `store.rs` persists projects. Other DB modules persist session status, tokens,
 debug logs, editors, prompt templates/overrides, TODOs,
-PR triage/investigations/terminal state, PR/AI review caches and manual PR review
+PR triage/investigations/terminal state, PR review caches and manual PR review
 drafts (`pr_review_drafts.rs`, keyed by repository and PR number). DB code knows
 project/domain types and uses WorktreeManager to resolve legacy stores.
 

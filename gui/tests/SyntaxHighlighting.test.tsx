@@ -161,7 +161,7 @@ const reviewView: ReviewView = {
   workflow_id: "review", revision: 2, target: { project_id: "p", feature_id: "f" },
   feature_name: "Feature", branch: "feature", base_ref: "main", selected_path: "src/lib.rs",
   general_feedback: "", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null, summary: null, check_command: null, check: null, finish: null,
-  ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, question_running: false, questions: [], question_error: null, comment_draft: null, ready_comment: null, harnesses: ["claude"], message: null },
+  ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude"], message: null },
   files: [{ diff: file, verdict: "undecided", feedback: "", severity: "suggestion", changed_since_last: false, notes: null, walkthrough: null, comment: null, line_comments: [] }],
 };
 

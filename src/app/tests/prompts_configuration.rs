@@ -222,7 +222,7 @@ fn review_model_for_prefers_per_action_override() {
 #[test]
 fn review_model_for_is_none_when_nothing_configured() {
     let config = AppConfig::default();
-    assert_eq!(config.review_model_for(ReviewAction::PrReview), None);
+    assert_eq!(config.review_model_for(ReviewAction::Walkthrough), None);
 }
 
 #[test]
@@ -964,7 +964,7 @@ fn prompt_override_manager_saves_to_each_scope_and_survives_reopen() {
             PromptSource::Global,
         ),
         (
-            PromptId::ReviewQuestion,
+            PromptId::ReviewCoReview,
             "This feature",
             "FEATURE answer {{question}}",
             PromptSource::Feature,

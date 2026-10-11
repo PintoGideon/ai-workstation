@@ -1,4 +1,3 @@
-mod ai_review;
 mod batch_creation;
 mod browse;
 mod config_wizard;
@@ -22,15 +21,12 @@ mod project;
 mod prompt_library;
 mod prompt_overrides;
 mod resource_gate;
-mod review_destination;
 mod review_harness;
-mod review_questions;
 mod search;
 mod session;
 mod theme;
 mod todos;
 
-pub use ai_review::{draw_ai_review, draw_ai_review_running};
 pub use batch_creation::draw_create_batch_features_dialog;
 pub use browse::draw_browse_path_dialog;
 pub use config_wizard::draw_config_wizard_dialog;
@@ -52,10 +48,8 @@ pub use hooks::{
 pub use issue_fixer::{draw_issue_browser, draw_issue_duplicate_warning, draw_issue_setup};
 pub use markdown::{draw_markdown_loading, draw_markdown_viewer};
 pub use pr_review::{
-    PrReviewUsage, draw_compact_confirm, draw_pr_investigation_loading, draw_pr_number_prompt,
-    draw_pr_picker, draw_pr_review, draw_pr_review_list, draw_pr_review_loading,
-    draw_review_memory_bootstrap_running, draw_review_memory_compact_review,
-    draw_review_memory_compact_running,
+    PrReviewUsage, draw_pr_investigation_loading, draw_pr_number_prompt, draw_pr_picker,
+    draw_pr_review, draw_pr_review_list, draw_pr_review_loading,
 };
 pub use precall::draw_prompt_precall;
 pub use project::{draw_create_project_dialog, draw_delete_project_confirm};
@@ -64,9 +58,6 @@ pub use prompt_library::{
 };
 pub use prompt_overrides::draw_prompt_overrides;
 pub use resource_gate::draw_resource_confirm_dialog;
-pub use review_destination::{
-    draw_review_destination_pick, draw_review_feature_setup, draw_review_integrate,
-};
 pub use review_harness::draw_review_harness_pick;
 pub use search::draw_search_dialog;
 pub use session::{

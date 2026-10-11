@@ -107,11 +107,6 @@ pub(super) fn apply(app: &mut App) -> GuiResult<()> {
             "Wait for or cancel the running AI request before applying suggestions",
         ));
     }
-    if s.questions.draft.is_some() {
-        return Err(GuiError::conflict(
-            "Transfer or discard the generated comment draft first",
-        ));
-    }
     if s.pending_suggestion_count() == 0 {
         return Err(GuiError::conflict("No open suggestions to apply"));
     }

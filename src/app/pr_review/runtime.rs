@@ -4,8 +4,6 @@ use std::path::Path;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use super::{InvestigationOutcome, PrReview};
-use crate::app::ai_review::AiReviewProgress;
-use crate::app::{AiReviewRunProgress, AiReviewState};
 
 /// One fetch and one investigation slot, preserving the original independent
 /// cancellation and receiver-drop behavior. AppMode remains the result target.
@@ -93,7 +91,7 @@ fn gh_review_poster(request: &PrPostRequest) -> PrPostOutcome {
         &request.comments,
     ) {
         let message = format!("{err:#}");
-        // `create_review`'s 422 text is written for the AI review's flow;
+        // `create_review`'s 422 text is written for the manual PR review;
         // say what it means here instead.
         let message = if message.contains("GitHub rejected the review (422)") {
             format!(
@@ -397,76 +395,5 @@ impl PrReviewWork {
 
     pub(crate) fn cancel_investigation(&mut self) {
         self.investigation = None;
-    }
-}
-
-/// The pending origin and live progress outlive the running dialog. Finishing
-/// or invalidating a run clears all three together; merely closing a pane does not.
-#[derive(Default)]
-pub(crate) struct AiReviewRun {
-    receiver: Option<Receiver<AiReviewProgress>>,
-    origin: Option<AiReviewState>,
-    progress: Option<AiReviewRunProgress>,
-}
-
-impl AiReviewRun {
-    pub(crate) fn begin(&mut self, receiver: Receiver<AiReviewProgress>, origin: AiReviewState) {
-        self.receiver = Some(receiver);
-        self.origin = Some(origin);
-    }
-
-    pub(crate) fn is_pending(&self) -> bool {
-        self.receiver.is_some()
-    }
-
-    pub(crate) fn poll(&self) -> Result<AiReviewProgress, TryRecvError> {
-        self.receiver
-            .as_ref()
-            .map_or(Err(TryRecvError::Disconnected), Receiver::try_recv)
-    }
-
-    pub(crate) fn origin(&self) -> &Option<AiReviewState> {
-        &self.origin
-    }
-
-    pub(crate) fn clear_question_history(&mut self) {
-        if let Some(origin) = &mut self.origin {
-            origin.questions = Default::default();
-        }
-    }
-
-    pub(crate) fn progress(&self) -> &Option<AiReviewRunProgress> {
-        &self.progress
-    }
-
-    pub(crate) fn progress_mut(&mut self) -> Option<&mut AiReviewRunProgress> {
-        self.progress.as_mut()
-    }
-
-    pub(crate) fn show_progress(&mut self, progress: AiReviewRunProgress) {
-        self.progress = Some(progress);
-    }
-
-    pub(crate) fn finish(&mut self) -> Option<AiReviewState> {
-        self.receiver = None;
-        self.progress = None;
-        self.origin.take()
-    }
-
-    // A few existing regressions intentionally seed incomplete/disconnected
-    // runs. Keep that injection test-only, outside the production lifecycle API.
-    #[cfg(test)]
-    pub(crate) fn set_receiver_for_test(&mut self, receiver: Option<Receiver<AiReviewProgress>>) {
-        self.receiver = receiver;
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_origin_for_test(&mut self, origin: Option<AiReviewState>) {
-        self.origin = origin;
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_progress_for_test(&mut self, progress: Option<AiReviewRunProgress>) {
-        self.progress = progress;
     }
 }

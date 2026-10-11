@@ -11,7 +11,6 @@ mod fetch;
 pub(crate) mod github_access;
 mod integration;
 mod investigation;
-mod memory;
 mod reply;
 mod review_tab;
 pub(crate) mod revisions;
@@ -22,6 +21,7 @@ mod tests;
 use actions::new_fix_confirm;
 pub(crate) use actions::with_reply_draft_handoff;
 pub(crate) use domain::AI_ATTRIBUTION_FOOTER;
+#[cfg(test)]
 pub(crate) use domain::AI_REVIEW_ATTRIBUTION_FOOTER;
 pub(crate) use domain::AIW_ATTRIBUTION_FOOTER;
 pub(crate) use domain::TRIAGE_SESSION_LABEL;
@@ -29,33 +29,23 @@ pub(crate) use domain::fix_session_index;
 pub(crate) use domain::pr_triage_session_index;
 #[cfg(test)]
 pub(crate) use domain::pr_triage_session_index_named;
-pub(crate) use domain::window_parsed_hunk;
 use domain::{
     BATCH_COMBINED_COMMENT_WARN, BATCH_COMBINED_TOKEN_WARN, SNIPPET_LEN, append_reply_attribution,
     file_already_touched, pr_triage_session_index_named_for_harness,
 };
 pub use domain::{
-    CommentKind, FixTarget, FixTargetPickRow, MarkAction, PendingLocalFindings, PrComment,
-    PrInvestigationStatus, PrInvestigationTurn, PrReview, PrSortMode, ReplyDraftProvenance,
-    ReplyDraftRequest, ReplyGenerationMetadata, ReplyKind, ReplyTarget, TriageState,
-    combined_fix_prompt, estimate_tokens, reply_effective_agent_drafted,
+    CommentKind, FixTarget, FixTargetPickRow, MarkAction, PrComment, PrInvestigationStatus,
+    PrInvestigationTurn, PrReview, PrSortMode, ReplyDraftProvenance, ReplyDraftRequest,
+    ReplyGenerationMetadata, ReplyKind, ReplyTarget, TriageState, combined_fix_prompt,
+    estimate_tokens, reply_effective_agent_drafted,
 };
 pub(crate) use fetch::PrFetchFailure;
 pub use fetch::{fetch_and_normalize, strip_bot_boilerplate};
 pub use investigation::InvestigationOutcome;
 pub(crate) use investigation::investigation_findings_for_prompt;
 pub(crate) use investigation::{INVESTIGATION_CONTEXT_MAX_LEN, investigation_prompt_from_meta};
-pub(crate) use memory::MEMORY_CATEGORIES;
-pub use memory::{
-    BootstrapDepth, BootstrapProgress, BootstrapStage, CompactProgress, CompactStage,
-    MemoryAiSummaryDone,
-};
 
 #[cfg(test)]
-pub use domain::reply_posted_via_aiw;
-#[cfg(test)]
 pub use fetch::normalize;
-#[cfg(test)]
-pub use memory::{BootstrapOutcome, CompactOutcome};
 
 pub(crate) mod runtime;

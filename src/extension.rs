@@ -159,20 +159,9 @@ pub struct ExtensionConfig {
     /// `lifecycle_hooks`, so each repo can point this at its own proof / CI
     /// script rather than a hardcoded `cargo build`.
     pub final_review_check_command: Option<String>,
-    /// Repo-relative (or absolute) path to the review-findings memory doc
-    /// (Epic E of `pr-comment-review-plan.md`). Project overrides global,
-    /// same as `final_review_check_command`. Note this field also exists at
-    /// the *global* scope (under the `"extension"` key of
-    /// `~/.config/ai_workstation/config.json`), where it takes precedence over the
-    /// older top-level `AppConfig::review_memory_path` in that same file —
-    /// see [`crate::app::App::configured_review_memory_path`] for the full
-    /// precedence chain. Falls back to `AppConfig::review_memory_path`, then
-    /// [`crate::app::review_memory::DEFAULT_REVIEW_MEMORY_PATH`], when unset
-    /// at every scope.
-    pub review_memory_path: Option<String>,
     /// Project-scope overrides of AIW's built-in headless prompt templates
     /// (the "Editable Headless Prompts" feature), keyed by stable prompt id
-    /// (e.g. `"pr_review.ai_review"`). Lives here — the tracked repo config —
+    /// (e.g. `"review.walkthrough"`). Lives here — the tracked repo config —
     /// rather than in a `.aiw/prompts/` directory because `.aiw/` is
     /// gitignored dir-wide, so a file there would never be committed.
     /// Feature- and global-scope overrides are per-user and live in `aiw.db`.
@@ -506,11 +495,6 @@ pub fn merge_project_extension_config_checked(
         .clone()
         .or_else(|| base.final_review_check_command.clone());
 
-    let review_memory_path = project
-        .review_memory_path
-        .clone()
-        .or_else(|| base.review_memory_path.clone());
-
     let mut merged = ExtensionConfig {
         custom_sessions,
         lifecycle_hooks: LifecycleHooks {
@@ -526,7 +510,6 @@ pub fn merge_project_extension_config_checked(
             .or_else(|| base.allowed_agents.clone()),
         prompt_templates,
         final_review_check_command,
-        review_memory_path,
         review_prompt_budget_tokens: project
             .review_prompt_budget_tokens
             .or(base.review_prompt_budget_tokens),
@@ -790,44 +773,6 @@ mod tests {
         assert_eq!(
             merged.final_review_check_command.as_deref(),
             Some("cargo build")
-        );
-    }
-
-    #[test]
-    fn project_review_memory_path_overrides_global() {
-        let global = ExtensionConfig {
-            review_memory_path: Some("notes/review.md".to_string()),
-            ..Default::default()
-        };
-        let project_config = ExtensionConfig {
-            review_memory_path: Some(".aiw/team-review-memory.md".to_string()),
-            ..Default::default()
-        };
-        let tmp = TempDir::new().unwrap();
-        write_extension_config(&tmp, &project_config);
-
-        let merged = merge_project_extension_config(&global, tmp.path());
-        assert_eq!(
-            merged.review_memory_path.as_deref(),
-            Some(".aiw/team-review-memory.md")
-        );
-    }
-
-    #[test]
-    fn global_review_memory_path_used_when_project_does_not_set_it() {
-        let global = ExtensionConfig {
-            review_memory_path: Some("notes/review.md".to_string()),
-            ..Default::default()
-        };
-        // Project config present but doesn't set a review-memory path.
-        let project_config = ExtensionConfig::default();
-        let tmp = TempDir::new().unwrap();
-        write_extension_config(&tmp, &project_config);
-
-        let merged = merge_project_extension_config(&global, tmp.path());
-        assert_eq!(
-            merged.review_memory_path.as_deref(),
-            Some("notes/review.md")
         );
     }
 

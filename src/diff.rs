@@ -137,27 +137,6 @@ impl DiffFile {
         addressable_lines_in(&self.hunks)
     }
 
-    /// Resolve a one-based source-file line on an explicit side of this diff.
-    /// The returned dual-sided location is the canonical anchor consumed by
-    /// review rendering and posting.
-    pub fn resolve_source_line(&self, side: DiffSide, line: usize) -> Option<DiffLineLocation> {
-        self.hunks
-            .iter()
-            .flat_map(line_locations_in_hunk)
-            .flatten()
-            .find(|location| location.line_on(side) == Some(line))
-    }
-
-    /// Find the parsed hunk that owns an exact canonical line location.
-    pub fn hunk_for_location(&self, target: DiffLineLocation) -> Option<&DiffHunk> {
-        self.hunks.iter().find(|hunk| {
-            line_locations_in_hunk(hunk)
-                .into_iter()
-                .flatten()
-                .any(|location| location == target)
-        })
-    }
-
     /// The index into `addressable_lines()` of each hunk's first addressable
     /// line, in hunk order. The anchor list for jump-by-hunk navigation of the
     /// review line cursor. Hunks with no addressable lines are skipped so a

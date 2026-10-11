@@ -1,4 +1,3 @@
-mod ai_review;
 mod batch_creation;
 mod browse;
 mod config_wizard;
@@ -24,8 +23,6 @@ mod pr_review;
 mod precall;
 mod prompt_library;
 mod prompt_overrides;
-mod review_destination;
-mod review_questions;
 mod search;
 mod skill_picker;
 mod todos;
@@ -35,7 +32,6 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::app::App;
 
-pub use ai_review::{handle_ai_review_key, handle_ai_review_running_key};
 pub use batch_creation::handle_create_batch_features_key;
 pub use browse::handle_browse_path_key;
 pub use config_wizard::handle_config_wizard_key;
@@ -75,20 +71,14 @@ pub use picker::{
     handle_syntax_language_picker_key,
 };
 pub use pr_review::{
-    handle_compact_confirm_key, handle_pr_investigation_loading_key, handle_pr_number_prompt_key,
-    handle_pr_picker_key, handle_pr_review_key, handle_pr_review_list_key,
-    handle_pr_review_loading_key, handle_review_memory_bootstrap_running_key,
-    handle_review_memory_compact_review_key, handle_review_memory_compact_running_key,
+    handle_pr_investigation_loading_key, handle_pr_number_prompt_key, handle_pr_picker_key,
+    handle_pr_review_key, handle_pr_review_list_key, handle_pr_review_loading_key,
 };
 pub use precall::handle_prompt_precall_key;
 pub use prompt_library::{
     handle_placeholder_fill_key, handle_prompt_editor_key, handle_prompt_library_key,
 };
 pub use prompt_overrides::handle_prompt_overrides_key;
-pub use review_destination::{
-    handle_review_destination_pick_key, handle_review_feature_setup_key,
-    handle_review_integrate_key,
-};
 pub use search::handle_search_key;
 pub use skill_picker::handle_skill_picker_key;
 pub use todos::{
@@ -99,10 +89,6 @@ pub use todos::{
 
 pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()> {
     use crate::app::AppMode;
-
-    if app.review_questions().is_some_and(|q| q.open) {
-        return review_questions::handle(app, key);
-    }
 
     match &app.mode {
         AppMode::Normal => handle_normal_key(app, key),
@@ -153,16 +139,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::PrReviewLoading(_) => handle_pr_review_loading_key(app, key),
         AppMode::PrReview(_) => handle_pr_review_key(app, key),
         AppMode::PrInvestigationLoading(_) => handle_pr_investigation_loading_key(app, key),
-        AppMode::ReviewMemoryBootstrapRunning(_) => {
-            handle_review_memory_bootstrap_running_key(app, key)
-        }
-        AppMode::ReviewMemoryCompactConfirm(_) => handle_compact_confirm_key(app, key),
-        AppMode::ReviewMemoryCompactRunning(_) => {
-            handle_review_memory_compact_running_key(app, key)
-        }
-        AppMode::ReviewMemoryCompactReview(_) => handle_review_memory_compact_review_key(app, key),
-        AppMode::AiReview(_) => handle_ai_review_key(app, key),
-        AppMode::AiReviewRunning(_) => handle_ai_review_running_key(app, key),
         AppMode::DiffReviewPrompt(_) => handle_diff_review_key(app, key),
         AppMode::RunningHook(_) => handle_running_hook_key(app, key.code),
         AppMode::DeletingFeatureInProgress(_) => handle_deleting_feature_key(app, key.code),
@@ -194,7 +170,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::HarnessSetup(_) => handle_harness_setup_key(app, key.code),
         AppMode::ConfigWizard(_) => handle_config_wizard_key(app, key),
         AppMode::ReviewHarnessPick(_) => handle_review_harness_pick_key(app, key.code),
-        AppMode::ReviewIntegrate(_) => handle_review_integrate_key(app, key.code),
         AppMode::ContextSettings(_) => handle_context_settings_key(app, key),
     }
 }

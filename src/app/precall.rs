@@ -27,20 +27,13 @@ use crate::prompts::PromptId;
 /// Which gated headless call a pre-call notice belongs to. One variant per
 /// user-initiated call site; [`App::dispatch_precall`] maps each back to the
 /// method that starts it.
-#[allow(dead_code)]
+#[allow(dead_code, clippy::enum_variant_names)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PrecallAction {
     ReviewWalkthrough,
     ReviewCoReview,
     ReviewChangesetOverview,
     ReviewDiffExplain,
-    PrReviewAiReview,
-    ReviewMemoryBootstrap,
-    ReviewMemoryCompact,
-    ReviewMemoryAiSummary,
-    ReviewQuestion,
-    /// Draft from the answered turn at this index.
-    ReviewQuestionDraft(crate::app::review_questions::DraftDestination, usize),
 }
 
 impl PrecallAction {
@@ -50,12 +43,6 @@ impl PrecallAction {
             PrecallAction::ReviewCoReview => PromptId::ReviewCoReview,
             PrecallAction::ReviewChangesetOverview => PromptId::ReviewChangesetOverview,
             PrecallAction::ReviewDiffExplain => PromptId::ReviewDiffExplain,
-            PrecallAction::PrReviewAiReview => PromptId::PrReviewAiReview,
-            PrecallAction::ReviewMemoryBootstrap => PromptId::ReviewMemoryBootstrap,
-            PrecallAction::ReviewMemoryCompact => PromptId::ReviewMemoryCompact,
-            PrecallAction::ReviewMemoryAiSummary => PromptId::ReviewMemoryAiSummary,
-            PrecallAction::ReviewQuestion => PromptId::ReviewQuestion,
-            PrecallAction::ReviewQuestionDraft(..) => PromptId::ReviewQuestionDraft,
         }
     }
 }
@@ -94,23 +81,6 @@ impl App {
         rendered_prompt: &str,
     ) -> bool {
         self.precall_gate_with_options(action, harness, rendered_prompt, PrecallOptions::default())
-    }
-
-    pub(crate) fn precall_gate_with_model(
-        &mut self,
-        action: PrecallAction,
-        harness: &AgentKind,
-        model: Option<&str>,
-        rendered_prompt: &str,
-    ) -> bool {
-        self.precall_gate_with_options(
-            action,
-            harness,
-            rendered_prompt,
-            PrecallOptions {
-                model: model.map(str::to_string),
-            },
-        )
     }
 
     fn precall_gate_with_options(
@@ -181,10 +151,9 @@ impl App {
         let Some(pending) = self.take_pending_precall() else {
             return Ok(());
         };
-        let harness = pending.harness.clone();
         self.mode = *pending.prior_mode;
         self.precall_cleared = Some(pending.action);
-        let result = self.dispatch_precall(pending.action, harness);
+        let result = self.dispatch_precall(pending.action);
         // The re-dispatched method's gate runs synchronously inside
         // `dispatch_precall`. Whether it consumed the clearance (normal path)
         // or bailed before reaching its gate (e.g. no harness → falls through
@@ -213,7 +182,7 @@ impl App {
         self.open_prompt_overrides_focused(None, Some(id));
     }
 
-    fn dispatch_precall(&mut self, action: PrecallAction, harness: AgentKind) -> Result<()> {
+    fn dispatch_precall(&mut self, action: PrecallAction) -> Result<()> {
         match action {
             PrecallAction::ReviewWalkthrough => {
                 self.generate_review_walkthrough();
@@ -229,30 +198,6 @@ impl App {
             }
             PrecallAction::ReviewDiffExplain => {
                 crate::handlers::diff_review::generate_diff_review_explanation(self);
-                Ok(())
-            }
-            PrecallAction::PrReviewAiReview => {
-                self.begin_ai_pr_review();
-                Ok(())
-            }
-            PrecallAction::ReviewMemoryBootstrap => {
-                self.review_memory_bootstrap_pick_confirm();
-                Ok(())
-            }
-            PrecallAction::ReviewMemoryCompact => {
-                self.review_memory_compact_confirm_run();
-                Ok(())
-            }
-            PrecallAction::ReviewMemoryAiSummary => {
-                self.pr_review_start_memory_ai_summary(harness);
-                Ok(())
-            }
-            PrecallAction::ReviewQuestion => {
-                self.submit_review_question();
-                Ok(())
-            }
-            PrecallAction::ReviewQuestionDraft(destination, turn) => {
-                self.draft_review_question_turn(turn, harness, destination);
                 Ok(())
             }
         }

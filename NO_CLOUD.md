@@ -60,7 +60,7 @@ linked packages.
 
 | Path | What it does | Why it stays |
 |---|---|---|
-| `src/github.rs` `GhCli` (20 `Command::new("gh")` sites) | PR resolve/list/meta/diff/comments/reviews/threads, posting reviews/replies/comments, resolving threads, issue list/comment, current user. | Every call is behind a user action: PR Triage/Review (`G`), AI Review (`W`), review memory bootstrap, issue fixer (`g`), posting, explicit refresh. `gh` is the user's own authenticated CLI. |
+| `src/github.rs` `GhCli` (19 `Command::new("gh")` sites) | PR resolve/list/meta/comments/reviews/threads, posting reviews/replies/comments, resolving threads, issue list/comment, current user. | Every call is behind a user action: PR Triage/Review (`G`), AI Review (`W`), review memory bootstrap, issue fixer (`g`), posting, explicit refresh. `gh` is the user's own authenticated CLI. |
 | `git fetch` in `src/github.rs` (local diff fallback), `src/app/pr_review/revisions.rs` (PR revisions), `src/app/triage_feature.rs` (PR head); `git push` in `src/app/triage_feature.rs` (land triage commits on the PR) | Fetch PR refs for review; push when the user lands commits. | Explicit user actions in PR Triage/Review. |
 | Tree-sitter parser install (`src/highlight/tree_sitter.rs`, `src/app/syntax.rs`, `src/gui_syntax.rs`) | `git clone` of a grammar repo, then `cc`. | Only when the user picks it (syntax picker `p` → `i`/Enter, `i` in the diff viewer/triage, GUI "Install … parser…" with a confirmation that says it clones from GitHub). Labelled as a download: "Downloading (git clone) + building", badge `DOWNLOADING`, help "Download + install …". |
 | `gui_screenshots::PrDocumentRead` | PR description for the GUI (`gh pr view` via `GhCli::pr_meta`). | Runs when the user opens a PR in PR Triage. |

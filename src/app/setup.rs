@@ -1098,44 +1098,11 @@ pub fn ensure_notification_hooks(
     ensure_aiw_skills(workdir, agent);
 }
 
-const PLAN_BEGIN: &str = "<!-- AIW:plan-instructions:begin -->";
-const PLAN_END: &str = "<!-- AIW:plan-instructions:end -->";
-const PLAN_IGNORE_BEGIN: &str = "# AIW:plan-instructions:begin";
-const PLAN_IGNORE_END: &str = "# AIW:plan-instructions:end";
 const REVIEW_BEGIN: &str = "<!-- AIW:review-instructions:begin -->";
 const REVIEW_END: &str = "<!-- AIW:review-instructions:end -->";
 
-/// FORK: the same blocks as written before the rename (in checkouts set up by
-/// upstream AMF). Recognised so they are replaced, not duplicated; never
-/// written.
-const LEGACY_PLAN_BEGIN: &str = "<!-- AMF:plan-instructions:begin -->";
-const LEGACY_PLAN_END: &str = "<!-- AMF:plan-instructions:end -->";
-const LEGACY_PLAN_IGNORE_BEGIN: &str = "# AMF:plan-instructions:begin";
-const LEGACY_PLAN_IGNORE_END: &str = "# AMF:plan-instructions:end";
 const LEGACY_REVIEW_BEGIN: &str = "<!-- AMF:review-instructions:begin -->";
 const LEGACY_REVIEW_END: &str = "<!-- AMF:review-instructions:end -->";
-
-/// Every marker-delimited block AIW writes into a checkout. Add a new one here
-/// when adding a managed block, or review questions will treat a checkout AIW
-/// itself touched as having local changes.
-const MANAGED_BLOCKS: [(&str, &str); 6] = [
-    (PLAN_BEGIN, PLAN_END),
-    (PLAN_IGNORE_BEGIN, PLAN_IGNORE_END),
-    (REVIEW_BEGIN, REVIEW_END),
-    (LEGACY_PLAN_BEGIN, LEGACY_PLAN_END),
-    (LEGACY_PLAN_IGNORE_BEGIN, LEGACY_PLAN_IGNORE_END),
-    (LEGACY_REVIEW_BEGIN, LEGACY_REVIEW_END),
-];
-
-/// `s` without any AIW-managed block — what the file would be had AIW never
-/// touched it (up to trailing whitespace, which AIW normalises on write).
-pub fn strip_aiw_managed_blocks(s: &str) -> String {
-    MANAGED_BLOCKS
-        .iter()
-        .fold(s.to_string(), |acc, (begin, end)| {
-            strip_between_markers(&acc, begin, end)
-        })
-}
 
 pub fn strip_between_markers(s: &str, begin: &str, end: &str) -> String {
     if let (Some(bi), Some(ei)) = (s.find(begin), s.find(end)) {

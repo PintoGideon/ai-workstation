@@ -198,10 +198,8 @@ pub(super) fn start(
             "Open the pre-finish summary before completing the review",
         ));
     }
-    if ai::view(app)?.running || s.questions.draft.is_some() {
-        return Err(GuiError::conflict(
-            "Wait for AI work and transfer or discard generated drafts first",
-        ));
+    if ai::view(app)?.running {
+        return Err(GuiError::conflict("Wait for AI work to finish first"));
     }
     let pending = if s.apply_suggestions_on_finish {
         s.pending_suggestion_count()

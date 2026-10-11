@@ -52,9 +52,6 @@ pub struct PrPickerState {
     pub include_closed: bool,
     /// Last fetch/resolve failure, shown inline.
     pub error: Option<String>,
-    /// When `Some`, the lookback-bootstrap depth picker (`b`) is open over the
-    /// picker.
-    pub bootstrap_pick: Option<BootstrapPickState>,
     /// The logged-in `gh` user's login, when resolvable — used to highlight
     /// the user's own PRs in the row rendering. `None` if unresolved/failed.
     pub current_user: Option<String>,
@@ -175,241 +172,6 @@ impl PrReviewListError {
     }
 }
 
-/// Depth picker for the review-memory lookback bootstrap (`b` in the PR
-/// picker): pick how many recent merged/closed PRs to learn from before
-/// running the fetch + distill pass.
-#[derive(Debug, Clone)]
-pub struct BootstrapPickState {
-    /// Index into [`crate::app::pr_review::BootstrapDepth::ALL`].
-    pub selected: usize,
-    /// Which doc the distilled findings land in, toggled with `g`. Defaults to
-    /// `Project`: a bootstrap learns from *this* repo's PR history, so its
-    /// findings belong to this repo unless the user says otherwise.
-    pub scope: crate::app::review_memory::MemoryScope,
-}
-
-/// Full-screen progress view for the lookback bootstrap's background fetch +
-/// distill pass, entered once a depth is confirmed.
-#[derive(Debug, Clone)]
-pub struct BootstrapRunState {
-    /// The PR picker to return to on completion or cancel.
-    pub origin: PrPickerState,
-    pub depth: crate::app::pr_review::BootstrapDepth,
-    /// Which doc the run is appending to, carried through from the picker so
-    /// the running screen and completion toast can name it.
-    pub scope: crate::app::review_memory::MemoryScope,
-    pub stage: crate::app::pr_review::BootstrapStage,
-}
-
-/// Confirm overlay for the review-memory compact pass (`c` in the PR picker):
-/// shows how many findings are currently in the doc before spending an agent
-/// pass to merge near-duplicates and prune stale ones (Epic E "prevent
-/// review-memory rot").
-#[derive(Debug, Clone)]
-pub struct CompactConfirmState {
-    /// Bullet count in the doc as it stands, read synchronously when the
-    /// overlay opens (a local file read — cheap enough not to background).
-    /// Re-read for the newly selected doc on every `scope` toggle, so the
-    /// number always describes what `⏎` would actually compact.
-    pub existing_findings: usize,
-    /// Which doc gets compacted, toggled with `g`. Defaults to `Project` when
-    /// that doc has findings, otherwise `Global` — so `c` still reaches the
-    /// only non-empty doc without the user having to know to press `g`.
-    pub scope: crate::app::review_memory::MemoryScope,
-}
-
-/// Cross-context overlay for `open_review_memory_compact_confirm` (`c` in the
-/// PR picker, PR Triage, and the dashboard leader key): unlike the
-/// PR-picker-only bootstrap picker, this can be opened from several
-/// different screens, so it stashes `prior_mode` and restores it verbatim on
-/// cancel — the same idiom [`crate::app::precall::PendingPrecall`] and
-/// [`TodoImplementChoiceState`] use for overlays reachable from more than one
-/// place. Rendered as a modal over the dashboard tree regardless of where it
-/// was opened from (see [`crate::app::precall`]'s doc comment for why that's
-/// fine — nothing behind it needs to stay legible).
-pub struct ReviewMemoryCompactConfirmState {
-    /// Working directory of the repo whose review-memory doc this targets.
-    pub workdir: PathBuf,
-    pub confirm: CompactConfirmState,
-    /// The mode to return to on cancel. Boxed and undecorated (no
-    /// `Debug`/`Clone`) because `AppMode` itself isn't clonable.
-    pub prior_mode: Box<crate::app::AppMode>,
-}
-
-/// Small, cloneable view of the compact run's progress, shown by the
-/// full-screen running dialog. Deliberately holds nothing from
-/// [`CompactRunState`] beyond what rendering needs (not `origin` or `path`)
-/// so `AppMode::ReviewMemoryCompactRunning` stays clonable even though the
-/// run's actual restore target isn't — see [`App::review_memory_compact_pending`]
-/// for where `origin`/`path` live instead.
-///
-/// [`App::review_memory_compact_pending`]: crate::app::App::review_memory_compact_pending
-#[derive(Debug, Clone, Copy)]
-pub struct CompactRunView {
-    pub scope: crate::app::review_memory::MemoryScope,
-    pub stage: crate::app::pr_review::CompactStage,
-}
-
-/// The review-memory compact pass's background read + rewrite: the mode to
-/// restore on completion/cancel plus the resolved doc path and scope, kept in
-/// [`App::review_memory_compact_pending`] independent of `self.mode` (see that
-/// field's doc comment) rather than inside [`AppMode::ReviewMemoryCompactRunning`]
-/// itself, since `origin` makes this unclonable and the running screen only
-/// ever needs the smaller [`CompactRunView`] to draw itself.
-///
-/// [`App::review_memory_compact_pending`]: crate::app::App::review_memory_compact_pending
-pub struct CompactRunState {
-    /// The mode to return to on completion or cancel.
-    pub origin: Box<crate::app::AppMode>,
-    /// Resolved path of the review-memory doc being compacted, carried
-    /// through from confirm so the poll's success path doesn't need to
-    /// re-resolve it (a second `repo_root` lookup) once the background
-    /// thread reports back.
-    pub path: PathBuf,
-    /// Which doc the run is rewriting, carried through from confirm so the
-    /// running screen can name it (the path alone doesn't read as
-    /// project-vs-global at a glance).
-    pub scope: crate::app::review_memory::MemoryScope,
-}
-
-/// Full-screen review of the compact pass's proposed replacement doc, entered
-/// once the background run finishes. Unlike [`append_finding`]-backed dialogs
-/// (`M`, the bootstrap), this proposes rewriting the *entire* doc, so nothing
-/// is written until the user explicitly confirms here — editable first, same
-/// as every other write in this pane.
-///
-/// [`append_finding`]: crate::app::review_memory::append_finding
-pub struct CompactReviewState {
-    /// The mode to return to on write or discard.
-    pub origin: Box<crate::app::AppMode>,
-    /// Resolved path of the review-memory doc this will write to.
-    pub path: PathBuf,
-    /// Which doc is being rewritten, so the success toast names it.
-    pub scope: crate::app::review_memory::MemoryScope,
-    /// Bullet count in the doc before compacting, for the "N -> M" summary.
-    pub original_findings: usize,
-    /// Bullet count in the agent's proposed replacement, for the same summary.
-    pub proposed_findings: usize,
-    /// The proposed replacement text, editable before writing.
-    pub editor: TextEditor,
-    /// The doc exactly as the compact pass read it. The write re-reads the file
-    /// and compares against this before overwriting, so findings another AIW
-    /// session appended while the agent ran (or while this dialog sat open) are
-    /// re-applied rather than clobbered — the cross-project doc in particular is
-    /// shared by every AIW session on the machine.
-    pub original_content: String,
-    /// Set once a write has been refused because the doc on disk diverged in
-    /// ways an append can't explain. The next confirm overwrites deliberately,
-    /// so the user is warned but never stuck.
-    pub overwrite_confirmed: bool,
-    /// True while keystrokes go to the editor (`e` to enter); false in the
-    /// confirm view (`⏎`/`w` write / `e` edit / `esc` discard).
-    pub editing: bool,
-    /// Scroll offset, in wrapped visual rows, for docs taller than the screen.
-    pub scroll: usize,
-    /// Request that the next render scroll the cursor back into view. Mirrors
-    /// [`FixConfirmState::sync_to_cursor`].
-    pub sync_to_cursor: bool,
-    /// Last write failure, shown inline so it's recoverable without losing
-    /// the edited content.
-    pub error: Option<String>,
-}
-
-/// Full-screen progress view for the AI PR review's background diff-fetch +
-/// review pass (`A`), entered from the AI Review pane.
-#[derive(Debug, Clone)]
-pub struct AiReviewRunProgress {
-    pub stage: crate::app::ai_review::AiReviewStage,
-    /// Wall-clock start for a live elapsed timer. This state is intentionally
-    /// not persisted; an in-flight headless process belongs to this AIW
-    /// process and cannot be resumed after restart.
-    pub started_at: std::time::Instant,
-    /// Latest sanitized activity label from the harness's structured stream.
-    pub activity: Option<String>,
-    /// Final token usage, when the harness reports it before completion.
-    pub usage: Option<(u64, u64)>,
-}
-
-#[derive(Debug, Clone)]
-pub struct AiReviewRunState {
-    /// The AI Review pane to return to on completion or cancel (dialogs
-    /// cleared before stashing, matching the PR Triage `P`/`f` stash
-    /// convention).
-    pub origin: AiReviewState,
-    pub progress: AiReviewRunProgress,
-}
-
-/// State for the full-screen AI Review pane — AIW's own review of a PR's
-/// diff, independent of PR Triage (see `crate::app::ai_review`'s module doc
-/// for why this is a separate workflow rather than bolted onto triage).
-#[derive(Debug, Clone)]
-pub struct AiReviewState {
-    pub(crate) questions: crate::app::review_questions::Questions,
-    /// Working directory of the feature whose PR this reviews.
-    pub workdir: PathBuf,
-    /// The PR being reviewed.
-    pub pr: crate::github::PrRef,
-    /// Findings from the most recent `A` run (or loaded from `ai_review_cache`
-    /// on entry), in generation order.
-    pub findings: Vec<crate::app::ai_review::AiReviewFinding>,
-    /// Overall one-to-three sentence review summary generated in the same
-    /// pass as `findings`, and loaded from the same cache row. Older cache
-    /// entries may not have one.
-    pub summary: Option<String>,
-    /// Harness/model/token/cost provenance of the run that produced
-    /// `findings`, loaded from the same cache row and refreshed by each `A`
-    /// pass. `None` before the first run this SHA, for a legacy cache row, or
-    /// when the latest run errored. Surfaced in the pane and attached to the
-    /// posted GitHub review.
-    pub attribution: Option<crate::app::ai_review::AiReviewAttribution>,
-    /// Index into `findings` of the highlighted finding.
-    pub selected: usize,
-    /// Scroll offset (in lines) for the detail pane of the selected finding.
-    pub detail_scroll: usize,
-    /// Number of lines the detail pane rendered on the last frame, so the
-    /// scroll clamp bounds against what was actually shown.
-    pub detail_content_lines: usize,
-    /// Record of the most recent `A` run (success/error/finding-count),
-    /// shown as a header badge so a review that already ran doesn't look
-    /// identical to one that never did.
-    pub last_run: Option<crate::app::ai_review::AiReviewRun>,
-    /// Harness chosen for this pane's `A` runs, picked once via `harness_pick`
-    /// and remembered for the rest of the visit.
-    pub harness: Option<AgentKind>,
-    /// Single-select picker shown before the first `A` run in this pane.
-    pub harness_pick: Option<AiHarnessPickState>,
-    /// Harness in effect when the current harness-pick "chain" started —
-    /// set the first time this pane's picker steps back from the model
-    /// picker to the harness picker, and left untouched by any further
-    /// back-and-forth within the same chain (cleared once a review actually
-    /// starts). Lets [`App::accept_ai_review_harness_pick`] detect a switch
-    /// away from the *original* harness even after the user backs out and
-    /// re-confirms an already-switched-to harness, so `AppConfig::review_model`
-    /// (which may only be valid for the original harness) isn't reseeded as
-    /// an incompatible model for the new one. See `AiHarnessPickState::previous_harness`.
-    pub harness_pick_origin: Option<AgentKind>,
-    /// Model chosen for this pane's `A` runs, picked once via `model_pick`
-    /// right after the harness. `None` means "use the default" — either the
-    /// picker hasn't run yet (see `model_picked`) or the user explicitly
-    /// chose the "Default" row.
-    pub model: Option<String>,
-    /// Whether the model has been picked (or auto-skipped, e.g. for Pi) yet
-    /// this pane visit.
-    pub model_picked: bool,
-    /// Reasoning level chosen alongside `model`; `None` is the harness default.
-    /// Meaningful only once `model_picked`, like `model`.
-    pub reasoning: Option<crate::headless::ReasoningLevel>,
-    /// Single-select picker shown once per pane, right after the harness.
-    pub model_pick: Option<AiModelPickState>,
-    /// When `Some`, the selected finding's body is open for editing (`e`).
-    pub finding_editor: Option<TextEditor>,
-    /// When `Some`, the post-to-GitHub confirm dialog is open (`W`).
-    pub post_confirm: Option<AiReviewPostConfirmState>,
-    /// Indices into `findings` marked for a combined fix (`space`, then `B`).
-    /// Cleared when a new run replaces the findings.
-    pub marked: std::collections::HashSet<usize>,
-}
-
 /// State for the full-screen PR Triage pane.
 #[derive(Debug, Clone)]
 pub struct PrReviewState {
@@ -490,10 +252,6 @@ pub struct PrReviewState {
     /// When `Some`, the reply dialog is open over the pane: an AI-drafted,
     /// editable reply awaiting the user's approval before it is posted to GitHub.
     pub reply: Option<ReplyState>,
-    /// When `Some`, the "add to memory" dialog is open over the pane: the
-    /// selected comment's finding, editable, awaiting the user's approval
-    /// before it's appended to the review-memory doc.
-    pub memory_add: Option<MemoryAddState>,
     /// Comment ids marked (with `space`) for a combined batch fix via `B`.
     /// Keyed by id (not index) so marks survive the hide-resolved filter
     /// shifting the visible rows. Cleared once the batch is injected.
@@ -511,14 +269,6 @@ pub struct PrReviewState {
     /// wrong branch — see [`Self::branch_mismatch`]. `None` when the branch
     /// couldn't be determined (e.g. detached HEAD).
     pub checked_out_branch: Option<String>,
-    /// Completed AI-review findings for this exact PR/head SHA that are still
-    /// publishable. Loaded from `ai_review_cache` on entry and kept in sync as
-    /// the linked AI Review is generated, skipped, or posted.
-    pub pending_ai_review_findings: usize,
-    /// Most recent terminal AI Review result for this exact PR/head SHA.
-    /// Kept alongside the pending count so a successful zero-finding run or a
-    /// failure remains distinguishable from a review that has never run.
-    pub ai_review_last_run: Option<crate::app::ai_review::AiReviewRun>,
     /// Persisted read-only investigations for this PR (the `v` → `f` flow),
     /// loaded from `pr_investigations` on entry and the in-memory source of
     /// truth while the overlay is open. Keyed by comment id (one per comment).
@@ -641,35 +391,6 @@ pub struct PrInvestigationLoadState {
     pub pr_url: String,
 }
 
-/// Identity of the PR Triage refresh started after a successful AI Review
-/// post. Kept outside `AppMode` so the refresh can update a stashed triage
-/// pane while the user remains in AI Review.
-#[derive(Debug, Clone)]
-pub struct AiReviewTriageRefresh {
-    pub workdir: PathBuf,
-    pub pr: crate::github::PrRef,
-}
-
-/// Confirm/edit dialog for posting the kept AI-review findings to GitHub as a
-/// real review (`W`). Built once from every not-skipped, not-yet-published
-/// finding; `⏎` posts as-is. Only the summary body is editable — the
-/// per-finding inline comment bodies are the AI's own text, vetted by
-/// skipping (`s`) rather than hand-edited here.
-#[derive(Debug, Clone)]
-pub struct AiReviewPostConfirmState {
-    /// Inline review comments built from the anchored findings.
-    pub inline: Vec<crate::github::PrReviewComment>,
-    pub editor: TextEditor,
-    pub editing: bool,
-    /// Last post failure, shown inline so a recoverable error (e.g. GitHub
-    /// rejecting the review because a finding no longer matches the current
-    /// diff) doesn't require leaving the dialog to notice — `show_error`
-    /// unconditionally resets `self.mode` to `Normal` outside of
-    /// `Normal`/`Help`/`Viewing`, so the pane is restored with this set
-    /// rather than losing the dialog entirely.
-    pub error: Option<String>,
-}
-
 /// A [`PrReviewState`] stashed while the user is watching the linked fix
 /// session (`P` from PR Triage), so `leader+P` can jump straight back
 /// to the exact comment/scroll/dialog state without re-fetching. `session`
@@ -681,57 +402,6 @@ pub struct PrReviewReturn {
     pub session: String,
     pub window: String,
     pub state: PrReviewState,
-}
-
-/// One row of the final-review destination picker
-/// ([`ReviewDestinationPickState`]). Mirrors PR Triage's
-/// [`crate::app::pr_review::FixTargetPickRow`] but adds a row per *other*
-/// feature in the store, so a review's fixes can be routed into an unrelated
-/// feature's agent session.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ReviewDestinationRow {
-    /// The reviewed feature's own first agent session (carries its label when
-    /// one exists, so the picker names exactly where the prompt lands).
-    ExistingLive(Option<String>),
-    /// A fresh dedicated "Final Review" session on this harness, in the
-    /// reviewed feature.
-    Dedicated(crate::project::AgentKind),
-    /// Another feature that already exists in the store — its first agent
-    /// session receives the prompt.
-    ExistingFeature { feature_id: String, label: String },
-    /// Create a brand-new companion feature (opens the compact setup overlay).
-    NewFeature,
-}
-
-impl ReviewDestinationRow {
-    pub fn label(&self) -> String {
-        match self {
-            ReviewDestinationRow::ExistingLive(Some(name)) => {
-                format!("This feature's live session ({name})")
-            }
-            ReviewDestinationRow::ExistingLive(None) => "This feature's live session".to_string(),
-            ReviewDestinationRow::Dedicated(agent) => {
-                format!("Dedicated review session ({})", agent.display_name())
-            }
-            ReviewDestinationRow::ExistingFeature { label, .. } => {
-                format!("Another feature: {label}")
-            }
-            ReviewDestinationRow::NewFeature => {
-                "New feature… (isolated worktree, own harness + mode)".to_string()
-            }
-        }
-    }
-}
-
-/// The final-review destination picker, opened with `t` in the review viewer
-/// and held as a sub-state of [`DiffViewerState`] (mirroring PR Triage's
-/// `harness_pick` on `PrReviewState`). One modal list; choosing a row resolves
-/// `DiffViewerState.fix_target` (+ `review_harness` / `fix_target_feature_id`),
-/// except `NewFeature`, which opens `review_feature_setup`.
-#[derive(Debug, Clone)]
-pub struct ReviewDestinationPickState {
-    pub rows: Vec<ReviewDestinationRow>,
-    pub selected: usize,
 }
 
 /// Single-select fix-target picker shown before the first fix/batch of a PR
@@ -807,13 +477,6 @@ pub struct TriageIntegrateState {
     /// Set once an integration succeeded, so the overlay reports the outcome
     /// instead of inviting the same action again.
     pub done: Option<String>,
-    /// Companion feature id captured when the overlay opened. The final-review
-    /// companion flow (`AppMode::ReviewIntegrate`) sets this so the confirm
-    /// step re-resolves the exact feature by id rather than by a branch-name
-    /// scan, which can collide across projects (`<branch>-review-fixes` is only
-    /// unique within its repo). PR Triage leaves it `None` — it re-resolves
-    /// from PR context instead.
-    pub companion_feature_id: Option<String>,
 }
 
 impl TriageIntegrateState {
@@ -822,103 +485,6 @@ impl TriageIntegrateState {
             .get(self.selected)
             .copied()
             .unwrap_or(TriageIntegration::Push)
-    }
-}
-
-/// Harness picker for the paid, headless `A` review pass. An unavailable CLI
-/// leaves the picker open and records an actionable inline error.
-#[derive(Debug, Clone)]
-pub struct AiHarnessPickState {
-    pub agents: Vec<AgentKind>,
-    pub selected: usize,
-    pub error: Option<String>,
-    /// The harness-pick chain's original harness (`AiReviewState::harness_pick_origin`),
-    /// carried into this picker so a confirm can tell whether the choice has
-    /// actually diverged from where the chain started — not just from the
-    /// harness shown on the immediately preceding screen. `None` on the
-    /// initial harness step. Used to avoid seeding one harness's model choice
-    /// (or the globally configured default model) into a different harness's
-    /// rebuilt model picker.
-    pub previous_harness: Option<AgentKind>,
-}
-
-/// One row of the model picker: either "use the default", a known-good
-/// preset `--model` value, or "type your own".
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ModelPickRow {
-    /// No explicit model — the harness's own default (or `AppConfig::review_model`
-    /// as an underlying override) applies.
-    Default,
-    /// A verified alias/name for the chosen harness (e.g. Claude's `"sonnet"`,
-    /// or one of the account's own model ids reported by
-    /// `codex_config::known_models`). Owned rather than `&'static str` since
-    /// Codex's come from a file read at runtime, not a fixed literal list.
-    Preset(String),
-    /// Free-text entry for anything not in the preset list.
-    Custom,
-}
-
-/// Single-select model picker for the `A` AI review, shown once per pane
-/// right after the harness is chosen. Presets are a best-effort, *verified*
-/// set of model names for the chosen harness: Claude's four well-known tier
-/// aliases (`sonnet`/`opus`/`haiku`/`fable`, confirmed against `claude
-/// --help`), or Codex's account-specific model ids read from
-/// `~/.codex/config.toml` (`codex_config::known_models`). Other harnesses
-/// offer just `Default` and `Custom`, since their valid model strings aren't
-/// reliably enumerable here; guessing wrong presets would be worse than not
-/// offering any.
-#[derive(Debug, Clone)]
-pub struct AiModelPickState {
-    pub rows: Vec<ModelPickRow>,
-    /// Index into `rows` of the highlighted choice.
-    pub selected: usize,
-    /// Free-text buffer for the `Custom` row, live only while `editing_custom`.
-    pub custom_input: String,
-    /// True while keystrokes go to `custom_input` (opened by `⏎`/`e` on the
-    /// `Custom` row); false in the plain list-navigation view.
-    pub editing_custom: bool,
-    /// Levels the harness under choice accepts (`ReasoningLevel::supported_for`);
-    /// empty when it has none, which hides the reasoning row.
-    pub reasoning_levels: &'static [crate::headless::ReasoningLevel],
-    /// Highlighted level; `None` is "Default" — pass nothing.
-    pub reasoning: Option<crate::headless::ReasoningLevel>,
-}
-
-impl AiModelPickState {
-    /// A picker for `harness`. `reasoning` seeds the level row (e.g. from
-    /// `AppConfig::review_reasoning`) and is discarded if the harness cannot
-    /// express it.
-    pub fn new(
-        harness: &AgentKind,
-        rows: Vec<ModelPickRow>,
-        selected: usize,
-        custom_input: String,
-        reasoning: Option<crate::headless::ReasoningLevel>,
-    ) -> Self {
-        let reasoning_levels = crate::headless::ReasoningLevel::supported_for(harness);
-        Self {
-            rows,
-            selected,
-            custom_input,
-            editing_custom: false,
-            reasoning_levels,
-            reasoning: reasoning.filter(|level| reasoning_levels.contains(level)),
-        }
-    }
-
-    /// Step the level row through `Default` then each supported level,
-    /// wrapping. A no-op when the harness has no levels.
-    pub fn cycle_reasoning(&mut self, delta: isize) {
-        if self.reasoning_levels.is_empty() {
-            return;
-        }
-        let slots = self.reasoning_levels.len() as isize + 1;
-        let current = self
-            .reasoning
-            .and_then(|level| self.reasoning_levels.iter().position(|l| *l == level))
-            .map_or(0, |index| index as isize + 1);
-        let next = (current + delta).rem_euclid(slots);
-        self.reasoning = (next > 0).then(|| self.reasoning_levels[next as usize - 1]);
     }
 }
 
@@ -976,57 +542,6 @@ pub struct ReplyState {
     /// True while keystrokes go to the editor (`e` to enter); false in the
     /// confirm view (`⏎` post / `e` edit / `esc` cancel).
     pub editing: bool,
-}
-
-/// "Add to memory" dialog (`M`): appends the selected comment's distilled
-/// finding to the review-findings memory doc
-/// (`review_memory::append_finding`). Mirrors [`ReplyState`]'s edit/confirm
-/// split, plus a category cycled with `Tab` in the confirm view.
-#[derive(Debug, Clone)]
-pub struct MemoryAddState {
-    /// GitHub id of the comment the finding is drawn from.
-    pub comment_id: u64,
-    /// Index into `crate::app::pr_review::MEMORY_CATEGORIES`, cycled with `Tab`.
-    pub category: usize,
-    /// Which doc the finding lands in, toggled with `g`. Defaults to
-    /// `Project` — a finding from this PR is about this repo until the user
-    /// says it's a habit worth carrying everywhere.
-    pub scope: crate::app::review_memory::MemoryScope,
-    /// The finding text, editable before it's appended.
-    pub editor: TextEditor,
-    /// True while keystrokes go to the editor (`e` to enter); false in the
-    /// confirm view (`⏎` append / `e` edit / `Tab` cycle category / `g` toggle
-    /// scope / `s` summarize with AI / `esc` cancel).
-    pub editing: bool,
-    /// The "summarize with AI" sub-flow (`s`), when active. `None` — the
-    /// steady state — covers both "never started" and "a summary already
-    /// landed": on success [`editor`] is overwritten and this is cleared, so
-    /// the dialog falls straight back to its ordinary review/edit confirm
-    /// view rather than needing a distinct "Review" state of its own.
-    pub ai_summary: Option<MemoryAiSummaryState>,
-}
-
-/// State machine for [`MemoryAddState::ai_summary`]. Mirrors
-/// [`InvestigationHarnessPick`]'s per-run picker (the operator picks a
-/// harness for this one summary, not a session-persistent default) rather
-/// than Learning Mode's picker, which is tied to a multi-question overlay
-/// this dialog doesn't have.
-#[derive(Debug, Clone)]
-pub enum MemoryAiSummaryState {
-    /// Choosing which installed harness runs the summary.
-    PickingHarness(MemoryAiSummaryHarnessPick),
-    /// The headless run is in flight on a background thread.
-    Generating { harness: crate::project::AgentKind },
-    /// The run failed (or the harness came back empty); the raw seed/edited
-    /// text in [`MemoryAddState::editor`] was never touched.
-    Failed(String),
-}
-
-/// Flat single-select harness picker for [`MemoryAiSummaryState::PickingHarness`].
-#[derive(Debug, Clone)]
-pub struct MemoryAiSummaryHarnessPick {
-    pub harnesses: Vec<crate::project::AgentKind>,
-    pub selected: usize,
 }
 
 /// Confirm/edit dialog for a fix prompt: shows the exact text that will be

@@ -63,17 +63,6 @@ pub fn handle_diff_viewer_key(app: &mut App, key: KeyEvent) -> Result<()> {
         return Ok(());
     }
 
-    // The final-review destination picker (`t`) and the companion-feature setup
-    // overlay it can open are sub-states of the diff viewer, mirroring PR
-    // Triage's `harness_pick` / `new_feature_setup`. Each captures every key
-    // while open, before any of the viewer's own bindings.
-    if app.review_feature_setup_open() {
-        return crate::handlers::handle_review_feature_setup_key(app, key);
-    }
-    if app.review_destination_pick_open() {
-        return crate::handlers::handle_review_destination_pick_key(app, key);
-    }
-
     // The review key-help overlay is read-only and captures every key while
     // open, so a key pressed to dismiss it can never also act on the review
     // underneath. `?` toggles, matching the dashboard's help overlay.
@@ -409,10 +398,6 @@ pub fn handle_diff_viewer_key(app: &mut App, key: KeyEvent) -> Result<()> {
                 app.open_review_help();
                 return Ok(());
             }
-            KeyCode::Char('Q') => {
-                app.open_review_questions();
-                return Ok(());
-            }
             KeyCode::Char('H') => {
                 app.open_review_history();
                 return Ok(());
@@ -543,10 +528,6 @@ pub fn handle_diff_viewer_key(app: &mut App, key: KeyEvent) -> Result<()> {
             }
             KeyCode::Char('F') => {
                 app.diff_review_cycle_file_filter();
-                return Ok(());
-            }
-            KeyCode::Char('t') => {
-                app.diff_review_toggle_fix_target();
                 return Ok(());
             }
             KeyCode::Char('X') => {
@@ -700,8 +681,7 @@ pub fn handle_diff_viewer_wheel(app: &mut App, lines: usize, down: bool) {
         None,
     }
 
-    if app.review_feature_setup_open() || app.review_destination_pick_open() || app.pr_submit_open()
-    {
+    if app.pr_submit_open() {
         return;
     }
     let target = match &app.mode {
@@ -1548,153 +1528,6 @@ index 1111111..2222222 100644
         assert!(matches!(app.mode, AppMode::Normal));
     }
 
-    /// The index of the first `Dedicated(..)` row in the open destination
-    /// picker.
-    fn dedicated_row_index(app: &App) -> usize {
-        match &app.mode {
-            AppMode::DiffViewer(s) => s
-                .destination_pick
-                .as_ref()
-                .expect("picker open")
-                .rows
-                .iter()
-                .position(|r| matches!(r, crate::app::ReviewDestinationRow::Dedicated(_)))
-                .expect("a dedicated row"),
-            _ => panic!("not in review"),
-        }
-    }
-
-    #[test]
-    fn t_opens_the_destination_picker_and_dedicated_sets_the_target() {
-        use crate::app::pr_review::FixTarget;
-        let dir = tempfile::TempDir::new().unwrap();
-        let mut app = make_review_app(dir.path(), &["a.rs"]);
-
-        // Default target is this feature's live session, picker closed.
-        assert!(matches!(&app.mode, AppMode::DiffViewer(s)
-            if s.fix_target == FixTarget::ExistingLive && s.destination_pick.is_none()));
-
-        // `t` opens the picker rather than toggling in place.
-        handle_diff_viewer_key(&mut app, key(KeyCode::Char('t'))).unwrap();
-        assert!(matches!(&app.mode, AppMode::DiffViewer(s) if s.destination_pick.is_some()));
-
-        // Walk to the dedicated row and choose it.
-        let dedicated = dedicated_row_index(&app);
-        for _ in 0..dedicated {
-            handle_diff_viewer_key(&mut app, key(KeyCode::Char('j'))).unwrap();
-        }
-        handle_diff_viewer_key(&mut app, key(KeyCode::Enter)).unwrap();
-        match &app.mode {
-            AppMode::DiffViewer(s) => {
-                assert_eq!(s.fix_target, FixTarget::DedicatedReview);
-                assert!(
-                    s.review_harness.is_some(),
-                    "dedicated resolves a harness up front"
-                );
-                assert!(s.destination_pick.is_none(), "confirming closes the picker");
-            }
-            _ => panic!("not in review"),
-        }
-
-        // Re-open: it pre-highlights the dedicated row it now points at. Walk
-        // back up to the first row and pick it → this feature's live session.
-        handle_diff_viewer_key(&mut app, key(KeyCode::Char('t'))).unwrap();
-        assert_eq!(
-            match &app.mode {
-                AppMode::DiffViewer(s) => s.destination_pick.as_ref().unwrap().selected,
-                _ => panic!("not in review"),
-            },
-            dedicated,
-            "re-opening pre-highlights the current destination"
-        );
-        for _ in 0..dedicated {
-            handle_diff_viewer_key(&mut app, key(KeyCode::Char('k'))).unwrap();
-        }
-        handle_diff_viewer_key(&mut app, key(KeyCode::Enter)).unwrap();
-        match &app.mode {
-            AppMode::DiffViewer(s) => {
-                assert_eq!(s.fix_target, FixTarget::ExistingLive);
-                assert!(s.review_harness.is_none());
-            }
-            _ => panic!("not in review"),
-        }
-    }
-
-    #[test]
-    fn destination_picker_cancels_without_changing_the_target() {
-        use crate::app::pr_review::FixTarget;
-        let dir = tempfile::TempDir::new().unwrap();
-        let mut app = make_review_app(dir.path(), &["a.rs"]);
-        handle_diff_viewer_key(&mut app, key(KeyCode::Char('t'))).unwrap();
-        handle_diff_viewer_key(&mut app, key(KeyCode::Char('j'))).unwrap();
-        handle_diff_viewer_key(&mut app, key(KeyCode::Esc)).unwrap();
-        match &app.mode {
-            AppMode::DiffViewer(s) => {
-                assert!(s.destination_pick.is_none());
-                assert_eq!(s.fix_target, FixTarget::ExistingLive);
-            }
-            _ => panic!("not in review"),
-        }
-    }
-
-    #[test]
-    fn dedicated_target_with_no_session_opens_harness_pick() {
-        use crate::app::pr_review::FixTarget;
-        let dir = tempfile::TempDir::new().unwrap();
-        let mut app = make_review_app(dir.path(), &["a.rs"]);
-        // The dispatch resolves the feature by the view's project/feature names,
-        // so the store must hold a matching feature with no agent session yet.
-        let mut project = Project::new(
-            "proj".into(),
-            dir.path().to_path_buf(),
-            true,
-            AgentKind::Claude,
-        );
-        project.features.push(Feature::new(
-            "feat".into(),
-            "branch".into(),
-            dir.path().to_path_buf(),
-            false,
-            VibeMode::Vibeless,
-            false,
-            AgentKind::Claude,
-            false,
-        ));
-        app.store.projects.push(project);
-        app.store.available_harnesses = vec![AgentKind::Claude, AgentKind::Codex];
-
-        // Choose the dedicated target via the picker, reject the file, then finish.
-        handle_diff_viewer_key(&mut app, key(KeyCode::Char('t'))).unwrap();
-        let dedicated = dedicated_row_index(&app);
-        for _ in 0..dedicated {
-            handle_diff_viewer_key(&mut app, key(KeyCode::Char('j'))).unwrap();
-        }
-        handle_diff_viewer_key(&mut app, key(KeyCode::Enter)).unwrap();
-        if let AppMode::DiffViewer(s) = &app.mode {
-            assert_eq!(s.fix_target, FixTarget::DedicatedReview);
-        }
-        handle_diff_viewer_key(&mut app, key(KeyCode::Char('r'))).unwrap();
-        for c in "fix it".chars() {
-            handle_diff_viewer_key(&mut app, key(KeyCode::Char(c))).unwrap();
-        }
-        handle_diff_viewer_key(&mut app, key(KeyCode::Tab)).unwrap(); // submit rejection
-        finish_review(&mut app);
-
-        // The feedback file is written and, because the dedicated session must be
-        // spun up, the harness picker is shown rather than returning to the view.
-        assert!(dir.path().join(".claude/final-review-feedback.md").exists());
-        match &app.mode {
-            AppMode::ReviewHarnessPick(state) => {
-                assert_eq!(state.harnesses, vec![AgentKind::Claude, AgentKind::Codex]);
-            }
-            _ => panic!("expected harness pick mode after finishing"),
-        }
-
-        // Cancelling keeps the feedback and returns to the feature view.
-        handle_review_harness_pick_key(&mut app, KeyCode::Esc).unwrap();
-        assert!(matches!(app.mode, AppMode::Normal));
-    }
-
     #[test]
     fn feedback_editor_accepts_multiline_input_and_tab_submits() {
         let dir = tempfile::TempDir::new().unwrap();
@@ -1995,123 +1828,6 @@ index 1111111..2222222 100644
         assert!(feedback.contains("## General Feedback"));
         assert!(feedback.contains("tighten error handling"));
         assert!(!feedback.contains("## Files Needing Revision"));
-    }
-
-    #[test]
-    fn destination_picker_lists_other_features_and_routes_to_the_one_picked() {
-        use crate::app::ReviewDestinationRow;
-        use crate::app::pr_review::FixTarget;
-        let dir = tempfile::TempDir::new().unwrap();
-        let mut app = make_review_app(dir.path(), &["a.rs"]);
-
-        // The reviewed feature ("proj"/"feat") plus a second, unrelated feature.
-        let mut project = Project::new(
-            "proj".into(),
-            dir.path().to_path_buf(),
-            true,
-            AgentKind::Claude,
-        );
-        project.features.push(Feature::new(
-            "feat".into(),
-            "feat".into(),
-            dir.path().to_path_buf(),
-            false,
-            VibeMode::Vibeless,
-            false,
-            AgentKind::Claude,
-            false,
-        ));
-        let mut other = Feature::new(
-            "other".into(),
-            "other".into(),
-            dir.path().to_path_buf(),
-            true,
-            VibeMode::Vibeless,
-            false,
-            AgentKind::Claude,
-            false,
-        );
-        other.add_session(SessionKind::Claude);
-        let other_id = other.id.clone();
-        project.features.push(other);
-        app.store.projects.push(project);
-
-        handle_diff_viewer_key(&mut app, key(KeyCode::Char('t'))).unwrap();
-        let other_row = match &app.mode {
-            AppMode::DiffViewer(s) => s
-                .destination_pick
-                .as_ref()
-                .unwrap()
-                .rows
-                .iter()
-                .position(|r| matches!(r,
-                    ReviewDestinationRow::ExistingFeature { feature_id, .. } if *feature_id == other_id))
-                .expect("an ExistingFeature row for the other feature"),
-            _ => panic!("not in review"),
-        };
-        for _ in 0..other_row {
-            handle_diff_viewer_key(&mut app, key(KeyCode::Char('j'))).unwrap();
-        }
-        handle_diff_viewer_key(&mut app, key(KeyCode::Enter)).unwrap();
-
-        match &app.mode {
-            AppMode::DiffViewer(s) => {
-                assert_eq!(s.fix_target, FixTarget::ExistingFeature);
-                assert_eq!(s.fix_target_feature_id.as_deref(), Some(other_id.as_str()));
-                assert!(s.destination_pick.is_none());
-            }
-            _ => panic!("not in review"),
-        }
-    }
-
-    #[test]
-    fn new_feature_row_opens_the_companion_setup_and_esc_closes_it() {
-        use crate::app::ReviewDestinationRow;
-        let dir = tempfile::TempDir::new().unwrap();
-        let mut app = make_review_app(dir.path(), &["a.rs"]);
-        app.store.available_harnesses = vec![AgentKind::Claude];
-        // The companion setup seeds from the reviewed feature's branch, so it
-        // has to resolve from the store by workdir.
-        let mut project = Project::new(
-            "proj".into(),
-            dir.path().to_path_buf(),
-            true,
-            AgentKind::Claude,
-        );
-        project.features.push(Feature::new(
-            "feat".into(),
-            "feat".into(),
-            dir.path().to_path_buf(),
-            false,
-            VibeMode::Vibeless,
-            false,
-            AgentKind::Claude,
-            false,
-        ));
-        app.store.projects.push(project);
-
-        handle_diff_viewer_key(&mut app, key(KeyCode::Char('t'))).unwrap();
-        let new_row = match &app.mode {
-            AppMode::DiffViewer(s) => s
-                .destination_pick
-                .as_ref()
-                .unwrap()
-                .rows
-                .iter()
-                .position(|r| matches!(r, ReviewDestinationRow::NewFeature))
-                .expect("a NewFeature row"),
-            _ => panic!("not in review"),
-        };
-        for _ in 0..new_row {
-            handle_diff_viewer_key(&mut app, key(KeyCode::Char('j'))).unwrap();
-        }
-        handle_diff_viewer_key(&mut app, key(KeyCode::Enter)).unwrap();
-        assert!(matches!(&app.mode, AppMode::DiffViewer(s)
-            if s.review_feature_setup.is_some() && s.destination_pick.is_none()));
-
-        handle_diff_viewer_key(&mut app, key(KeyCode::Esc)).unwrap();
-        assert!(matches!(&app.mode, AppMode::DiffViewer(s)
-            if s.review_feature_setup.is_none() && s.destination_pick.is_none()));
     }
 
     #[test]

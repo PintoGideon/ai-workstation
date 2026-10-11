@@ -9,7 +9,7 @@ const view: ReviewView = {
   workflow_id: "review", revision: 4, target: { project_id: "project", feature_id: "feature" },
   feature_name: "Feature", branch: "feature", base_ref: "main", selected_path: "code.rs",
   general_feedback: "Overall saved", has_prior_review: true, error: null, save_error: null, applied_suggestions: [], history: null, summary: null, check_command: null, check: null, finish: null,
-  ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, question_running: false, questions: [], question_error: null, comment_draft: null, ready_comment: null, harnesses: ["claude", "codex", "pi"], message: null },
+  ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude", "codex", "pi"], message: null },
   files: [{ diff: { path: "code.rs", old_path: null, status: "modified", additions: 1, deletions: 1, is_binary: false, patch: "",
     hunks: [{ header: "@@ -1,1 +1,1 @@", lines: [
       { kind: "removed", text: "-before", old_line: 1, new_line: null },
@@ -61,18 +61,6 @@ it("opens the complete pre-finish summary without discarding a draft or its file
   update({ view });
   expect((screen.getByRole("textbox", { name: "File comment" }) as HTMLTextAreaElement).value).toBe("Unsent multiline\ndraft");
   expect((screen.getByRole("textbox", { name: "Filter review files" }) as HTMLInputElement).value).toBe("code.rs");
-});
-
-it("retains a question draft through the summary and closes it with Escape without pausing", async () => {
-  const { onAct, update } = mount();
-  fireEvent.click(screen.getByRole("button", { name: "Ask about file" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Review question" }), { target: { value: "Question draft" } });
-  update({ view: { ...view, summary } });
-  fireEvent.keyDown(window, { key: "Escape" });
-  await waitFor(() => expect(onAct).toHaveBeenLastCalledWith({ kind: "summary_close" }));
-  update({ view });
-  expect((screen.getByRole("textbox", { name: "Review question" }) as HTMLTextAreaElement).value).toBe("Question draft");
-  expect(onAct).not.toHaveBeenCalledWith({ kind: "pause" });
 });
 
 it("requires explicit batch confirmation and cancelling starts no action", () => {
@@ -164,33 +152,6 @@ it("retains a dirty editor through history navigation and returns without pausin
   expect((screen.getByRole("textbox", { name: "File comment" }) as HTMLTextAreaElement).value).toBe("Keep my unsaved draft");
   expect(onAct).not.toHaveBeenCalledWith({ kind: "pause" });
   expect(onAct).not.toHaveBeenCalledWith({ kind: "retry_save" });
-});
-
-it("retains question text when history is closed with Escape", async () => {
-  const { onAct, update } = mount();
-  fireEvent.click(screen.getByRole("button", { name: "Ask about file" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Review question" }), { target: { value: "Why this change?" } });
-  fireEvent.click(screen.getByRole("button", { name: "Review history" }));
-  await waitFor(() => expect(onAct).toHaveBeenLastCalledWith({ kind: "history_open" }));
-  update({ view: { ...view, history } });
-  fireEvent.keyDown(window, { key: "Escape" });
-  await waitFor(() => expect(onAct).toHaveBeenLastCalledWith({ kind: "history_close" }));
-  update({ view });
-  expect((screen.getByRole("textbox", { name: "Review question" }) as HTMLTextAreaElement).value).toBe("Why this change?");
-  expect(onAct).not.toHaveBeenCalledWith({ kind: "cancel_ai" });
-});
-
-it("retains edited AI comment drafts through history navigation", async () => {
-  const { onAct, update } = mount(withDraft);
-  fireEvent.change(screen.getByRole("textbox", { name: "AI comment draft" }), { target: { value: "Edited AI prose" } });
-  fireEvent.click(screen.getByRole("button", { name: "Review history" }));
-  await waitFor(() => expect(onAct).toHaveBeenLastCalledWith({ kind: "history_open" }));
-  update({ view: { ...withDraft, history } });
-  fireEvent.click(screen.getByRole("button", { name: "Return to review" }));
-  await waitFor(() => expect(onAct).toHaveBeenLastCalledWith({ kind: "history_close" }));
-  update({ view: withDraft });
-  expect((screen.getByRole("textbox", { name: "AI comment draft" }) as HTMLTextAreaElement).value).toBe("Edited AI prose");
-  expect(onAct).not.toHaveBeenCalledWith({ kind: "discard_question_draft" });
 });
 
 it("shows history read failures and empty rounds and prevents submissions while busy", () => {
@@ -577,36 +538,6 @@ it("offers preview, continue and cancel while a pre-call notice keeps the review
   await waitFor(() => expect(onAct).toHaveBeenLastCalledWith({ kind: "precall_cancel" }));
 });
 
-it("keeps a multiline question through pre-call cancellation, failed commands and polling", async () => {
-  const { onAct, update } = mount(view, vi.fn(async () => false));
-  fireEvent.click(screen.getByRole("button", { name: "Ask about file" }));
-  const textbox = screen.getByRole("textbox", { name: "Review question" });
-  fireEvent.change(textbox, { target: { value: "Why?\nCheck the helper 🦀" } });
-  fireEvent.change(screen.getByRole("combobox", { name: "Answering harness" }), { target: { value: "codex" } });
-  fireEvent.click(screen.getByRole("button", { name: "Ask review question" }));
-  await waitFor(() => expect(onAct).toHaveBeenCalledWith({ kind: "ask", path: "code.rs", start: null, end: null, question: "Why?\nCheck the helper 🦀", harness: "codex" }));
-  update({ view: { ...view, revision: view.revision + 1, ai: { ...view.ai, precall: { title: "Question", harness: "Codex", preview: "preview", viewing: false } } } });
-  expect((textbox as HTMLTextAreaElement).value).toBe("Why?\nCheck the helper 🦀");
-  fireEvent.click(screen.getByRole("button", { name: "Cancel AI call" }));
-  update({ view: { ...view, revision: view.revision + 2 } });
-  expect((textbox as HTMLTextAreaElement).value).toBe("Why?\nCheck the helper 🦀");
-  fireEvent.click(screen.getByRole("button", { name: "Pause review" }));
-  expect(screen.getByRole("alertdialog", { name: "Discard unsaved review draft" })).toBeTruthy();
-});
-
-it.each(["claude", "codex", "pi"])("asks selected source coordinates with %s and shows returned answers", async (harness) => {
-  const { onAct, update } = mount(noThreadsView);
-  fireEvent.click(screen.getAllByRole("button", { name: "Select line 1" })[0]);
-  fireEvent.click(screen.getByRole("button", { name: "Ask about selection" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Review question" }), { target: { value: "Why this line?" } });
-  fireEvent.change(screen.getByRole("combobox", { name: "Answering harness" }), { target: { value: harness } });
-  fireEvent.click(screen.getByRole("button", { name: "Ask review question" }));
-  await waitFor(() => expect(onAct).toHaveBeenCalledWith({ kind: "ask", path: "code.rs", start: { old_line: null, new_line: 1 }, end: { old_line: null, new_line: 1 }, question: "Why this line?", harness }));
-  update({ view: { ...noThreadsView, revision: 5, ai: { ...view.ai, questions: [{ question: "Why this line?", answer: "An explanation", error: null, focus: "code.rs, new line 1", path: "code.rs", start: { old_line: null, new_line: 1 }, end: { old_line: null, new_line: 1 }, harness }] } } });
-  expect(screen.getByText("An explanation")).toBeTruthy();
-  await waitFor(() => expect(screen.queryByRole("textbox", { name: "Review question" })).toBeNull());
-});
-
 it("requires explicit acceptance of co-review drafts and supports dismissal", async () => {
   const next = editableView();
   next.files[0].line_comments[0].draft = true;
@@ -630,31 +561,6 @@ it("shows in-flight progress, blocks a second AI run, and confirms cancellation 
   await waitFor(() => expect(onAct).toHaveBeenLastCalledWith({ kind: "cancel_ai" }));
 });
 
-it("retains submitted question text while running and after a failed answer", async () => {
-  const { update } = mount(noThreadsView);
-  fireEvent.click(screen.getByRole("button", { name: "Ask about file" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Review question" }), { target: { value: "Keep this question" } });
-  fireEvent.click(screen.getByRole("button", { name: "Ask review question" }));
-  const turn = { question: "Keep this question", answer: null, error: null, focus: "code.rs", path: "code.rs", start: null, end: null, harness: "claude" as const };
-  update({ view: { ...noThreadsView, ai: { ...view.ai, running: true, question_running: true, questions: [turn] } } });
-  expect((screen.getByRole("textbox", { name: "Review question" }) as HTMLTextAreaElement).value).toBe("Keep this question");
-  update({ view: { ...noThreadsView, revision: 5, ai: { ...view.ai, questions: [{ ...turn, error: "Harness failed" }], question_error: "Harness failed" } } });
-  expect((screen.getByRole("textbox", { name: "Review question" }) as HTMLTextAreaElement).value).toBe("Keep this question");
-  expect((screen.getByRole("button", { name: "Ask review question" }) as HTMLButtonElement).disabled).toBe(false);
-});
-
-it("retries a failed question about its own file, lines and harness, not the current selection", async () => {
-  const failed = { question: "Why this line?", answer: null, error: "Harness failed", focus: "code.rs, new line 1",
-    path: "code.rs", start: { old_line: null, new_line: 1 }, end: { old_line: null, new_line: 1 }, harness: "codex" as const };
-  const { onAct } = mount({ ...noThreadsView, selected_path: "image.bin", ai: { ...view.ai, questions: [failed] } });
-  fireEvent.click(screen.getByText("Review questions (1)"));
-  fireEvent.click(screen.getByRole("button", { name: "Retry question" }));
-  expect(screen.getByText("Question about code.rs, line 1 – line 1")).toBeTruthy();
-  expect((screen.getByRole("combobox", { name: "Answering harness" }) as HTMLSelectElement).value).toBe("codex");
-  fireEvent.click(screen.getByRole("button", { name: "Ask review question" }));
-  await waitFor(() => expect(onAct).toHaveBeenCalledWith({ kind: "ask", path: "code.rs", start: failed.start, end: failed.end, question: "Why this line?", harness: "codex" }));
-});
-
 it("drops a line selection when the selected file's patch changes, but keeps it across unrelated updates", () => {
   const { update } = mount(noThreadsView);
   fireEvent.click(screen.getAllByRole("button", { name: "Select line 1" })[0]);
@@ -673,99 +579,6 @@ it("does not claim the review is updating while a pre-call notice waits on the r
   expect(screen.getByText(/Updating review/)).toBeTruthy();
 });
 
-const answeredTurn = { question: "Why this line?", answer: "Repository explanation", error: null, focus: "code.rs, new line 1", path: "code.rs", start: { old_line: null, new_line: 1 }, end: { old_line: null, new_line: 1 }, harness: "codex" as const };
-const withDraft: ReviewView = { ...noThreadsView, ai: { ...view.ai, questions: [answeredTurn], comment_draft: { request: 2, turn: 0, destination: "inline", text: "Generated feedback" } } };
-const withReady: ReviewView = { ...noThreadsView, ai: { ...view.ai, questions: [answeredTurn], ready_comment: { request: 3, original: "Existing thread", path: "code.rs", start: answeredTurn.start, end: answeredTurn.end, text: "Existing thread\n\nGenerated feedback", severity: "nit" } } };
-
-it("drafts from the selected answer with explicit inline or overall destinations", async () => {
-  const { onAct, update } = mount({ ...noThreadsView, ai: { ...view.ai, questions: [answeredTurn] } });
-  fireEvent.click(screen.getByText("Review questions (1)"));
-  fireEvent.click(screen.getByRole("button", { name: "Draft inline comment" }));
-  await waitFor(() => expect(onAct).toHaveBeenCalledWith({ kind: "draft_question", turn: 0, destination: "inline" }));
-  fireEvent.click(screen.getByRole("button", { name: "Draft overall feedback" }));
-  await waitFor(() => expect(onAct).toHaveBeenCalledWith({ kind: "draft_question", turn: 0, destination: "general" }));
-  update({ view: { ...noThreadsView, ai: { ...view.ai, questions: [{ ...answeredTurn, start: null, end: null }] } } });
-  expect((screen.getByRole("button", { name: "Draft inline comment" }) as HTMLButtonElement).disabled).toBe(true);
-  expect((screen.getByRole("button", { name: "Draft overall feedback" }) as HTMLButtonElement).disabled).toBe(false);
-});
-
-it("retains edited AI draft text across polls and failed transfers and blocks duplicate submissions", async () => {
-  const { onAct, update } = mount(withDraft, vi.fn(async () => false));
-  const textbox = screen.getByRole("textbox", { name: "AI comment draft" });
-  fireEvent.change(textbox, { target: { value: "Human edits 🦀\nMore feedback" } });
-  update({ view: { ...withDraft, revision: 5, ai: { ...withDraft.ai, comment_draft: { ...withDraft.ai.comment_draft! } } } });
-  expect((textbox as HTMLTextAreaElement).value).toBe("Human edits 🦀\nMore feedback");
-  expect(onAct).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Open comment editor" }));
-  await waitFor(() => expect(onAct).toHaveBeenCalledWith({ kind: "transfer_question_draft", request: 2, text: "Human edits 🦀\nMore feedback" }));
-  update({ busy: true });
-  fireEvent.click(screen.getByRole("button", { name: "Open comment editor" }));
-  expect(onAct).toHaveBeenCalledOnce();
-  update({ error: "Repository changed", view: { ...withDraft, revision: 6 } });
-  expect((textbox as HTMLTextAreaElement).value).toBe("Human edits 🦀\nMore feedback");
-  expect(screen.getByRole("alert").textContent).toContain("Repository changed");
-});
-
-it("requires explicit discard before leaving a generated draft and preserves it when dismissal is cancelled", async () => {
-  const { onAct } = mount(withDraft);
-  fireEvent.click(screen.getByRole("button", { name: "Pause review" }));
-  expect(screen.getByRole("alertdialog", { name: "Discard unsaved review draft" })).toBeTruthy();
-  expect(onAct).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
-  expect((screen.getByRole("textbox", { name: "AI comment draft" }) as HTMLTextAreaElement).value).toBe("Generated feedback");
-  fireEvent.click(screen.getByRole("button", { name: "Discard AI draft" }));
-  fireEvent.click(screen.getByRole("button", { name: "Discard and continue" }));
-  await waitFor(() => expect(onAct).toHaveBeenCalledWith({ kind: "discard_question_draft" }));
-  expect(screen.queryByRole("textbox", { name: "AI comment draft" })).toBeNull();
-});
-
-it("opens the transferred inline editor without saving and keeps edits until an explicit anchored save", async () => {
-  const { onAct, update } = mount(withReady, vi.fn(async () => false));
-  const textbox = screen.getByRole("textbox", { name: "Line comment" });
-  expect((textbox as HTMLTextAreaElement).value).toBe("Existing thread\n\nGenerated feedback");
-  expect((screen.getByRole("combobox", { name: "Severity" }) as HTMLSelectElement).value).toBe("nit");
-  expect(onAct).not.toHaveBeenCalled();
-  fireEvent.change(textbox, { target: { value: "Final feedback" } });
-  update({ view: { ...withReady, revision: 8, ai: { ...withReady.ai, ready_comment: { ...withReady.ai.ready_comment! } } } });
-  expect((textbox as HTMLTextAreaElement).value).toBe("Final feedback");
-  fireEvent.click(screen.getByRole("button", { name: "Save comment" }));
-  await waitFor(() => expect(onAct).toHaveBeenCalledWith({ kind: "line_comment", path: "code.rs", start: answeredTurn.start, end: answeredTurn.end, text: "Final feedback", severity: "nit" }));
-  expect((textbox as HTMLTextAreaElement).value).toBe("Final feedback");
-});
-
-it("opens transferred overall feedback and cancels without saving or restoring the draft on polling", async () => {
-  const general = { ...withReady, ai: { ...withReady.ai, ready_comment: { ...withReady.ai.ready_comment!, path: null, start: null, end: null } } };
-  const { onAct, update } = mount(general);
-  expect(screen.getByRole("textbox", { name: "Overall feedback draft" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Cancel edit" }));
-  fireEvent.click(screen.getByRole("button", { name: "Discard and continue" }));
-  await waitFor(() => expect(onAct).toHaveBeenCalledWith({ kind: "discard_question_draft" }));
-  await waitFor(() => expect(screen.queryByRole("textbox", { name: "Overall feedback draft" })).toBeNull());
-  update({ view: { ...general, revision: 9, ai: { ...general.ai, ready_comment: { ...general.ai.ready_comment! } } } });
-  expect(screen.queryByRole("textbox", { name: "Overall feedback draft" })).toBeNull();
-});
-
-it("blocks drafting with disabled harnesses and while another request or unsaved draft is active", () => {
-  const { update } = mount({ ...noThreadsView, ai: { ...view.ai, harnesses: ["claude"], questions: [answeredTurn] } });
-  fireEvent.click(screen.getByText("Review questions (1)"));
-  expect((screen.getByRole("button", { name: "Draft overall feedback" }) as HTMLButtonElement).disabled).toBe(true);
-  update({ view: { ...noThreadsView, ai: { ...view.ai, running: true, question_running: true, questions: [answeredTurn] } } });
-  expect((screen.getByRole("button", { name: "Draft inline comment" }) as HTMLButtonElement).disabled).toBe(true);
-  update({ view: withDraft });
-  expect((screen.getByRole("button", { name: "Draft overall feedback" }) as HTMLButtonElement).disabled).toBe(true);
-});
-
-
-it("protects a cleared transferred editor when an empty save would remove existing prose", async () => {
-  const { onAct } = mount(withReady, vi.fn(async () => false));
-  fireEvent.change(screen.getByRole("textbox", { name: "Line comment" }), { target: { value: "" } });
-  fireEvent.click(screen.getByRole("button", { name: "Pause review" }));
-  expect(screen.getByRole("alertdialog", { name: "Discard unsaved review draft" })).toBeTruthy();
-  expect(onAct).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
-  fireEvent.click(screen.getByRole("button", { name: "Save comment" }));
-  await waitFor(() => expect(onAct).toHaveBeenCalledWith({ kind: "line_comment", path: "code.rs", start: answeredTurn.start, end: answeredTurn.end, text: "", severity: "nit" }));
-});
 
 it("previews the configured check and cancelling its confirmation launches nothing", () => {
   const { onAct } = mount({ ...view, summary, check_command: "npm test" });
@@ -896,20 +709,6 @@ it("explains stopped and missing handoff targets", () => {
   expect(screen.getByText(/no agent session; the feedback is saved for later/)).toBeTruthy();
   expect(screen.queryByRole("button", { name: /hand off/ })).toBeNull();
   expect(screen.getByRole("button", { name: "Complete review" })).toBeTruthy();
-});
-
-it("keeps unsaved and generated drafts by refusing to complete until they are settled", () => {
-  const { update } = mount();
-  fireEvent.click(screen.getByRole("button", { name: "Overall feedback" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Overall feedback draft" }), { target: { value: "Unsaved overall" } });
-  update({ view: { ...view, summary, finish } });
-  expect((screen.getByRole("button", { name: "Complete review…" }) as HTMLButtonElement).disabled).toBe(true);
-  update({ view });
-  expect((screen.getByRole("textbox", { name: "Overall feedback draft" }) as HTMLTextAreaElement).value).toBe("Unsaved overall");
-  cleanup();
-  mount({ ...view, summary, finish, ai: { ...view.ai, comment_draft: { request: 1, turn: 0, destination: "general", text: "Generated" } } });
-  expect((screen.getByRole("button", { name: "Complete review…" }) as HTMLButtonElement).disabled).toBe(true);
-  expect(screen.getByText("Transfer or discard the generated comment draft before completing.")).toBeTruthy();
 });
 
 it("cancels a completion while its check runs and cannot leave the summary meanwhile", async () => {

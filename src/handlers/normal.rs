@@ -313,12 +313,6 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char('T') => {
             app.start_theme_picker();
         }
-        // Land a companion review feature's commits back on its source branch.
-        // A no-op (with a hint) unless the selected feature carries a
-        // `ReviewSource` link.
-        KeyCode::Char('t') => {
-            app.open_review_integrate();
-        }
         KeyCode::Char('p') => {
             app.start_syntax_language_picker();
         }
@@ -327,9 +321,6 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
         }
         KeyCode::Char('G') => {
             app.open_pr_review();
-        }
-        KeyCode::Char('W') => {
-            app.open_ai_review();
         }
         KeyCode::Char('E') => {
             app.open_prompt_overrides(None);
@@ -370,7 +361,6 @@ pub(crate) const DASHBOARD_KEYBINDING_ACTIONS: &[(&str, char)] = &[
     ("refresh", 'r'),
     ("syntax_picker", 'p'),
     ("pr_review", 'G'),
-    ("ai_review", 'W'),
     ("session_config", 'u'),
     ("fork_feature", 'F'),
     ("mark_ready", 'y'),
@@ -428,9 +418,6 @@ fn handle_normal_leader_key(app: &mut App, key: KeyEvent) -> Result<()> {
         }
         KeyCode::Char('c') => {
             app.start_config_wizard();
-        }
-        KeyCode::Char('C') => {
-            app.open_review_memory_compact_confirm();
         }
         KeyCode::Char('h') => {
             app.open_bookmark_picker(None);

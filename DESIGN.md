@@ -187,7 +187,7 @@ on macOS), repo files `aiw.json` / `.aiw/` / `AIW_PLAN*.md`, injected skills `ai
 We no longer merge upstream; useful commits are cherry-picked by hand ([FORK.md](FORK.md)).
 
 **Data migrated by copy.** On the first start with no `~/.config/ai_workstation`, an existing upstream setup
-(`~/.config/amf`) is *copied* in (`src/fork/migrate.rs`): settings, ports, themes, parsers, review memory, and the
+(`~/.config/amf`) is *copied* in (`src/fork/migrate.rs`): settings, ports, themes, parsers, and the
 database (copied while unchanged, WAL folded into the copy, integrity-checked). Upstream's folders, hooks and tmux
 socket are never touched, so it keeps running side by side. A one-time toast reports the copy.
 

@@ -1,7 +1,6 @@
 //! Central registry of every headless AI prompt AIW sends.
 //!
 //! Historically each headless call site (`app/review/`,
-//! `app/ai_review.rs`, `app/pr_review/`,
 //! `handlers/diff_review.rs`, `summary.rs`) assembled its prompt inline. This
 //! module is the single place those templates live, so they can be listed,
 //! displayed, and overridden.
@@ -33,13 +32,6 @@ use crate::project::AgentKind;
 /// overrides).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PromptId {
-    /// Review questions: answer a reviewer's question about the code under
-    /// Final Review, a manual PR review, or the AI PR pane
-    /// (`app/review_questions/`, read-only tools).
-    ReviewQuestion,
-    /// Review questions: turn an answer into an inline or general review
-    /// comment draft (`app/review_questions/`, no repository tools).
-    ReviewQuestionDraft,
     /// Final Review: plain-language walkthrough of a file's diff (Claude).
     ReviewWalkthrough,
     /// Final Review: AI co-reviewer first pass over a file (Claude).
@@ -48,16 +40,6 @@ pub enum PromptId {
     ReviewChangesetOverview,
     /// Config-wizard / hook diff-review explanation (Claude).
     ReviewDiffExplain,
-    /// The AI PR review pane (`app/ai_review.rs`).
-    PrReviewAiReview,
-    /// Review-memory lookback bootstrap (`app/pr_review.rs`, Claude).
-    ReviewMemoryBootstrap,
-    /// Review-memory compaction (`app/pr_review.rs`, Claude).
-    ReviewMemoryCompact,
-    /// Review-memory AI summary: turns one PR review comment into a
-    /// recall-shaped finding (`app/pr_review/memory.rs`, the "add to memory"
-    /// dialog's `s` action, user-picked harness, restricted no-tools mode).
-    ReviewMemoryAiSummary,
     /// One-line session summary from tmux pane content (`summary.rs`).
     SessionSummary,
     /// Batched review: one bounded slice of an oversized diff
@@ -73,17 +55,11 @@ pub enum PromptId {
 
 impl PromptId {
     /// Every registered prompt, in registry (and manager-list) order.
-    pub const ALL: [PromptId; 15] = [
-        PromptId::ReviewQuestion,
-        PromptId::ReviewQuestionDraft,
+    pub const ALL: [PromptId; 9] = [
         PromptId::ReviewWalkthrough,
         PromptId::ReviewCoReview,
         PromptId::ReviewChangesetOverview,
         PromptId::ReviewDiffExplain,
-        PromptId::PrReviewAiReview,
-        PromptId::ReviewMemoryBootstrap,
-        PromptId::ReviewMemoryCompact,
-        PromptId::ReviewMemoryAiSummary,
         PromptId::SessionSummary,
         PromptId::ReviewBatch,
         PromptId::ReviewHunkSplit,
@@ -95,16 +71,10 @@ impl PromptId {
     /// `.aiw/prompts/` file stem — do not change for an existing prompt.
     pub fn as_str(self) -> &'static str {
         match self {
-            PromptId::ReviewQuestion => "review.question",
-            PromptId::ReviewQuestionDraft => "review.question_draft",
             PromptId::ReviewWalkthrough => "review.walkthrough",
             PromptId::ReviewCoReview => "review.co_review",
             PromptId::ReviewChangesetOverview => "review.changeset_overview",
             PromptId::ReviewDiffExplain => "review.diff_explain",
-            PromptId::PrReviewAiReview => "pr_review.ai_review",
-            PromptId::ReviewMemoryBootstrap => "review_memory.bootstrap",
-            PromptId::ReviewMemoryCompact => "review_memory.compact",
-            PromptId::ReviewMemoryAiSummary => "review_memory.ai_summary",
             PromptId::SessionSummary => "session.summary",
             PromptId::ReviewBatch => "review.batch",
             PromptId::ReviewHunkSplit => "review.hunk_split",
@@ -175,41 +145,7 @@ pub fn spec(id: PromptId) -> &'static PromptSpec {
 
 const NO_HARNESS_VARIANTS: &[(AgentKind, &str)] = &[];
 
-static SPECS: [PromptSpec; 15] = [
-    PromptSpec {
-        id: PromptId::ReviewQuestion,
-        title: "Review: ask AI",
-        summary: "Answers reviewer questions with read-only repository discovery.",
-        placeholders: &[
-            "review_identity",
-            "repository_path",
-            "review_revision",
-            "context_version",
-            "selection",
-            "diff",
-            "earlier_turns",
-            "question",
-        ],
-        default_template: defaults::REVIEW_QUESTION,
-        harness_variants: NO_HARNESS_VARIANTS,
-    },
-    PromptSpec {
-        id: PromptId::ReviewQuestionDraft,
-        title: "Review: draft comment from answer",
-        summary: "Turns an answer into editable local review-comment text.",
-        placeholders: &[
-            "review_identity",
-            "repository_path",
-            "review_revision",
-            "context_version",
-            "selection",
-            "diff",
-            "question",
-            "answer",
-        ],
-        default_template: defaults::REVIEW_QUESTION_DRAFT,
-        harness_variants: NO_HARNESS_VARIANTS,
-    },
+static SPECS: [PromptSpec; 9] = [
     PromptSpec {
         id: PromptId::ReviewWalkthrough,
         title: "Final Review: file walkthrough",
@@ -240,43 +176,6 @@ static SPECS: [PromptSpec; 15] = [
         summary: "Explains a code change shown in the config-wizard / hook diff review.",
         placeholders: &["file_path", "old_snippet", "new_snippet"],
         default_template: defaults::REVIEW_DIFF_EXPLAIN,
-        harness_variants: NO_HARNESS_VARIANTS,
-    },
-    PromptSpec {
-        id: PromptId::PrReviewAiReview,
-        title: "PR review: AI review",
-        summary: "Reviews a PR diff for bugs and quality issues in a fixed output format.",
-        placeholders: &[
-            "skill_directive",
-            "recurring_findings",
-            "annotated_diff",
-            "finding_heading_prefix",
-        ],
-        default_template: defaults::PR_REVIEW_AI_REVIEW,
-        harness_variants: NO_HARNESS_VARIANTS,
-    },
-    PromptSpec {
-        id: PromptId::ReviewMemoryBootstrap,
-        title: "Review memory: bootstrap",
-        summary: "Distills recurring review findings from a project's PR history.",
-        placeholders: &["pr_history"],
-        default_template: defaults::REVIEW_MEMORY_BOOTSTRAP,
-        harness_variants: NO_HARNESS_VARIANTS,
-    },
-    PromptSpec {
-        id: PromptId::ReviewMemoryCompact,
-        title: "Review memory: compact",
-        summary: "Merges near-duplicate findings and prunes the review-memory doc.",
-        placeholders: &["doc_contents"],
-        default_template: defaults::REVIEW_MEMORY_COMPACT,
-        harness_variants: NO_HARNESS_VARIANTS,
-    },
-    PromptSpec {
-        id: PromptId::ReviewMemoryAiSummary,
-        title: "Review memory: AI summary",
-        summary: "Turns one PR review comment into a recall-shaped review-memory finding.",
-        placeholders: &["finding_context"],
-        default_template: defaults::REVIEW_MEMORY_AI_SUMMARY,
         harness_variants: NO_HARNESS_VARIANTS,
     },
     PromptSpec {

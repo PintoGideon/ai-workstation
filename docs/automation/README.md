@@ -6,7 +6,6 @@ AIW now exposes machine-friendly automation entrypoints:
 aiw automation create-project --file docs/automation/create-project.example.json
 aiw automation create-feature --file docs/automation/create-feature.example.json
 aiw automation create-batch-features --file docs/automation/create-batch-features.example.json
-aiw automation seed-ai-review --file docs/automation/seed-ai-review.template.json
 ```
 
 The command sends a request to the running AIW dashboard over the same local IPC system used by hook notifications. AIW applies the request inside the dashboard process and prints a JSON response.
@@ -18,30 +17,6 @@ The command sends a request to the running AIW dashboard over the same local IPC
 - For `create-feature`, `project_name` must already exist in AIW.
 - For `create-batch-features`, `workspace_path` must be inside a git repository.
 - For `create-project` and `create-batch-features`, `project_name` must not already exist in AIW.
-
-## Seed AI Review (screenshot fixture only)
-
-`seed-ai-review` is a deterministic visual-test seam for a completed AI Review
-pane. It writes supplied findings to the cache and does not launch an agent,
-spend tokens, or contact GitHub. It is not an agent-review API and must not be
-used to fabricate a real review result.
-
-Use [`seed-ai-review.template.json`](seed-ai-review.template.json) as the
-field reference. With `open: true`, `workdir` and `repository` (`owner/name`)
-are required and AIW opens the fixture pane immediately. Screenshot CI uses
-this mode so a scenario can prove review presentation and the post disclosure
-without any authenticated Claude/Codex harness.
-
-For a local visual check, the repository scenario supplies those fields from
-the environment and opens the fixture in the isolated screenshot harness:
-
-```bash
-AIW_SCREENSHOT_PR_NUMBER=123 \
-GITHUB_REPOSITORY=owner/repository \
-scripts/dev/screenshot/aiw-capture.sh \
-  --scenario scripts/dev/screenshot/scenarios/ai-review-completed-fixture.txt \
-  --out-dir /tmp/aiw-ai-review-fixture
-```
 
 ## Create Project
 

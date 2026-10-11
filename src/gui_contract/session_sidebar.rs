@@ -30,8 +30,8 @@
 //! them (see [`TUI_ONLY_NOTE`]): the attention reason, an in-flight tool
 //! call, Codex app-server live events (work item and reasoning), the IPC
 //! thinking state of a Claude/Codex PR-review session, and a TUI's own
-//! summary generation or AI review. The GUI's own summary generation and AI
-//! review are this process's state and are reported.
+//! summary generation. The GUI's own summary generation is this process's
+//! state and is reported.
 
 use serde::{Deserialize, Serialize};
 
@@ -216,7 +216,6 @@ impl GuiHandle {
             pr_review_working: app
                 .dedicated_review_session_working_for_workdir(&feature.workdir)
                 .unwrap_or(false),
-            ai_review_running: app.ai_review_running_for_workdir(&feature.workdir),
         };
         let assembly = app
             .assemble_agent_sidebar(feature, Some(session), &session.kind, &runtime)

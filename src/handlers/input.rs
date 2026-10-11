@@ -5,18 +5,6 @@ use crate::app::{
 };
 
 pub fn handle_paste(app: &mut App, text: &str) -> Result<()> {
-    if let Some(q) = app.review_questions_mut()
-        && q.open
-    {
-        if let Some((_, editor)) = &mut q.draft {
-            if q.request.is_none() {
-                editor.insert_str(text);
-            }
-        } else if q.editing {
-            q.editor.insert_str(text);
-        }
-        return Ok(());
-    }
     match &app.mode {
         AppMode::CreatingProject(_) => {
             if let AppMode::CreatingProject(state) = &mut app.mode {

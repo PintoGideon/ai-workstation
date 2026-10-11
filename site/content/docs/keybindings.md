@@ -34,7 +34,6 @@ for the complete, current keybinding reference built into that version of AIW.
 | `z` | Show dormant features: idle and unattended |
 | `Z` | Generate a short AI summary of the selected feature's recent activity |
 | `G` | Open GitHub PR triage |
-| `W` | Run AIW's AI review of a PR diff |
 | `L` | Open the prompt library |
 | `E` | Edit headless AI prompt templates (overrides) |
 | `T` | Choose a theme |

@@ -294,7 +294,6 @@ pub(crate) struct SidebarRuntime<'a> {
     pub codex_live: Option<&'a CodexLiveThreadState>,
     /// The dedicated PR-review session is mid-turn.
     pub pr_review_working: bool,
-    pub ai_review_running: bool,
 }
 
 impl App {
@@ -557,9 +556,6 @@ pub(crate) fn pr_triage_sidebar_text(
         }];
         if runtime.pr_review_working {
             lines.push("Status: Working".to_string());
-        }
-        if runtime.ai_review_running {
-            lines.push("AI review: Running".to_string());
         }
         return Some(lines.join("\n"));
     }

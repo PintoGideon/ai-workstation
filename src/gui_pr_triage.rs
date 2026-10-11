@@ -651,7 +651,6 @@ fn open_picker(
         selected,
         include_closed,
         error: list_error,
-        bootstrap_pick: None,
         current_user,
     });
     if let Some(context) = gui.pr_triage_context.as_mut() {

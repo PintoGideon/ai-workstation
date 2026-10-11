@@ -206,7 +206,7 @@ try:
     click("Final Review")
     wait('!!document.querySelector(".diff-file")')
     choose_file("invoice.ts")
-    capture("001-review-ai-controls.png", "A stopped feature offers walkthroughs, a changeset overview, co-review and questions without starting a terminal agent.", ["Final Review · Round invoice totals", "Generate walkthrough", "AI co-review file", "Ask about file", "Changeset overview"], 'document.querySelectorAll(".diff-lines:not(.diff-split)").length>0')
+    capture("001-review-ai-controls.png", "A stopped feature offers walkthroughs, a changeset overview, co-review without starting a terminal agent.", ["Final Review · Round invoice totals", "Generate walkthrough", "AI co-review file", "Changeset overview"], 'document.querySelectorAll(".diff-lines:not(.diff-split)").length>0')
     assert calls() == [], "Opening the review must not launch an AI call"
 
     # The short smoke-test diff makes the entire prompt preview readable.
@@ -247,29 +247,6 @@ try:
     assert "invoice.ts" not in progress["decisions"]
 
     evaluate('Array.from(document.querySelectorAll("details")).forEach(d=>d.open=false)')
-    select_line(9)
-    click("Ask about selection")
-    fill("Review question", "Why does this round before formatting?\nCheck negative totals and the selected formatter.")
-    select("Answering harness", "codex")
-    capture("005-local-review-question.png", "A multiline question is drafted locally for a selected source line, with Codex chosen from the four allowed answering harnesses. Editing does not launch a call.", ["Question about invoice.ts, line 9 – line 9", "Answering harness", "Ask review question", "The answering harness reads the repository"], 'document.querySelector(".review-editor textarea").value.includes("Check negative totals") && Array.from(document.querySelectorAll("select")).find(s=>s.value==="codex").options.length===4')
-    assert len(calls()) == 3
-    click("Ask review question")
-    wait('document.body.innerText.includes("Continue AI call")')
-    assert "Codex" in evaluate('document.querySelector(".review-confirm").innerText')
-    click("Cancel AI call")
-    wait('!document.body.innerText.includes("Continue AI call")')
-    assert evaluate('document.querySelector(".review-editor textarea").value').startswith("Why does this round")
-    assert len(calls()) == 3
-    click("Ask review question")
-    wait('document.body.innerText.includes("Continue AI call")')
-    approve_call()
-    wait('document.body.innerText.includes("Review questions (1)") && !document.body.innerText.includes("Answering review question") && !document.querySelector(".review-editor")')
-    open_detail("Review questions")
-    capture("006-repository-aware-answer.png", "The Codex fixture answer arrives through the real question engine and appears in review history. Cancelling its first pre-call retained the unsent question; confirming the retry ran it exactly once.", ["Rounding and currency formatting", "Rounding happens in", "Add tests for negative totals and half-cent boundaries", "Question context"], 'document.querySelector(".review-note details")!==null')
-    assert calls()[-1] == {"harness": "codex", "kind": "question"}
-    assert len(calls()) == 4
-
-    evaluate('Array.from(document.querySelectorAll("details")).forEach(d=>d.open=false)')
     open_detail("Saved line comments")
     click("Accept AI draft")
     ready()
@@ -288,7 +265,7 @@ try:
     choose_file("invoice.ts")
     open_detail("Saved line comments")
     capture("007-kept-finding-resumes.png", "Accepting one draft and dismissing the other leaves one human-confirmed finding and a rejection that survive pause/reopen in the shared TUI progress format.", ["1 rejected", "Saved line comments (1)", "Cover negative totals before relying on this rounding rule.", "Resolve thread"], '!document.body.innerText.includes("(AI draft)") && !document.body.innerText.includes("Consider making the currency") && !document.body.innerText.includes("Review questions")')
-    assert len(calls()) == 4, "Reopening must not generate notes or restart a question"
+    assert len(calls()) == 3, "Reopening must not generate notes"
 
     click("AI co-review file")
     wait('document.body.innerText.includes("Continue AI call")')
@@ -297,7 +274,7 @@ try:
     click("Continue AI call")
     wait('!!document.querySelector("[role=alert]")')
     capture("008-stale-preview-refused.png", "An externally changed patch is refused again when the pending AI call is confirmed, before the fixture executes.", ["Review changes changed; refresh changes before running AI", "Cancel AI call"], allow_alert=True)
-    assert len(calls()) == 4
+    assert len(calls()) == 3
     click("Cancel AI call")
     ready()
     (out / "capture-notes.jsonl").write_text("".join(json.dumps({"file": n["file"].replace(".png", ".ansi"), "note": n["note"]}) + "\n" for n in notes))

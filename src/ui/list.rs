@@ -323,23 +323,13 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         ));
                     }
                     if let Some(pr) = app.active_pr_for_feature(&feature.id) {
-                        // A background AI Review outlives the pane it was
-                        // started from, so mirror the in-session PR badge's
-                        // activity marker here (see `pr_triage_badge_span`) —
-                        // the dashboard is where the user waits it out.
-                        let ai_review_running = app.ai_review_running_for_workdir(&feature.workdir);
                         let mut label = match pr.unresolved_threads {
                             Some(0) => format!(" [PR #{} · 0 open", pr.number),
                             Some(count) => format!(" [PR #{} · {} open", pr.number, count),
                             None => format!(" [PR #{}", pr.number),
                         };
-                        if ai_review_running {
-                            label.push_str(" · AI review");
-                        }
                         label.push(']');
-                        let color = if ai_review_running {
-                            theme.warning.to_color()
-                        } else if pr.unresolved_threads == Some(0) {
+                        let color = if pr.unresolved_threads == Some(0) {
                             theme.success.to_color()
                         } else {
                             theme.info.to_color()
@@ -815,45 +805,6 @@ mod tests {
         }
     }
 
-    /// Mark a background AI Review as running for `workdir`, the way
-    /// `App::ai_review_running_for_workdir` observes it.
-    fn set_ai_review_running(app: &mut App, workdir: PathBuf) {
-        let (_tx, rx) = std::sync::mpsc::channel();
-        // Dropping the sender is fine: the badge only checks that the
-        // background slot is occupied, it never reads progress here.
-        app.ai_review_run.set_receiver_for_test(Some(rx));
-        app.ai_review_run
-            .set_origin_for_test(Some(crate::app::AiReviewState {
-                questions: Default::default(),
-                workdir,
-                pr: crate::github::PrRef {
-                    number: 321,
-                    head_sha: "abc123".to_string(),
-                    url: "https://github.com/o/r/pull/321".to_string(),
-                    owner: "o".to_string(),
-                    repo: "r".to_string(),
-                    head_ref: "usage-feat".to_string(),
-                },
-                findings: Vec::new(),
-                summary: None,
-                attribution: None,
-                selected: 0,
-                detail_scroll: 0,
-                detail_content_lines: 0,
-                last_run: None,
-                harness: None,
-                harness_pick: None,
-                harness_pick_origin: None,
-                model: None,
-                model_picked: false,
-                reasoning: None,
-                model_pick: None,
-                finding_editor: None,
-                post_confirm: None,
-                marked: Default::default(),
-            }));
-    }
-
     fn render_feature_row_with_pr(
         sessions: Vec<FeatureSession>,
         active_pr: Option<crate::app::ActivePrStatus>,
@@ -1315,47 +1266,5 @@ mod tests {
         );
 
         assert!(rendered.contains("[PR #321 · 4 open]"));
-    }
-
-    fn pr_status() -> crate::app::ActivePrStatus {
-        crate::app::ActivePrStatus {
-            branch: "usage-feat".to_string(),
-            head_sha: "abc123".to_string(),
-            number: 321,
-            unresolved_threads: Some(4),
-        }
-    }
-
-    #[test]
-    fn feature_row_marks_a_running_ai_review_on_its_own_pr_badge() {
-        let rendered = render_feature_row_configured(vec![], Some(pr_status()), |app| {
-            set_ai_review_running(app, PathBuf::from("/tmp/usage-feat"));
-        });
-
-        assert!(rendered.contains("[PR #321 · 4 open · AI review]"));
-    }
-
-    #[test]
-    fn feature_row_omits_the_ai_review_marker_for_another_features_review() {
-        let rendered = render_feature_row_configured(vec![], Some(pr_status()), |app| {
-            set_ai_review_running(app, PathBuf::from("/tmp/other-feat"));
-        });
-
-        assert!(rendered.contains("[PR #321 · 4 open]"));
-        assert!(!rendered.contains("AI review"));
-    }
-
-    #[test]
-    fn feature_row_omits_the_ai_review_marker_once_generation_finishes() {
-        // Completion clears the background slot before taking the pending
-        // snapshot (`App::poll_ai_pr_review_bg`), so the marker must be gone
-        // at the intermediate state, not just after both fields are empty.
-        let rendered = render_feature_row_configured(vec![], Some(pr_status()), |app| {
-            set_ai_review_running(app, PathBuf::from("/tmp/usage-feat"));
-            app.ai_review_run.set_receiver_for_test(None);
-        });
-
-        assert!(rendered.contains("[PR #321 · 4 open]"));
-        assert!(!rendered.contains("AI review"));
     }
 }

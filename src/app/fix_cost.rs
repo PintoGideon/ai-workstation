@@ -1,15 +1,14 @@
 //! Shared rendering of a per-issue **cost to fix** value and its "combined"
 //! badge.
 //!
-//! Two surfaces show what one agent run cost to fix a single review issue: the
-//! PR Triage reply disclosure (`R`) and, once a finding has been posted and
-//! fixed, the AI Review pane (`W`). When several PR Triage comments are fixed
+//! The PR Triage reply disclosure (`R`) shows what one agent run cost to fix a
+//! single review issue. When several PR Triage comments are fixed
 //! together in one combined batch (`B`), that single run's cost is shown in
 //! full on **every** resolved comment in the batch, marked `combined` so it is
 //! clear the figure is shared rather than counted once per issue.
 //!
-//! Both surfaces route their wording through here so the label and the badge
-//! stay identical.
+//! The wording is routed through here so the label and the badge stay
+//! identical wherever they appear.
 
 /// Combined-batch context for a fix cost: the issue was resolved as part of a
 /// `B` batch whose single agent run's cost is shared across `sibling_count`

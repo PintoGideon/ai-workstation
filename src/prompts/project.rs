@@ -12,7 +12,7 @@
 //! Shape:
 //! ```json
 //! "prompt_overrides": {
-//!   "pr_review.ai_review": { "template": "…text with {{tokens}}…" },
+//!   "review.walkthrough": { "template": "…text with {{tokens}}…" },
 //!   "review.question": {
 //!     "template": "…shared…",
 //!     "harnesses": { "codex": "…codex-specific…" }
@@ -304,11 +304,11 @@ mod tests {
     fn effective_reads_by_prompt_id_string() {
         let mut map = ProjectPromptOverrides::new();
         map.insert(
-            "pr_review.ai_review".to_string(),
+            "review.walkthrough".to_string(),
             entry(Some("repo review prompt {{annotated_diff}}"), &[]),
         );
         assert_eq!(
-            effective(&map, PromptId::PrReviewAiReview, &AgentKind::Claude),
+            effective(&map, PromptId::ReviewWalkthrough, &AgentKind::Claude),
             Some("repo review prompt {{annotated_diff}}")
         );
         assert_eq!(

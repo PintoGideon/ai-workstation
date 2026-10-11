@@ -25,7 +25,6 @@ const DASHBOARD_LEADER_COMMANDS: &[(&str, &str)] = &[
     ("/", "Command picker"),
     ("a", "Local commands"),
     ("c", "Config wizard"),
-    ("C", "Compact review memory"),
     ("h", "Bookmarks"),
     ("H", "Bookmark current session"),
     ("M", "Remove bookmark"),
@@ -211,8 +210,8 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     // views) each `return` before reaching the shared `draw_toasts` call near
     // the end of this function, so every one of them draws its own — a
     // success/warning/error toast pushed while any of these is showing
-    // (e.g. the AI review's "found N findings" / error result landing while
-    // the user is back in the pane) would otherwise never appear, silently
+    // (e.g. a background result landing while the user is back in the pane)
+    // would otherwise never appear, silently
     // swallowed until the mode changes.
     if let AppMode::PrReviewLoading(state) = &app.mode {
         super::dialogs::draw_pr_review_loading(frame, state, &app.throbber_state, &app.theme);
@@ -236,20 +235,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         // Resolved here, before the `&mut app.mode` borrow: the companion
         // feature's name/harness/mode live on the store, not the pane state.
         let triage_feature_summary = app.pr_review_triage_feature_summary();
-        let ai_review_status = match &app.mode {
-            AppMode::PrReview(state) => app.ai_review_triage_status(state),
-            _ => crate::app::ai_review::AiReviewTriageStatus::NotRun,
-        };
-        // Same pattern: resolved off `app` before the `&mut app.mode` borrow —
-        // but only while the "add to memory" dialog is actually open, since
-        // `repo_for_project_path` shells out to git and this runs every frame.
-        let memory_paths = match &app.mode {
-            AppMode::PrReview(state) if state.memory_add.is_some() => {
-                let repo = app.repo_for_project_path(&state.workdir);
-                Some(app.review_memory_paths(&repo))
-            }
-            _ => None,
-        };
         if let AppMode::PrReview(state) = &mut app.mode {
             super::dialogs::draw_pr_review(
                 frame,
@@ -261,71 +246,19 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                     pricing: &app.config.token_pricing,
                 },
                 dedicated_session_working,
-                &ai_review_status,
                 triage_feature_summary.as_deref(),
-                memory_paths.as_ref(),
-            );
-        }
-        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
-        return;
-    }
-    if matches!(app.mode, AppMode::AiReview(_)) {
-        let ai_review_running = app.ai_review_run.is_pending();
-        let finding_fix_costs = app.ai_review_finding_fix_costs();
-        if let AppMode::AiReview(state) = &mut app.mode {
-            super::dialogs::draw_ai_review(
-                frame,
-                state,
-                &app.theme,
-                ai_review_running,
-                &app.throbber_state,
-                &finding_fix_costs,
             );
         }
         super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
     if let AppMode::PrPicker(state) = &app.mode {
-        // FORK: memoised — this ran `git rev-parse` + config reads per frame.
-        let memory_paths = app.render_review_memory_paths(&state.workdir);
-        super::dialogs::draw_pr_picker(frame, state, &app.theme, &memory_paths);
+        super::dialogs::draw_pr_picker(frame, state, &app.theme);
         super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
     if let AppMode::PrReviewList(state) = &app.mode {
         super::dialogs::draw_pr_review_list(frame, state, &app.theme);
-        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
-        return;
-    }
-    if let AppMode::ReviewMemoryBootstrapRunning(state) = &app.mode {
-        super::dialogs::draw_review_memory_bootstrap_running(
-            frame,
-            state,
-            &app.throbber_state,
-            &app.theme,
-        );
-        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
-        return;
-    }
-    if let AppMode::ReviewMemoryCompactRunning(state) = &app.mode {
-        super::dialogs::draw_review_memory_compact_running(
-            frame,
-            state,
-            &app.throbber_state,
-            &app.theme,
-        );
-        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
-        return;
-    }
-    if matches!(app.mode, AppMode::ReviewMemoryCompactReview(_)) {
-        if let AppMode::ReviewMemoryCompactReview(state) = &mut app.mode {
-            super::dialogs::draw_review_memory_compact_review(frame, state, &app.theme);
-        }
-        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
-        return;
-    }
-    if let AppMode::AiReviewRunning(state) = &app.mode {
-        super::dialogs::draw_ai_review_running(frame, state, &app.throbber_state, &app.theme);
         super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
@@ -661,10 +594,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         super::dialogs::draw_review_harness_pick(frame, state, &app.theme);
     }
 
-    if let AppMode::ReviewIntegrate(state) = &app.mode {
-        super::dialogs::draw_review_integrate(frame, state, &app.theme);
-    }
-
     if let AppMode::DebugLog(state) = &app.mode {
         super::dialogs::draw_debug_log(
             frame,
@@ -693,17 +622,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     if let AppMode::PromptPrecall(pending) = &app.mode {
         super::dialogs::draw_prompt_precall(frame, pending, &app.theme);
-    }
-
-    if let AppMode::ReviewMemoryCompactConfirm(state) = &app.mode {
-        // FORK: memoised — this ran `git rev-parse` + config reads per frame.
-        let memory_paths = app.render_review_memory_paths(&state.workdir);
-        super::dialogs::draw_compact_confirm(
-            frame,
-            &state.confirm,
-            memory_paths.for_scope(state.confirm.scope),
-            &app.theme,
-        );
     }
 
     if let AppMode::PlaceholderFill(state) = &app.mode {
@@ -1119,12 +1037,9 @@ mod tests {
             mark_pick: None,
             reply_kind_pick: None,
             reply: None,
-            memory_add: None,
             marked: std::collections::HashSet::new(),
             pending_batch: false,
             checked_out_branch: Some(checked_out.to_string()),
-            pending_ai_review_findings: 0,
-            ai_review_last_run: None,
             investigations: Vec::new(),
             investigation_harness_pick: None,
             investigation_action_pick: None,
@@ -1132,216 +1047,6 @@ mod tests {
             pending_follow_up: None,
             investigation_context: Default::default(),
         }
-    }
-
-    #[test]
-    fn pr_review_pane_shows_ai_review_running_badge_for_its_own_workdir() {
-        let (store, _feature) = store_with_claude_feature();
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        let mut state = pr_review_state_with_branches("main", "main");
-        state.pending_ai_review_findings = 3;
-        state.ai_review_last_run = Some(crate::app::ai_review::AiReviewRun {
-            ran_at: chrono::Local::now(),
-            outcome: crate::app::ai_review::AiReviewRunOutcome::Error("cached failure".to_string()),
-        });
-        let workdir = state.workdir.clone();
-        app.mode = crate::app::AppMode::PrReview(state);
-
-        let pr = crate::github::PrRef {
-            number: 321,
-            head_sha: "abc123".to_string(),
-            url: "https://github.com/o/r/pull/321".to_string(),
-            owner: "o".to_string(),
-            repo: "r".to_string(),
-            head_ref: "main".to_string(),
-        };
-        let (_tx, rx) = std::sync::mpsc::channel();
-        app.ai_review_run.set_receiver_for_test(Some(rx));
-        app.ai_review_run
-            .set_origin_for_test(Some(crate::app::AiReviewState {
-                questions: Default::default(),
-                workdir,
-                pr,
-                findings: Vec::new(),
-                summary: None,
-                attribution: None,
-                selected: 0,
-                detail_scroll: 0,
-                detail_content_lines: 0,
-                last_run: None,
-                harness: None,
-                harness_pick: None,
-                harness_pick_origin: None,
-                model: None,
-                model_picked: false,
-                reasoning: None,
-                model_pick: None,
-                finding_editor: None,
-                post_confirm: None,
-                marked: Default::default(),
-            }));
-
-        let backend = TestBackend::new(140, 30);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
-        let rendered: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect();
-
-        assert!(rendered.contains("AI review running"));
-        assert!(!rendered.contains("AI review pending"));
-        assert!(!rendered.contains("AI review failed"));
-    }
-
-    #[test]
-    fn pr_review_pane_omits_ai_review_badge_when_nothing_is_running() {
-        let (store, _feature) = store_with_claude_feature();
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.mode = crate::app::AppMode::PrReview(pr_review_state_with_branches("main", "main"));
-
-        let backend = TestBackend::new(140, 30);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
-        let rendered: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect();
-
-        assert!(!rendered.contains("AI review running"));
-        assert!(!rendered.contains("AI review pending"));
-    }
-
-    #[test]
-    fn pr_review_pane_shows_completed_pending_ai_review_count() {
-        let (store, _feature) = store_with_claude_feature();
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        let mut state = pr_review_state_with_branches("main", "main");
-        state.pending_ai_review_findings = 3;
-        app.mode = crate::app::AppMode::PrReview(state);
-
-        let backend = TestBackend::new(140, 30);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
-        let rendered: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect();
-
-        assert!(rendered.contains("AI review pending: 3"));
-    }
-
-    #[test]
-    fn pr_review_pane_shows_completed_zero_finding_result() {
-        let (store, _feature) = store_with_claude_feature();
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        let mut state = pr_review_state_with_branches("main", "main");
-        state.ai_review_last_run = Some(crate::app::ai_review::AiReviewRun {
-            ran_at: chrono::Local::now(),
-            outcome: crate::app::ai_review::AiReviewRunOutcome::Findings(0),
-        });
-        app.mode = crate::app::AppMode::PrReview(state);
-
-        let backend = TestBackend::new(160, 30);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
-        let rendered: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect();
-
-        assert!(rendered.contains("[AI review: no findings (now)]"));
-    }
-
-    #[test]
-    fn pr_review_pane_shows_failed_result_without_error_details() {
-        let (store, _feature) = store_with_claude_feature();
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        let mut state = pr_review_state_with_branches("main", "main");
-        state.ai_review_last_run = Some(crate::app::ai_review::AiReviewRun {
-            ran_at: chrono::Local::now(),
-            outcome: crate::app::ai_review::AiReviewRunOutcome::Error(
-                "sensitive worker detail".to_string(),
-            ),
-        });
-        app.mode = crate::app::AppMode::PrReview(state);
-
-        let backend = TestBackend::new(160, 30);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
-        let rendered: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect();
-
-        assert!(rendered.contains("[AI review failed (now)]"));
-        assert!(!rendered.contains("sensitive worker detail"));
-    }
-
-    #[test]
-    fn pending_findings_take_precedence_over_cached_zero_result() {
-        let (store, _feature) = store_with_claude_feature();
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        let mut state = pr_review_state_with_branches("main", "main");
-        state.pending_ai_review_findings = 2;
-        state.ai_review_last_run = Some(crate::app::ai_review::AiReviewRun {
-            ran_at: chrono::Local::now(),
-            outcome: crate::app::ai_review::AiReviewRunOutcome::Findings(0),
-        });
-        app.mode = crate::app::AppMode::PrReview(state);
-
-        let backend = TestBackend::new(160, 30);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
-        let rendered: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect();
-
-        assert!(rendered.contains("AI review pending: 2"));
-        assert!(!rendered.contains("no findings"));
     }
 
     #[test]

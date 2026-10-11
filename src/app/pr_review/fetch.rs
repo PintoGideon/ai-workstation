@@ -314,7 +314,6 @@ impl App {
         }
         self.apply_persisted_triage(&mut review);
         let investigations = self.pr_review_load_investigations(&workdir, review.pr.number);
-        let ai_review = self.ai_review_triage_snapshot(&review.pr);
         let checked_out_branch =
             crate::worktree::WorktreeManager::current_branch(&workdir).unwrap_or(None);
         self.mode = AppMode::PrReview(PrReviewState {
@@ -338,12 +337,9 @@ impl App {
             mark_pick: None,
             reply_kind_pick: None,
             reply: None,
-            memory_add: None,
             marked: std::collections::HashSet::new(),
             pending_batch: false,
             checked_out_branch,
-            pending_ai_review_findings: ai_review.pending_findings,
-            ai_review_last_run: ai_review.last_run,
             investigations,
             investigation_harness_pick: None,
             investigation_action_pick: None,
@@ -354,7 +350,6 @@ impl App {
         // A companion triage feature created on an earlier visit is reused
         // for every fix in this PR — adopt it now so `f` doesn't re-ask.
         self.adopt_existing_triage_feature();
-        self.apply_pending_local_findings();
     }
 
     /// Drop in-memory state that belongs to a known predecessor PR on the same
@@ -366,7 +361,7 @@ impl App {
     /// This is called when dashboard badge sync observes a PR-number transition.
     /// Naming the predecessor explicitly keeps an older PR chosen from the picker
     /// from invalidating live work that belongs to the current successor. It
-    /// prevents `leader+P`, a late AI review result, or an old comment-fetch
+    /// prevents `leader+P` or an old comment-fetch
     /// result from silently restoring the closed predecessor after the branch
     /// has been reused.
     pub(crate) fn invalidate_pr_context_for_transition(
@@ -383,42 +378,13 @@ impl App {
             changed = true;
         }
 
-        if self.ai_review_run.origin().as_ref().is_some_and(|pending| {
-            pending.workdir == workdir && pending.pr.number == predecessor_pr_number
-        }) {
-            self.ai_review_run.finish();
-            changed = true;
-        }
-
-        if self
-            .ai_review_triage_refresh_pending
-            .as_ref()
-            .is_some_and(|pending| {
-                pending.workdir == workdir && pending.pr.number == predecessor_pr_number
-            })
-        {
-            self.ai_review_triage_refresh_pending = None;
-            self.ai_review_triage_refresh_bg = None;
-            changed = true;
-        }
-
         let stale_loading = matches!(
             &self.mode,
             AppMode::PrReviewLoading(state)
                 if state.workdir == workdir && state.pr.number == predecessor_pr_number
         );
-        let stale_ai_run = matches!(
-            &self.mode,
-            AppMode::AiReviewRunning(state)
-                if state.origin.workdir == workdir
-                    && state.origin.pr.number == predecessor_pr_number
-        );
         if stale_loading {
             self.pr_review_work.cancel_fetch();
-            self.mode = AppMode::Normal;
-            changed = true;
-        } else if stale_ai_run {
-            self.ai_review_run.finish();
             self.mode = AppMode::Normal;
             changed = true;
         }
@@ -504,7 +470,6 @@ impl App {
                     selected,
                     include_closed: false,
                     error: None,
-                    bootstrap_pick: None,
                     current_user,
                 });
             }

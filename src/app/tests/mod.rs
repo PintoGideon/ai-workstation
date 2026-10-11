@@ -12,7 +12,6 @@ mod pane_input;
 mod pr_triage;
 mod prompts_configuration;
 mod resources;
-mod review_questions;
 mod screenshots;
 mod startup_navigation;
 mod status_sidebar;

@@ -131,10 +131,6 @@ pub fn draw_diff_picker(frame: &mut Frame, state: &DiffPickerState, theme: &Them
 }
 
 pub fn draw_diff_viewer(frame: &mut Frame, state: &mut DiffViewerState, theme: &Theme) {
-    if state.questions.open {
-        super::review_questions::draw(frame, &mut state.questions, theme);
-        return;
-    }
     let area = centered_rect(96, 90, frame.area());
     crate::ui::draw_modal_overlay(frame, area, theme);
 
@@ -212,14 +208,6 @@ pub fn draw_diff_viewer(frame: &mut Frame, state: &mut DiffViewerState, theme: &
     // Drawn last so it sits on top of anything else the reviewer left open.
     if state.help_open {
         draw_review_help_modal(frame, state, theme);
-    }
-    // The destination picker and the companion-feature setup it can open sit on
-    // top of everything (they capture every key while shown).
-    if let Some(pick) = &state.destination_pick {
-        super::draw_review_destination_pick(frame, pick, theme);
-    }
-    if let Some(setup) = &state.review_feature_setup {
-        super::draw_review_feature_setup(frame, setup, theme);
     }
     // Hidden while its summary is being edited, so the editor is visible.
     if state.pr_submit.is_some() && !state.editing_general {
@@ -396,10 +384,6 @@ const REVIEW_HELP_SECTIONS: &[(&str, &[(&str, &str)])] = &[
             ("", "(starts off; enabling Vim enters Normal mode)"),
             ("Tab", "Submit an open editor in either keymap"),
             ("Ctrl+Q", "Cancel an open editor in either keymap"),
-            (
-                "Q",
-                "Ask AI about this review with read-only repository discovery",
-            ),
             ("Esc", "Cancel plain editing; Vim Insert enters Normal mode"),
         ],
     ),
@@ -473,10 +457,6 @@ const REVIEW_HELP_SECTIONS: &[(&str, &[(&str, &str)])] = &[
     (
         "Finishing",
         &[
-            (
-                "t",
-                "Choose where fixes go: this feature, a dedicated session, another feature, or a new one",
-            ),
             ("X", "Also apply remaining suggestions when finishing"),
             ("q", "Review summary, then finish"),
             (
@@ -3022,8 +3002,6 @@ fn review_hint_lines(state: &DiffViewerState, theme: &Theme) -> [Line<'static>; 
             ),
             key("?"),
             Span::raw(" keys  "),
-            key("Q"),
-            Span::raw(" ask AI  "),
         ];
         // Surface a committed search so its shadowing of n/N is discoverable.
         if !state.editing_search && !state.search_query.trim().is_empty() {
@@ -3167,7 +3145,6 @@ fn review_hint_lines(state: &DiffViewerState, theme: &Theme) -> [Line<'static>; 
         }
     };
     if !pr_review {
-        second_line.push(key("t"));
         second_line.push(Span::styled(
             target_label,
             Style::default().fg(target_color),
@@ -3221,8 +3198,6 @@ fn review_hint_lines(state: &DiffViewerState, theme: &Theme) -> [Line<'static>; 
     let mut first_line = vec![
         key(" ?"),
         Span::raw(" keys  "),
-        key("Q"),
-        Span::raw(" ask AI  "),
         key("a"),
         Span::raw(" approve  "),
         key("r"),
