@@ -123,7 +123,8 @@ configured check rather than trusting a transient GUI result. An actionable
 round's prompt goes to the reviewed feature's first agent session only when
 the reviewer chose handoff: submitted through `deliver_review_prompt` when the
 TUI setting submits and the session runs, otherwise returned once (via
-`take_completion`) as an unsent composer draft.
+`take_completion`) as an unsent prompt hand-off (the TUI pastes it into the
+agent's pane unsent; the GUI shows it in its own composer).
 
 `app/supervised_edits.rs` owns Vibeless per-edit approval shared by both
 interfaces: the hook reply format, its IPC-or-file delivery and the captured
@@ -156,7 +157,7 @@ each row was decided on. Its confirmed stop re-checks every selected feature
 against those readings and the current scan, then calls the TUI's stop
 (`App::stop_feature_reporting`), whose editor cleanup keeps its ownership
 rules; the module signals no process itself. Terminal attachment records
-`last_accessed`, as TUI view entry does.
+`last_accessed`, as focusing a session's pane in the TUI cockpit does.
 
 ## Feature modules
 

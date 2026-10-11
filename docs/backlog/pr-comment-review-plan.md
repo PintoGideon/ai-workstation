@@ -4,7 +4,7 @@
 - **Owner:** unassigned
 - **Relates to:** `trigger_final_review` / `DiffViewer` mode
   (`src/app/review.rs`), embedded tmux view (`AppMode::Viewing`,
-  `src/app/view.rs`), compose box / prompt injection
+  `src/app/view.rs`), composer (removed 2026-10-11, DESIGN.md §18) / prompt injection
   (`src/app/compose.rs`), prompt library injection seam
   ([prompt-library-plan.md](prompt-library-plan.md)), `gh` usage in
   PR skills (`scripts/dev/aiw/pr-info.sh`, `.claude/commands/aiw/pr-*`),
@@ -226,7 +226,7 @@ existing migration pattern in `src/db/store.rs`.
 
 Reuse the **prompt-library / compose** injection path
 (`src/app/compose.rs`): a "fix" assembles the minimal prompt and
-delivers it to the feature's live agent window (compose box if
+delivers it to the feature's live agent window (composer (removed 2026-10-11, DESIGN.md §18) if
 intercept is on, else paste-without-send), so the user reviews before
 it runs. This is the same `deliver_prompt` seam the prompt library
 uses — no new injection mechanism.
@@ -645,7 +645,7 @@ from the last *N* PRs) is reached from the PR entry flow:
       forwarded keys to it only in edit mode; it now has the niceties the other
       editor-backed dialogs already have. **Vim keymap support** via `Ctrl+T`
       (`TextEditor::toggle_vim` — the app-wide vim-toggle key, matching the
-      compose box, steering prompt, and diff-feedback editors), with the choice
+      composer (removed 2026-10-11, DESIGN.md §18), steering prompt, and diff-feedback editors), with the choice
       **persisted on the pane**
       (`PrReviewState::fix_vim_enabled`, the same approach as
       `PlaceholderFillState::vim_enabled`) so it survives the editor being rebuilt
@@ -881,8 +881,8 @@ from the last *N* PRs) is reached from the PR entry flow:
       now stashes exactly like `P` does, right after marking the targeted
       comment(s) `Fixing` and before handing off to `enter_view_without_auto_compose`.
       Since compose interception is on by default, `f` actually lands in the
-      **compose box** (seeded with the fix prompt), not bare `Viewing` — the
-      real return path is `f` → `Ctrl+Space` (cancels the compose box back to
+      **composer (removed 2026-10-11, DESIGN.md §18)** (seeded with the fix prompt), not bare `Viewing` — the
+      real return path is `f` → `Ctrl+Space` (cancels the composer (removed 2026-10-11, DESIGN.md §18) back to
       `Viewing`, per `handlers/compose.rs`) → `P`. Caught a second bug during
       live testing of that exact path: the stashed state still carried the
       now-already-actioned `fix_confirm` dialog, so `leader+P` reopened the

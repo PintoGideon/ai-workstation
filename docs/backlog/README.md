@@ -169,7 +169,7 @@ doc always says exactly what remains.
   inline styling inside table cells, long cells, footnotes, and math.
   Links and image fallbacks remain.
 - [Prompt library](prompt-library-plan.md) — _In progress._ Save
-  reusable prompts and inject them into a session (compose box when on,
+  reusable prompts and inject them into a session (composer (removed 2026-10-11, DESIGN.md §18) when on,
   paste without sending when off). Phases 1–2 have shipped: SQLite-backed
   save & inject, a multi-source picker (`User` / `Project` / `Global` /
   `Worktree` with badges), export to `config.json`, fill-in

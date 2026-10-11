@@ -8,7 +8,7 @@
   in the editor/fill surfaces (Ctrl+T toggle + mode indicator) and agent-skill
   injection (Ctrl+K skill picker inserting `/skill-name` at the cursor).)_
 - **Owner:** unassigned
-- **Relates to:** compose box (`src/app/compose.rs`),
+- **Relates to:** composer (removed 2026-10-11, DESIGN.md §18) (`src/app/compose.rs`),
   `AppMode::LatestPrompt` (`src/app/view.rs`), `session_bookmarks`
   (`src/app/bookmarks.rs`, `src/db/store.rs`), `FeaturePreset` /
   `CustomSessionConfig` (`src/extension.rs`), `TextEditor`
@@ -28,7 +28,7 @@ The user can:
 
 - Save the current compose prompt as a library entry.
 - Open a picker (`leader+P`) listing saved prompts, fuzzy-filtered.
-- Inject a chosen prompt into the **compose box** when compose
+- Inject a chosen prompt into the **composer (removed 2026-10-11, DESIGN.md §18)** when compose
   interception is on, so they can review/edit before sending. When
   compose is off for that session, paste the prompt straight into
   the agent window **without sending** (no Enter).
@@ -61,11 +61,11 @@ them before the prompt reaches the session.
 
 ### Injection seam
 
-The injection seam is the **compose box** (`src/app/compose.rs`).
+The injection seam is the **composer (removed 2026-10-11, DESIGN.md §18)** (`src/app/compose.rs`).
 A shared `deliver_prompt(rendered, from_view)` step branches on
 `compose_intercept_active(view)`:
 
-- `true` → seed the compose box with the rendered text (reuses the
+- `true` → seed the composer (removed 2026-10-11, DESIGN.md §18) with the rendered text (reuses the
   `open_compose_from_view` seeding path); the user reviews and
   submits with existing send logic.
 - `false` (session is a `compose_direct_targets` entry) →
@@ -267,7 +267,7 @@ New `src/ui/dialogs/prompt_library.rs` (model on
 - [x] `leader+P` (view) and dashboard `L` binding (dashboard `P` was
   already taken by the syntax parser picker)
 - [x] `ui/dialogs/prompt_library.rs` picker + editor UI
-- [x] Inject: compose box when on; paste-without-send when off
+- [x] Inject: composer (removed 2026-10-11, DESIGN.md §18) when on; paste-without-send when off
 - [x] Help overlay + README keybindings + CHANGELOG entry
 - [x] Tests: store round-trip, picker nav/filter clamp, `render_template`
 
@@ -368,9 +368,9 @@ New `src/ui/dialogs/prompt_library.rs` (model on
   Prompt body editor and any multi-line (`MultiLine`) placeholder fill field
   should honor the same vim keybindings and respect the user's vim toggle.
   Surface a small mode indicator and verify normal/insert/visual behave the
-  same as in the compose box. Add a test that the editor enters vim normal
+  same as in the composer (removed 2026-10-11, DESIGN.md §18). Add a test that the editor enters vim normal
   mode on `Esc` and that motions/operators reach the prompt body. _(Done: the
-  body editor gains a `Ctrl+T` vim toggle (mirroring the compose box) plus a
+  body editor gains a `Ctrl+T` vim toggle (mirroring the composer (removed 2026-10-11, DESIGN.md §18)) plus a
   `[Vim Insert]`/`[Vim Normal]` indicator in the box title; `MultiLine`
   placeholder-fill fields get the same `Ctrl+T` toggle, a persisted
   `PlaceholderFillState.vim_enabled` so the choice survives moving between
@@ -403,7 +403,7 @@ New `src/ui/dialogs/prompt_library.rs` (model on
 
 ## Resolved decisions
 
-1. **Inject target:** into the compose box when compose
+1. **Inject target:** into the composer (removed 2026-10-11, DESIGN.md §18) when compose
    interception is on; when off, paste into the agent window
    without sending (no Enter). Never auto-submits.
 2. **Save scope (MVP):** save the current (compose) prompt only.

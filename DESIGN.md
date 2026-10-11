@@ -39,7 +39,7 @@ Learning mode · prompt library · prompt overrides · TODO lists · usage/cost 
 | G7 | Flat list for many projects | project tags/colours, summary counts, `0`–`9` scope | P2 | ⏳ |
 | G8 | No tickets | board, start N agents on a ticket, compare, pick → PR → Linear (on demand only) | P3 | ⏳ |
 | G9 | A session whose window closed on its own (`exit`, agent quit) stayed listed as running; opening it errored | closed terminals disappear; closed agents show as stopped (■) and reopen with their conversation; an agent that exits while its shell survives shows ■ "exited" (no "finished" attention) and `c`/`S` relaunch it in the same window; the single view returns to the dashboard when its window is gone | P1 | ✅ |
-| G10 | Typing in an agent opened a compose box | keys go **straight to the agent**; compose box optional (`compose_box` setting, or `Ctrl+Space e` per session) | P1 | ✅ |
+| G10 | Typing in an agent opened a composer | keys go **straight to the agent**; the optional composer was removed on 2026-10-11 (§18) (setting, or `Ctrl+Space e` per session) | P1 | ✅ |
 | G11 | Dated look | **UI revamp** within a strict performance budget (§12) | P2 | ✅ dashboard, footer, help; project colour tags ⏳ (with G7) |
 | G12 | OpenCode support we don't use | **OpenCode removed** (code, plugins, themes, GUI, docs); old data still loads — see §14 | P1 | ✅ |
 
@@ -48,6 +48,9 @@ Learning mode · prompt library · prompt overrides · TODO lists · usage/cost 
 ## 4. G1 — Split view (no more switching)
 
 ### 4.1 Inside the TUI
+
+> **History (2026-10-11).** The in-app split view (captured tiles, `Ctrl+Space` leader, pins) was removed with
+> the in-app view; `v` now runs `aiw grid` (§4.2) in the cockpit's agent pane (§18).
 
 From the dashboard, `v` on a feature opens **Split view** with that feature's agent sessions tiled. `v` on a project
 tiles its features' first agents. You can also **pin** any session from any project (`P` on a session row) and `V`
@@ -408,9 +411,13 @@ to load:
 
 ## 15. Workspace layout and badges (2026-10-10)
 
+> **History (2026-10-11).** The in-app layout described here — a captured pane redrawn by AIW beside the sidebar,
+> the tree layout, `b`, `Tab`, `o` — was replaced by the cockpit (§18), where tmux draws the agent's real pane.
+> The badge model (`src/fork/badges.rs`) and the sidebar rows are unchanged and still described here.
+
 With 10–30 agents the tree is a list of names, and reaching an agent means entering and leaving a view. The
 workspace layout keeps the sidebar and shows the selected session live beside it, so moving between agents is
-moving the cursor. It is the default layout; `b` toggles to the tree and back (saved as `dashboard_layout` in
+moving the cursor. It was the default layout; `b` toggled to the tree and back (saved under a layout key in
 `config.json` — a config that already says `"tree"` keeps the tree). README "Workspace layout" has the key table.
 
 ```
@@ -426,7 +433,7 @@ moving the cursor. It is the default layout; `b` toggles to the tree and back (s
 │ ▾ BA                   ⛔1 ││                                                                  │
 │  ▾ ⛔ ba-7              2m ││                                                                  │
 ╰────────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
-╰ Tab type here  o full view  i next needing you  v tiles  n feature  c start  x stop  b tree ───╯
+╰ (footer of the time: type here · full view · i next needing you · v tiles · n feature · c start · x stop) ╯
 ```
 
 **One badge model** (`src/fork/badges.rs`). Every place that says what a session is doing — tree rows, sidebar
@@ -483,7 +490,7 @@ Decisions:
   (`SELECTION_DEBOUNCE`), so holding `j` never restarts a capture per row. Focusing the pane (`Tab`, `Enter`, a
   click) commits a pending selection at once. Project and feature rows show the feature's first running agent.
 - **Focus.** With the pane focused keys go through `forward_tmux_key` with the single view's compose rule
-  (`compose_intercept_active`; with the compose box on for the session, typing opens it over the full view).
+  (`compose_intercept_active`; the optional composer of the time, since removed).
   `Ctrl+Q` returns to the sidebar, never to the tree. `Ctrl+Space` reuses the view's `handle_leader_key`
   against the live session: `z` opens the full view, `q` the sidebar; `t`/`T` move the sidebar to the session
   they land on; overlays that would close into the full view (`i`, `?`) close into the workspace instead.
@@ -499,6 +506,9 @@ The tree frame on the same machine and run: 393 → 426 µs mean, 432 → 457 µ
 layout through a `MockTmuxOps` with no expectations, as the tree test does.
 
 ### 15.4 Native attach (2026-10-10)
+
+> **History (2026-10-11).** Superseded by the cockpit (§18): the right pane *is* the attach, there is nothing to
+> hand the terminal to and take back. `src/fork/attach.rs` is gone.
 
 The in-app pane and the full view relay keys with `send-keys` and redraw from a capture, so a keystroke costs a
 process spawn each way plus the capture interval: tens of milliseconds, felt as lag when typing a prompt. For
@@ -613,6 +623,10 @@ hooks it needed are not wired.
 
 ## 17. One prompt, several agents (fan-out) — design (2026-10-11)
 
+> **Note (2026-10-11).** Written against the composer. With the cockpit (§18) the unsent seed is pasted into
+> each agent's pane with `paste_text` and no Enter (`App::paste_prompt_unsent`); the GUI collects it with
+> `take_unsent_prompt`. Everything else here stands. Not built yet.
+
 **Ask.** "Give me the option to start several sessions for the same prompt, either all in one worktree or one
 worktree each." Not a split view, not a comparison tool: the launch step only. Today the `n` dialog picks one
 agent, `s` adds a second agent by hand, `B` makes N features for one agent, and the prompt has to be typed
@@ -635,7 +649,7 @@ into each pane. Everything the feature needs already exists as a primitive; this
    type or paste, `Ctrl+L` picks from the prompt library, `Ctrl+O` opens `$EDITOR`. Empty is allowed.
 5. **Send** — `[ ] send the prompt to every agent as soon as it is ready` (default off, keeps the rule
    that the task prompt is never sent on its own). Off: every session gets the prompt **pre-filled and
-   unsent**; opening a session (`Enter`, `o`) shows it in the compose box, `Enter` sends. On: the prompt
+   unsent**; opening a session (`Enter`, `o`) showed it in the composer, `Enter` sent. On: the prompt
    is pasted and sent when the agent's own SessionStart hook reports it ready — never typed blind into a
    pane that is still starting.
 6. The dashboard lands on the primary session as today; the others show `○` with `⏸ prompt ready` in the
@@ -662,7 +676,118 @@ Two commits: (1) agent multi-select + shared layout + prompt step + unsent draft
 + automation/presets + optional send-on-ready. Tests: dialog state transitions and naming (unit), draft
 seeding and restart survival (unit, DB), an e2e scenario with the fake agents (`/perm`, `/done`) that creates
 a two-agent feature both ways, checks the two windows / two worktrees, opens each session and finds the prompt
-in the compose box unsent, then ticks "send" on a second run and checks both panes received it exactly once.
+in each pane unsent, then ticks "send" on a second run and checks both panes received it exactly once.
 
 **Out of scope here:** comparing the two results (a `git diff` between sibling worktrees in a dialog) and the
 split view; both come after this lands.
+
+## 18. Cockpit: tmux draws the dashboard (2026-10-11)
+
+**Decision.** The dashboard is one layout, drawn by tmux: a session sidebar on the left (AIW) and the selected
+agent's *real* tmux pane on the right. Typing in the right pane is native — the same as `tmux attach` — with
+no key relay and no capture-and-render loop. Everything that existed only to relay keys or redraw an agent's
+screen went: the in-app full view (`AppMode::Viewing`, `app/view.rs`, `handlers/view.rs`, `ui/pane.rs`'s
+renderer and its "Claude sidebar" panels), the composer, the tree layout and `b`, `Tab`-typing through the
+pane, the snapshot/capture workers, the startup mask, the `VIEW_*` refresh constants, the in-app split tiles
+and the attach hand-over (the right pane *is* the attach). `aiw grid` stays and backs `v`.
+
+**Launch (`src/fork/cockpit.rs`).** `aiw` with no subcommand is a thin launcher. It needs an interactive
+terminal, creates (or finds) the cockpit server on its own socket — `cockpit.sock` next to AIW's private tmux
+socket under the state dir, `-f /dev/null` so the user's tmux configuration never applies — with a session
+`aiw`, one window, two panes: pane 0 runs `env -u TMUX aiw sidebar` (the whole dashboard app: instance lock,
+IPC socket, database, hooks; a hidden subcommand), pane 1 runs `aiw sidebar --placeholder` ("select a
+session"). Then it runs `tmux -S cockpit.sock attach-session` with `TMUX` unset (nested tmux works, Ghostty
+without an outer tmux works) and exits when the client returns. Server settings: `status off`, `prefix None`,
+`prefix2 None`, `mouse on`, `escape-time 0`, `pane-border-status top` with `@aiw_title` per pane
+(`AIW` / `project › feature › session`), `pane-active-border-style` from the theme's `primary` colour,
+`window-size latest`, `terminal-features ,*:RGB` when the terminal is truecolor. Root table: `C-q` →
+`last-pane` (sidebar ⇄ agent), a no-op while a dialog has the sidebar zoomed. A `client-resized` hook pins
+the sidebar at `sidebar_width` columns (default 36, floor 28, `config.json`), never while zoomed; the sidebar
+also notices when its own viewport disagrees with that width after a resize and asks once (`cockpit_tick`),
+so a resize that raced tmux's layout still ends at 36 columns.
+`remain-on-exit` is **on** (the brief said off): a crashed sidebar then stays as a dead pane with its message
+instead of leaving a one-pane window, and the next `aiw` respawns it; the placeholder never exits on its own.
+If the server is already up, `aiw` repairs dead panes and attaches — the dashboard survives a closed terminal
+window — and a second `aiw` attaches a second client (the instance lock belongs to the sidebar process, not
+the launcher). `q` in the sidebar kills the cockpit server (after `SIGHUP` is ignored, since its own pane dies
+with it) and the view sessions it made; the agents' own sessions on AIW's socket are untouched.
+
+**The right pane (`src/app/fork_cockpit.rs`).** The sidebar talks to the cockpit server through a `Link`: a
+channel to one worker thread (`aiw-cockpit`) that runs the tmux commands, so nothing on the draw path or the
+main thread spawns a process (`workspace_frame_makes_no_tmux_calls` and the frame bench stay as they were). Each
+main-loop iteration `cockpit_tick` looks at the committed workspace target — the selection after the 150 ms
+debounce of §15, kept — and when it changed sends `Respawn { command, title }`: `respawn-pane -k -t aiw:0.1
+'<cmd>'`, where the command is `env -u TMUX tmux -S <AIW socket> new-session -t =<feature session> -s
+aiw-view-ck<pid>-<n> ; set-option destroy-unattached on ; set-option status off ; set-window-option -t :=<window>
+window-size latest ; select-window -t :=<window>` — a grouped view session on AIW's socket, exactly as
+`grid.rs` builds it but by window *name* — followed by `tmux -S cockpit.sock set-option -p @aiw_title 'select a
+session'` and `exec aiw sidebar --placeholder`, so the pane retitles itself and falls back to the placeholder
+when the agent's window goes. Only the newest `Respawn` in a batch is run. A stopped session, or a project or
+feature with nothing running, shows the placeholder. `Enter` (and `i`, a pasted prompt, the needs-you picker's
+open) commits the selection at once (`workspace_commit_now`), respawns if needed and sends `FocusAgent`
+(`select-pane -t aiw:0.1`); looking at the agent clears the feature's generic "needs input" notes as entering
+the view did. `v` respawns the pane with `env -u TMUX aiw grid <project>/<feature>; <retitle>; <agent command>`
+so `Alt+q` in the grid brings the selected agent back.
+
+**Dialogs.** When `app.mode` leaves `Normal` the tick sends `Zoom(true)` (`resize-pane -Z -t aiw:0.0`) and
+`Zoom(false)` on the way back, re-pinning the width since the terminal may have been resized meanwhile; the
+first-run icon check is zoomed the same way from `cli.rs`. The selection is frozen while a dialog is open, so
+the pane keeps the agent behind it. Every "return to the view" a dialog had is `App::return_to_dashboard(view)`:
+mode `Normal` and the sidebar on that session's row (the feature's row when the window is gone).
+
+**Keys.** Sidebar: `j/k`, `Enter` (focus the agent), `h/l`, `/`, `i`, `a`/`X`, `e`, `c`, `x`, `r`, `d`, `N`/`n`,
+`s`, `z`, `G`, `W`, `K`, `L`, `E`, `T`, `A`, `?`, `q`, `v`. Gone: `b`, `o`, `Tab`, the pane's own leader.
+`Ctrl+Q` is tmux's. The old view's leader commands that still matter moved to the dashboard's
+`Ctrl+Space` menu, for the selected session (`App::selection_view_state`, `src/app/session_tools.rs`): `f`
+final review, `d` diff viewer, `n` current plan, `m` Markdown, `l` past/unsent prompts, `N` TODO capture, `F`
+fresh-context session, `B` model advice, `P` back to PR Triage, `z` complete the referenced TODO; the bookmark,
+picker, wizard and refresh entries stayed; `i`, `?`, `A` left the menu (they are plain keys). The session
+switcher (`w`), remote-control URL copy, scroll mode and text selection went with the view: the sidebar *is*
+the switcher, and tmux has copy mode.
+
+**Prompts, unsent (`src/app/fork_prompt_paste.rs`).** Every path that opened the composer seeded with text —
+learning-mode escalation, TODO spawn (both kinds), plan-interview kickoff (both kinds), prompt-library
+delivery, the PR-triage fix prompt, a feature's `startup_prompt`, the fresh-context handoff, `Ctrl+Space l` —
+calls `App::paste_prompt_unsent(pi, fi, si, text)`: it writes `.claude/latest-prompt.txt`, pastes with
+`tmux.paste_text` (bracketed paste, **no Enter**), selects the row, closes whatever dialog asked, and focuses
+the agent pane. The task prompt is never sent on its own. A failed paste is an error the callers stash as
+before (`stash_lost_prompt`, the `unsent_prompts` table; `Ctrl+Space l` lists them first). The `App` embedded
+in the desktop GUI has no cockpit, so the same call keeps the text as an `UnsentPromptHandoff` the GUI collects
+with `take_unsent_prompt` — the GUI contract (`PlanHandoff.draft_prompt`, `TodoAgentLaunchResponse.draft_prompt`)
+is unchanged. The steering-prompt dialog still sends on `Tab` because the user wrote and sent it.
+
+**Session info block (`src/fork/session_info.rs`, `src/app/fork_session_info.rs`,
+`src/ui/fork_session_info.rs`).** The bottom 8 rows of the sidebar when it is ≥ 24 rows tall, for the selected
+session (a feature or project row: the agent the pane shows): title, harness · model, `ctx 42% · $0.84 · 12m
+old`, `⎇ branch`, the worktree shortened to `…/<project dir>/<feature dir>`, `⏭ n queued · ✓ allowed Bash`.
+Sources, all local and read-only: `App::telemetry` (the §16 status line / rollout / chat readers) for model,
+context and cost; the follow-up queue; `answer_permission` now records the decision per session; and the
+harness transcript the hooks already name — Claude's session `.jsonl` at `~/.claude/projects/<cwd
+encoded>/<session id>.jsonl` (the `claude_session_id` the hooks bind; the first non-meta `user` message that is
+not a `<command-…>` echo, the last `"type":"summary"` line, the assistant `model`), Codex's rollout from the
+indexed thread id (first `input_text` user message or `user_message` event, `turn_context.model`), Gemini's
+newest chat `.jsonl` for the project (first `user` record). The folds run on the 5-second sweep in a background
+thread (`aiw-session-info`) through `LineFoldCache`, so a long transcript is read once and then by its appended
+bytes; results are cached per session id and the draw path only formats them. No transcript → the AIW task
+prompt (`latest-prompt.txt`) → the feature name. Tests use fixtures under a temp HOME, never `~/.claude`.
+
+**Config.** The layout, composer and view-auto-refresh keys are gone; unknown keys in an existing
+`config.json` are ignored and not written back (`unknown_keys_are_ignored_and_the_sidebar_width_has_a_floor`).
+`tmux_control_mode` stays: the desktop GUI's terminal still uses the control-mode client. `sidebar_width` is
+new.
+
+**Also removed as bloat (2026-10-11).** The session switcher (redundant with the sidebar), the Remote Control URL
+detection (`src/app/remote_control.rs`; the `--remote-control` launch flag is still passed), the compose-only
+clipboard helpers, the TUI's agent-sidebar runtime, the dead `DASHBOARD_SESSION_FILTER_ENABLED` paths in view
+code. The GUI contract, `aiw-gui`, automation, hooks and IPC are unchanged.
+
+**Measured** (`cargo +1.99.0 test --locked --release fork_bench -- --ignored --nocapture`, 36×60 sidebar with
+the info block, 3 projects × 10 sessions, the selection alternating between a `⛔` row and a `●` row, 2,000
+frames): **mean 143 µs, p50 142 µs, p95 159 µs, max 233 µs** — 12× under the 2 ms budget (the old 200×60
+workspace frame was 540 µs mean; the same bench at 200×60 for the sidebar-only dashboard: 439 µs mean, 486 µs
+p95). The frame makes no tmux calls (`sidebar_frame_makes_no_tmux_calls`). The agent itself costs AIW nothing:
+tmux draws it.
+
+**Resumable.** Nothing here is lost when the terminal closes: the cockpit server, the sidebar process and the
+agents' tmux sessions all outlive the client, `aiw` re-attaches, and `S` resumes a saved Claude or Codex
+conversation after a reboot as before.

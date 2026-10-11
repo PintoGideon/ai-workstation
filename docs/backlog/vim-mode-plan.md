@@ -128,7 +128,7 @@ Not editing features, but related vim-mode polish:
 
 ## Notes
 
-- Surfaces in scope today: the Compose box, the Steering Prompt,
+- Surfaces in scope today: the Composer (removed 2026-10-11, DESIGN.md §18), the Steering Prompt,
   final-review PR-triage comment and suggestion editors, and the scoped-TODOs
   overlay's inline edits. Reach to other inputs (feature-creation fields,
   search query) is a separate decision and not tracked here.

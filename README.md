@@ -182,11 +182,17 @@ writes `aiw.json` and leaves `amf.json` alone for AMF.
 
 ## Quick start
 
-1. Start AIW from a normal shell or an existing tmux session:
+1. Start AIW from a terminal window:
 
    ```bash
    aiw
    ```
+
+   `aiw` builds a small tmux **cockpit** for itself and attaches your terminal
+   to it: the session sidebar on the left, the selected agent's real terminal
+   on the right. Closing the terminal window stops nothing — the dashboard
+   and the agents keep running, and the next `aiw` attaches to the same
+   dashboard. `q` in the sidebar shuts the dashboard down (the agents stay).
 
 2. On first launch, AIW probes every supported agent CLI and ticks the ones
    it finds on your `PATH`; untick any you do not want and confirm. `A`
@@ -200,8 +206,10 @@ writes `aiw.json` and leaves `amf.json` alone for AMF.
    and whether to use the guided plan interview. The feature starts when setup
    is complete.
 
-5. Select the agent session and press `Enter` to work in its embedded terminal.
-   Press `Ctrl+Q` to return to the dashboard.
+5. Select the agent session: it appears in the right pane as you move. Press
+   `Enter` (or `Ctrl+Q`) to put the keyboard in that pane — typing is native,
+   the same as `tmux attach`. `Ctrl+Q` brings the keyboard back to the
+   sidebar.
 
 6. Press `s` on a feature to add another agent, terminal, editor, TODO list, or
    custom session.
@@ -260,19 +268,19 @@ and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-inte
 | --- | --- |
 | `j` / `k` or arrow keys | Move through projects, features, and sessions |
 | `h` / `l` | Collapse or expand the selected item |
-| `Enter` | Open the selected session or expand/collapse an item |
+| `Enter` | Put the keyboard in the selected running session's pane; on anything else, expand/collapse |
+| `Ctrl+Q` | Move the keyboard between the sidebar and the agent pane (a tmux key; it works from either side) |
 | `N` / `n` | Create a project / feature |
 | `s` | Add a session to a feature |
 | `c` | Start the selected feature, or the selected stopped session (an agent that exited at its shell shows `■` "exited" and is relaunched in the same window) |
-| `v` | Split view: tile the feature's agents live, 2–4 per screen (on a project row: one per feature) |
-| `b` | Toggle the dashboard layout: the workspace (default: a session sidebar beside the selected session, live — see below) ⇄ the project tree |
+| `v` | Tile the feature's agents in the right pane (`aiw grid`; on a project row: one per feature). `Alt+q` there brings the selected agent back |
 | `x` | Stop a feature or a single session. A stopped session stays listed (`■`) and stays stopped when its feature starts again |
 | `r` | Rename a feature or session |
 | `d` | Delete a project, feature, or session |
 | `/` | Search and jump |
 | `i` | Show agents needing attention: questions first, then finished work |
 | `a` / `X` | Allow / deny the permission prompt the selected agent is waiting on (Claude, Codex, Cursor); in the `i` list too, where `Enter` shows the tool and its full input |
-| `e` | Queue a follow-up for the selected agent: delivered only when its current turn ends (`Ctrl+Space`, then `Q`, from the pane or a view) |
+| `e` | Queue a follow-up for the selected agent: delivered only when its current turn ends |
 | `I` | On a TODOs session row: start an agent on the next TODO in priority order, across the lists currently showing |
 | `z` | Show dormant features: idle and unattended |
 | `G` | Open GitHub PR triage; on a project row, review a PR yourself |
@@ -283,63 +291,90 @@ and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-inte
 | `T` | Choose a theme |
 | `A` | Manage installed agent harnesses |
 | `?` | Show all keybindings |
-| `q` | Quit (`Esc` does nothing on the dashboard) |
+| `Ctrl+Space` | Commands on the selected session (a menu lists them): `f` final diff review · `d` diff viewer · `n` current plan · `m` Markdown files · `l` past and unsent prompts, pasted again · `N` capture a TODO · `F` fresh-context session · `B` model advice · `P` back to PR Triage · `z` complete the TODO this session came from · `h` `H` `M` `1-9` bookmarks · `/` command picker · `a` local actions · `c` config wizard · `C` compact review memory · `r` refresh |
+| `q` | Quit the dashboard; the agents keep running (`Esc` does nothing on the dashboard) |
 
 Search accepts every letter, including `j` and `k`. Use arrow keys or
 `Tab` / `Shift+Tab` to select a result, `Enter` to jump, and `Esc` to cancel.
 
-### Embedded session
+### The cockpit
 
-Everything you type goes straight to the agent; there is no compose box
-unless you turn it on with `Ctrl+Space`, then `e`. These controls belong to AIW:
-
-| Key | Action |
-| --- | --- |
-| `Ctrl+Q` | Return to the dashboard |
-| `Ctrl+Space` | Open the leader-command menu |
-| `Ctrl+Space`, then `Enter` | Attach: hand the terminal to this agent's tmux window (native typing); `Ctrl+Q` detaches |
-| `Ctrl+Space`, then `w` | Switch sessions |
-| `Ctrl+Space`, then `i` | Jump to an agent needing attention |
-| `Ctrl+Space`, then `f` | Start final diff review |
-| `Ctrl+Space`, then `p` | Open the prompt library |
-| `Ctrl+Space`, then `E` | Edit headless AI prompt templates (overrides) |
-| `Ctrl+Space`, then `N` | Add a TODO to this worktree's list |
-| `Ctrl+Space`, then `e` | Turn the compose box on or off for this session |
-| `Ctrl+Space`, then `Q` | Queue a follow-up for this agent (see "Harness hooks" below) |
-| `Ctrl+Space`, then `?` | Show all leader commands |
-
-In split view, `Ctrl+Space` then an arrow key moves focus between tiles, `z`
-zooms the focused tile, `[` / `]` page through more agents, `i` jumps to the
-next agent needing you and `v` leaves split view.
-
-### Workspace layout
-
-The dashboard opens in the **workspace** layout: a session sidebar on the
-left and the selected session live on the right. You move between agents by
-moving the cursor; the pane follows the selection (after 150 ms, so scrolling
-through rows is free). `b` swaps it for the project tree and back; the choice
-is saved (`dashboard_layout` in `config.json`, and an existing `"tree"`
-setting is kept). Below 72 columns the tree is shown with a note until the
-window is wider.
+`aiw` is a thin launcher. It starts (or finds) a throw-away tmux server of its
+own — `cockpit.sock` beside AIW's private tmux socket, `-f /dev/null`, so your
+own tmux configuration is untouched — with one window and two panes: the left
+pane runs the dashboard (`aiw sidebar`), the right pane shows the selected
+agent's **real** tmux window through a grouped view session on AIW's socket,
+exactly as `aiw grid` does. Nothing is relayed and nothing is captured and
+redrawn: tmux draws the agent, AIW draws the sidebar.
 
 ```
-╭ Sessions ──────────────────╮╭ RS › hx-12 › claude ─────────────────────────── ⛔ question 0:40 ╮
-│ ▾ RS               ⛔1 ●1  ││                                                                  │
-│  ▾ ⛔ hx-12           0:40 ││  ⏺ Bash(git push origin hx-12-sso)                               │
-│▎   ⛔ claude          0:40 ││  Do you want to proceed?                                         │
-│▎     permission: Bash      ││  ❯ 1. Yes   2. Yes, and don't ask again   3. No                  │
-│    ●  codex             6m ││                                                                  │
-│    ✓  gemini            3m ││                                                                  │
-│  ▾ ●  hx-14            12m ││                                                                  │
-│    ●  claude           12m ││                                                                  │
-│ ▾ BA                   ⛔1 ││                                                                  │
-│  ▾ ⛔ ba-7              2m ││                                                                  │
-╰────────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
-╰ Tab type here  o full view  i next needing you  v tiles  n feature  c start  x stop  b tree ───╯
+── AIW ─────────────────────────────┬── RS › hx-12 › Claude 1 ───────────────────────────────
+╭──────────────────────────────────╮│
+│ AI Workstation v0.49.0    ? help │││ ⏺ Bash(git push origin hx-12-sso)
+╰──────────────────────────────────╯││ Do you want to proceed?
+╭ Sessions ────────────────────────╮││ ❯ 1. Yes   2. Yes, and don't ask again   3. No
+│ ▾ RS                     ⛔1 ●1  ││
+│  ▾ ⛔ hx-12                0:40  ││
+│▎   ⛔ Claude 1             0:40  ││
+│▎     permission: Bash           ││
+│    ●  Codex 1                6m  ││
+│  ▾ ●  hx-14                 12m  ││
+╰──────────────────────────────────╯││
+╭ Claude 1 ────────────────────────╮││
+│ Fix the login redirect loop in … ││
+│ Claude Code · Opus 4             ││
+│ ctx 42% · $0.84 · 12m old        ││
+│ ⎇ hx-12-sso                      ││
+│ …/RS/hx-12                       ││
+│ ⏭ 2 queued · ✓ allowed Bash      ││
+╰──────────────────────────────────╯││
+╰ Enter agent  i needs  v tiles  ? q╯│❯
 ```
 
-Every row carries one badge, the same one the tree, the header pills, the
-split-view tiles and the needs-you list use:
+- The pane follows the selection after 150 ms of rest, so scrolling through
+  rows is free. A project or feature row shows the feature's first running
+  agent; a stopped session shows a "select a session" placeholder.
+- The sidebar is `sidebar_width` columns wide (`config.json`, default 36,
+  minimum 28) at every terminal size; the agent gets the rest.
+- A dialog (`n`, `?`, `i`, the plan interview, …) zooms the sidebar pane over
+  the whole window and un-zooms when it closes. The agent keeps running
+  underneath.
+- A second `aiw` while one is open attaches a second client to the same
+  cockpit; `aiw grid`, `aiw doctor` and the hook subcommands work alongside.
+- `v` runs `aiw grid` for the selected feature in the right pane; `Alt+q`
+  there closes the tiles and the pane returns to the selected agent.
+
+### Typing is native
+
+The right pane is the agent's own terminal. `Enter` on a running session (or
+`Ctrl+Q` from the sidebar) puts the keyboard there; everything you type goes
+to the agent exactly as in `tmux attach` — native latency, mouse and
+scrollback, the agent's own key bindings. `Ctrl+Q` is the one key the cockpit
+keeps for itself: it flips the keyboard between the sidebar and the agent.
+Nothing is sent to an agent on its own.
+
+Prompts AIW prepares for an agent — a plan-interview kickoff, a TODO, a
+learning-mode escalation, a prompt-library template, a feature's startup
+prompt, a past prompt from `Ctrl+Space` then `l` — are **pasted into the
+agent's pane unsent** and the pane is focused: you read the text where the
+agent will, edit it if you like, and press Enter yourself. The pasted text
+is also saved as the checkout's `.claude/latest-prompt.txt`; a prompt that
+could not be delivered (the agent was not running) is stashed and offered
+again under `Ctrl+Space`, then `l`.
+
+### Session info block
+
+The bottom eight rows of the sidebar (when it is at least 24 rows tall)
+describe the selected session from the harness's own files, read locally on
+the five-second sweep and cached per session: the title (Claude's own session
+summary when it wrote one, else the first prompt; Codex's and Gemini's first
+user message; else the AIW task prompt or the feature name), harness and
+model, context use in the threshold colours, cost (Claude), age, branch,
+worktree, `⏭ n queued` follow-ups and the last permission decision answered
+from the dashboard.
+
+Every row carries one badge, the same one the header pills, the grid and the
+needs-you list use:
 
 | Badge | Meaning |
 | --- | --- |
@@ -350,40 +385,11 @@ split-view tiles and the needs-you list use:
 | `■` | stopped; `■ exited` when the agent died at its shell (`c` relaunches it) |
 
 Project rows show their counts (`⛔1 ●7 ✓2`); feature rows show their most
-pressing session. The pane border turns amber while the shown agent needs
-you. A session row's right edge shows its context use (`42%`) when the
-harness reports it, in the warning / critical colour past
+pressing session. A session row's right edge shows its context use (`42%`)
+when the harness reports it, in the warning / critical colour past
 `context_warning_percent` / `context_critical_percent`; `⏭ 2 queued` on the
-reason line counts the follow-ups waiting for it.
-
-| Key | Action |
-| --- | --- |
-| `b` | Toggle tree ⇄ workspace layout (saved at once) |
-| `j` / `k`, arrows | Pick a session; the pane follows after 150 ms |
-| `Enter` on a session or feature | **Attach**: your terminal is handed to the agent's tmux window, so typing is native (no relay, no lag). `Ctrl+Q` detaches and returns to the dashboard |
-| `Tab`, a click on the pane | Type through the in-app pane instead: keys are relayed to the agent as in the full view |
-| `Ctrl+Q` | In the pane: back to the sidebar (not to the tree) |
-| `o` | Open the selected session in the full view (sidebar, compose box, scroll mode) |
-| `Ctrl+Space` | Leader in the pane, as in the full view: `z` full view, `q` sidebar, `i` needs you, `f` final review, `p` prompts, `t` / `T` next / previous session |
-| `v` | Tile the feature's agents (split view); leaving it returns to the workspace |
-| everything else | The dashboard keys keep working with the sidebar focused: `n`, `s`, `c`, `x`, `d`, `r`, `i`, `z`, `/`, `B`, `G`, `T`, `?`, … |
-
-Below 100 columns the sidebar shows glyph and name only; below 72 the
-dashboard shows the tree (with a note in the footer) until the window is
-wider.
-
-### Attach: typing natively
-
-The in-app pane and the full view relay every key through tmux and redraw
-from a capture, which costs a few tens of milliseconds per keystroke. When
-you are going to type for a while, attach instead: `Enter` on a session in
-the workspace layout (or `Ctrl+Space`, then `Enter`, in a view) hands your
-terminal to the agent's tmux window. Your terminal emulator then talks to
-Claude Code (or Codex, Gemini, Cursor, Pi) directly, with native latency,
-mouse and scrollback. A tmux status line shows where you are
-(`AIW project › feature › session`) and `Ctrl+Q` brings you back to the
-dashboard, which picks up where it left off. The agent keeps running either
-way; attaching changes nothing about the session.
+reason line counts the follow-ups waiting for it. Below 28 columns the
+sidebar shows glyph and name only.
 
 ## User workflows
 
@@ -469,8 +475,8 @@ project.
 
 ### Review changes before shipping
 
-From an embedded session, press `Ctrl+Space`, then `f`. AIW presents the
-feature's diff file by file and lets you attach line comments or suggested
+With the feature (or one of its sessions) selected, press `Ctrl+Space`, then
+`f`. AIW presents the feature's diff file by file and lets you attach line comments or suggested
 changes. When you finish, AIW writes the feedback and hands it to an agent.
 With an authenticated `gh` CLI, AIW can also post the feedback to the branch's
 pull request.
@@ -605,9 +611,10 @@ still requires the review's explicit submit action.
 
 ### Reuse prompts and track TODOs
 
-Press `L` to manage reusable prompt templates, or open them from a session with
-`Ctrl+Space`, then `p`. Templates may include `{{placeholder}}` fields that AIW
-asks you to fill before injection.
+Press `L` to manage reusable prompt templates. A template you pick is pasted
+into the selected agent's pane, unsent, so you read it there and press Enter.
+Templates may include `{{placeholder}}` fields that AIW asks you to fill
+before injection.
 
 Add a `TODOs` session with `s` to open a checklist — one per feature. The
 editor shows up to three lists side by side:
@@ -628,10 +635,10 @@ scratchpad while hidden. `M` moves the selected TODO to another visible list
 and `C` copies it — a move carries whatever was already started for the item,
 while a copy lands as fresh, unstarted work.
 
-From any session, press `Ctrl+Space`, then `N` to capture a TODO without
-leaving your current work. It lands in that feature's worktree list (the
-project's if the feature sits on the repo root), and the capture box names the
-list it is writing to.
+With a feature or session selected, press `Ctrl+Space`, then `N` to capture a
+TODO without leaving the dashboard. It lands in that feature's worktree list
+(the project's if the feature sits on the repo root), and the capture box
+names the list it is writing to.
 
 Existing TODO lists are unchanged by the upgrade: they stay project-scoped,
 keep their host feature and their links, and show up in the project pane. New
@@ -641,8 +648,8 @@ Press `Enter` on a TODO to start work on it. AIW asks how:
 
 | Choice | What happens |
 | --- | --- |
-| **Start an agent on this TODO** | Opens a session with the TODO in the composer, unsent — in this feature for a worktree TODO, or in a feature you pick for a project or global one. |
-| **Start an agent in a new feature** | Opens the ordinary create-feature wizard, pre-filled with a branch name from the TODO title and plan mode off; once the feature exists, the TODO is linked to it and its agent is seeded with the TODO, unsent. Needs a git repository. |
+| **Start an agent on this TODO** | Pastes the TODO into an agent's pane, unsent — in this feature for a worktree TODO, or in a feature you pick for a project or global one. |
+| **Start an agent in a new feature** | Opens the ordinary create-feature wizard, pre-filled with a branch name from the TODO title and plan mode off; once the feature exists, the TODO is linked to it and the TODO is pasted into its agent's pane, unsent. Needs a git repository. |
 | **Plan this TODO first** | Runs the guided plan interview, with the TODO's title, notes, and the list scratchpad already filled in as the feature brief — editable before the first question. |
 
 If you choose to plan it, AIW then asks where the plan should land: **here**, in
@@ -753,10 +760,10 @@ as one of:
 
 The state shows on the feature's dashboard row and in the header count. Press
 `i` for the full list, questions first and oldest first within each group;
-`Enter` opens the session, `x` dismisses the row.
+`Enter` puts the keyboard in the session's pane, `x` dismisses the row.
 
-AIW does not capture the agent's message — open the session to read the
-question or the summary.
+AIW does not capture the agent's message — the question or the summary is
+in the agent's pane, right beside the sidebar.
 
 Fidelity depends on the harness. Claude Code and Gemini CLI report all three
 states. Codex fires one hook when a turn ends and cannot say whether it

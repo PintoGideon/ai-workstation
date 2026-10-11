@@ -960,7 +960,7 @@ picked up in parallel with whatever is left of Epics 5 and 6.
         pass, so the first cut's "this session can change files" toast — the
         one thing this key most needed to say — was invisible in the one place
         it was raised. Drawing toasts there is not the fix either: they stack
-        from the bottom-right, which is exactly where the compose box sits, so
+        from the bottom-right, which is exactly where the composer (removed 2026-10-11, DESIGN.md §18) sits, so
         they would cover the prompt the user is meant to read. The statement
         moved **into the seed**, and the leftovers (a stale link replaced, a
         link that failed to save) moved to `self.message`, which
@@ -1318,7 +1318,7 @@ picked up in parallel with whatever is left of Epics 5 and 6.
       presumably never shown either. Both halves re-verified against the
       code while filing. The entry records that the fix is not simply
       adding the call (toasts stack from the bottom-right, exactly where
-      the compose box is drawn), lists the four routes, and notes that
+      the composer (removed 2026-10-11, DESIGN.md §18) is drawn), lists the four routes, and notes that
       the one Learning Mode took — moving the statement into the seed's
       last line — does not generalize to callers with nothing to append
       to.

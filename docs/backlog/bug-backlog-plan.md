@@ -247,9 +247,9 @@ than the comment refers to and reports that it mis-anchored the comment.
   thing that key had to say, invisible in the one place it was said.
 
   **The fix is not simply adding the call.** Toasts stack from the
-  bottom-right, which is exactly where the compose box is drawn, so they would
+  bottom-right, which is exactly where the composer (removed 2026-10-11, DESIGN.md §18) is drawn, so they would
   cover the prompt the user is meant to be reading. Options: move the toast
-  stack for this mode, draw it above the compose box, or decide the composer
+  stack for this mode, draw it above the composer (removed 2026-10-11, DESIGN.md §18), or decide the composer
   is a place where a toast is the wrong channel and require callers to use
   `self.message` instead (which `promote_message_to_toast` surfaces the moment
   the user steps back out). Learning Mode's escalation took a fourth route as

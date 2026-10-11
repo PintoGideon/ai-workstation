@@ -129,7 +129,14 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("j/k / \u{2191}/\u{2193}", "Navigate up/down"),
         ("h / \u{2190}", "Collapse project/feature"),
         ("l / \u{2192}", "Expand project/feature"),
-        ("Enter", "Toggle expand / view or recover session"),
+        (
+            "Enter",
+            "Keyboard into the agent pane (running session) / expand / recover",
+        ),
+        (
+            "Ctrl+Q",
+            "Keyboard sidebar ⇄ agent pane (tmux; works from either side)",
+        ),
         ("s", "Add session (picker)"),
         ("m", "Model / reasoning advice for selected agent session"),
         ("S", "Pick session to resume"),
@@ -159,14 +166,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "Companion review feature: land its commits on the source branch",
         ),
         ("c", "Start feature / stopped session"),
-        // FORK: split view (DESIGN.md §4.1).
+        // FORK: tiles in the agent pane (DESIGN.md §18).
         (
             "v",
-            "Split view: tile this feature's agents (project row: one per feature)",
-        ),
-        (
-            "",
-            "  in split view: Ctrl+Space ←↑→↓ focus · z zoom · v leave · [ ] page · i needs you",
+            "Tile this feature's agents in the agent pane (aiw grid; Alt+q there closes)",
         ),
         ("x", "Stop feature / session (session stays listed)"),
         ("r", "Rename session/feature"),
@@ -190,10 +193,8 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("i", "Needs attention: questions and finished work"),
         ("I", "On a TODOs row: start the next TODO"),
         ("/", "Search and jump to item"),
-        ("Ctrl+Space c", "Config wizard"),
-        ("Ctrl+Space m", "Compact review memory"),
         ("?", "Toggle this help"),
-        ("q / Esc", "Quit"),
+        ("q", "Quit the dashboard (the agents keep running)"),
     ];
 
     // FORK: G11 — section titles instead of a banner line; the close/scroll
@@ -207,57 +208,69 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
 
-    // FORK: workspace layout (DESIGN.md §15).
-    lines.extend(section_header("  Workspace layout (b):", columns, theme));
-    let workspace_keybinds: Vec<(&str, &str)> = vec![
-        ("b", "Toggle the dashboard layout: workspace ⇄ tree (saved)"),
-        ("j/k", "Pick a session; the pane follows after 150 ms"),
+    // FORK: the cockpit (DESIGN.md §18).
+    lines.extend(section_header("  The cockpit:", columns, theme));
+    let cockpit_keybinds: Vec<(&str, &str)> = vec![
+        ("j/k", "Pick a session; the agent pane follows after 150 ms"),
         (
             "Enter",
-            "Attach: your terminal on the agent itself (native typing, no lag)",
+            "Keyboard into the agent's real pane: typing is native, as in tmux attach",
         ),
         (
             "Ctrl+Q",
-            "Detach: back to the dashboard (also: in the pane, back to the sidebar)",
+            "Keyboard back to the sidebar (and from the sidebar: to the agent)",
         ),
         (
-            "Tab",
-            "Type through the in-app pane instead (keys are relayed)",
-        ),
-        ("o", "Open the selected session in the full view"),
-        ("Ctrl+Space", "Leader in the pane, as in the full view"),
-        (
-            "",
-            "  Enter attach · z full view · i needs you · f final review · p prompts · t/T sessions",
+            "v",
+            "aiw grid in the agent pane; Alt+q there brings the agent back",
         ),
         (
-            "i / v",
-            "Next needing you / tile the feature's agents (split view)",
+            "dialogs",
+            "Zoom the sidebar over the agent pane and un-zoom when they close",
         ),
         (
-            "",
-            "Badges: ⛔ needs you · ● working · ✓ finished (dim once seen)",
+            "prompts",
+            "Kickoffs, TODOs, templates, past prompts are pasted unsent; you press Enter",
         ),
         (
-            "",
-            "        ○ idle · ■ stopped · ■ exited (agent died at its shell)",
-        ),
-        // FORK: hook-driven productivity (DESIGN.md §16).
-        (
-            "",
-            "        42% on a row = context used · working … · 2 subagents · ⏭ 2 queued",
-        ),
-        (
-            "a / X",
-            "Allow / deny a ⛔ permission request on the row (also in the i list; Enter there shows it)",
-        ),
-        (
-            "e",
-            "Queue a follow-up for the agent; Ctrl+Space Q does the same from the pane or a view",
+            "info block",
+            "Title · harness · model · ctx % · cost · age · branch · worktree · queued",
         ),
     ];
     lines.extend(
-        workspace_keybinds
+        cockpit_keybinds
+            .iter()
+            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
+    );
+
+    lines.extend(section_header(
+        "  Ctrl+Space, then a key — commands on the selected session:",
+        columns,
+        theme,
+    ));
+    let leader_keybinds: Vec<(&str, &str)> = vec![
+        ("f", "Final diff review of the selected feature"),
+        ("d", "Diff viewer (all changes / commit)"),
+        ("n", "Open the current plan"),
+        ("m", "Markdown file picker/viewer"),
+        ("l", "Past and unsent prompts: paste one again (unsent)"),
+        ("N", "Quick-capture a TODO for this worktree"),
+        (
+            "F",
+            "Start a fresh-context session (asks for your prompt first)",
+        ),
+        ("B", "Model / reasoning advice for this agent session"),
+        ("P", "Back to PR Triage (if one is stashed)"),
+        ("z", "Complete the TODO this session came from"),
+        ("h / H / M / 1-9", "Bookmarks: picker / add / remove / jump"),
+        ("/", "Command picker (slash + AIW actions)"),
+        ("a", "AIW local actions picker"),
+        ("c", "Config wizard"),
+        ("C", "Compact review memory"),
+        ("r", "Refresh statuses + PR badges (runs gh)"),
+    ];
+    lines.extend(
+        leader_keybinds
             .iter()
             .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     );
@@ -359,67 +372,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
 
     lines.extend(
         plan_critique_keybinds
-            .iter()
-            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
-    ); // FORK: G11
-
-    lines.extend(section_header(
-        "  While viewing: Ctrl+Q exits; Ctrl+Space opens leader commands.",
-        columns,
-        theme,
-    )); // FORK: G11
-
-    let view_keybinds: Vec<(&str, &str)> = vec![
-        ("Ctrl+Q", "Exit view"),
-        ("Ctrl+Space", "Open leader command menu"),
-        // FORK: typing goes straight to the agent unless the compose box is on.
-        (
-            "any text key",
-            "Typed straight into the agent (compose box: Ctrl+Space e)",
-        ),
-        ("", "Commands below require Ctrl+Space first:"),
-        // FORK: native attach (DESIGN.md §15.4).
-        (
-            "Enter",
-            "Attach: your terminal on this agent (Ctrl+Q detaches)",
-        ),
-        ("s", "Steering coach (experimental)"),
-        ("e", "Toggle compose/direct input (agent sessions)"),
-        ("d", "Diff viewer (all changes / commit)"),
-        ("m", "Markdown file picker/viewer"),
-        ("B", "Model / reasoning advice for this agent session"),
-        ("n", "Open current plan"),
-        (
-            "F",
-            "Start a fresh-context session (asks for your prompt first)",
-        ),
-        ("b", "Show/hide sidebar"),
-        ("v", "Expand/collapse todos"),
-        // FORK: in a tile zoomed from split view, `z` returns to the tiles.
-        (
-            "z",
-            "Complete this session's referenced TODO (zoomed split tile: back to split view)",
-        ),
-        ("N", "Quick-capture a TODO for this worktree"),
-        ("t / T", "Cycle next/prev session"),
-        ("w", "Session switcher"),
-        ("h", "Bookmark picker popup"),
-        ("H / M", "Bookmark / unbookmark session"),
-        ("1-9", "Jump to bookmark slot"),
-        ("/", "Command picker (slash + AIW actions)"),
-        ("a", "AIW local actions picker"),
-        ("p", "Prompt library (inject saved prompt)"),
-        ("E", "Edit headless AI prompt templates (overrides)"),
-        ("R", "Refresh pane sizing"),
-        ("D", "Debug log"),
-        ("A", "Manage agent harnesses"),
-        ("P", "Back to PR Triage (if one is stashed)"),
-        ("G", "Open PR Triage for this feature"),
-        ("W", "Open AI Review for this feature"),
-    ];
-
-    lines.extend(
-        view_keybinds
             .iter()
             .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11

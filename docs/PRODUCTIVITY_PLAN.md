@@ -31,7 +31,7 @@ Sources (October 2026):
 - **Lists and inputs:** TODOs `I`, needs-you queue `i`, dormant list `z`, prompt library `L`.
 - **Review and PRs:** diff viewer and final review (leader `d` / `f`), supervised edits (Claude), PR triage and AI
   review `G` / `W`.
-- **Running things:** resource gate, split view `v` and `aiw grid`, ports, worktree prep, lifecycle hooks, custom
+- **Running things:** resource gate, `v` tiles via `aiw grid` in the cockpit's agent pane (DESIGN.md §18), ports, worktree prep, lifecycle hooks, custom
   run sessions.
 
 ## Gaps this plan closes
@@ -144,7 +144,7 @@ Sources (October 2026):
   - Gemini's hook can only observe, so `y` / `n` send the matching keys to the pane instead.
 - **Effort:** M.
 
-### P7 Queued follow-ups — **done 2026-10-10** (DESIGN.md §16): `e` on the row, `Ctrl+Space Q` in a pane/view, `aiw automation queue`; `aiw_followups` table; delivered by the Stop hooks (Claude/Codex `Stop`, Gemini `AfterAgent`, Cursor `stop` with `loop_limit` 20). Gemini is delivered through its hook, not `send-keys`; Pi has none.
+### P7 Queued follow-ups — **done 2026-10-10** (DESIGN.md §16): `e` on the row, `aiw automation queue`; `aiw_followups` table; delivered by the Stop hooks (Claude/Codex `Stop`, Gemini `AfterAgent`, Cursor `stop` with `loop_limit` 20). Gemini is delivered through its hook, not `send-keys`; Pi has none.
 - **What:** write the next instruction for a busy agent now (leader `q`). It's delivered the moment that agent
   finishes. The row shows `⏵2` for two queued messages; you can edit or drop them before they're sent.
 - **How:**
@@ -157,7 +157,7 @@ Sources (October 2026):
 - **Effort:** M.
 
 ### P8 Broadcast to many agents
-- **What:** mark sessions with `Space` (in the tree or split view), press `b`, type once (for example "rebase on main
+- **What:** mark sessions with `Space` in the sidebar, press `b`, type once (for example "rebase on main
   and rerun tests") and confirm. It's queued for each marked agent through P7, so busy agents get it when they
   finish.
 - **Effort:** S once P7 exists.
@@ -265,6 +265,15 @@ Sources (October 2026):
   task moves to Codex with the diff, the original request, recent turns and the changed files.
 - **How:** extend `src/app/handoff.rs`. A same-agent fork uses `claude --resume <id> --fork-session` or `codex fork`.
 - **Effort:** S.
+
+## Also done 2026-10-11 (the cockpit, DESIGN.md §18)
+
+- The dashboard is drawn by tmux: sidebar left, the selected agent's real pane right; typing is native,
+  `Ctrl+Q` flips focus, dialogs zoom. The in-app view, the composer, the tree layout, the in-app split
+  tiles and the attach hand-over are gone (−20k lines). Prompts AIW prepares are pasted into the agent's pane
+  unsent (P9's "pasted but not sent" is now how every seed lands). A session info block under the sidebar reads
+  the harness's own transcript, status line and rollout. The dashboard's `Ctrl+Space` menu is the home of the
+  view's surviving commands.
 
 ## Also done 2026-10-10 (hook-driven, DESIGN.md §16)
 
