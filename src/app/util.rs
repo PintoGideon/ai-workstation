@@ -82,22 +82,6 @@ pub fn latest_prompt_path(workdir: &Path) -> PathBuf {
     workdir.join(".claude").join("latest-prompt.txt")
 }
 
-pub fn read_latest_prompt(workdir: &Path) -> Option<String> {
-    let paths = [
-        latest_prompt_path(workdir),
-        workdir.join(".codex").join("latest-prompt.txt"),
-    ];
-
-    paths
-        .into_iter()
-        .find_map(|path| std::fs::read_to_string(path).ok())
-        .or_else(|| {
-            super::codex_sessions::latest_prompt_for_workdir(workdir)
-                .ok()
-                .flatten()
-        })
-}
-
 pub fn fuzzy_match_score(candidate: &str, query: &str) -> Option<usize> {
     let query = query.trim().to_ascii_lowercase();
     if query.is_empty() {
@@ -772,20 +756,36 @@ pub fn is_wsl() -> bool {
     })
 }
 
-/// Translate a Linux path to its Windows form (`\\wsl.localhost\...`) so a
-/// Windows process launched from WSL can reach it. Returns None when
-/// `wslpath` is unavailable or fails.
-fn wsl_windows_path(path: &std::path::Path) -> Option<String> {
-    let out = std::process::Command::new("wslpath")
-        .arg("-w")
-        .arg(path)
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
+fn copy_to_clipboard_wsl(text: &str) -> anyhow::Result<()> {
+    use std::io::Write;
+    let mut child = std::process::Command::new("clip.exe")
+        .stdin(std::process::Stdio::piped())
+        .spawn()?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(text.as_bytes())?;
     }
-    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if s.is_empty() { None } else { Some(s) }
+    let status = child.wait()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("clip.exe exited with {status}"))
+    }
+}
+
+fn copy_to_clipboard_macos(text: &str) -> anyhow::Result<()> {
+    use std::io::Write;
+    let mut child = std::process::Command::new("pbcopy")
+        .stdin(std::process::Stdio::piped())
+        .spawn()?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(text.as_bytes())?;
+    }
+    let status = child.wait()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("pbcopy exited with {status}"))
+    }
 }
 
 pub fn copy_to_clipboard(text: &str) -> anyhow::Result<()> {
@@ -826,437 +826,10 @@ pub fn copy_to_clipboard(text: &str) -> anyhow::Result<()> {
     ))
 }
 
-/// Open a URL in the user's default browser. Uses `xdg-open` on Linux and
-/// `open` on macOS; the child is detached so AIW does not block on it.
-pub fn open_in_browser(url: &str) -> anyhow::Result<()> {
-    let opener = if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    };
-    std::process::Command::new(opener)
-        .arg(url)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| anyhow::anyhow!("Failed to launch {opener}: {e}"))
-}
-
-pub enum ClipboardContent {
-    Text(String),
-    Image { data: Vec<u8>, mime: String },
-}
-
-/// Read the system clipboard, preferring image content over text so a
-/// copied screenshot pastes as an image rather than a file path.
-pub fn read_clipboard() -> anyhow::Result<ClipboardContent> {
-    if is_wsl()
-        && let Some(content) = read_clipboard_wsl()
-    {
-        return Ok(content);
-    }
-    if cfg!(target_os = "macos")
-        && let Some(content) = read_clipboard_macos()
-    {
-        return Ok(content);
-    }
-    if let Some(content) = read_clipboard_wayland() {
-        return Ok(content);
-    }
-    if let Some(content) = read_clipboard_x11() {
-        return Ok(content);
-    }
-    Err(anyhow::anyhow!(
-        "No clipboard utility found (wl-paste or xclip)"
-    ))
-}
-
-fn clipboard_image_mime(types: &str) -> Option<String> {
-    // Prefer png; otherwise take the first image type offered.
-    let mut first_image = None;
-    for line in types.lines() {
-        let mime = line.trim();
-        if mime == "image/png" {
-            return Some(mime.to_string());
-        }
-        if mime.starts_with("image/") && first_image.is_none() {
-            first_image = Some(mime.to_string());
-        }
-    }
-    first_image
-}
-
-fn read_clipboard_wayland() -> Option<ClipboardContent> {
-    let types = std::process::Command::new("wl-paste")
-        .arg("--list-types")
-        .output()
-        .ok()?;
-    if !types.status.success() {
-        return None;
-    }
-
-    let types = String::from_utf8_lossy(&types.stdout);
-    if let Some(mime) = clipboard_image_mime(&types) {
-        let output = std::process::Command::new("wl-paste")
-            .args(["--type", &mime])
-            .output()
-            .ok()?;
-        if output.status.success() && !output.stdout.is_empty() {
-            return Some(ClipboardContent::Image {
-                data: output.stdout,
-                mime,
-            });
-        }
-    }
-
-    let output = std::process::Command::new("wl-paste")
-        .arg("--no-newline")
-        .output()
-        .ok()?;
-    if output.status.success() {
-        return Some(ClipboardContent::Text(
-            String::from_utf8_lossy(&output.stdout).into_owned(),
-        ));
-    }
-    None
-}
-
-fn read_clipboard_x11() -> Option<ClipboardContent> {
-    let types = std::process::Command::new("xclip")
-        .args(["-selection", "clipboard", "-t", "TARGETS", "-o"])
-        .output()
-        .ok()?;
-    if !types.status.success() {
-        return None;
-    }
-
-    let types = String::from_utf8_lossy(&types.stdout);
-    if let Some(mime) = clipboard_image_mime(&types) {
-        let output = std::process::Command::new("xclip")
-            .args(["-selection", "clipboard", "-t", &mime, "-o"])
-            .output()
-            .ok()?;
-        if output.status.success() && !output.stdout.is_empty() {
-            return Some(ClipboardContent::Image {
-                data: output.stdout,
-                mime,
-            });
-        }
-    }
-
-    let output = std::process::Command::new("xclip")
-        .args(["-selection", "clipboard", "-o"])
-        .output()
-        .ok()?;
-    if output.status.success() {
-        return Some(ClipboardContent::Text(
-            String::from_utf8_lossy(&output.stdout).into_owned(),
-        ));
-    }
-    None
-}
-
-/// Put image bytes on the system clipboard so Claude Code can ingest
-/// them via its own Ctrl+V image paste.
-pub fn copy_image_to_clipboard(data: &[u8], mime: &str) -> anyhow::Result<()> {
-    use std::io::Write;
-    // On WSL, hand the image to the Windows clipboard so the harness's
-    // own Ctrl+V image paste can ingest it.
-    if is_wsl() && copy_image_to_clipboard_wsl(data).is_ok() {
-        return Ok(());
-    }
-    if cfg!(target_os = "macos") && copy_image_to_clipboard_macos(data).is_ok() {
-        return Ok(());
-    }
-    if let Ok(mut child) = std::process::Command::new("wl-copy")
-        .args(["--type", mime])
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-    {
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(data);
-        }
-        let status = child.wait()?;
-        if status.success() {
-            return Ok(());
-        }
-    }
-    if let Ok(mut child) = std::process::Command::new("xclip")
-        .args(["-selection", "clipboard", "-t", mime])
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-    {
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(data);
-        }
-        let status = child.wait()?;
-        if status.success() {
-            return Ok(());
-        }
-    }
-    Err(anyhow::anyhow!(
-        "No clipboard utility found (wl-copy or xclip)"
-    ))
-}
-
-/// Read the Windows clipboard from WSL via `powershell.exe`. A single
-/// invocation prefers an image (e.g. a screenshot), which it saves to a
-/// temp PNG we then read; otherwise it returns the clipboard text.
-fn read_clipboard_wsl() -> Option<ClipboardContent> {
-    let tmp = std::env::temp_dir().join(format!("aiw-clip-{}.png", uuid::Uuid::new_v4()));
-    let win_path = wsl_windows_path(&tmp)?;
-    let script = format!(
-        "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; \
-         Add-Type -AssemblyName System.Windows.Forms; \
-         Add-Type -AssemblyName System.Drawing; \
-         $img=[System.Windows.Forms.Clipboard]::GetImage(); \
-         if($img -ne $null){{ \
-           $img.Save('{path}',[System.Drawing.Imaging.ImageFormat]::Png); \
-           Write-Output 'AIWIMAGE' \
-         }} else {{ Write-Output 'AIWTEXT'; Get-Clipboard -Raw }}",
-        path = win_path.replace('\'', "''")
-    );
-    let output = std::process::Command::new("powershell.exe")
-        .args(["-NoProfile", "-STA", "-Command", &script])
-        .output()
-        .ok()?;
-
-    let result = if output.status.success() {
-        let raw = String::from_utf8_lossy(&output.stdout);
-        if raw.starts_with("AIWIMAGE") {
-            std::fs::read(&tmp)
-                .ok()
-                .map(|data| ClipboardContent::Image {
-                    data,
-                    mime: "image/png".to_string(),
-                })
-        } else if let Some(rest) = raw.strip_prefix("AIWTEXT") {
-            // Drop the marker line and any single trailing newline that
-            // PowerShell appends, then normalise CRLF to LF.
-            let text = rest
-                .strip_prefix("\r\n")
-                .or_else(|| rest.strip_prefix('\n'))
-                .unwrap_or(rest);
-            let text = text
-                .strip_suffix("\r\n")
-                .or_else(|| text.strip_suffix('\n'))
-                .unwrap_or(text);
-            Some(ClipboardContent::Text(text.replace("\r\n", "\n")))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    let _ = std::fs::remove_file(&tmp);
-    result
-}
-
-/// Push text onto the macOS clipboard via `pbcopy`.
-fn copy_to_clipboard_macos(text: &str) -> anyhow::Result<()> {
-    use std::io::Write;
-    let mut child = std::process::Command::new("pbcopy")
-        .stdin(std::process::Stdio::piped())
-        .spawn()?;
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(text.as_bytes())?;
-    }
-    let status = child.wait()?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(anyhow::anyhow!("pbcopy exited with {status}"))
-    }
-}
-
-/// Read the macOS clipboard. `pbpaste` cannot read image data, so an
-/// image is detected via `osascript`'s `clipboard info` and saved to a
-/// temp PNG through AppleScript; otherwise falls back to `pbpaste` text.
-fn read_clipboard_macos() -> Option<ClipboardContent> {
-    let info = std::process::Command::new("osascript")
-        .args(["-e", "clipboard info"])
-        .output()
-        .ok()?;
-    if info.status.success() {
-        let info = String::from_utf8_lossy(&info.stdout);
-        if info.contains("PNGf") || info.contains("TIFF") || info.contains("public.png") {
-            let tmp = std::env::temp_dir().join(format!("aiw-clip-{}.png", uuid::Uuid::new_v4()));
-            let script = format!(
-                "set theFile to open for access POSIX file \"{path}\" with write permission\n\
-                 set eof of theFile to 0\n\
-                 write (the clipboard as «class PNGf») to theFile\n\
-                 close access theFile",
-                path = tmp.display()
-            );
-            let result = std::process::Command::new("osascript")
-                .arg("-e")
-                .arg(&script)
-                .output()
-                .ok()?;
-            let content = if result.status.success() {
-                std::fs::read(&tmp)
-                    .ok()
-                    .map(|data| ClipboardContent::Image {
-                        data,
-                        mime: "image/png".to_string(),
-                    })
-            } else {
-                None
-            };
-            let _ = std::fs::remove_file(&tmp);
-            if content.is_some() {
-                return content;
-            }
-        }
-    }
-
-    let output = std::process::Command::new("pbpaste").output().ok()?;
-    if output.status.success() {
-        return Some(ClipboardContent::Text(
-            String::from_utf8_lossy(&output.stdout).into_owned(),
-        ));
-    }
-    None
-}
-
-/// Place image bytes on the macOS clipboard via `osascript`, so the
-/// harness's own Ctrl+V image paste can ingest them.
-fn copy_image_to_clipboard_macos(data: &[u8]) -> anyhow::Result<()> {
-    let tmp = std::env::temp_dir().join(format!("aiw-clip-{}.png", uuid::Uuid::new_v4()));
-    std::fs::write(&tmp, data)?;
-    let script = format!(
-        "set the clipboard to (read (POSIX file \"{path}\") as «class PNGf»)",
-        path = tmp.display()
-    );
-    let status = std::process::Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
-        .status();
-    let _ = std::fs::remove_file(&tmp);
-    match status {
-        Ok(s) if s.success() => Ok(()),
-        Ok(s) => Err(anyhow::anyhow!("osascript set clipboard exited with {s}")),
-        Err(e) => Err(anyhow::anyhow!("failed to launch osascript: {e}")),
-    }
-}
-
-/// Push text onto the Windows clipboard from WSL via `clip.exe`.
-fn copy_to_clipboard_wsl(text: &str) -> anyhow::Result<()> {
-    use std::io::Write;
-    let mut child = std::process::Command::new("clip.exe")
-        .stdin(std::process::Stdio::piped())
-        .spawn()?;
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(text.as_bytes())?;
-    }
-    let status = child.wait()?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(anyhow::anyhow!("clip.exe exited with {status}"))
-    }
-}
-
-/// Place image bytes on the Windows clipboard from WSL. The bytes are
-/// written to a temp file that `powershell.exe` loads and sets via
-/// `Clipboard::SetImage`.
-fn copy_image_to_clipboard_wsl(data: &[u8]) -> anyhow::Result<()> {
-    let tmp = std::env::temp_dir().join(format!("aiw-clip-{}.png", uuid::Uuid::new_v4()));
-    std::fs::write(&tmp, data)?;
-    let win_path = wsl_windows_path(&tmp)
-        .ok_or_else(|| anyhow::anyhow!("wslpath could not translate temp path"))?;
-    let script = format!(
-        "Add-Type -AssemblyName System.Windows.Forms; \
-         Add-Type -AssemblyName System.Drawing; \
-         $img=[System.Drawing.Image]::FromFile('{path}'); \
-         [System.Windows.Forms.Clipboard]::SetImage($img); $img.Dispose()",
-        path = win_path.replace('\'', "''")
-    );
-    let status = std::process::Command::new("powershell.exe")
-        .args(["-NoProfile", "-STA", "-Command", &script])
-        .status();
-    let _ = std::fs::remove_file(&tmp);
-    match status {
-        Ok(s) if s.success() => Ok(()),
-        Ok(s) => Err(anyhow::anyhow!("powershell SetImage exited with {s}")),
-        Err(e) => Err(anyhow::anyhow!("failed to launch powershell: {e}")),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::TempDir;
-
-    /// Round-trips an image and text through the real Windows clipboard.
-    /// Only meaningful under WSL; a no-op elsewhere so CI stays green.
-    #[test]
-    fn wsl_clipboard_round_trips_image_and_text() {
-        if !is_wsl() {
-            return;
-        }
-
-        // 1x1 red PNG.
-        const PNG: &[u8] = &[
-            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
-            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
-            0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x08,
-            0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x01, 0x36, 0x37, 0x82,
-            0x9e, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
-        ];
-
-        copy_image_to_clipboard(PNG, "image/png").expect("copy image to clipboard");
-        match read_clipboard().expect("read clipboard") {
-            ClipboardContent::Image { data, mime } => {
-                assert!(!data.is_empty());
-                assert_eq!(mime, "image/png");
-                assert_eq!(&data[..8], &PNG[..8], "should read back PNG bytes");
-            }
-            ClipboardContent::Text(t) => panic!("expected image, got text: {t:?}"),
-        }
-
-        copy_to_clipboard("aiw-wsl-roundtrip").expect("copy text to clipboard");
-        match read_clipboard().expect("read clipboard") {
-            ClipboardContent::Text(t) => assert_eq!(t, "aiw-wsl-roundtrip"),
-            ClipboardContent::Image { .. } => panic!("expected text, got image"),
-        }
-    }
-
-    /// Round-trips an image and text through the real macOS clipboard.
-    /// Only meaningful on macOS; a no-op elsewhere so CI stays green.
-    #[test]
-    fn macos_clipboard_round_trips_image_and_text() {
-        if !cfg!(target_os = "macos") {
-            return;
-        }
-
-        // 1x1 red PNG.
-        const PNG: &[u8] = &[
-            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
-            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
-            0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x08,
-            0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x01, 0x36, 0x37, 0x82,
-            0x9e, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
-        ];
-
-        copy_image_to_clipboard(PNG, "image/png").expect("copy image to clipboard");
-        match read_clipboard().expect("read clipboard") {
-            ClipboardContent::Image { data, mime } => {
-                assert!(!data.is_empty());
-                assert_eq!(mime, "image/png");
-                assert_eq!(&data[..8], &PNG[..8], "should read back PNG bytes");
-            }
-            ClipboardContent::Text(t) => panic!("expected image, got text: {t:?}"),
-        }
-
-        copy_to_clipboard("aiw-macos-roundtrip").expect("copy text to clipboard");
-        match read_clipboard().expect("read clipboard") {
-            ClipboardContent::Text(t) => assert_eq!(t, "aiw-macos-roundtrip"),
-            ClipboardContent::Image { .. } => panic!("expected text, got image"),
-        }
-    }
 
     #[test]
     fn claude_task_store_missing_exact_session_does_not_read_other_sessions() {

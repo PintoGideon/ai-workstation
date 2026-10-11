@@ -737,7 +737,7 @@ impl App {
             }
             AppMode::DiffViewerLoading(state) => {
                 // Diff not loaded yet; nothing to summarize.
-                self.mode = AppMode::Viewing(state.from_view.clone());
+                self.return_to_dashboard(&state.from_view.clone());
                 return None;
             }
             _ => return None,
@@ -848,7 +848,7 @@ impl App {
                     }
                 )
             });
-            self.mode = AppMode::Viewing(from_view);
+            self.return_to_dashboard(&from_view);
             return None;
         }
         {
@@ -995,7 +995,7 @@ impl App {
             } else {
                 String::new()
             };
-            self.mode = AppMode::Viewing(from_view.clone());
+            self.return_to_dashboard(&from_view.clone());
             // The caller dispatches the "address the feedback" prompt to the
             // chosen target (the TUI immediately, via `complete_final_review`).
             Some(ReviewFeedbackDispatch {
@@ -1064,7 +1064,7 @@ impl App {
             self.message = Some(format!(
                 "{summary} (feedback saved; the companion review feature is gone — nothing dispatched)"
             ));
-            self.mode = AppMode::Viewing(from_view);
+            self.return_to_dashboard(&from_view);
             return;
         }
 
@@ -1077,7 +1077,7 @@ impl App {
         };
         let Some((pi, fi)) = indices else {
             self.message = Some(summary);
-            self.mode = AppMode::Viewing(from_view);
+            self.return_to_dashboard(&from_view);
             return;
         };
 
@@ -1093,7 +1093,7 @@ impl App {
         if let Some(window) = target_window {
             let suffix = self.paste_review_prompt(&tmux_session, &window);
             self.message = Some(format!("{summary}{suffix}"));
-            self.mode = AppMode::Viewing(from_view);
+            self.return_to_dashboard(&from_view);
             return;
         }
 
@@ -1102,7 +1102,7 @@ impl App {
             // behaviour for a feature whose agent isn't running).
             FixTarget::ExistingLive | FixTarget::ExistingFeature => {
                 self.message = Some(summary);
-                self.mode = AppMode::Viewing(from_view);
+                self.return_to_dashboard(&from_view);
             }
             // The companion feature resolved (the guard above returned early if
             // it hadn't), but its "Final Review" window is gone (or never came
@@ -1136,7 +1136,7 @@ impl App {
                         ));
                     }
                 }
-                self.mode = AppMode::Viewing(from_view);
+                self.return_to_dashboard(&from_view);
             }
             // A dedicated session must be spun up; let the reviewer pick which
             // harness runs the fixes before it is created.
@@ -1244,7 +1244,7 @@ impl App {
                 self.message = Some(format!(
                     "{summary} (feedback saved; couldn't start review session)"
                 ));
-                self.mode = AppMode::Viewing(from_view);
+                self.return_to_dashboard(&from_view);
                 return Ok(());
             }
         };
@@ -1258,7 +1258,7 @@ impl App {
         };
         let suffix = self.paste_review_prompt(&tmux_session, &window);
         self.message = Some(format!("{summary}{suffix} (dedicated review session)"));
-        self.mode = AppMode::Viewing(from_view);
+        self.return_to_dashboard(&from_view);
         Ok(())
     }
 
@@ -1269,7 +1269,7 @@ impl App {
             let summary = state.summary.clone();
             let from_view = state.from_view.clone();
             self.message = Some(format!("{summary} (feedback saved; no agent prompted)"));
-            self.mode = AppMode::Viewing(from_view);
+            self.return_to_dashboard(&from_view);
         }
     }
 

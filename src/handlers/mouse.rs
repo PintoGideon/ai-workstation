@@ -1,11 +1,10 @@
 use anyhow::Result;
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 use std::time::Instant;
 
 use crate::app::{App, AppMode, CreateFeatureStep, Selection, VisibleItem};
 use crate::project::AgentKind;
-use crate::tmux::TmuxManager;
 
 static mut LAST_CLICK_TIME: Option<Instant> = None;
 static mut LAST_CLICK_ROW: Option<u16> = None;
@@ -16,10 +15,6 @@ const HELP_MOUSE_SCROLL_LINES: usize = 3;
 const PLAN_INTERVIEW_MOUSE_SCROLL_LINES: usize = 3;
 
 pub fn handle_mouse(app: &mut App, mouse: MouseEvent, visible_rows: u16) -> Result<()> {
-    // FORK: split view handles its own clicks (focus a tile).
-    if matches!(app.mode, crate::app::AppMode::SplitView(_)) {
-        return super::fork_split::handle_split_mouse(app, mouse);
-    }
     if app.review_questions().is_some_and(|q| q.open) {
         if let Some(q) = app.review_questions_mut() {
             match mouse.kind {
@@ -34,19 +29,13 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, visible_rows: u16) -> Resu
     }
     match mouse.kind {
         MouseEventKind::ScrollUp => {
-            handle_scroll_up(app, visible_rows);
+            handle_scroll_up(app);
         }
         MouseEventKind::ScrollDown => {
-            handle_scroll_down(app, visible_rows);
+            handle_scroll_down(app);
         }
-        MouseEventKind::Down(button) => {
-            handle_click(app, mouse.column, mouse.row, button, visible_rows)?;
-        }
-        MouseEventKind::Drag(button) => {
-            handle_drag(app, mouse.column, mouse.row, button)?;
-        }
-        MouseEventKind::Up(button) => {
-            handle_release(app, mouse.column, mouse.row, button)?;
+        MouseEventKind::Down(_) => {
+            handle_click(app, mouse.column, mouse.row, visible_rows)?;
         }
         MouseEventKind::Moved => {
             handle_move(app, mouse.row, visible_rows);
@@ -82,7 +71,7 @@ fn handle_move(app: &mut App, row: u16, visible_rows: u16) {
     };
 }
 
-fn handle_scroll_up(app: &mut App, visible_rows: u16) {
+fn handle_scroll_up(app: &mut App) {
     if matches!(app.mode, AppMode::DiffViewer(_)) {
         super::handle_diff_viewer_wheel(app, VIEW_MOUSE_SCROLL_LINES, false);
         return;
@@ -122,14 +111,10 @@ fn handle_scroll_up(app: &mut App, visible_rows: u16) {
         }
         return;
     }
-    if matches!(app.mode, AppMode::Viewing(_)) {
-        handle_view_scroll(app, ScrollDirection::Up, visible_rows);
-        return;
-    }
     app.select_prev();
 }
 
-fn handle_scroll_down(app: &mut App, visible_rows: u16) {
+fn handle_scroll_down(app: &mut App) {
     if matches!(app.mode, AppMode::DiffViewer(_)) {
         super::handle_diff_viewer_wheel(app, VIEW_MOUSE_SCROLL_LINES, true);
         return;
@@ -169,117 +154,10 @@ fn handle_scroll_down(app: &mut App, visible_rows: u16) {
         }
         return;
     }
-    if matches!(app.mode, AppMode::Viewing(_)) {
-        handle_view_scroll(app, ScrollDirection::Down, visible_rows);
-        return;
-    }
     app.select_next();
 }
 
-enum ScrollDirection {
-    Up,
-    Down,
-}
-
-fn handle_view_scroll(app: &mut App, direction: ScrollDirection, visible_rows: u16) {
-    let needs_scroll_mode = matches!(&app.mode, AppMode::Viewing(view) if !view.scroll_mode);
-    if needs_scroll_mode {
-        app.deactivate_leader();
-        app.toggle_scroll_mode(visible_rows);
-    }
-
-    let (session, window, passthrough) = match &app.mode {
-        AppMode::Viewing(view) if view.scroll_mode => (
-            view.session.clone(),
-            view.window.clone(),
-            view.scroll_passthrough,
-        ),
-        _ => return,
-    };
-
-    if passthrough {
-        let key_name = match direction {
-            ScrollDirection::Up => "PPage",
-            ScrollDirection::Down => "NPage",
-        };
-        if let Err(err) = TmuxManager::send_key_name(&session, &window, key_name) {
-            app.show_error(err);
-        }
-        return;
-    }
-
-    match direction {
-        ScrollDirection::Up => app.scroll_up(VIEW_MOUSE_SCROLL_LINES),
-        ScrollDirection::Down => app.scroll_down(VIEW_MOUSE_SCROLL_LINES, visible_rows),
-    }
-}
-
-fn handle_click(
-    app: &mut App,
-    col: u16,
-    row: u16,
-    button: crossterm::event::MouseButton,
-    visible_rows: u16,
-) -> Result<()> {
-    // Read before borrowing `app.mode` mutably below.
-    let attention_badge = crate::ui::pane::attention_badge_text(app.attention_rows().len());
-
-    if let AppMode::Viewing(view) = &mut app.mode {
-        if row == 0 {
-            let name_start = 2;
-            let name_end = name_start + view.project_name.len() as u16 + 1;
-            if col >= name_start && col <= name_end {
-                app.exit_view();
-                return Ok(());
-            }
-
-            if let Some(inputs_text) = attention_badge {
-                let inputs_len = inputs_text.len() as u16;
-
-                let mut header_len = 2;
-                header_len += view.project_name.len() as u16 + 1;
-                header_len += view.feature_name.len() as u16 + 2;
-                header_len += view.session_label.len() as u16 + 2;
-                header_len += match view.vibe_mode {
-                    crate::project::VibeMode::Vibeless => 11,
-                    crate::project::VibeMode::Vibe => 7,
-                    crate::project::VibeMode::SuperVibe => 11,
-                };
-                if view.review {
-                    header_len += 9;
-                }
-                header_len += 17;
-
-                let inputs_start = header_len;
-                let inputs_end = inputs_start + inputs_len;
-                if col >= inputs_start && col < inputs_end {
-                    app.mode = AppMode::NotificationPicker(0, None);
-                    return Ok(());
-                }
-            }
-            return Ok(());
-        }
-
-        if button == MouseButton::Left && row > 0 {
-            if app.pane_content_cols == 0 || col >= app.pane_content_cols {
-                return Ok(());
-            }
-            app.message = None;
-            let Some((content_row, content_col)) =
-                selection_coords_for_view(view, row - 1, col, app.pane_content_cols)
-            else {
-                return Ok(());
-            };
-            view.selection.start_row = content_row;
-            view.selection.start_col = content_col;
-            view.selection.end_row = content_row;
-            view.selection.end_col = content_col;
-            view.selection.is_selecting = true;
-            view.selection.has_selection = false;
-        }
-        return Ok(());
-    }
-
+fn handle_click(app: &mut App, col: u16, row: u16, visible_rows: u16) -> Result<()> {
     if matches!(app.mode, AppMode::Help(_)) {
         app.mode = AppMode::Normal;
         return Ok(());
@@ -326,7 +204,6 @@ fn handle_click(
             | AppMode::DiffViewerLoading(_)
             | AppMode::DiffViewer(_)
             | AppMode::MarkdownLoading(_)
-            | AppMode::SessionSwitcher(_)
             | AppMode::RenamingSession(_)
             | AppMode::RenamingFeature(_)
             | AppMode::NotificationPicker(_, _)
@@ -337,12 +214,6 @@ fn handle_click(
             | AppMode::ConfirmResourceStart(_)
             | AppMode::PlanInterview(_)
     ) {
-        return Ok(());
-    }
-
-    // FORK: workspace layout — a click on the pane focuses it; a click on the
-    // sidebar lands on the row hit test below.
-    if crate::handlers::fork_workspace::handle_click(app, col, row)? {
         return Ok(());
     }
 
@@ -412,178 +283,6 @@ fn handle_double_click(app: &mut App, item: &VisibleItem, col: u16) -> Result<()
         }
     }
     Ok(())
-}
-
-fn handle_drag(app: &mut App, col: u16, row: u16, button: MouseButton) -> Result<()> {
-    if let AppMode::Viewing(view) = &mut app.mode
-        && button == MouseButton::Left
-        && view.selection.is_selecting
-        && row > 0
-        && app.pane_content_cols > 0
-    {
-        let Some((content_row, content_col)) =
-            selection_coords_for_view(view, row - 1, col, app.pane_content_cols)
-        else {
-            return Ok(());
-        };
-        view.selection.end_row = content_row;
-        view.selection.end_col = content_col;
-        view.selection.has_selection = true;
-    }
-    Ok(())
-}
-
-fn handle_release(app: &mut App, col: u16, row: u16, button: MouseButton) -> Result<()> {
-    if let AppMode::Viewing(view) = &mut app.mode
-        && button == MouseButton::Left
-        && view.selection.is_selecting
-    {
-        view.selection.is_selecting = false;
-
-        if view.selection.has_selection {
-            if row > 0 && app.pane_content_cols > 0 {
-                let Some((content_row, content_col)) =
-                    selection_coords_for_view(view, row - 1, col, app.pane_content_cols)
-                else {
-                    return Ok(());
-                };
-                view.selection.end_row = content_row;
-                view.selection.end_col = content_col;
-            }
-
-            let (content, rows) =
-                selection_source_for_view(&app.pane_content, app.pane_content_rows, view);
-            let text = extract_selected_text(content, &view.selection, rows, app.pane_content_cols);
-
-            if !text.is_empty() {
-                copy_to_clipboard_osc52(&text);
-                app.push_toast_success(format!("Copied {} chars", text.len()));
-            }
-        }
-    }
-    Ok(())
-}
-
-fn selection_coords_for_view(
-    view: &crate::app::ViewState,
-    row: u16,
-    col: u16,
-    pane_content_cols: u16,
-) -> Option<(u16, u16)> {
-    if view.scroll_mode && !view.scroll_passthrough {
-        let scrollbar_width = crate::ui::SCROLLBAR_WIDTH;
-        let content_width = pane_content_cols.saturating_sub(scrollbar_width);
-        if col >= content_width {
-            return None;
-        }
-
-        if content_width == 0 {
-            return None;
-        }
-
-        Some((
-            (row as usize)
-                .saturating_add(view.scroll_offset)
-                .min(u16::MAX as usize) as u16,
-            col,
-        ))
-    } else {
-        Some((row, col.min(pane_content_cols.saturating_sub(1))))
-    }
-}
-
-fn selection_source_for_view<'a>(
-    pane_content: &'a str,
-    pane_content_rows: u16,
-    view: &'a crate::app::ViewState,
-) -> (&'a str, u16) {
-    if view.scroll_mode && !view.scroll_passthrough {
-        (
-            &view.scroll_content,
-            view.scroll_total_lines.min(u16::MAX as usize) as u16,
-        )
-    } else {
-        (pane_content, pane_content_rows)
-    }
-}
-
-/// Copy text to clipboard using OSC 52 escape sequence.
-/// This works in terminals that support it (most modern terminals).
-fn copy_to_clipboard_osc52(text: &str) {
-    use std::io::Write;
-    let encoded = base64_encode(text.as_bytes());
-    let _ = std::io::stdout().write_all(format!("\x1b]52;c;{}\x07", encoded).as_bytes());
-    let _ = std::io::stdout().flush();
-}
-
-fn base64_encode(data: &[u8]) -> String {
-    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::with_capacity(data.len().div_ceil(3) * 4);
-    for chunk in data.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = chunk.get(1).copied().unwrap_or(0) as u32;
-        let b2 = chunk.get(2).copied().unwrap_or(0) as u32;
-        let triple = (b0 << 16) | (b1 << 8) | b2;
-        result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
-        result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
-        if chunk.len() > 1 {
-            result.push(CHARS[((triple >> 6) & 0x3F) as usize] as char);
-        } else {
-            result.push('=');
-        }
-        if chunk.len() > 2 {
-            result.push(CHARS[(triple & 0x3F) as usize] as char);
-        } else {
-            result.push('=');
-        }
-    }
-    result
-}
-
-fn extract_selected_text(
-    content: &str,
-    selection: &crate::app::TextSelection,
-    rows: u16,
-    cols: u16,
-) -> String {
-    let (start_row, start_col, end_row, end_col) = selection.normalized();
-
-    if rows == 0 || cols == 0 {
-        return String::new();
-    }
-
-    let mut parser = vt100::Parser::new(rows, cols, 0);
-    let normalized = crate::ui::normalize_captured_pane(content);
-    parser.process(normalized.as_bytes());
-    let screen = parser.screen();
-
-    let mut result = String::new();
-
-    for row in start_row..=end_row.min(rows.saturating_sub(1)) {
-        let col_start = if row == start_row { start_col } else { 0 };
-        let col_end = if row == end_row {
-            end_col.min(cols)
-        } else {
-            cols
-        };
-
-        let mut line_text = String::new();
-        for col in col_start..col_end {
-            if let Some(cell) = screen.cell(row, col) {
-                line_text.push_str(&cell.contents());
-            }
-        }
-
-        let trimmed = line_text.trim_end();
-        if !trimmed.is_empty() || row != end_row.min(rows.saturating_sub(1)) {
-            result.push_str(trimmed);
-            if row != end_row.min(rows.saturating_sub(1)) {
-                result.push('\n');
-            }
-        }
-    }
-
-    result
 }
 
 #[cfg(test)]

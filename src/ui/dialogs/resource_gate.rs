@@ -115,8 +115,6 @@ fn pending_summary(pending: &PendingStart) -> String {
             None => "Adding a session".to_string(),
         },
         PendingStart::RestartSessionWindow { .. } => "Restarting a session".to_string(),
-        PendingStart::EnterView { .. } => "Opening a stopped feature".to_string(),
-        PendingStart::SwitchViewToFeature { .. } => "Jumping to a stopped feature".to_string(),
         PendingStart::PlannedFeature(pending) => {
             format!("Starting planned feature '{}'", pending.prepared.branch)
         }

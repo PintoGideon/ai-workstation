@@ -3,7 +3,6 @@ mod dialogs;
 pub(crate) mod fork_chrome; // FORK: G11 dashboard chrome
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6)
 pub(crate) mod fork_session_info; // FORK: the session info block (DESIGN.md §18)
-mod fork_split; // FORK: split view
 pub(crate) mod fork_text; // FORK: `…` fitting, hint cutting, path wrapping
 pub(crate) mod fork_workspace; // FORK: workspace layout (DESIGN.md §15)
 pub mod header;
@@ -23,11 +22,6 @@ use ratatui::{
 use crate::app::App;
 use crate::theme::Theme;
 
-pub(crate) use pane::SCROLLBAR_WIDTH;
-pub(crate) use pane::normalize_captured_pane;
-pub(crate) use pane::render_ansi_lines;
-pub(crate) use pane::render_vt100_screen;
-pub(crate) use pane::viewing_main_width;
 pub(crate) use toast::draw_toasts;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
@@ -39,11 +33,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         app.viewport_cols = area.width;
         app.viewport_total_rows = area.height;
         app.viewport_rows = area.height.saturating_sub(3);
-    }
-    // FORK: split view draws the whole screen itself.
-    if matches!(app.mode, crate::app::AppMode::SplitView(_)) {
-        fork_split::draw(frame, app);
-        return;
     }
     dashboard::draw(frame, app);
 }

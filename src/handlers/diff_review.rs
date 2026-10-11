@@ -210,10 +210,10 @@ fn submit_diff_review(app: &mut App, reject: bool, skip: bool) -> Result<()> {
         return Ok(());
     }
 
-    app.mode = match return_to_view {
-        Some(view) => AppMode::Viewing(view),
-        None => AppMode::Normal,
-    };
+    match return_to_view {
+        Some(view) => app.return_to_dashboard(&view),
+        None => app.mode = AppMode::Normal,
+    }
     app.pending_inputs.retain(|input| {
         !(input.session_id == session_id
             && matches!(
@@ -596,7 +596,7 @@ mod tests {
         handle_diff_review_key(&mut app, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
             .unwrap();
 
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
     }
 
     #[test]

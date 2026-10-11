@@ -34,7 +34,7 @@
 
 use std::collections::HashMap;
 
-use crate::app::{App, AppMode, Selection};
+use crate::app::{App, Selection};
 use crate::project::{ProjectStatus, SessionKind};
 use crate::tmux::PaneCommand;
 
@@ -135,13 +135,14 @@ impl App {
         }
         let commands = agent_panes(panes);
 
-        let viewing = match &self.mode {
-            AppMode::Viewing(view) => Some((view.session.clone(), view.window.clone())),
-            AppMode::Compose(state) => {
-                Some((state.view.session.clone(), state.view.window.clone()))
-            }
-            _ => None,
-        };
+        // FORK(cockpit): the agent pane shows this window; when it goes the
+        // view client ends and the placeholder takes over by itself, the
+        // sidebar only has to say so.
+        let viewing = self
+            .fork_workspace
+            .live
+            .as_ref()
+            .map(|live| (live.session.clone(), live.window.clone()));
         let cutoff = chrono::Utc::now() - chrono::Duration::seconds(CREATION_GRACE_SECS);
 
         let mut fixes: Vec<(usize, usize, usize, Fix)> = Vec::new();
@@ -238,10 +239,6 @@ impl App {
             }
         }
         if leave_view {
-            if matches!(self.mode, AppMode::Compose(_)) {
-                self.cancel_compose();
-            }
-            self.exit_view();
             self.message = Some(VIEWED_WINDOW_GONE.to_string());
             self.log_info("reconcile", VIEWED_WINDOW_GONE.to_string());
         }
@@ -389,26 +386,7 @@ pub(crate) fn selection_after_removal(
     }
 }
 
-impl App {
-    /// A tmux send failed because its target no longer exists (the agent's
-    /// window closed, or its whole tmux session ended). Settle the list and
-    /// leave the view once, instead of an error per keystroke. Returns
-    /// `false` for any other error, which the caller reports as before.
-    pub(crate) fn handle_vanished_tmux_target(&mut self, err: &anyhow::Error) -> bool {
-        let text = format!("{err:#}");
-        if !(text.contains("can't find session") || text.contains("can't find window")) {
-            return false;
-        }
-        self.reconcile_vanished_windows();
-        if matches!(self.mode, AppMode::Viewing(_) | AppMode::Compose(_)) {
-            // tmux could not even be listed: leave the dead frame anyway.
-            self.exit_view();
-            self.message = Some(VIEWED_WINDOW_GONE.to_string());
-            self.log_info("reconcile", VIEWED_WINDOW_GONE.to_string());
-        }
-        true
-    }
-}
+impl App {}
 
 #[cfg(test)]
 mod tests {

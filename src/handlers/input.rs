@@ -3,7 +3,6 @@ use anyhow::Result;
 use crate::app::{
     App, AppMode, CreateFeatureStep, CreateProjectStep, PromptEditorFocus, TodoEditTarget,
 };
-use crate::tmux::TmuxManager;
 
 pub fn handle_paste(app: &mut App, text: &str) -> Result<()> {
     if let Some(q) = app.review_questions_mut()
@@ -19,24 +18,6 @@ pub fn handle_paste(app: &mut App, text: &str) -> Result<()> {
         return Ok(());
     }
     match &app.mode {
-        // FORK: paste into the focused split-view tile.
-        AppMode::SplitView(_) => super::fork_split::handle_split_paste(app, text)?,
-        AppMode::Viewing(view) => {
-            if app.compose_intercept_active(view) {
-                app.open_compose_from_view(None)?;
-                if let AppMode::Compose(state) = &mut app.mode {
-                    let outcome = state.editor.insert_str(text);
-                    if outcome.text_changed {
-                        state.refresh_suggestions();
-                        state.request_cursor_scroll();
-                    }
-                }
-            } else {
-                let session = view.session.clone();
-                let window = view.window.clone();
-                TmuxManager::paste_text(&session, &window, text)?;
-            }
-        }
         AppMode::CreatingProject(_) => {
             if let AppMode::CreatingProject(state) = &mut app.mode {
                 match state.step {
@@ -114,15 +95,6 @@ pub fn handle_paste(app: &mut App, text: &str) -> Result<()> {
                 let outcome = state.editor.insert_str(text);
                 if outcome.text_changed {
                     state.refresh_prompt_analysis();
-                }
-            }
-        }
-        AppMode::Compose(_) => {
-            if let AppMode::Compose(state) = &mut app.mode {
-                let outcome = state.editor.insert_str(text);
-                if outcome.text_changed {
-                    state.refresh_suggestions();
-                    state.request_cursor_scroll();
                 }
             }
         }

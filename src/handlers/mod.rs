@@ -1,7 +1,6 @@
 mod ai_review;
 mod batch_creation;
 mod browse;
-mod compose;
 mod config_wizard;
 mod context_settings;
 mod dialog;
@@ -12,7 +11,6 @@ mod feature_creation;
 mod fork;
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7)
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6)
-mod fork_split; // FORK: split view
 pub(crate) mod fork_workspace; // FORK: workspace layout
 mod handoff;
 mod harness;
@@ -35,7 +33,6 @@ mod review_questions;
 mod search;
 mod skill_picker;
 mod todos;
-mod view;
 
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -45,7 +42,6 @@ use crate::app::App;
 pub use ai_review::{handle_ai_review_key, handle_ai_review_running_key};
 pub use batch_creation::handle_create_batch_features_key;
 pub use browse::handle_browse_path_key;
-pub use compose::handle_compose_key;
 pub use config_wizard::handle_config_wizard_key;
 pub use context_settings::handle_context_settings_key;
 pub use dialog::{
@@ -81,7 +77,7 @@ pub use picker::{
     handle_claude_session_picker_key, handle_codex_session_confirm_key,
     handle_codex_session_picker_key, handle_command_picker_key, handle_markdown_file_picker_key,
     handle_new_session_name_key, handle_notification_picker_key, handle_session_picker_key,
-    handle_session_switcher_key, handle_syntax_language_picker_key,
+    handle_syntax_language_picker_key,
 };
 pub use plan_interview::handle_plan_interview_key;
 pub use plan_interview_attach::handle_plan_interview_attach_doc_key;
@@ -107,7 +103,6 @@ pub use todos::{
     handle_todo_quick_capture_key, handle_todo_reference_completion_key,
     handle_todo_spawn_target_key, handle_todos_host_reassign_key, handle_todos_key,
 };
-pub use view::handle_view_key;
 
 pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()> {
     use crate::app::AppMode;
@@ -140,13 +135,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::DeletingFeature(_, _) => handle_delete_feature_key(app, key.code),
         AppMode::ConfirmResourceStart(_) => handle_resource_confirm_key(app, key.code),
         AppMode::Dormant(_) => handle_dormant_key(app, key),
-        AppMode::Viewing(_) => handle_view_key(app, key, visible_rows),
-        AppMode::SplitView(_) => fork_split::handle_split_key(app, key), // FORK: split view
         AppMode::Help(_) => handle_help_key(app, key),
         AppMode::SteeringPrompt(_) => handle_steering_prompt_key(app, key),
-        AppMode::Compose(_) => handle_compose_key(app, key),
         AppMode::NotificationPicker(_, _) => handle_notification_picker_key(app, key.code),
-        AppMode::SessionSwitcher(_) => handle_session_switcher_key(app, key.code),
         AppMode::RenamingSession(_) => handle_rename_session_key(app, key.code),
         AppMode::RenamingFeature(_) => handle_rename_feature_key(app, key.code),
         AppMode::SessionConfig(_) => handle_session_config_key(app, key.code),

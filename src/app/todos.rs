@@ -489,9 +489,10 @@ impl App {
     /// names that list so the target is never a guess. No-op unless a session
     /// view is active.
     pub fn open_todo_quick_capture(&mut self) {
-        let view = match &self.mode {
-            AppMode::Viewing(view) => view.clone(),
-            _ => return,
+        // FORK(cockpit): the selected session or feature.
+        let Some(view) = self.selection_view_state() else {
+            self.push_toast_warning("Select a feature or session first");
+            return;
         };
         let project_name = view.project_name.clone();
         let list_label = self
@@ -510,7 +511,7 @@ impl App {
     /// Cancel quick-capture, returning to the session view unchanged.
     pub fn cancel_todo_quick_capture(&mut self) {
         if let AppMode::TodoQuickCapture(state) = &self.mode {
-            self.mode = AppMode::Viewing(state.view.clone());
+            self.return_to_dashboard(&state.view.clone());
         }
     }
 
@@ -527,7 +528,7 @@ impl App {
         };
 
         if title.is_empty() {
-            self.mode = AppMode::Viewing(view);
+            self.return_to_dashboard(&view);
             return Ok(());
         }
 
@@ -545,7 +546,7 @@ impl App {
             None => self.push_toast_warning("Couldn't resolve the project for this TODO"),
         }
 
-        self.mode = AppMode::Viewing(view);
+        self.return_to_dashboard(&view);
         Ok(())
     }
 
@@ -2843,8 +2844,9 @@ impl App {
     /// Ask before completing the TODO explicitly attached to the embedded
     /// session. References from ordinary agent launches are never eligible.
     pub(crate) fn request_todo_reference_completion(&mut self) {
-        let Some((view, todo_id)) = (match &self.mode {
-            AppMode::Viewing(view) => {
+        let Some((view, todo_id)) = (match self.selection_view_state() {
+            // FORK(cockpit): the selected session.
+            Some(view) => {
                 let reference = self
                     .store
                     .projects
@@ -2902,7 +2904,7 @@ impl App {
 
         let outcome = self.complete_referenced_todo(&state.todo_id);
 
-        self.mode = AppMode::Viewing(state.view);
+        self.return_to_dashboard(&state.view);
         self.refresh_active_todos_sidebar_cache();
         match outcome {
             Ok(message) => self.push_toast_success(message),
@@ -2941,7 +2943,7 @@ impl App {
         else {
             return;
         };
-        self.mode = AppMode::Viewing(state.view);
+        self.return_to_dashboard(&state.view);
     }
 
     /// Sort items into display order: open first, then by manual `sort_order`.

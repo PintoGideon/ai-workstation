@@ -4270,7 +4270,6 @@ fn a_second_escalation_returns_to_the_session_you_already_have() {
     let first = app.learning_escalate().unwrap();
 
     // Back to the overlay, cursor on the same row.
-    app.cancel_compose();
     app.open_learning_mode(0, 0).unwrap();
     let again = app.learning_escalate().unwrap();
 
@@ -4281,8 +4280,8 @@ fn a_second_escalation_returns_to_the_session_you_already_have() {
         "and no second one was created"
     );
     assert!(
-        matches!(app.mode, AppMode::Viewing(_)),
-        "it jumps into the session rather than re-seeding it"
+        matches!(app.mode, AppMode::Normal),
+        "it jumps to the session's row rather than re-seeding it"
     );
     assert!(
         app.toasts
@@ -4301,7 +4300,6 @@ fn escalating_after_the_session_was_removed_starts_a_new_one() {
     let (_repo, _db, mut app, id) = launchable_with_an_answer();
     let first = app.learning_escalate().unwrap();
 
-    app.cancel_compose();
     app.store.projects[0].features[0].sessions.clear();
     app.open_learning_mode(0, 0).unwrap();
     let second = app.learning_escalate().unwrap();
@@ -4318,7 +4316,6 @@ fn escalating_after_the_session_was_removed_starts_a_new_one() {
         app.message
     );
 
-    app.cancel_compose();
     app.open_learning_mode(0, 0).unwrap();
     let row = learning(&app).qa.iter().find(|r| r.id == id).unwrap();
     assert_eq!(row.spawned_session_id.as_deref(), Some(second.as_str()));
@@ -4332,7 +4329,6 @@ fn escalating_after_the_session_was_removed_starts_a_new_one() {
 fn escalating_after_the_agent_exited_starts_a_new_one() {
     let (_repo, _db, mut app, id) = launchable_with_an_answer();
     let first = app.learning_escalate().unwrap();
-    app.cancel_compose();
 
     // The feature is still running — other windows are alive — but the
     // window this answer opened is not.
@@ -4358,7 +4354,6 @@ fn escalating_after_the_agent_exited_starts_a_new_one() {
         app.message
     );
 
-    app.cancel_compose();
     app.open_learning_mode(0, 0).unwrap();
     let row = learning(&app).qa.iter().find(|r| r.id == id).unwrap();
     assert_eq!(row.spawned_session_id.as_deref(), Some(second.as_str()));

@@ -85,26 +85,6 @@ impl App {
         Ok(())
     }
 
-    pub fn bookmark_status_labels(&self) -> Vec<String> {
-        (0..MAX_SESSION_BOOKMARKS)
-            .map(|idx| {
-                let slot = idx + 1;
-                let Some(bookmark) = self.store.session_bookmarks.get(idx) else {
-                    return format!("{}:-", slot);
-                };
-
-                if let Some((pi, fi, si)) = self.resolve_bookmark_indices(bookmark) {
-                    let project = &self.store.projects[pi];
-                    let feature = &project.features[fi];
-                    let session = &feature.sessions[si];
-                    format!("{}:{}/{}", slot, feature.name, session.label)
-                } else {
-                    format!("{}:?", slot)
-                }
-            })
-            .collect()
-    }
-
     pub fn remove_bookmark_slot(&mut self, slot: usize) -> Result<()> {
         if slot == 0 || slot > MAX_SESSION_BOOKMARKS {
             self.message = Some("Bookmark slot must be 1-9".to_string());
@@ -164,9 +144,12 @@ impl App {
     }
 
     fn current_view_session_indices(&self) -> Option<(usize, usize, usize)> {
-        let AppMode::Viewing(view) = &self.mode else {
-            return None;
-        };
+        // FORK(cockpit): the selected row is the current session.
+        if let Selection::Session(pi, fi, si) = self.selection {
+            return Some((pi, fi, si));
+        }
+        let view = self.selection_view_state()?;
+        let view = &view;
 
         let pi = self
             .store

@@ -63,7 +63,7 @@ pub fn handle_command_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
             if let AppMode::CommandPicker(state) = old_mode
                 && let Some(view) = state.from_view
             {
-                app.mode = AppMode::Viewing(view);
+                app.return_to_dashboard(&view);
             }
         }
         KeyCode::Down | KeyCode::Char('j') => {
@@ -101,7 +101,7 @@ pub fn handle_command_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
                             crate::app::LocalCommand::RefreshNotifications => {
                                 app.refresh_status_and_notifications();
                                 if let Some(view) = return_view.clone() {
-                                    app.mode = AppMode::Viewing(view);
+                                    app.return_to_dashboard(&view);
                                 }
                             }
                             crate::app::LocalCommand::CheckPendingDiffReview => {
@@ -109,7 +109,7 @@ pub fn handle_command_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
                                 if let Some(view) = return_view.clone()
                                     && matches!(app.mode, AppMode::Normal)
                                 {
-                                    app.mode = AppMode::Viewing(view);
+                                    app.return_to_dashboard(&view);
                                 }
                             }
                             crate::app::LocalCommand::PlanInterview => {
@@ -165,7 +165,7 @@ pub fn handle_command_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
                 if let Some(view) = return_view
                     && matches!(app.mode, AppMode::Normal)
                 {
-                    app.mode = AppMode::Viewing(view);
+                    app.return_to_dashboard(&view);
                 }
             }
         }
@@ -310,7 +310,7 @@ pub fn handle_markdown_file_picker_key(app: &mut App, key: KeyEvent) -> Result<(
             if let AppMode::MarkdownFilePicker(state) = old_mode
                 && let Some(view) = state.from_view
             {
-                app.mode = AppMode::Viewing(view);
+                app.return_to_dashboard(&view);
             }
         }
         KeyEvent {
@@ -330,7 +330,7 @@ pub fn handle_markdown_file_picker_key(app: &mut App, key: KeyEvent) -> Result<(
             if let AppMode::MarkdownFilePicker(state) = old_mode
                 && let Some(view) = state.from_view
             {
-                app.mode = AppMode::Viewing(view);
+                app.return_to_dashboard(&view);
             }
         }
         KeyEvent {
@@ -511,7 +511,7 @@ pub fn handle_notification_picker_key(app: &mut App, key: KeyCode) -> Result<()>
                 }
             };
             if let Some(view) = from_view {
-                app.mode = AppMode::Viewing(view);
+                app.return_to_dashboard(&view);
             }
         }
         KeyCode::Down | KeyCode::Char('j') => {
@@ -574,48 +574,9 @@ pub fn handle_notification_picker_key(app: &mut App, key: KeyCode) -> Result<()>
                     }
                 };
                 if let Some(view) = from_view {
-                    app.mode = AppMode::Viewing(view);
+                    app.return_to_dashboard(&view);
                 }
             }
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
-pub fn handle_session_switcher_key(app: &mut App, key: KeyCode) -> Result<()> {
-    match key {
-        KeyCode::Esc | KeyCode::Char('q') => {
-            app.cancel_session_switcher();
-        }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if let AppMode::SessionSwitcher(ref mut state) = app.mode {
-                let len = state.sessions.len();
-                if len > 0 {
-                    state.selected = (state.selected + 1) % len;
-                }
-            }
-        }
-        KeyCode::Up | KeyCode::Char('k') => {
-            if let AppMode::SessionSwitcher(ref mut state) = app.mode {
-                let len = state.sessions.len();
-                if len > 0 {
-                    state.selected = if state.selected == 0 {
-                        len - 1
-                    } else {
-                        state.selected - 1
-                    };
-                }
-            }
-        }
-        KeyCode::Enter => {
-            app.switch_from_switcher();
-        }
-        KeyCode::Char('r') => {
-            app.start_rename_from_switcher();
-        }
-        KeyCode::Char('s') => {
-            app.open_session_picker_from_switcher()?;
         }
         _ => {}
     }
@@ -721,7 +682,7 @@ pub fn handle_session_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
             if let AppMode::SessionPicker(state) = old_mode
                 && let Some(view) = state.from_view
             {
-                app.mode = AppMode::Viewing(view);
+                app.return_to_dashboard(&view);
             }
         }
         KeyCode::Down | KeyCode::Char('j') => {
@@ -794,7 +755,7 @@ pub fn handle_session_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
                             }
                         }
                         if let Some(view) = state.from_view {
-                            app.mode = AppMode::Viewing(view);
+                            app.return_to_dashboard(&view);
                         }
                         return Ok(());
                     }
@@ -923,10 +884,10 @@ pub fn handle_new_session_name_key(app: &mut App, key: KeyCode) -> Result<()> {
                 // to restore once the warning is answered instead of
                 // returning there now.
                 app.set_resource_confirm_return_view(state.return_to.from_view);
-            } else if !matches!(app.mode, AppMode::Viewing(_))
+            } else if matches!(app.mode, AppMode::Normal)
                 && let Some(view) = state.return_to.from_view
             {
-                app.mode = AppMode::Viewing(view);
+                app.return_to_dashboard(&view);
             }
         }
         KeyCode::Backspace => {
@@ -951,7 +912,7 @@ pub fn handle_bookmark_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
             if let AppMode::BookmarkPicker(state) = old_mode
                 && let Some(view) = state.from_view
             {
-                app.mode = AppMode::Viewing(view);
+                app.return_to_dashboard(&view);
             }
         }
         KeyCode::Down | KeyCode::Char('j') => {
@@ -1018,7 +979,7 @@ pub fn handle_bookmark_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{CommandEntry, CommandPickerState, MarkdownFilePickerState, ViewState};
+    use crate::app::{MarkdownFilePickerState, ViewState};
     use crate::project::{
         AgentKind, Feature, FeatureSession, Project, ProjectStatus, ProjectStore, SessionKind,
         VibeMode,
@@ -1460,67 +1421,6 @@ mod tests {
         handle_markdown_file_picker_key(&mut app, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
             .unwrap();
 
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
-    }
-
-    #[test]
-    fn command_picker_debug_demo_updates_live_codex_state_locally() {
-        let mut app = codex_picker_app();
-        app.mode = AppMode::CommandPicker(CommandPickerState {
-            commands: vec![CommandEntry {
-                name: "demo-plan".into(),
-                source: "AIW Debug".into(),
-                path: None,
-                action: CommandAction::CodexLiveDemo(CodexDebugCommand::PlanDemo),
-            }],
-            selected: 0,
-            from_view: None,
-        });
-
-        handle_command_picker_key(&mut app, KeyCode::Enter).unwrap();
-
-        assert_eq!(
-            app.codex_live_thread("aiw-feature")
-                .unwrap()
-                .plan_text
-                .as_deref(),
-            Some("1. Inspect reducer\n2. Patch sidebar\n3. Re-run tests")
-        );
-        assert_eq!(
-            app.toasts.last().map(|t| t.message.as_str()),
-            Some("Applied 'demo-plan'")
-        );
-        assert!(matches!(app.mode, AppMode::Normal));
-    }
-
-    #[test]
-    fn command_picker_change_reason_demo_updates_live_codex_state_locally() {
-        let mut app = codex_picker_app();
-        app.mode = AppMode::CommandPicker(CommandPickerState {
-            commands: vec![CommandEntry {
-                name: "demo-work-change-reason".into(),
-                source: "AIW Debug".into(),
-                path: None,
-                action: CommandAction::CodexLiveDemo(CodexDebugCommand::WorkChangeReasonDemo),
-            }],
-            selected: 0,
-            from_view: None,
-        });
-
-        handle_command_picker_key(&mut app, KeyCode::Enter).unwrap();
-
-        assert_eq!(
-            app.codex_live_thread("aiw-feature")
-                .and_then(|live| live.sidebar_work_text())
-                .as_deref(),
-            Some(
-                "State: waiting for change reason\nFile: src/app/codex_live.rs\nTool: Edit\nRequest: Explain why this change is needed."
-            )
-        );
-        assert_eq!(
-            app.toasts.last().map(|t| t.message.as_str()),
-            Some("Applied 'demo-work-change-reason'")
-        );
         assert!(matches!(app.mode, AppMode::Normal));
     }
 }

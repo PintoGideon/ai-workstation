@@ -295,14 +295,29 @@ mod tests {
     #[test]
     fn footer_shows_the_contextual_key_hints() {
         let mut app = realistic_app(MockTmuxOps::new());
+        // FORK(cockpit): the sidebar's short line; `Enter agent` only when
+        // the selection has a running agent (the first row's project does).
         let screen = rows(&mut app, 200, 60);
-        let footer = &screen[59];
-        assert!(footer.starts_with("╰ n feature  Enter expand"), "{footer}");
+        assert!(screen[59].starts_with("╰ Enter agent"), "{}", screen[59]);
 
-        app.selection = crate::app::Selection::Session(0, 0, 1);
+        // A stopped feature: nothing to focus, the longer wording.
+        let stopped = app
+            .store
+            .projects
+            .iter()
+            .enumerate()
+            .find_map(|(pi, p)| {
+                p.features
+                    .iter()
+                    .position(|f| f.status == crate::project::ProjectStatus::Stopped)
+                    .map(|fi| (pi, fi))
+            })
+            .expect("the realistic store has a stopped feature");
+        app.selection = crate::app::Selection::Feature(stopped.0, stopped.1);
+        app.workspace_commit_now();
         let screen = rows(&mut app, 200, 60);
         assert!(
-            screen[59].contains("Enter view  r rename"),
+            screen[59].contains("i needs you  v tiles  ? help  q"),
             "{}",
             screen[59]
         );
@@ -341,10 +356,9 @@ mod tests {
             Box::new(MockTmuxOps::new()),
             Box::new(MockWorktreeOps::new()),
         );
-        // A tree row: the workspace sidebar words it differently.
-        app.config.aiw.dashboard_layout = crate::fork::config::DashboardLayout::Tree;
         let screen = rows(&mut app, 200, 60).concat();
-        assert!(screen.contains("▾ workflow-engine  /home/dev/code/workflow-engine  · no features yet — press n to add one"));
+        assert!(screen.contains("▾ workflow-engine"), "{screen}");
+        assert!(screen.contains("no features yet — n adds one"), "{screen}");
     }
 
     /// Box-drawing glyphs that only a dialog border or a toast would leave on

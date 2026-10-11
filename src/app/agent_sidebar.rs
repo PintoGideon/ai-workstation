@@ -19,7 +19,7 @@ use super::attention::AttentionState;
 use super::util::{ClaudeTaskState, read_claude_task_state};
 use super::{App, CodexLiveThreadState};
 use crate::context_tracking::SessionContextSnapshot;
-use crate::project::{Feature, FeatureSession, Project, SessionKind, TokenUsageSourceMatch};
+use crate::project::{Feature, FeatureSession, SessionKind, TokenUsageSourceMatch};
 use crate::token_tracking::{TokenUsageProvider, TokenUsageSource};
 
 /// The leader-key hint the TUI appends to a pending diff review's Work text.
@@ -304,45 +304,6 @@ pub(crate) struct SidebarRuntime<'a> {
 }
 
 impl App {
-    /// The runtime signals this (TUI) process observed for `feature`, matched
-    /// the way the TUI always has: by the viewed tmux session, or by
-    /// project and feature name.
-    pub(crate) fn tui_sidebar_runtime<'a>(
-        &'a self,
-        project: &Project,
-        feature: &Feature,
-        view_session: &str,
-    ) -> SidebarRuntime<'a> {
-        let pending_inputs = self
-            .pending_inputs
-            .iter()
-            .filter(|input| {
-                input.session_id == view_session
-                    || (input.project_name.as_deref() == Some(project.name.as_str())
-                        && input.feature_name.as_deref() == Some(feature.name.as_str()))
-            })
-            .map(|input| SidebarPendingInput {
-                notification_type: input.notification_type.clone(),
-                message: input.message.clone(),
-            })
-            .collect();
-        SidebarRuntime {
-            pending_inputs,
-            attention: self.feature_attention(&feature.tmux_session),
-            running_tool: self.ipc_tool_sessions.contains(&feature.tmux_session),
-            thinking: self.is_feature_thinking(&feature.tmux_session),
-            summary_generating: self
-                .summary_state
-                .generating
-                .contains(&feature.tmux_session),
-            codex_live: self.codex_live_thread(&feature.tmux_session),
-            pr_review_working: self
-                .dedicated_review_session_working_for_workdir(&feature.workdir)
-                .unwrap_or(false),
-            ai_review_running: self.ai_review_running_for_workdir(&feature.workdir),
-        }
-    }
-
     /// Build the sidebar for `session` (or, when the window has no session
     /// row, the feature's first session of `kind`). `None` for a kind that
     /// has no agent sidebar.

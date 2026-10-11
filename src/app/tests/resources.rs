@@ -2,7 +2,6 @@ use super::support::*;
 use crate::app::*;
 use crate::project::SessionKind;
 use crate::traits::{MockTmuxOps, MockWorktreeOps};
-use std::sync::atomic::{AtomicBool, Ordering};
 
 // ---------------------------------------------------------------------------
 // Pre-start resource gate
@@ -282,42 +281,6 @@ fn adding_a_terminal_to_a_stopped_feature_asks_first() {
     assert!(app.store.projects[0].features[1].sessions.is_empty());
 }
 
-#[test]
-fn entering_a_stopped_feature_asks_first() {
-    let mut tmux = MockTmuxOps::new();
-    let _pane = expect_one_live_harness(&mut tmux);
-    tmux.expect_session_exists()
-        .withf(|session| session == "aiw-other-feat")
-        .return_const(false);
-
-    let mut app = App::new_for_test(
-        store_with_running_and_stopped_features(),
-        Box::new(tmux),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.config.max_concurrent_agents = 1;
-    app.config.low_memory_warn_mb = 0;
-    app.selection = Selection::Feature(0, 1);
-
-    app.enter_view().unwrap();
-
-    match &app.mode {
-        AppMode::ConfirmResourceStart(state) => assert_eq!(
-            state.pending,
-            PendingStart::EnterView { auto_compose: true }
-        ),
-        other => panic!(
-            "expected a resource confirm, got {:?}",
-            std::mem::discriminant(other)
-        ),
-    }
-    assert_eq!(
-        app.store.projects[0].features[1].status,
-        ProjectStatus::Stopped,
-        "nothing should have started while the question is on screen"
-    );
-}
-
 /// `x` then `c` on one session of an otherwise-running feature restarts just
 /// that session's window via `restart_stopped_session_window`. Recreating an
 /// agent-harness window spawns a process exactly like any other launch
@@ -426,71 +389,9 @@ fn entering_a_running_feature_never_asks() {
     app.enter_view_without_auto_compose().unwrap();
 
     assert!(
-        matches!(app.mode, AppMode::Viewing(_)),
+        matches!(app.mode, AppMode::Normal),
         "got {:?}",
         std::mem::discriminant(&app.mode)
-    );
-}
-
-#[test]
-fn confirming_the_warning_opens_the_stopped_feature() {
-    let mut tmux = MockTmuxOps::new();
-    let _pane = expect_one_live_harness(&mut tmux);
-    // False while the gate looks, true once the session has been created.
-    let created = std::sync::Arc::new(AtomicBool::new(false));
-    let seen = created.clone();
-    tmux.expect_session_exists()
-        .withf(|session| session == "aiw-other-feat")
-        .returning(move |_| seen.load(Ordering::SeqCst));
-    tmux.expect_create_session_with_window()
-        .returning(move |_, _, _| {
-            created.store(true, Ordering::SeqCst);
-            Ok(())
-        });
-    tmux.expect_set_session_env().returning(|_, _, _| Ok(()));
-    tmux.expect_create_window().returning(|_, _, _| Ok(()));
-    tmux.expect_launch_claude()
-        .returning(|_, _, _, _, _| Ok(()));
-    tmux.expect_resize_pane().returning(|_, _, _, _| Ok(()));
-    tmux.expect_select_window().returning(|_, _| Ok(()));
-
-    let mut app = App::new_for_test(
-        store_with_running_and_stopped_features(),
-        Box::new(tmux),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.config.max_concurrent_agents = 1;
-    app.config.low_memory_warn_mb = 0;
-    app.selection = Selection::Feature(0, 1);
-
-    app.enter_view_without_auto_compose().unwrap();
-    match &app.mode {
-        // The flag the caller opened with travels through the dialog, so the
-        // replay is the same operation and not a lookalike.
-        AppMode::ConfirmResourceStart(state) => assert_eq!(
-            state.pending,
-            PendingStart::EnterView {
-                auto_compose: false
-            }
-        ),
-        other => panic!(
-            "expected a resource confirm, got {:?}",
-            std::mem::discriminant(other)
-        ),
-    }
-
-    app.confirm_pending_start().unwrap();
-
-    // Replayed as the original operation, not just as a bare feature start:
-    // the user asked to open the feature, so they land in its view.
-    assert!(
-        matches!(app.mode, AppMode::Viewing(_)),
-        "got {:?}",
-        std::mem::discriminant(&app.mode)
-    );
-    assert_eq!(
-        app.store.projects[0].features[1].status,
-        ProjectStatus::Active
     );
 }
 

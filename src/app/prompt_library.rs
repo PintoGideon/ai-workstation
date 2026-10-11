@@ -378,37 +378,6 @@ impl App {
         });
     }
 
-    /// Capture the current compose buffer as a new template, opening the
-    /// editor pre-seeded. The compose draft is preserved so the user
-    /// lands back on their unsent text after saving.
-    pub fn save_current_prompt_as_template(&mut self) {
-        let text = match &self.mode {
-            AppMode::Compose(state) => state.editor.text().trim().to_string(),
-            _ => return,
-        };
-        if text.is_empty() {
-            self.push_toast_warning("Nothing to save — compose box is empty");
-            return;
-        }
-
-        // Closing compose stashes a draft and drops us back on the view;
-        // capture that Viewing mode as the editor's return target.
-        self.cancel_compose();
-        let dest_path = self.template_source_path(PromptSource::User, None);
-        let return_to = std::mem::replace(&mut self.mode, AppMode::Normal);
-        self.mode = AppMode::PromptEditor(PromptEditorState {
-            editing_id: None,
-            editing_source: PromptSource::User,
-            original_template: None,
-            name: String::new(),
-            tags: String::new(),
-            focus: PromptEditorFocus::Name,
-            editor: TextEditor::with_vim(text),
-            return_to: Box::new(return_to),
-            dest_path,
-        });
-    }
-
     /// Validate and persist the editor's contents (insert or update),
     /// then return to wherever the editor was opened from.
     pub fn submit_prompt_editor(&mut self) -> Result<()> {
@@ -1848,7 +1817,7 @@ mod tests {
         )
         .unwrap();
 
-        let catalog = crate::app::compose::build_skill_catalog(Some(workdir.path()));
+        let catalog = crate::app::fork_skills::build_skill_catalog(Some(workdir.path()));
         let entry = catalog
             .iter()
             .find(|e| e.name == "my-skill")
@@ -1858,8 +1827,8 @@ mod tests {
 
     #[test]
     fn skill_picker_inserts_invocation_at_cursor_and_returns_to_editor() {
+        use crate::app::ComposeCommandEntry;
         use crate::app::{App, AppMode, SkillPickerState};
-        use crate::app::{ComposeCommandEntry, ComposeCommandSource};
         use crate::traits::{MockTmuxOps, MockWorktreeOps};
 
         let repo = tempfile::TempDir::new().unwrap();
@@ -1884,8 +1853,6 @@ mod tests {
             skills: vec![ComposeCommandEntry {
                 name: "review".to_string(),
                 description: "Review the diff".to_string(),
-                source: ComposeCommandSource::Skill,
-                interactive: false,
             }],
             filtered: vec![0],
             query: String::new(),
@@ -1903,8 +1870,8 @@ mod tests {
 
     #[test]
     fn skill_picker_filter_ranks_by_query_and_cancel_restores_editor() {
+        use crate::app::ComposeCommandEntry;
         use crate::app::{App, AppMode, SkillPickerState};
-        use crate::app::{ComposeCommandEntry, ComposeCommandSource};
         use crate::traits::{MockTmuxOps, MockWorktreeOps};
 
         let repo = tempfile::TempDir::new().unwrap();
@@ -1920,8 +1887,6 @@ mod tests {
         let skill = |name: &str| ComposeCommandEntry {
             name: name.to_string(),
             description: String::new(),
-            source: ComposeCommandSource::Skill,
-            interactive: false,
         };
         app.mode = AppMode::SkillPicker(SkillPickerState {
             skills: vec![skill("build"), skill("review"), skill("run")],

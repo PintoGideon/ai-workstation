@@ -154,7 +154,7 @@ pub fn handle_help_key(app: &mut App, key: KeyEvent) -> Result<()> {
                 }
             };
             if let Some(view) = from_view {
-                app.mode = AppMode::Viewing(view);
+                app.return_to_dashboard(&view);
             }
         }
         KeyCode::Char('j') | KeyCode::Down => {
@@ -202,7 +202,7 @@ pub fn handle_latest_prompt_key(app: &mut App, key: KeyCode) -> Result<()> {
                     return Ok(());
                 }
             };
-            app.mode = AppMode::Viewing(view);
+            app.return_to_dashboard(&view);
         }
         KeyCode::Tab | KeyCode::Enter => {
             app.inject_latest_prompt()?;
@@ -284,7 +284,7 @@ pub fn handle_markdown_viewer_key(app: &mut App, key: KeyEvent) -> Result<()> {
                 }
             };
             if let Some(view) = from_view {
-                app.mode = AppMode::Viewing(view);
+                app.return_to_dashboard(&view);
             }
         }
         KeyCode::Char('j') | KeyCode::Down => {
@@ -721,7 +721,7 @@ pub fn handle_debug_log_key(app: &mut App, key: KeyCode) -> Result<()> {
                 }
             };
             if let Some(view) = from_view {
-                app.mode = AppMode::Viewing(view);
+                app.return_to_dashboard(&view);
             }
         }
         KeyCode::Char('j') | KeyCode::Down => {
@@ -891,7 +891,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
     }
 
     #[test]
@@ -1256,7 +1256,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
         assert!(
             app.store.projects[0].features[0]
                 .selected_plan_path

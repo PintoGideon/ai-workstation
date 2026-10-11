@@ -1516,7 +1516,7 @@ index 1111111..2222222 100644
         handle_diff_viewer_key(&mut app, key(KeyCode::Char('a'))).unwrap(); // approve b.rs
         finish_review(&mut app);
 
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
         let history =
             std::fs::read_to_string(dir.path().join(".claude/final-review-feedback.md")).unwrap();
         assert!(history.contains("**Files reviewed:** 2"));
@@ -1545,7 +1545,7 @@ index 1111111..2222222 100644
         assert!(feedback.contains("fix it"));
         assert!(feedback.contains("**Approved:** 1"));
         assert!(feedback.contains("**Needs work:** 1"));
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
     }
 
     /// The index of the first `Dedicated(..)` row in the open destination
@@ -1694,7 +1694,7 @@ index 1111111..2222222 100644
 
         // Cancelling keeps the feedback and returns to the feature view.
         handle_review_harness_pick_key(&mut app, KeyCode::Esc).unwrap();
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
     }
 
     #[test]
@@ -1971,29 +1971,6 @@ index 1111111..2222222 100644
     }
 
     #[test]
-    fn closing_and_reopening_review_clears_unsent_editor_state_and_vim() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let mut app = make_review_app(dir.path(), &["a.rs"]);
-
-        handle_diff_viewer_key(&mut app, ctrl(KeyCode::Char('t'))).unwrap();
-        handle_diff_viewer_key(&mut app, key(KeyCode::Char('f'))).unwrap();
-        handle_diff_viewer_key(&mut app, key(KeyCode::Char('i'))).unwrap();
-        for c in "unsent".chars() {
-            handle_diff_viewer_key(&mut app, key(KeyCode::Char(c))).unwrap();
-        }
-
-        app.close_diff_viewer();
-        let AppMode::Viewing(view) = &app.mode else {
-            panic!("expected return to viewing mode");
-        };
-        let reopened = DiffViewerState::new(view.clone(), dir.path().to_path_buf());
-        assert!(!reopened.vim_enabled);
-        assert!(reopened.feedback_editor.text().is_empty());
-        assert!(reopened.feedback_editor.vim_mode().is_none());
-        assert_eq!(reopened.feedback_editor.cursor(), 0);
-    }
-
-    #[test]
     fn general_feedback_is_written_even_when_all_approved() {
         let dir = tempfile::TempDir::new().unwrap();
         let mut app = make_review_app(dir.path(), &["a.rs"]);
@@ -2252,7 +2229,7 @@ index 1111111..2222222 100644
         finish_review(&mut app);
 
         assert!(dir.path().join(".claude/final-review-feedback.md").exists());
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
         // The .times(1) paste/enter expectations are verified on drop: they
         // targeted the *other* feature's session, not the reviewed one.
     }
@@ -2336,7 +2313,7 @@ index 1111111..2222222 100644
 
         // Feedback is still saved and the viewer returns to the feature view…
         assert!(dir.path().join(".claude/final-review-feedback.md").exists());
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
         assert!(
             app.message
                 .as_deref()
@@ -2443,7 +2420,7 @@ index 1111111..2222222 100644
         finish_review(&mut app);
 
         assert!(dir.path().join(".claude/final-review-feedback.md").exists());
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
         // Mock .times(1) expectations are verified when `app` (and its tmux) drop.
     }
 
@@ -2535,7 +2512,7 @@ index 1111111..2222222 100644
         finish_review(&mut app);
 
         assert!(dir.path().join(".claude/final-review-feedback.md").exists());
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
         assert!(
             app.message
                 .as_deref()
@@ -2680,7 +2657,7 @@ index 1111111..2222222 100644
             std::fs::read_to_string(repo.path().join("a.rs")).unwrap(),
             "ctx\nreplacement\n"
         );
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
         let message = app.message.as_deref().unwrap_or_default();
         assert!(
             message.contains("1 suggestion(s) applied locally (a.rs:2)"),
@@ -2789,7 +2766,7 @@ index 1111111..2222222 100644
         assert!(feedback.contains("### a.rs:2"));
         assert!(feedback.contains("bug here"));
         assert!(feedback.contains("**Line comments:** 1"));
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
     }
 
     #[test]
@@ -3301,7 +3278,7 @@ index 1111111..2222222 100644
         assert!(matches!(&app.mode, AppMode::DiffViewer(s) if !s.finish_confirm));
         // A third q, from the summary, actually finishes.
         handle_diff_viewer_key(&mut app, key(KeyCode::Char('q'))).unwrap();
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
     }
 
     #[test]
@@ -3337,7 +3314,7 @@ index 1111111..2222222 100644
         // q now opens the pre-finish summary immediately (all files decided,
         // no undecided-files confirmation needed).
         finish_review(&mut app);
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
     }
 
     #[test]
@@ -3562,7 +3539,7 @@ index 1111111..2222222 100644
         // confirmation, but top-level Esc pauses immediately without it.
         handle_diff_viewer_key(&mut app, key(KeyCode::Esc)).unwrap();
 
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
         assert!(!dir.path().join(".claude/final-review-feedback.md").exists());
     }
 
@@ -3578,7 +3555,7 @@ index 1111111..2222222 100644
 
         handle_diff_viewer_key(&mut app, key(KeyCode::Esc)).unwrap();
 
-        assert!(matches!(app.mode, AppMode::Viewing(_)));
+        assert!(matches!(app.mode, AppMode::Normal));
         assert!(!dir.path().join(".claude/final-review-feedback.md").exists());
         // Pausing must not clear the progress a reviewer will resume from.
         let saved = std::fs::read_to_string(&progress_path).unwrap();

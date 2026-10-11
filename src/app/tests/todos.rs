@@ -1896,7 +1896,7 @@ fn active_todo_completion_keybind_updates_db_and_retains_reference() {
             token_usage: None,
             stopped: false,
         });
-    app.mode = AppMode::Viewing(ViewState::new(
+    app.return_to_dashboard(&ViewState::new(
         "my-project".into(),
         "my-feat".into(),
         "aiw-my-feat".into(),
@@ -1937,7 +1937,7 @@ fn active_todo_completion_keybind_updates_db_and_retains_reference() {
         .unwrap()
         .unwrap();
     assert_eq!(loaded.work.status, TodoStatus::Completed);
-    assert!(matches!(app.mode, AppMode::Viewing(_)));
+    assert!(matches!(app.mode, AppMode::Normal));
     assert!(
         app.store.projects[0].features[0].sessions[0]
             .todo_reference
@@ -2162,7 +2162,7 @@ fn request_todo_reference_completion_without_db_warns_instead_of_opening_dialog(
             token_usage: None,
             stopped: false,
         });
-    app.mode = AppMode::Viewing(ViewState::new(
+    app.return_to_dashboard(&ViewState::new(
         "my-project".into(),
         "my-feat".into(),
         "aiw-my-feat".into(),
@@ -2175,7 +2175,7 @@ fn request_todo_reference_completion_without_db_warns_instead_of_opening_dialog(
 
     app.request_todo_reference_completion();
 
-    assert!(matches!(app.mode, AppMode::Viewing(_)));
+    assert!(matches!(app.mode, AppMode::Normal));
     assert!(
         app.toasts
             .iter()
@@ -2881,7 +2881,7 @@ fn worktree_keys_ignore_a_trailing_separator() {
 fn quick_capture_overlay_names_its_target_list() {
     let mut app = todos_app();
     make_feature_a_worktree(&mut app);
-    app.mode = AppMode::Viewing(view_state_for("my-project", "my-feat"));
+    app.return_to_dashboard(&view_state_for("my-project", "my-feat"));
 
     app.open_todo_quick_capture();
 

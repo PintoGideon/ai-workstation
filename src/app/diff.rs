@@ -47,7 +47,7 @@ impl App {
                 return;
             }
         };
-        self.mode = AppMode::Viewing(view);
+        self.return_to_dashboard(&view);
     }
 
     pub fn diff_picker_select_next(&mut self) {
@@ -104,7 +104,7 @@ impl App {
             self.exit_pr_review(state);
             return;
         }
-        self.mode = AppMode::Viewing(state.from_view);
+        self.return_to_dashboard(&state.from_view);
     }
 
     pub fn refresh_diff_viewer(&mut self) {
@@ -838,10 +838,8 @@ impl App {
     }
 
     fn current_view_and_workdir(&self) -> Option<(ViewState, std::path::PathBuf)> {
-        let view = match &self.mode {
-            AppMode::Viewing(view) => view.clone(),
-            _ => return None,
-        };
+        // FORK(cockpit): the selected session.
+        let view = self.selection_view_state()?;
 
         let workdir = self
             .store

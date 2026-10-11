@@ -500,26 +500,6 @@ impl App {
                     };
                     self.session_model_target(pi, fi, si)
                 }
-                AppMode::Viewing(view) => {
-                    let pi = self
-                        .store
-                        .projects
-                        .iter()
-                        .position(|p| p.name == view.project_name)
-                        .ok_or_else(|| anyhow::anyhow!("target project was deleted"))?;
-                    let project = &self.store.projects[pi];
-                    let fi = project
-                        .features
-                        .iter()
-                        .position(|f| f.tmux_session == view.session)
-                        .ok_or_else(|| anyhow::anyhow!("target feature was deleted"))?;
-                    let si = project.features[fi]
-                        .sessions
-                        .iter()
-                        .position(|s| s.tmux_window == view.window && s.kind == view.session_kind)
-                        .ok_or_else(|| anyhow::anyhow!("target session changed or was deleted"))?;
-                    self.session_model_target(pi, fi, si)
-                }
                 _ => anyhow::bail!("model advice requires plan review or an agent session"),
             };
         };

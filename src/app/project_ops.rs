@@ -140,7 +140,7 @@ impl App {
         let detail = error.to_string();
         self.report_logged_error("app", format!("Error: {}", detail));
         match &self.mode {
-            AppMode::Normal | AppMode::Help(_) | AppMode::Viewing(_) => {}
+            AppMode::Normal | AppMode::Help(_) => {}
             _ => {
                 self.mode = AppMode::Normal;
             }

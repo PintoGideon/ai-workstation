@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use serde_json::Value;
 
-use super::{App, AppMode, Selection, ViewState};
+use super::{App, AppMode, Selection};
 use crate::editor::TextEditor;
 use crate::fork::followups::{Followup, QUEUE_ACTION, TAKE_TYPE, take_reply};
 use crate::project::SessionKind;
@@ -320,28 +320,6 @@ impl App {
         let previous = std::mem::replace(&mut self.mode, AppMode::Normal);
         self.open_followup_queue(pi, fi, si, previous);
         true
-    }
-
-    /// Open the dialog for the session a view shows (the leader's `Q`).
-    pub fn open_followup_queue_for_view(&mut self, view: &ViewState, previous: AppMode) -> bool {
-        for (pi, project) in self.store.projects.iter().enumerate() {
-            for (fi, feature) in project.features.iter().enumerate() {
-                if feature.tmux_session != view.session {
-                    continue;
-                }
-                if let Some(si) = feature
-                    .sessions
-                    .iter()
-                    .position(|s| s.tmux_window == view.window && s.kind.is_agent_harness())
-                {
-                    self.open_followup_queue(pi, fi, si, previous);
-                    return true;
-                }
-            }
-        }
-        self.mode = previous;
-        self.push_toast_warning("Only agent sessions take follow-ups");
-        false
     }
 
     fn open_followup_queue(&mut self, pi: usize, fi: usize, si: usize, previous: AppMode) {

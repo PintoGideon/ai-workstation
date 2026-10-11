@@ -93,67 +93,6 @@ fn pr_review_toggle_to_session_requires_existing_session() {
 }
 
 #[test]
-fn pr_review_toggle_to_session_jumps_and_stashes_state() {
-    let mut store = store_with_feature(ProjectStatus::Active);
-    store.projects[0].features[0].add_session_named(SessionKind::Claude, "PR Triage".to_string());
-
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists().returning(|_| true);
-
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    enter_pr_review_for_feature(&mut app, 2);
-    if let AppMode::PrReview(state) = &mut app.mode {
-        state.selected = 1;
-        state.detail_scroll = 3;
-    }
-
-    app.pr_review_toggle_to_session().unwrap();
-
-    match &app.mode {
-        AppMode::Viewing(view) => {
-            assert_eq!(view.session, "aiw-my-feat");
-            assert_eq!(view.session_label, "PR Triage");
-        }
-        other => panic!("expected Viewing, got {:?}", std::mem::discriminant(other)),
-    }
-    let stash = app
-        .pr_review_return
-        .as_ref()
-        .expect("pane state should be stashed");
-    assert_eq!(stash.session, "aiw-my-feat");
-    assert_eq!(stash.state.selected, 1);
-    assert_eq!(stash.state.detail_scroll, 3);
-}
-
-#[test]
-fn pr_review_toggle_to_session_uses_the_selected_custom_name() {
-    let mut store = store_with_feature(ProjectStatus::Active);
-    store.projects[0].features[0].add_session_named(SessionKind::Claude, "PR Triage".to_string());
-    store.projects[0].features[0]
-        .add_session_named(SessionKind::Codex, "PR 321 security".to_string());
-
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists().returning(|_| true);
-
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    enter_pr_review_for_feature(&mut app, 2);
-    if let AppMode::PrReview(state) = &mut app.mode {
-        state.dedicated_session_label = "PR 321 security".to_string();
-        state.fix_target_picked = true;
-    }
-
-    app.pr_review_toggle_to_session().unwrap();
-
-    match &app.mode {
-        AppMode::Viewing(view) => {
-            assert_eq!(view.session_label, "PR 321 security");
-            assert_eq!(view.session_kind, SessionKind::Codex);
-        }
-        other => panic!("expected Viewing, got {:?}", std::mem::discriminant(other)),
-    }
-}
-
-#[test]
 fn pr_review_return_to_pane_restores_stashed_state() {
     let mut store = store_with_feature(ProjectStatus::Active);
     store.projects[0].features[0].add_session_named(SessionKind::Claude, "PR Triage".to_string());
@@ -177,36 +116,6 @@ fn pr_review_return_to_pane_restores_stashed_state() {
     assert!(
         app.pr_review_return.is_none(),
         "stash should be consumed on restore"
-    );
-}
-
-#[test]
-fn pr_review_return_to_pane_ignores_mismatched_session() {
-    let mut store = store_with_feature(ProjectStatus::Active);
-    store.projects[0].features[0].add_session_named(SessionKind::Claude, "PR Triage".to_string());
-
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists().returning(|_| true);
-
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    enter_pr_review_for_feature(&mut app, 1);
-    app.pr_review_toggle_to_session().unwrap();
-
-    // Simulate having navigated away to an unrelated session's view.
-    if let AppMode::Viewing(view) = &mut app.mode {
-        view.session = "aiw-other-feat".to_string();
-        view.window = "claude".to_string();
-    }
-
-    app.pr_review_return_to_pane();
-
-    assert!(
-        matches!(&app.mode, AppMode::Viewing(view) if view.session == "aiw-other-feat"),
-        "should not have jumped into the stashed pane from an unrelated session"
-    );
-    assert!(
-        app.pr_review_return.is_some(),
-        "the stash should be left alone, not dropped, in case the user navigates back"
     );
 }
 
@@ -554,99 +463,6 @@ fn pr_investigation_follow_up_editor_opens_and_refuses_an_empty_question() {
 }
 
 #[test]
-fn pr_review_inject_fix_also_stashes_return_state() {
-    // Regression: `f` (inject fix) used to drop the pane's state on the floor
-    // when leaving for the fix session, so `leader+P` had nothing to restore
-    // even though `f` is the far more common way into that session (`P` is
-    // just a peek). `f` must stash exactly like `P` does.
-    let mut store = store_with_feature(ProjectStatus::Active);
-    store.projects[0].features[0].add_session_named(SessionKind::Claude, "PR Triage".to_string());
-
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists().returning(|_| true);
-
-    let db_dir = TempDir::new().unwrap();
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
-    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
-    enter_pr_review_for_feature(&mut app, 2);
-    if let AppMode::PrReview(state) = &mut app.mode {
-        state.selected = 1;
-        // This regression exercises the post-target confirm/inject path; the
-        // target picker (including its new optional name step) is covered
-        // separately.
-        state.fix_target_picked = true;
-    }
-    // Go through the real confirm-dialog path (`f` opens it, then the user
-    // confirms) rather than the no-dialog fallback — a prior version of this
-    // fix left the confirm dialog attached to the stashed state, so returning
-    // via leader+P reopened the same "inject fix" dialog instead of the plain
-    // comment list.
-    app.pr_review_open_fix_confirm();
-    assert!(
-        matches!(&app.mode, AppMode::PrReview(state) if state.fix_confirm.is_some()),
-        "confirm dialog should be open before injecting"
-    );
-    let request_id = match &app.mode {
-        AppMode::PrReview(state) => state.fix_confirm.as_ref().unwrap().reply_draft_requests[0]
-            .request_id
-            .clone(),
-        _ => unreachable!(),
-    };
-
-    app.pr_review_inject_fix().unwrap();
-
-    // Confirming the injection activates this dialog's request id. The agent
-    // can now return a draft through IPC; an id from an older dialog could not
-    // overwrite it.
-    assert!(
-        app.db
-            .as_ref()
-            .unwrap()
-            .capture_pr_comment_reply_draft(7, 2, &request_id, "Fixed the selected path.")
-            .unwrap()
-    );
-
-    // FORK(cockpit): `f` hands the fix prompt over unsent (pasted into the
-    // agent's pane in the cockpit) — the stash must still be keyed to the
-    // same session/window.
-    let compose_view = app
-        .take_unsent_prompt()
-        .expect("the fix prompt is handed over unsent")
-        .view;
-    let stash = app
-        .pr_review_return
-        .as_ref()
-        .expect("f should stash the pane state just like the P toggle");
-    assert_eq!(stash.session, compose_view.session);
-    assert_eq!(stash.window, compose_view.window);
-    assert_eq!(stash.state.selected, 1);
-    let stash_session = stash.session.clone();
-
-    // FORK(cockpit): the prompt hand-off lands on the dashboard; the stash
-    // still names the session it came from.
-    assert!(matches!(&app.mode, AppMode::Normal));
-    assert!(!stash_session.is_empty());
-
-    app.pr_review_return_to_pane();
-
-    match &app.mode {
-        AppMode::PrReview(state) => {
-            assert_eq!(state.selected, 1);
-            assert!(
-                state.fix_confirm.is_none(),
-                "the already-actioned confirm dialog must not reappear"
-            );
-        }
-        other => panic!("expected PrReview, got {:?}", std::mem::discriminant(other)),
-    }
-    assert!(app.pr_review_return.is_none());
-
-    app.pr_review_open_reply_done();
-    assert_eq!(reply_editor_text(&app), "Fixed the selected path.");
-}
-
-#[test]
 fn fix_confirm_prompt_carries_a_completed_investigations_findings() {
     use crate::app::pr_review::{PrInvestigationStatus, PrInvestigationTurn};
     use crate::db::pr_investigations::PrInvestigation;
@@ -749,129 +565,6 @@ fn pr_review_inject_fix_rejects_a_named_session_with_the_wrong_harness() {
             .is_some_and(|toast| toast.message.contains("already runs Claude")),
         "expected an actionable harness-conflict toast, got {:?}",
         app.toasts.last().map(|toast| &toast.message)
-    );
-}
-
-#[test]
-fn pr_review_inject_fix_targets_dialogs_original_comment_after_selection_moves() {
-    // Regression: a PR Triage refresh (e.g. the automatic one after posting
-    // an AI review) can drop the comment a still-open fix-confirm dialog was
-    // built for, falling the selection back onto a different comment while
-    // the stale dialog stays open. Confirming must still mark — and route
-    // the reply-draft handoff to — the dialog's original comment, never
-    // whatever the refresh happened to leave selected.
-    let mut store = store_with_feature(ProjectStatus::Active);
-    store.projects[0].features[0].add_session_named(SessionKind::Claude, "PR Triage".to_string());
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists().returning(|_| true);
-    let db_dir = TempDir::new().unwrap();
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
-    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
-    enter_pr_review_for_feature(&mut app, 2);
-    if let AppMode::PrReview(state) = &mut app.mode {
-        state.selected = 1; // comment id 2
-        // Keep this regression focused on the stale-dialog target rather than
-        // the first-fix target/name picker.
-        state.fix_target_picked = true;
-    }
-    app.pr_review_open_fix_confirm();
-    let request_id = match &app.mode {
-        AppMode::PrReview(state) => state.fix_confirm.as_ref().unwrap().reply_draft_requests[0]
-            .request_id
-            .clone(),
-        _ => unreachable!(),
-    };
-
-    // Simulate the refresh: comment 2's thread resolved upstream and dropped
-    // out of the fetched set, so selection fell back to comment 1. The dialog
-    // (still targeting comment 2 via its own `reply_draft_requests`) is left
-    // open, exactly as `apply_refreshed_pr_review_state` leaves it.
-    if let AppMode::PrReview(state) = &mut app.mode {
-        state.review.comments.retain(|c| c.id != 2);
-        state.selected = 0;
-    }
-
-    app.pr_review_inject_fix().unwrap();
-
-    let triage = app.db.as_ref().unwrap().load_pr_comment_triage(7).unwrap();
-    assert!(
-        !triage.contains_key(&1),
-        "the newly-selected comment must not be marked Fixing"
-    );
-    assert_eq!(
-        triage.get(&2).map(|row| row.state),
-        Some(crate::app::pr_review::TriageState::Fixing),
-        "the dialog's original comment must still be marked Fixing"
-    );
-    assert!(
-        app.db
-            .as_ref()
-            .unwrap()
-            .capture_pr_comment_reply_draft(7, 2, &request_id, "Fixed the selected path.")
-            .unwrap(),
-        "the reply-draft handoff must still route to the dialog's original comment"
-    );
-}
-
-#[test]
-fn single_comment_fix_keeps_a_batched_comments_in_memory_batch_id() {
-    // Regression: fixing one comment with `f` set `c.batch_id = batch_id` for
-    // every targeted comment, and `batch_id` is `None` on the single-comment
-    // path — so a comment that was already part of an earlier combined batch
-    // had its in-memory `batch_id` cleared, dropping its `⧉` marker and
-    // `[`/`]` sibling jump until the pane was re-entered. The single-comment
-    // path must leave an existing `batch_id` alone.
-    let mut store = store_with_feature(ProjectStatus::Active);
-    store.projects[0].features[0].add_session_named(SessionKind::Claude, "PR Triage".to_string());
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists().returning(|_| true);
-    let db_dir = TempDir::new().unwrap();
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
-    app.db = Some(crate::db::AiwDb::open(&db_dir.path().join("aiw.db")).unwrap());
-    enter_pr_review_for_feature(&mut app, 2);
-
-    // Comment id 1 was resolved as part of an earlier batch; comment id 2 is
-    // the one now being fixed on its own.
-    if let AppMode::PrReview(state) = &mut app.mode {
-        state.selected = 1; // comment id 2
-        state.fix_target_picked = true;
-        if let Some(c) = state.review.comments.iter_mut().find(|c| c.id == 1) {
-            c.batch_id = Some("earlier-batch".to_string());
-        }
-    }
-
-    app.pr_review_open_fix_confirm();
-    app.pr_review_inject_fix().unwrap();
-
-    let stashed = &app
-        .pr_review_return
-        .as_ref()
-        .expect("f stashes the pane state")
-        .state;
-    assert_eq!(
-        stashed
-            .review
-            .comments
-            .iter()
-            .find(|c| c.id == 1)
-            .unwrap()
-            .batch_id
-            .as_deref(),
-        Some("earlier-batch"),
-        "a single-comment fix must not clear an unrelated comment's batch_id"
-    );
-    assert_eq!(
-        stashed
-            .review
-            .comments
-            .iter()
-            .find(|c| c.id == 2)
-            .unwrap()
-            .batch_id,
-        None,
-        "the single-comment fix target itself gets no batch id"
     );
 }
 
@@ -3748,65 +3441,6 @@ fn pr_review_open_without_selection_shows_message() {
 }
 
 #[test]
-fn feature_for_view_resolves_by_project_and_feature_name() {
-    let store = store_with_feature(ProjectStatus::Active);
-    let app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    let view = view_state_for("my-project", "my-feat");
-
-    let feature = app.feature_for_view(&view).expect("feature should resolve");
-    assert_eq!(feature.id, "feat-1");
-}
-
-#[test]
-fn feature_for_view_returns_none_for_unknown_feature() {
-    let store = store_with_feature(ProjectStatus::Active);
-    let app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    let view = view_state_for("my-project", "does-not-exist");
-
-    assert!(app.feature_for_view(&view).is_none());
-}
-
-#[test]
-fn open_pr_review_from_view_is_noop_outside_viewing_mode() {
-    // Leader commands only fire while `Viewing`, but guard the entry point
-    // itself in case something else ever calls it from another mode.
-    let mut app = pr_review_test_app();
-    app.mode = AppMode::Normal;
-
-    app.open_pr_review_from_view();
-
-    assert!(matches!(app.mode, AppMode::Normal));
-    assert!(app.message.is_none());
-}
-
-#[test]
-fn open_pr_review_from_view_shows_message_for_unresolvable_feature() {
-    // The session view names a project/feature that no longer exists in the
-    // store — resolve must fail gracefully rather than panicking or spending
-    // a `gh` call on a bogus workdir.
-    let store = store_with_feature(ProjectStatus::Active);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.mode = AppMode::Viewing(view_state_for("my-project", "does-not-exist"));
-
-    app.open_pr_review_from_view();
-
-    assert!(matches!(app.mode, AppMode::Viewing(_)));
-    assert_eq!(app.message.as_deref(), Some("No active feature to review"));
-}
-
-#[test]
 fn dedicated_review_session_working_for_workdir_reads_outside_pr_review_mode() {
     // The ambient Viewing-mode badge calls this while `self.mode` is
     // `Viewing`, not `PrReview` — unlike `pr_review_dedicated_session_working`,
@@ -3826,7 +3460,7 @@ fn dedicated_review_session_working_for_workdir_reads_outside_pr_review_mode() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.mode = AppMode::Viewing(view_state_for("my-project", "my-feat"));
+    app.return_to_dashboard(&view_state_for("my-project", "my-feat"));
 
     assert_eq!(
         app.dedicated_review_session_working_for_workdir(&workdir),

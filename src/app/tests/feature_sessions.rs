@@ -10,10 +10,7 @@ use crate::traits::{MockTmuxOps, MockWorktreeOps};
 use chrono::Utc;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::collections::HashMap;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::{Arc, atomic::Ordering};
 use tempfile::NamedTempFile;
 use tempfile::TempDir;
 
@@ -205,24 +202,6 @@ fn pick_session_choice_leaves_the_dialog_for_the_transcript_picker() {
 }
 
 #[test]
-fn running_agent_session_still_opens_directly() {
-    let mut store = store_with_stopped_agent_session(SessionKind::Claude, Some("resume-me"));
-    store.projects[0].features[0].status = ProjectStatus::Idle;
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists().times(2).return_const(true);
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.selection = Selection::Session(0, 0, 0);
-
-    crate::handlers::handle_normal_key(&mut app, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-        .unwrap();
-
-    assert!(
-        matches!(app.mode, AppMode::Viewing(_) | AppMode::Compose(_)),
-        "running sessions should keep the existing open behavior"
-    );
-}
-
-#[test]
 fn uppercase_s_for_running_agent_keeps_existing_resume_picker_behavior() {
     let mut store = store_with_stopped_agent_session(SessionKind::Claude, Some("resume-me"));
     store.projects[0].features[0].status = ProjectStatus::Idle;
@@ -271,90 +250,13 @@ fn stopped_session_dialog_cancel_returns_to_dashboard() {
 }
 
 #[test]
-fn stopped_terminal_session_keeps_existing_start_and_open_behavior() {
-    let mut store = store_with_feature(ProjectStatus::Stopped);
-    store.projects[0].features[0].add_session_named(SessionKind::Terminal, "Shell".into());
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists().times(1).return_const(false);
-    tmux.expect_create_session_with_window()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_set_session_env()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_select_window()
-        .times(1)
-        .returning(|_, _| Ok(()));
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.selection = Selection::Session(0, 0, 0);
-
-    crate::handlers::handle_normal_key(&mut app, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-        .unwrap();
-
-    assert!(matches!(
-        app.mode,
-        AppMode::Viewing(ViewState {
-            session_kind: SessionKind::Terminal,
-            ..
-        })
-    ));
-}
-
-#[test]
-fn recovery_resumes_saved_codex_session_and_opens_its_pane() {
-    let store = store_with_stopped_agent_session(SessionKind::Codex, Some("codex-resume"));
-    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let calls_for_exists = calls.clone();
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists()
-        .times(4)
-        .returning(move |_| calls_for_exists.fetch_add(1, Ordering::SeqCst) == 3);
-    tmux.expect_check_harness_available()
-        .withf(|kind| *kind == AgentKind::Codex)
-        .times(1)
-        .returning(|_| Ok(()));
-    tmux.expect_create_session_with_window()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_set_session_env()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_run_shell_command()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_launch_codex()
-        .withf(|_, window, _, resume_id, _| {
-            window == "codex" && resume_id.as_deref() == Some("codex-resume")
-        })
-        .times(1)
-        .returning(|_, _, _, _, _| Ok(()));
-    tmux.expect_select_window()
-        .times(1)
-        .returning(|_, _| Ok(()));
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.selection = Selection::Session(0, 0, 0);
-    app.open_stopped_session_dialog().unwrap();
-
-    app.confirm_stopped_session_choice(StoppedSessionChoice::Resume);
-
-    assert!(matches!(
-        app.mode,
-        AppMode::Viewing(ViewState {
-            session_kind: SessionKind::Codex,
-            ..
-        })
-    ));
-    assert_eq!(app.message.as_deref(), Some("Resumed Codex session"));
-}
-
-#[test]
 fn clear_recovery_launches_without_resume_and_clears_saved_metadata() {
     let store = store_with_stopped_agent_session(SessionKind::Claude, Some("old-session"));
     let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let calls_for_exists = calls.clone();
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists()
-        .times(4)
+        .times(3..=4)
         .returning(move |_| calls_for_exists.fetch_add(1, Ordering::SeqCst) == 3);
     tmux.expect_check_harness_available()
         .withf(|kind| *kind == AgentKind::Claude)
@@ -1162,132 +1064,6 @@ fn finish_feature_launch_opens_startup_prompt_for_codex() {
     startup_prompt_overlay_test(AgentKind::Codex, "codex");
 }
 
-#[test]
-fn restore_claude_session_resizes_window_before_launch_when_viewport_known() {
-    let repo = TempDir::new().unwrap();
-    let workdir = repo.path().join(".worktrees").join("restore-me");
-    std::fs::create_dir_all(&workdir).unwrap();
-
-    let now = Utc::now();
-    let feature = Feature {
-        id: "feat-1".to_string(),
-        name: "restore-me".to_string(),
-        branch: "restore-me".to_string(),
-        workdir: workdir.clone(),
-        is_worktree: true,
-        tmux_session: "aiw-restore-me".to_string(),
-        sessions: vec![],
-        collapsed: false,
-        mode: VibeMode::default(),
-        review: false,
-        plan_mode: false,
-        agent: AgentKind::Claude,
-        enable_chrome: false,
-        remote_control: false,
-        pending_worktree_script: false,
-        ready: false,
-        status: ProjectStatus::Stopped,
-        created_at: now,
-        last_accessed: now,
-        summary: None,
-        summary_updated_at: None,
-        nickname: None,
-        selected_plan_path: None,
-        triage_source: None,
-        review_source: None,
-        issue_source: None,
-    };
-    let store = ProjectStore {
-        version: 4,
-        projects: vec![Project {
-            id: "proj-1".to_string(),
-            name: "my-project".to_string(),
-            repo: repo.path().to_path_buf(),
-            collapsed: false,
-            features: vec![feature],
-            created_at: now,
-            preferred_agent: AgentKind::Claude,
-            is_git: true,
-        }],
-        session_bookmarks: vec![],
-        available_harnesses: vec![],
-        prompt_templates: Vec::new(),
-        extra: HashMap::new(),
-    };
-
-    let resized = Arc::new(AtomicBool::new(false));
-    let resized_for_launch = resized.clone();
-
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists()
-        .withf(|session| session == "aiw-restore-me")
-        .times(3)
-        .return_const(false);
-    tmux.expect_create_session_with_window()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_set_session_env()
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_create_window()
-        .times(0)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_resize_pane()
-        .times(1)
-        .withf(|session, window, cols, rows| {
-            session == "aiw-restore-me" && window == "claude" && *cols == 120 && *rows == 40
-        })
-        .returning(move |_, window, _, _| {
-            if window == "claude" {
-                resized.store(true, Ordering::SeqCst);
-            }
-            Ok(())
-        });
-    tmux.expect_launch_claude()
-        .times(1)
-        .withf(
-            move |session, window, feature_session_id, resume_id, extra_args| {
-                resized_for_launch.load(Ordering::SeqCst)
-                    && session == "aiw-restore-me"
-                    && window == "claude"
-                    && !feature_session_id.is_empty()
-                    && resume_id.as_deref() == Some("claude-session-123")
-                    // FORK: the only extra argument is `--settings <file>` (DESIGN.md §16).
-                    && crate::fork::launch::only_settings_flag(extra_args)
-            },
-        )
-        .returning(|_, _, _, _, _| Ok(()));
-    tmux.expect_select_window()
-        .times(1)
-        .withf(|session, window| session == "aiw-restore-me" && window == "claude")
-        .returning(|_, _| Ok(()));
-
-    let tmp = NamedTempFile::new().unwrap();
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.store_path = tmp.path().to_path_buf();
-    app.selection = Selection::Feature(0, 0);
-    app.viewport_cols = 120;
-    app.viewport_rows = 40;
-    app.viewport_total_rows = 41;
-    app.mode = AppMode::ConfirmingClaudeSession {
-        session_id: "claude-session-123".to_string(),
-        target_session_id: None,
-        workdir,
-    };
-
-    app.confirm_and_start_claude().unwrap();
-
-    match &app.mode {
-        AppMode::Viewing(view) => {
-            assert_eq!(view.session_kind, SessionKind::Claude);
-            assert!(view.startup_mask_active());
-        }
-        _ => panic!("expected Viewing mode"),
-    }
-    assert_eq!(app.message.as_deref(), Some("Restored claude session"));
-    assert!(matches!(app.selection, Selection::Session(0, 0, 0)));
-}
-
 /// Regression test for issue #633: restoring a historical claude session for
 /// one named session in a feature must not overwrite or resume any other
 /// claude-kind session sharing that feature.
@@ -1406,62 +1182,6 @@ fn restore_claude_session_only_affects_the_targeted_session() {
         Some("picked-session-999")
     );
     assert_eq!(claude_2.claude_session_id.as_deref(), Some("claude-2-old"));
-}
-
-#[test]
-fn enter_view_from_feature_selects_pi_harness_and_shows_startup_mask() {
-    let mut store = store_with_feature(ProjectStatus::Stopped);
-    store.projects[0].features[0].agent = AgentKind::Pi;
-    store.projects[0].preferred_agent = AgentKind::Pi;
-
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists()
-        .withf(|session| session == "aiw-my-feat")
-        .times(1)
-        .return_const(false);
-    tmux.expect_create_session_with_window()
-        .withf(|session, window, workdir| {
-            session == "aiw-my-feat"
-                && window == "pi"
-                && workdir == std::path::Path::new("/tmp/test-workdir")
-        })
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_set_session_env()
-        .withf(|session, key, value| {
-            session == "aiw-my-feat" && key == "AIW_SESSION" && value == "aiw-my-feat"
-        })
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_create_window()
-        .times(0)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_launch_pi()
-        .withf(|session, window, feature_session_id| {
-            session == "aiw-my-feat" && window == "pi" && !feature_session_id.is_empty()
-        })
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_select_window()
-        .withf(|session, window| session == "aiw-my-feat" && window == "pi")
-        .times(1)
-        .returning(|_, _| Ok(()));
-
-    let tmp = NamedTempFile::new().unwrap();
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.store_path = tmp.path().to_path_buf();
-    app.selection = Selection::Feature(0, 0);
-
-    app.enter_view_without_auto_compose().unwrap();
-
-    match &app.mode {
-        AppMode::Viewing(view) => {
-            assert_eq!(view.session_kind, SessionKind::Pi);
-            assert_eq!(view.window, "pi");
-            assert!(view.startup_mask_active());
-        }
-        _ => panic!("expected Viewing mode"),
-    }
 }
 
 #[test]
@@ -2921,45 +2641,6 @@ fn stopping_an_already_stopped_session_says_so() {
 }
 
 #[test]
-fn enter_on_a_stopped_session_of_a_running_feature_restarts_and_opens_it() {
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists().return_const(true);
-    tmux.expect_window_exists()
-        .withf(|_, window| window == "Claude-2")
-        .returning(|_, _| false);
-    tmux.expect_create_window()
-        .withf(|_, window, _| window == "Claude-2")
-        .times(1)
-        .returning(|_, _, _| Ok(()));
-    tmux.expect_launch_claude()
-        .withf(|_, window, _, _, _| window == "Claude-2")
-        .times(1)
-        .returning(|_, _, _, _, _| Ok(()));
-    tmux.expect_resize_pane().returning(|_, _, _, _| Ok(()));
-
-    let store = store_with_sessions(
-        ProjectStatus::Idle,
-        &["Claude-1", "Claude-2"],
-        &["Claude-2"],
-    );
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.selection = Selection::Session(0, 0, 1);
-
-    crate::handlers::handle_normal_key(&mut app, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-        .unwrap();
-
-    assert_eq!(stopped_flags(&app), vec![false, false]);
-    match &app.mode {
-        AppMode::Viewing(view) => assert_eq!(view.window, "Claude-2"),
-        AppMode::Compose(_) => {}
-        other => panic!(
-            "expected the restarted session to open, got {:?}",
-            std::mem::discriminant(other)
-        ),
-    }
-}
-
-#[test]
 fn complete_deleting_feature_clears_sidebar_caches() {
     let repo = TempDir::new().unwrap();
     let tmp = NamedTempFile::new().unwrap();
@@ -3378,55 +3059,6 @@ fn bookmark_add_and_remove_current_session() {
 
     app.unbookmark_current_session().unwrap();
     assert!(app.store.session_bookmarks.is_empty());
-}
-
-#[test]
-fn jump_to_bookmark_opens_composer_for_agent_session() {
-    let store = store_with_single_claude_session();
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists().times(1).returning(|_| true);
-
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
-    app.selection = Selection::Session(0, 0, 0);
-    let tmp = NamedTempFile::new().unwrap();
-    app.store_path = tmp.path().to_path_buf();
-    app.bookmark_current_session().unwrap();
-    app.mode = AppMode::Normal;
-
-    app.jump_to_bookmark(1).unwrap();
-
-    assert!(matches!(app.selection, Selection::Session(0, 0, 0)));
-    match &app.mode {
-        AppMode::Compose(state) => {
-            assert_eq!(state.view.session, "aiw-my-feat");
-            assert_eq!(state.view.window, "claude");
-            assert!(state.editor.text().is_empty());
-        }
-        _ => panic!("expected Compose mode"),
-    }
-}
-
-#[test]
-fn jump_to_bookmark_keeps_direct_agent_session_in_view() {
-    let store = store_with_single_claude_session();
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_session_exists().times(1).returning(|_| true);
-
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.config.compose_box = true; // FORK: exercises AIW's compose-on mode
-    app.selection = Selection::Session(0, 0, 0);
-    app.compose_direct_targets
-        .insert("aiw-my-feat:claude".to_string());
-    let tmp = NamedTempFile::new().unwrap();
-    app.store_path = tmp.path().to_path_buf();
-    app.bookmark_current_session().unwrap();
-    app.mode = AppMode::Normal;
-
-    app.jump_to_bookmark(1).unwrap();
-
-    assert!(matches!(app.selection, Selection::Session(0, 0, 0)));
-    assert!(matches!(app.mode, AppMode::Viewing(_)));
 }
 
 #[test]

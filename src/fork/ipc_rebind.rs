@@ -25,7 +25,7 @@ pub(crate) fn rebind_if_vanished(app: &mut App) -> bool {
     // Drop first: the old guard's `Drop` removes the (already missing) file,
     // and must not run after the new one bound the same path.
     app.ipc = None;
-    match crate::ipc::start_with_wakeup(&path, Some(app.view_wakeup_tx())) {
+    match crate::ipc::start_with_wakeup(&path, Some(app.wakeup_tx())) {
         Ok(guard) => {
             app.log_warn(
                 "ipc",

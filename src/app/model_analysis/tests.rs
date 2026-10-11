@@ -597,7 +597,7 @@ fn pane_session_advice_returns_to_pane_and_rejects_deleted_target() {
     let (mut app, _dir) = session_fixture(SessionKind::Codex);
     let feature = &app.store.projects[0].features[0];
     let session = &feature.sessions[0];
-    app.mode = AppMode::Viewing(super::super::ViewState::new(
+    app.return_to_dashboard(&super::super::ViewState::new(
         "project".into(),
         feature.name.clone(),
         feature.tmux_session.clone(),
@@ -622,7 +622,7 @@ fn pane_session_advice_returns_to_pane_and_rejects_deleted_target() {
     poll(&mut app);
     assert!(matches!(&app.mode,AppMode::ModelAnalysis(s) if matches!(s.status,Status::Error(_))));
     app.cancel_model_analysis();
-    assert!(matches!(app.mode, AppMode::Viewing(_)));
+    assert!(matches!(app.mode, AppMode::Normal));
 }
 
 #[test]

@@ -15,8 +15,6 @@ use crate::app::{App, AppMode};
 
 /// The dashboard key that opens the dialog on a session row.
 pub const QUEUE_KEY: char = 'e';
-/// The leader key (pane or full view) that opens it for the shown session.
-pub const LEADER_QUEUE_KEY: char = 'Q';
 
 /// A dashboard key. Returns `true` when consumed.
 pub fn handle_dashboard_key(app: &mut App, key: KeyEvent) -> Result<bool> {

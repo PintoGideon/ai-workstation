@@ -253,21 +253,6 @@ impl App {
         self.open_pr_review_for_workdir(workdir);
     }
 
-    /// Open PR Triage for the feature behind the current `Viewing` session —
-    /// the leader-key entry point (`leader+G`), peer to the dashboard's `G`.
-    /// Lets the user jump straight into triage without first exiting to the
-    /// dashboard and re-entering.
-    pub fn open_pr_review_from_view(&mut self) {
-        let AppMode::Viewing(view) = &self.mode else {
-            return;
-        };
-        let Some(workdir) = self.feature_for_view(view).map(|f| f.workdir.clone()) else {
-            self.message = Some("No active feature to review".to_string());
-            return;
-        };
-        self.open_pr_review_for_workdir(workdir);
-    }
-
     pub(super) fn open_pr_review_for_workdir(&mut self, workdir: PathBuf) {
         if let Err(e) = GhCli::check_available() {
             self.show_error(e);

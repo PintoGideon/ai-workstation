@@ -936,7 +936,7 @@ pub fn run() -> Result<()> {
 
         // Start IPC socket server for push-based hook notifications.
         let socket = ipc::socket_path();
-        match ipc::start_with_wakeup(&socket, Some(app.view_wakeup_tx())) {
+        match ipc::start_with_wakeup(&socket, Some(app.wakeup_tx())) {
             Ok(guard) => {
                 app.log_info("ipc", format!("Socket listening at {}", socket.display()));
                 app.ipc = Some(guard);
@@ -1485,67 +1485,6 @@ fn run_pending_editor<B: Backend<Error = io::Error> + io::Write>(
     Ok(())
 }
 
-/// FORK: hand the terminal to `tmux attach-session` for one agent window,
-/// then take it back (DESIGN.md §15.4). Mirrors `run_pending_editor`: the
-/// screen is always restored, and a failed attach is a message, not an
-/// error.
-fn run_pending_attach<B: Backend<Error = io::Error> + io::Write>(
-    terminal: &mut Terminal<B>,
-    app: &mut App,
-    request: &crate::fork::attach::PendingAttach,
-) -> Result<()> {
-    // The capture worker would otherwise keep a pipe-pane on the window
-    // and race the attached client for its size.
-    app.stop_view_snapshot_worker();
-    if let Err(e) = app.flush_view_input_batch() {
-        app.log_error("attach", format!("{e:#}"));
-    }
-
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        DisableBracketedPaste,
-        DisableMouseCapture,
-        SetCursorStyle::DefaultUserShape,
-        LeaveAlternateScreen
-    )?;
-    terminal.show_cursor()?;
-
-    app.log_info(
-        "attach",
-        format!(
-            "Attaching to {} ({}:{})",
-            request.title, request.session, request.window
-        ),
-    );
-    let status = crate::fork::attach::run_attach(request);
-
-    enable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        EnterAlternateScreen,
-        EnableBracketedPaste,
-        EnableMouseCapture,
-        SetCursorStyle::SteadyBlock
-    )?;
-    terminal.hide_cursor()?;
-    terminal.clear()?;
-
-    let ok = match status {
-        Ok(status) if status.success() => true,
-        Ok(status) => {
-            app.log_error("attach", format!("tmux attach exited with {status}"));
-            false
-        }
-        Err(err) => {
-            app.log_error("attach", format!("Could not run tmux attach: {err}"));
-            false
-        }
-    };
-    app.note_attach_returned(request, ok);
-    Ok(())
-}
-
 // The `io::Write` bound is what lets `run_pending_editor` drive the terminal's
 // alternate screen / raw mode through the backend, the same way `run` does.
 fn run_loop<B: Backend<Error = io::Error> + io::Write>(
@@ -1564,9 +1503,7 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
     app.prune_stale_notifications();
     let mut last_usage_debug: Option<(Option<i64>, Option<i64>, u64, u64)> = None;
     let mut last_claude_usage_debug: Option<String> = None;
-    let mut last_resize: Option<(u16, u16, String, String)> = None;
     let mut force_redraw = true;
-    let startup_grace_until = Instant::now() + app.config.input_request_wait_duration();
     let mut startup_task_spacing_until = Instant::now();
     let mut startup_sync_statuses_pending = true;
     let mut startup_session_status_pending = true;
@@ -1580,36 +1517,27 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
     const STORE_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
     let mut last_store_refresh_check = Instant::now();
     const ANIMATED_REDRAW_INTERVAL: Duration = Duration::from_millis(125);
-    const VIEW_IDLE_REFRESH_QUIET_PERIOD: Duration = Duration::from_millis(150);
     // Thinking sync is event-driven via the filesystem watcher; this
     // is only the safety-net cadence when the watcher is running.
     const THINKING_SYNC_FALLBACK_INTERVAL: Duration = Duration::from_secs(2);
     // Status sync is event-driven via the tmux observer; this is only
     // the safety-net cadence when the observer is running.
     const STATUSES_SYNC_FALLBACK_INTERVAL: Duration = Duration::from_secs(30);
-    let wakeup_rx_fd: Option<RawFd> = app.view_wakeup_rx_fd();
+    let wakeup_rx_fd: Option<RawFd> = app.wakeup_rx_fd();
     let startup_loading_started_at = Instant::now();
-    let mut last_view_refresh_request = Instant::now();
     // Backoff for pane-size drift corrections: if drift reappears right
     // after we fixed it, something else (another AIW instance, a user
     // attached elsewhere) is also resizing the pane, and fighting it
     // every few seconds garbles the agent's screen on each SIGWINCH.
-    const DRIFT_CORRECTION_BACKOFF: Duration = Duration::from_secs(30);
-    let mut last_drift_correction: Option<Instant> = None;
     // Terminal resizes arrive as a stream while a window is dragged or
     // re-tiled; forwarding each one to tmux lands a SIGWINCH mid-frame
     // in the agent pane, and every reflow can bake blended rows into
     // its scrollback. Wait for the viewport to hold still before
     // resizing the pane.
-    const VIEWPORT_RESIZE_DEBOUNCE: Duration = Duration::from_millis(250);
-    let mut last_viewport_dims: Option<(u16, u16)> = None;
-    let mut viewport_stable_since = Instant::now();
     // Periodic re-anchor bounce for Claude panes. Two-phase so the main
     // thread never sleeps: shrink the pane one row, then restore it a
     // later iteration once `VIEW_REANCHOR_BOUNCE_DWELL` has passed. The
     // restore tuple is `(session, window, cols, full_rows, shrunk_at)`.
-    let mut last_reanchor_bounce = Instant::now();
-    let mut pending_reanchor_restore: Option<(String, String, u16, u16, Instant)> = None;
     let mut last_statuses_sync = std::time::Instant::now();
     // FORK(no-cloud): no background PR badge sweep. AIW re-ran `gh` for every
     // feature's PR every 5 minutes (and once at startup); AIW refreshes PR
@@ -1621,26 +1549,15 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         // Carried over from the end of the previous iteration so the
         // signature is hashed only once per loop.
         let loop_state_signature = last_redraw_signature;
-        let is_viewing = matches!(app.mode, app::AppMode::Viewing(_));
-        // The compose box keeps the live pane visible behind it, so the
-        // pane-refresh paths must stay active while composing too.
-        let pane_live = is_viewing
-            || matches!(app.mode, app::AppMode::Compose(_))
-            || matches!(app.mode, app::AppMode::SplitView(_)) // FORK: split view tiles are live panes
-            || app.workspace_pane_live(); // FORK: the workspace layout's live pane
         let animating = app.has_visible_animation();
 
         // FORK: `mut` — a resize event below updates it, so the split-view
         // tick lays tiles out for the frame that is about to be drawn.
-        let mut size = terminal.size()?;
+        let size = terminal.size()?;
         let visible_rows = size.height.saturating_sub(3);
         app.viewport_cols = size.width;
         app.viewport_rows = visible_rows;
         app.viewport_total_rows = size.height;
-        if last_viewport_dims != Some((size.width, size.height)) {
-            last_viewport_dims = Some((size.width, size.height));
-            viewport_stable_since = Instant::now();
-        }
 
         app.throbber_state.calc_next();
         if app.tick_toasts() {
@@ -1717,9 +1634,7 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             app.show_error(e);
         }
 
-        if app.has_active_sidebar() {
-            force_redraw |= app.poll_codex_sidebar_metadata();
-        }
+        force_redraw |= app.poll_codex_sidebar_metadata();
 
         if app.session_status_bg.is_some() {
             let started_at = Instant::now();
@@ -1891,22 +1806,12 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             };
             deadlines.register_after(last_thinking_sync, thinking_fallback);
             deadlines.register_after(last_file_log_flush, Duration::from_secs(1));
-            if !is_viewing {
-                let statuses_fallback = if app.tmux_observer.is_some() {
-                    STATUSES_SYNC_FALLBACK_INTERVAL
-                } else {
-                    Duration::from_secs(5)
-                };
-                deadlines.register_after(last_statuses_sync, statuses_fallback);
-            }
-            // Only the persistent control-mode view worker drifts and needs
-            // the periodic reseed; the direct (pipe/capture) path rebuilds a
-            // fresh parser per frame and self-heals, so its refresh timestamp
-            // never updates and this deadline would otherwise floor the poll.
-            if pane_live && app.config.view_auto_refresh && TmuxManager::uses_control_pty_input() {
-                deadlines
-                    .register_after(last_view_refresh_request, app::VIEW_DRIFT_RESEED_INTERVAL);
-            }
+            let statuses_fallback = if app.tmux_observer.is_some() {
+                STATUSES_SYNC_FALLBACK_INTERVAL
+            } else {
+                Duration::from_secs(5)
+            };
+            deadlines.register_after(last_statuses_sync, statuses_fallback);
             if animating {
                 deadlines.register_after(now, ANIMATED_REDRAW_INTERVAL);
             }
@@ -1924,24 +1829,17 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             if let Some(due) = app.workspace_debounce_due() {
                 deadlines.register(due);
             }
-            // The view-mode resize check is not fd-driven (libc::poll cannot
-            // observe SIGWINCH), so keep its worst-case latency at 250ms;
-            // outside the libc::poll path crossterm's own poll wakes on
-            // resize. Compose mode shares the libc::poll path.
-            let cap = if pane_live {
-                Duration::from_millis(250)
-            } else {
-                Duration::from_millis(500)
-            };
-            deadlines.sleep_duration(now, Duration::from_millis(50), cap)
+            // libc::poll cannot observe SIGWINCH, so a resize waits at most
+            // this long for the next iteration.
+            deadlines.sleep_duration(now, Duration::from_millis(50), Duration::from_millis(250))
         };
         let mut handled_user_events = false;
 
-        // In view mode, multiplex stdin and the snapshot-wakeup pipe so we
-        // unblock the moment a new frame arrives rather than waiting for the
-        // full poll_duration.  Outside view mode (or when no pipe is
-        // available) fall back to the standard crossterm path.
-        let has_terminal_events = if pane_live && !startup_loading {
+        // Multiplex stdin and the wakeup pipe so an IPC message, a watcher
+        // event or a tmux observer change unblocks the loop the moment it
+        // lands rather than after the full poll_duration. With no pipe fall
+        // back to the standard crossterm path.
+        let has_terminal_events = if !startup_loading {
             if let Some(wfd) = wakeup_rx_fd {
                 // crossterm may already hold buffered events internally, in
                 // which case fd 0 shows no data — never sleep in libc::poll
@@ -1993,7 +1891,7 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                 app.mode,
                 app::AppMode::DiffViewer(_) | app::AppMode::DiffReviewPrompt(_)
             );
-            if pane_live || startup_loading || coalesce_keys {
+            if startup_loading || coalesce_keys {
                 while event::poll(Duration::ZERO)? {
                     events.push(event::read()?);
                 }
@@ -2014,11 +1912,7 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                                 force_redraw = true;
                             }
                         }
-                        Event::Resize(w, h) => {
-                            // FORK: see the other `Resize` arm.
-                            size = Size::new(w, h);
-                            app.split_view_note_resize();
-                            last_resize = None;
+                        Event::Resize(..) => {
                             force_redraw = true;
                         }
                         _ => {}
@@ -2032,9 +1926,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                         if key.kind == KeyEventKind::Release {
                             continue;
                         }
-                        if pane_live {
-                            app.note_view_activity();
-                        }
                         app.perf.increment_counter("event.key");
                         app.perf.note_input_for_next_draw();
                         let started_at = Instant::now();
@@ -2045,9 +1936,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                             .record_duration("main.handle_key", started_at.elapsed());
                     }
                     Event::Mouse(mouse) => {
-                        if pane_live {
-                            app.note_view_activity();
-                        }
                         app.perf.increment_counter("event.mouse");
                         let started_at = Instant::now();
                         if let Err(e) = handlers::handle_mouse(app, mouse, visible_rows) {
@@ -2057,9 +1945,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                             .record_duration("main.handle_mouse", started_at.elapsed());
                     }
                     Event::Paste(text) => {
-                        if pane_live {
-                            app.note_view_activity();
-                        }
                         app.perf.increment_counter("event.paste");
                         app.perf.note_input_for_next_draw();
                         let started_at = Instant::now();
@@ -2069,16 +1954,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                         app.perf
                             .record_duration("main.handle_paste", started_at.elapsed());
                     }
-                    Event::Resize(w, h) => {
-                        // FORK: `size` was read before the events; without
-                        // this the split-view tick below laid its tiles out
-                        // for the old frame and the draw wrote past the new,
-                        // smaller buffer (a panic on shrinking the terminal).
-                        // Dropping the cached rects makes the draw recompute
-                        // them from its own frame even before the next tick.
-                        size = Size::new(w, h);
-                        app.split_view_note_resize();
-                        last_resize = None;
+                    Event::Resize(..) => {
+                        // The draw below lays out from its own frame.
                         force_redraw = true;
                     }
                     _ => {}
@@ -2099,90 +1976,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             force_redraw = true;
         }
 
-        // FORK: native attach (DESIGN.md §15.4) — the same hand-over as the
-        // editor, to the tmux client. The window is resized by the attached
-        // client, so the dashboard's pane size has to be applied again.
-        if let Some(request) = app.pending_attach.take() {
-            run_pending_attach(terminal, app, &request)?;
-            last_resize = None;
-            force_redraw = true;
-        }
-
-        if app.has_pending_view_input()
-            && let Err(e) = app.flush_view_input_batch()
-        {
-            app.show_error(e);
-        }
-
-        if pane_live
-            && app.config.view_auto_refresh
-            && TmuxManager::uses_control_pty_input()
-            && !startup_loading
-            && !handled_user_events
-            && last_view_refresh_request.elapsed() >= app::VIEW_DRIFT_RESEED_INTERVAL
-            && app
-                .last_view_activity_at
-                .is_none_or(|last| last.elapsed() >= VIEW_IDLE_REFRESH_QUIET_PERIOD)
-        {
-            // The pane can be resized behind our back (another client
-            // attaching to the session, a second AIW instance, etc.).
-            // last_resize only tracks sizes we set ourselves, so
-            // reconcile against the actual pane size here; otherwise
-            // every snapshot is parsed at the wrong geometry and the
-            // view stays garbled until restart.
-            let drift_target = match &app.mode {
-                app::AppMode::Viewing(view) => Some((
-                    view.session.clone(),
-                    view.window.clone(),
-                    ui::viewing_main_width(view, size.width),
-                )),
-                app::AppMode::Compose(state) => Some((
-                    state.view.session.clone(),
-                    state.view.window.clone(),
-                    ui::viewing_main_width(&state.view, size.width),
-                )),
-                _ => None,
-            };
-            if let Some((session, window, expected_cols)) = drift_target {
-                let expected_rows = size.height.saturating_sub(1);
-                if let Ok(actual) = TmuxManager::pane_size(&session, &window)
-                    && actual != (expected_cols, expected_rows)
-                    && !TmuxManager::has_attached_client(&session)
-                {
-                    let in_backoff = last_drift_correction
-                        .is_some_and(|at| at.elapsed() < DRIFT_CORRECTION_BACKOFF);
-                    if in_backoff {
-                        app.log_debug(
-                            "tmux",
-                            format!(
-                                "pane size drift for {session}:{window} (actual {}x{}, expected {expected_cols}x{expected_rows}) within correction backoff; leaving it alone",
-                                actual.0, actual.1
-                            ),
-                        );
-                    } else {
-                        app.log_warn(
-                            "tmux",
-                            format!(
-                                "pane size drift for {session}:{window} (actual {}x{}, expected {expected_cols}x{expected_rows}), resizing",
-                                actual.0, actual.1
-                            ),
-                        );
-                        let _ = TmuxManager::resize_pane(
-                            &session,
-                            &window,
-                            expected_cols,
-                            expected_rows,
-                        );
-                        last_drift_correction = Some(Instant::now());
-                    }
-                }
-            }
-            app.request_view_snapshot_refresh();
-            last_view_refresh_request = Instant::now();
-        }
-
-        let defer_background_sync = app.should_defer_view_background_sync();
-
         // Feature-status reconciliation is event-driven via the tmux
         // observer (%sessions-changed); the interval is only a fallback.
         // Without an observer, keep the legacy 5s cadence.
@@ -2192,7 +1985,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             Duration::from_secs(5)
         };
         if !handled_user_events
-            && !is_viewing
             && !startup_tasks_pending
             && (app.take_sessions_dirty() || last_statuses_sync.elapsed() >= statuses_fallback)
         {
@@ -2206,7 +1998,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
 
         if !handled_user_events
             && last_sync.elapsed() >= Duration::from_secs(5)
-            && !defer_background_sync
             && !startup_tasks_pending
         {
             // FORK: drop/stop sessions whose tmux window closed on its own,
@@ -2329,12 +2120,7 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                 .record_duration("summary.poll_result", summary_poll_started_at.elapsed());
         }
 
-        force_redraw |= app.poll_compose_clipboard_paste();
-        force_redraw |= app.poll_compose_submit();
-
-        if app.has_active_sidebar() {
-            force_redraw |= app.poll_sidebar_load_results();
-        }
+        force_redraw |= app.poll_sidebar_load_results();
 
         if app.should_flush_pending_debug_log_entries() {
             app.flush_pending_debug_log_entries();
@@ -2352,11 +2138,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                 last_notification_prune = Instant::now();
             }
         }
-        let startup_grace_active = is_viewing && Instant::now() < startup_grace_until;
         let can_run_startup_task = startup_tasks_pending
             && !handled_user_events
-            && !defer_background_sync
-            && !startup_grace_active
             && Instant::now() >= startup_task_spacing_until;
 
         if can_run_startup_task {
@@ -2411,12 +2194,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             };
         }
 
-        // FORK: split view — lay out tiles, resize their windows, run their
-        // workers, take new frames. Its resizes invalidate the single view's.
-        force_redraw |= app.split_view_tick(Rect::new(0, 0, size.width, size.height));
-        if app.fork_split.take_view_resize_invalidation() {
-            last_resize = None;
-        }
         // FORK: badges keep their ages; the workspace pane follows the
         // selection (debounced).
         app.refresh_badge_ages();
@@ -2424,129 +2201,11 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         // FORK(cockpit): the agent pane and the zoom follow (DESIGN.md §18).
         force_redraw |= app.cockpit_tick();
 
-        // FORK: the workspace layout's live pane is sized and captured
-        // exactly like the single view, at the pane's inner size.
-        let live_view_for_sizing: Option<(String, String, u16, u16)> = match &app.mode {
-            app::AppMode::Viewing(view) => Some((
-                view.session.clone(),
-                view.window.clone(),
-                ui::viewing_main_width(view, size.width),
-                size.height.saturating_sub(1),
-            )),
-            app::AppMode::Compose(state) => Some((
-                state.view.session.clone(),
-                state.view.window.clone(),
-                ui::viewing_main_width(&state.view, size.width),
-                size.height.saturating_sub(1),
-            )),
-            app::AppMode::Normal => app.workspace_capture_geometry(size.width, size.height),
-            _ => None,
-        };
-        if let Some((view_session, view_window, content_cols, content_rows)) =
-            live_view_for_sizing.as_ref()
-        {
-            // The view content area is the full terminal minus the
-            // 1-row header (see ui/pane.rs); the pane, the vt100
-            // parser, and the rendered area must all share these
-            // dimensions or captured output reflows incorrectly.
-            let (content_cols, content_rows) = (*content_cols, *content_rows);
-            let current_resize = (
-                content_cols,
-                content_rows,
-                view_session.clone(),
-                view_window.clone(),
-            );
-
-            let mut dims_applied = last_resize.as_ref() == Some(&current_resize);
-            if !dims_applied {
-                // Resize immediately when switching to a different
-                // session/window; debounce when only the dimensions
-                // changed (mid-drag) so the agent pane gets a single
-                // SIGWINCH once the viewport settles.
-                let same_target = last_resize.as_ref().is_some_and(|(_, _, session, window)| {
-                    session == view_session && window == view_window
-                });
-                if !same_target || viewport_stable_since.elapsed() >= VIEWPORT_RESIZE_DEBOUNCE {
-                    let _ = TmuxManager::resize_pane(
-                        view_session,
-                        view_window,
-                        content_cols,
-                        content_rows,
-                    );
-                    last_resize = Some(current_resize);
-                    app.request_view_snapshot_refresh();
-                    force_redraw = true;
-                    dims_applied = true;
-                }
-            }
-            // Store the rendering dimensions (content area in pane.rs)
-            // for mouse selection alignment — but only once the pane has
-            // actually been resized to them, so the snapshot worker is
-            // not restarted for every intermediate drag size.
-            if dims_applied {
-                app.pane_content_cols = content_cols;
-                app.pane_content_rows = content_rows;
-            }
-        }
-
-        // Periodic re-anchor bounce for live Claude panes. Claude Code's
-        // incremental renderer drifts its input-box anchor over time and
-        // leaves stale cells in the real tmux grid (input text bleeds into
-        // the divider above it); AIW can only display that grid
-        // faithfully, so the fix is to force a full agent repaint. A
-        // SIGWINCH pair (shrink one row, then restore) does it. Two-phase
-        // so the main thread never sleeps: shrink now, restore a later
-        // iteration once the dwell has elapsed and tmux has delivered the
-        // first SIGWINCH. This repairs Claude's actual tmux grid, so it is
-        // required for both direct and control-mode transports. See
-        // VIEW_REANCHOR_BOUNCE_INTERVAL.
-        if let Some((session, window, cols, full_rows, shrunk_at)) =
-            pending_reanchor_restore.clone()
-        {
-            if shrunk_at.elapsed() >= app::VIEW_REANCHOR_BOUNCE_DWELL {
-                let _ = TmuxManager::resize_pane(&session, &window, cols, full_rows);
-                app.request_view_snapshot_refresh();
-                // Reveal the repainted pane only after Claude Code has had
-                // time to redraw at full height; until then keep showing
-                // the last good frame so the bounce stays invisible.
-                app.freeze_view_display(app::VIEW_REANCHOR_REVEAL_DELAY);
-                pending_reanchor_restore = None;
-                last_reanchor_bounce = Instant::now();
-            }
-        } else if pane_live
-            && app.config.view_auto_refresh
-            && !app.has_pending_view_input()
-            && viewport_stable_since.elapsed() >= VIEWPORT_RESIZE_DEBOUNCE
-            && last_reanchor_bounce.elapsed() >= app::VIEW_REANCHOR_BOUNCE_INTERVAL
-            && let Some((session, window, cols, full_rows)) = app.reanchor_bounce_target()
-        {
-            let _ = TmuxManager::resize_pane(
-                &session,
-                &window,
-                cols,
-                full_rows.saturating_sub(1).max(1),
-            );
-            // Freeze the display through the shrink and until the restore
-            // phase re-freezes for the precise reveal. Generous bound so a
-            // delayed restore still can't strand the freeze.
-            app.freeze_view_display(
-                app::VIEW_REANCHOR_BOUNCE_DWELL
-                    + app::VIEW_REANCHOR_REVEAL_DELAY
-                    + Duration::from_millis(250),
-            );
-            pending_reanchor_restore = Some((session, window, cols, full_rows, Instant::now()));
-        }
-
-        app.ensure_view_snapshot_worker();
-        let (pane_refreshed, cursor_refreshed) = app.drain_view_snapshots();
-
         let current_redraw_signature = app.redraw_signature();
         let state_changed = current_redraw_signature != loop_state_signature;
         last_redraw_signature = current_redraw_signature;
         let needs_redraw = force_redraw
-            || handled_user_events && !is_viewing
-            || pane_refreshed
-            || cursor_refreshed
+            || handled_user_events
             || state_changed
             || animating && !handled_user_events;
 

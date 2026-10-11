@@ -54,9 +54,6 @@ pub(crate) enum StartIntent {
     /// outer half of an operation that gates once and then calls several
     /// primitives. Asking again would ask twice for the same agent.
     Approved,
-    /// Park the operation and replay `PendingStart` if the user confirms.
-    /// Only for operations that can be resumed from stashed state.
-    Ask(PendingStart),
     /// Warn and carry on, naming the thing being started.
     ///
     /// For starts buried inside a longer flow — a session picker, a review
@@ -187,13 +184,6 @@ impl App {
     pub(crate) fn gate_launch(&mut self, intent: StartIntent) -> Started {
         match intent {
             StartIntent::Approved => Started::Yes,
-            StartIntent::Ask(pending) => {
-                if self.gate_start(pending) {
-                    Started::Parked
-                } else {
-                    Started::Yes
-                }
-            }
             StartIntent::Warn(what) => {
                 self.warn_start_over_budget(what);
                 Started::Yes
@@ -382,10 +372,6 @@ impl App {
             // Both replay their operation from the top with the gate already
             // satisfied, rather than re-entering the asking variant and
             // parking the user in the same dialog they just answered.
-            PendingStart::EnterView { auto_compose } => self.enter_view_approved(auto_compose),
-            PendingStart::SwitchViewToFeature { pi, fi } => {
-                self.switch_view_to_feature_approved(pi, fi)
-            }
             PendingStart::PlannedFeature(pending) => {
                 if let Some(interview) = plan_interview {
                     self.mode = AppMode::PlanInterview(interview);
@@ -397,9 +383,9 @@ impl App {
         // Returning to the view the start came from is what the ungated path
         // would have done, so do it whether or not the start itself failed.
         if let Some(view) = from_view
-            && !matches!(self.mode, AppMode::Viewing(_))
+            && matches!(self.mode, AppMode::Normal)
         {
-            self.mode = AppMode::Viewing(view);
+            self.return_to_dashboard(&view);
         }
 
         result
@@ -423,7 +409,7 @@ impl App {
             return;
         }
         if let Some(view) = from_view {
-            self.mode = AppMode::Viewing(view);
+            self.return_to_dashboard(&view);
         }
         self.push_toast_info("Start cancelled");
     }

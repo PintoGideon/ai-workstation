@@ -43,12 +43,25 @@ impl App {
         self.open_fresh_context_prompt_with_prefill(prefill, FreshContextPromptSource::ContextHint);
     }
 
+    /// `Ctrl+Space F` on the dashboard: the fresh-context prompt for the
+    /// selected agent session, prefilled when its context hint is showing.
+    pub fn open_fresh_context_prompt_for_selection(&mut self) {
+        if self.context_hint_is_visible_in_current_view() {
+            self.open_fresh_context_prompt_from_view_with_context_hint();
+        } else {
+            self.open_fresh_context_prompt_from_view();
+        }
+    }
+
     /// Open the editable fresh-context prompt with a conservative continuation
     /// instruction assembled from the current feature's persisted artifacts.
     pub(crate) fn open_fresh_context_prompt_from_view_with_context_hint(&mut self) {
-        let view = match &self.mode {
-            AppMode::Viewing(view) if view.session_kind.is_agent_harness() => view.clone(),
-            _ => return,
+        // FORK(cockpit): the selected agent session.
+        let Some(view) = self
+            .selection_view_state()
+            .filter(|view| view.session_kind.is_agent_harness())
+        else {
+            return;
         };
         let Some((pi, fi)) = view_project_feature_indices(&self.store, &view) else {
             self.push_toast_warning("Could not resolve the current feature");
@@ -123,14 +136,14 @@ impl App {
         prefill: String,
         source: FreshContextPromptSource,
     ) {
-        let view = match &self.mode {
-            AppMode::Viewing(view) if view.session_kind.is_agent_harness() => view.clone(),
-            AppMode::Viewing(_) => {
-                self.push_toast_warning("Fresh context sessions start from an agent session");
-                return;
-            }
-            _ => return,
+        // FORK(cockpit): the selected agent session.
+        let Some(view) = self.selection_view_state() else {
+            return;
         };
+        if !view.session_kind.is_agent_harness() {
+            self.push_toast_warning("Fresh context sessions start from an agent session");
+            return;
+        }
 
         let Some((pi, fi)) = view_project_feature_indices(&self.store, &view) else {
             self.push_toast_warning("Could not resolve the current feature");
@@ -150,7 +163,7 @@ impl App {
     /// unchanged.
     pub fn cancel_fresh_context_prompt(&mut self) {
         if let AppMode::FreshContextPrompt(state) = &self.mode {
-            self.mode = AppMode::Viewing(state.view.clone());
+            self.return_to_dashboard(&state.view.clone());
         }
     }
 
@@ -175,7 +188,7 @@ impl App {
         // Reverting to `Viewing` up front means every early return below --
         // an unresolvable feature, a launch failure -- leaves the user back
         // where they started rather than stuck behind the prompt.
-        self.mode = AppMode::Viewing(view.clone());
+        self.return_to_dashboard(&view.clone());
 
         if instruction.is_empty() {
             return Ok(());

@@ -16,25 +16,10 @@ fn app_config_default_leader_timeout_is_five_seconds() {
 }
 
 #[test]
-fn app_config_default_input_request_wait_is_one_point_five_seconds() {
-    let config = AppConfig::default();
-    assert_eq!(
-        config.input_request_wait_duration(),
-        std::time::Duration::from_millis(1500)
-    );
-}
-
-#[test]
 fn app_config_default_tmux_control_mode_is_disabled() {
     // Direct transport is the default; control mode is opt-in.
     let config = AppConfig::default();
     assert!(!config.tmux_control_mode);
-}
-
-#[test]
-fn app_config_default_view_auto_refresh_is_disabled() {
-    let config = AppConfig::default();
-    assert!(!config.view_auto_refresh);
 }
 
 #[test]
@@ -255,24 +240,6 @@ fn app_config_missing_input_request_wait_uses_default() {
 }
 
 #[test]
-fn app_config_input_request_wait_can_be_configured() {
-    let config: AppConfig = serde_json::from_str(r#"{"input_request_wait_seconds":0.75}"#).unwrap();
-    assert_eq!(
-        config.input_request_wait_duration(),
-        std::time::Duration::from_millis(750)
-    );
-}
-
-#[test]
-fn app_config_invalid_input_request_wait_falls_back_to_default_duration() {
-    let config: AppConfig = serde_json::from_str(r#"{"input_request_wait_seconds":-1.0}"#).unwrap();
-    assert_eq!(
-        config.input_request_wait_duration(),
-        std::time::Duration::from_millis(1500)
-    );
-}
-
-#[test]
 fn app_config_missing_tmux_control_mode_uses_default() {
     let config: AppConfig = serde_json::from_str(r#"{"nerd_font":false}"#).unwrap();
     assert!(!config.tmux_control_mode);
@@ -288,18 +255,6 @@ fn app_config_tmux_control_mode_can_be_disabled() {
 fn app_config_tmux_control_mode_can_be_enabled() {
     let config: AppConfig = serde_json::from_str(r#"{"tmux_control_mode":true}"#).unwrap();
     assert!(config.tmux_control_mode);
-}
-
-#[test]
-fn app_config_missing_view_auto_refresh_uses_default() {
-    let config: AppConfig = serde_json::from_str(r#"{"nerd_font":false}"#).unwrap();
-    assert!(!config.view_auto_refresh);
-}
-
-#[test]
-fn app_config_view_auto_refresh_can_be_enabled() {
-    let config: AppConfig = serde_json::from_str(r#"{"view_auto_refresh":true}"#).unwrap();
-    assert!(config.view_auto_refresh);
 }
 
 #[test]

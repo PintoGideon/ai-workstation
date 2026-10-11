@@ -6,16 +6,26 @@ use ratatui::{
     widgets::{Block, Clear, Paragraph},
 };
 
-use crate::app::{App, AppMode, CreateFeatureStep, RenameReturnTo};
-use crate::project::{SessionKind, VibeMode};
+use crate::app::{App, AppMode, CreateFeatureStep};
+use crate::project::VibeMode;
 
+// FORK(cockpit): the selected session's commands (DESIGN.md §18) — the
+// embedded view's leader menu moved here when the view went.
 const DASHBOARD_LEADER_COMMANDS: &[(&str, &str)] = &[
-    ("i", "Pending inputs"),
-    ("?", "Help"),
+    ("f", "Final review of the selected feature"),
+    ("d", "Diff viewer"),
+    ("n", "Current plan"),
+    ("m", "Markdown files"),
+    ("l", "Past / unsent prompts (paste again)"),
+    ("N", "Quick-capture a TODO"),
+    ("F", "Fresh-context session"),
+    ("P", "Back to PR Triage (after P there)"),
+    ("B", "Model advice for the selected session"),
+    ("z", "Complete the TODO this session came from"),
     ("/", "Command picker"),
     ("a", "Local commands"),
-    ("A", "Manage harnesses"),
     ("c", "Config wizard"),
+    ("C", "Compact review memory"),
     ("h", "Bookmarks"),
     ("H", "Bookmark current session"),
     ("M", "Remove bookmark"),
@@ -23,193 +33,35 @@ const DASHBOARD_LEADER_COMMANDS: &[(&str, &str)] = &[
     ("r", "Refresh statuses + PR badges"),
 ];
 
-/// The ambient `[PR #N · M open]` badge span shown in the top-right corner
-/// of a live session — shared by both `AppMode::Viewing` and
-/// `AppMode::Compose` (composing is just Viewing plus an input overlay; the
-/// session underneath, and its PR, don't change). Shown as a sidebar box
-/// instead (`pr_triage_sidebar_text`) once the sidebar is visible, so the
-/// two never compete for the same header space.
-fn pr_triage_badge_span(app: &App, view: &crate::app::ViewState) -> Option<Span<'static>> {
-    if view.sidebar_visible {
-        return None;
-    }
-    let feature = app.feature_for_view(view)?;
-    if let Some(pr) = app.active_pr_for_feature(&feature.id) {
-        let working = app
-            .dedicated_review_session_working_for_workdir(&feature.workdir)
-            .unwrap_or(false);
-        let ai_review_running = app.ai_review_running_for_workdir(&feature.workdir);
-        let mut label = match pr.unresolved_threads {
-            Some(0) => format!(" [PR #{} · 0 open", pr.number),
-            Some(count) => format!(" [PR #{} · {} open", pr.number, count),
-            None => format!(" [PR #{}", pr.number),
-        };
-        if working {
-            label.push_str(" · ● working");
-        }
-        if ai_review_running {
-            label.push_str(" · AI review");
-        }
-        label.push_str("] ");
-        let color = if working || ai_review_running {
-            app.theme.warning.to_color()
-        } else if pr.unresolved_threads == Some(0) {
-            app.theme.success.to_color()
-        } else {
-            app.theme.info.to_color()
-        };
-        return Some(Span::styled(
-            label,
-            Style::default().fg(color).add_modifier(Modifier::BOLD),
-        ));
-    }
-    // No open PR: a merged or closed one is finished work, not "no PR" —
-    // show that instead of nothing.
-    let pr = app.terminal_pr_for_feature(&feature.id)?;
-    let color = match pr.state {
-        crate::github::TerminalPrState::Merged => app.theme.pr_merged.to_color(),
-        crate::github::TerminalPrState::Closed => app.theme.pr_closed.to_color(),
-    };
-    Some(Span::styled(
-        format!(" [PR #{} {}] ", pr.number, pr.state.label()),
-        Style::default().fg(color).add_modifier(Modifier::BOLD),
-    ))
-}
+/// FORK(cockpit): the dashboard itself — header, sidebar, footer. Drawn
+/// under the session dialogs too, where the embedded view used to be.
+fn draw_dashboard_chrome(frame: &mut Frame, app: &mut App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(5),
+            Constraint::Length(3),
+        ])
+        .split(frame.area());
 
-/// Render a right-aligned row of badge spans flush with the top of `area`.
-///
-/// FORK: the badges have priority over the header text already on that row:
-/// when the full badges do not fit beside it, `compact_spans` (a shorter
-/// wording, or empty for none) are tried, and whatever header text would
-/// still run under the badges is elided with `…` instead of overpainted.
-fn draw_badge_row(
-    frame: &mut Frame,
-    area: Rect,
-    badge_spans: Vec<Span<'static>>,
-    compact_spans: Vec<Span<'static>>,
-) {
-    if badge_spans.is_empty() || area.width == 0 || area.height == 0 {
-        return;
-    }
-    let width_of = |spans: &[Span]| spans.iter().map(Span::width).sum::<usize>();
-    let row_width = usize::from(area.width);
-    let buffer = frame.buffer_mut();
-    // Where the header text ends: the last cell on the row that is not blank.
-    let text_end = (0..area.width)
-        .rev()
-        .find(|x| {
-            buffer
-                .cell((area.x + x, area.y))
-                .is_some_and(|cell| cell.symbol() != " " && !cell.symbol().is_empty())
-        })
-        .map_or(0, |x| usize::from(x) + 1);
-    let available = row_width.saturating_sub(text_end + 1);
-    let spans = if width_of(&badge_spans) <= available || compact_spans.is_empty() {
-        badge_spans
-    } else {
-        compact_spans
-    };
-    let label_width = width_of(&spans).min(row_width);
-    let badge_x = row_width - label_width;
-    if text_end + 1 > badge_x && badge_x >= 2 {
-        // `…` and one column of gap, in the header's own style.
-        let cut = badge_x - 2;
-        for x in cut..badge_x {
-            if let Some(cell) = buffer.cell_mut((area.x + x as u16, area.y)) {
-                cell.set_symbol(" ");
-            }
-        }
-        if cut > 0
-            && let Some(before) = buffer.cell_mut((area.x + cut as u16 - 1, area.y))
-            && unicode_width::UnicodeWidthStr::width(before.symbol()) > 1
-        {
-            // A wide glyph would run under the marker.
-            before.set_symbol(" ");
-        }
-        if let Some(cell) = buffer.cell_mut((area.x + cut as u16, area.y)) {
-            cell.set_symbol(super::fork_text::ELLIPSIS);
-        }
-    }
-    let badge_area = Rect::new(area.x + badge_x as u16, area.y, label_width as u16, 1);
-    frame.render_widget(Paragraph::new(Line::from(spans)), badge_area);
-}
-
-/// The embedded view's sidebar content. Assembly lives in
-/// `app::agent_sidebar`, shared with the desktop GUI; this resolves the
-/// viewed feature and session and supplies the TUI's own runtime signals.
-fn build_agent_sidebar_data(
-    app: &App,
-    view: &crate::app::ViewState,
-) -> Option<super::pane::AgentSidebarData> {
-    let sidebar_kind = view.sidebar_session_kind()?;
-
-    let (project, feature) = app.store.projects.iter().find_map(|project| {
-        project
-            .features
-            .iter()
-            .find(|feature| feature.tmux_session == view.session)
-            .map(|feature| (project, feature))
-    })?;
-
-    let session = feature
-        .sessions
-        .iter()
-        .find(|session| session.tmux_window == view.window)
-        .or_else(|| {
-            feature
-                .sessions
-                .iter()
-                .find(|session| session.kind == sidebar_kind)
-        });
-
-    let runtime = app.tui_sidebar_runtime(project, feature, &view.session);
-    app.assemble_agent_sidebar(feature, session, &sidebar_kind, &runtime)
-        .map(|assembly| assembly.data)
-}
-
-fn draw_view_pane(
-    frame: &mut Frame,
-    app: &App,
-    view: &crate::app::ViewState,
-    leader_active: bool,
-    show_tmux_cursor: bool,
-) {
-    let sidebar_data = build_agent_sidebar_data(app, view);
-    let tmux_cursor = if show_tmux_cursor {
-        app.tmux_cursor
-    } else {
-        None
-    };
-    let compose_intercept = view
-        .session_kind
-        .is_agent_harness()
-        .then(|| app.compose_intercept_active(view));
-
-    let next_prev_feature = (
-        app.active_extension
-            .keybindings
-            .get("next_feature")
-            .copied(),
-        app.active_extension
-            .keybindings
-            .get("prev_feature")
-            .copied(),
-    );
-
-    super::pane::draw_with_lines(
+    // FORK: G11 status pills from the badge model; cwd read once.
+    let pills = super::fork_chrome::header_pills(app);
+    super::header::draw(
         frame,
-        view,
-        &app.pane_content,
-        &app.pane_lines,
-        sidebar_data.as_ref(),
-        leader_active,
-        app.attention_rows().len(),
-        tmux_cursor,
-        compose_intercept,
-        next_prev_feature,
-        &app.throbber_state,
+        chunks[0],
+        super::fork_chrome::cwd_label(),
+        env!("CARGO_PKG_VERSION"),
+        app.attention_badge_count(),
+        pills,
         &app.theme,
     );
+    // FORK: the cockpit sidebar; the empty-dashboard note when there are
+    // no projects.
+    if !super::fork_workspace::draw(frame, app, chunks[1]) {
+        super::list::draw(frame, app, chunks[1]);
+    }
+    super::status::draw(frame, app, chunks[2]);
 }
 
 fn draw_view_context_bar(
@@ -245,7 +97,6 @@ fn draw_mode_context_bar(frame: &mut Frame, mode: &AppMode, theme: &crate::theme
 
 fn mode_view_context(mode: &AppMode) -> Option<&crate::app::ViewState> {
     match mode {
-        AppMode::Viewing(view) => Some(view),
         AppMode::Help(state) => state.from_view.as_ref(),
         AppMode::NotificationPicker(_, from_view) => from_view.as_ref(),
         AppMode::CommandPicker(state) => state.from_view.as_ref(),
@@ -253,7 +104,6 @@ fn mode_view_context(mode: &AppMode) -> Option<&crate::app::ViewState> {
         AppMode::DiffPicker(state) => Some(&state.from_view),
         AppMode::DiffViewerLoading(state) | AppMode::DiffViewer(state) => Some(&state.from_view),
         AppMode::SteeringPrompt(state) => Some(&state.view),
-        AppMode::Compose(state) => Some(&state.view),
         AppMode::TodoQuickCapture(state) => Some(&state.view),
         AppMode::FreshContextPrompt(state) => Some(&state.view),
         AppMode::SessionPicker(state) => state.from_view.as_ref(),
@@ -500,150 +350,37 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         return;
     }
 
-    if matches!(app.mode, AppMode::Viewing(_)) {
-        // `message` is shared by dashboard status bars and dialog validation,
-        // but pane view should not leave AIW-owned text painted over the
-        // harness. Promote any such feedback to a timed toast before drawing.
-        app.promote_message_to_toast();
-    }
-
-    if let AppMode::Viewing(view) = &app.mode {
-        let area = frame.area();
-        draw_view_pane(frame, app, view, app.leader_active, true);
-        // Top-right status badges for agent sessions. Remote Control is
-        // Claude-only; the direct-input hint applies to every harness.
-        if view.session_kind.is_agent_harness() {
-            use ratatui::style::{Modifier, Style};
-            use ratatui::text::Span;
-            let mut badge_spans: Vec<Span> = Vec::new();
-            // FORK: the same badges with the direct-input hint shortened, for
-            // a row too narrow to carry the long wording beside the header.
-            let mut compact_spans: Vec<Span> = Vec::new();
-            if view.session_kind == SessionKind::Claude
-                && crate::app::remote_control::detect_remote_control(&app.pane_content).active
-            {
-                let remote = Span::styled(
-                    " [remote ●] ",
-                    Style::default()
-                        .fg(app.theme.success.to_color())
-                        .add_modifier(Modifier::BOLD),
-                );
-                badge_spans.push(remote.clone());
-                compact_spans.push(remote);
-            }
-            if !app.compose_intercept_active(view) {
-                let style = Style::default()
-                    .fg(app.theme.warning.to_color())
-                    .add_modifier(Modifier::BOLD);
-                badge_spans.push(Span::styled(" [direct input — leader+e: compose] ", style));
-                compact_spans.push(Span::styled(" [leader+e: compose] ", style));
-            }
-            if let Some(stash) = &app.pr_review_return
-                && stash.session == view.session
-                && stash.window == view.window
-            {
-                let back = Span::styled(
-                    " [Ctrl+Space P: back to PR Triage] ",
-                    Style::default()
-                        .fg(app.theme.info.to_color())
-                        .add_modifier(Modifier::BOLD),
-                );
-                badge_spans.push(back.clone());
-                compact_spans.push(back);
-            }
-            if let Some(span) = pr_triage_badge_span(app, view) {
-                badge_spans.push(span.clone());
-                compact_spans.push(span);
-            }
-            draw_badge_row(frame, area, badge_spans, compact_spans);
-        }
-        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
-        return;
-    }
-
-    if let AppMode::SessionSwitcher(state) = &app.mode {
-        let return_kind = state
-            .sessions
-            .iter()
-            .find(|entry| entry.tmux_window == state.return_window)
-            .map(|entry| entry.kind.clone())
-            .unwrap_or(crate::project::SessionKind::Terminal);
-        let temp_view = crate::app::ViewState::new(
-            state.project_name.clone(),
-            state.feature_name.clone(),
-            state.tmux_session.clone(),
-            state.return_window.clone(),
-            state.return_label.clone(),
-            return_kind,
-            state.vibe_mode.clone(),
-            state.review,
-        );
-        draw_view_pane(frame, app, &temp_view, false, false);
-        super::picker::draw_session_switcher(frame, state, app.config.nerd_font, &app.theme);
-        return;
-    }
-
-    if let AppMode::Help(state) = &app.mode
-        && let Some(view) = &state.from_view
-    {
-        let scroll = state.scroll_offset;
-        draw_view_pane(frame, app, view, false, false);
-        let scroll = super::dialogs::draw_help(frame, scroll, &app.theme);
-        if let AppMode::Help(state) = &mut app.mode {
-            state.scroll_offset = scroll;
-        }
-        draw_mode_context_bar(frame, &app.mode, &app.theme);
-        return;
-    }
-
-    if let AppMode::NotificationPicker(selected, Some(view)) = &app.mode {
-        draw_view_pane(frame, app, view, false, false);
-        let attention_rows = app.attention_rows(); // FORK: badge rows
-        let badges = super::picker::row_badges(app, &attention_rows);
-        super::picker::draw_notification_picker(
-            frame,
-            &attention_rows,
-            &app.pending_inputs,
-            &badges,
-            *selected,
-            app.config.nerd_font,
-            &app.theme,
-        );
-        draw_mode_context_bar(frame, &app.mode, &app.theme);
-        return;
+    // FORK(cockpit): the dialogs that used to open over the embedded view
+    // open over the dashboard; it is drawn first, the dialog on top.
+    let over_dashboard = matches!(
+        app.mode,
+        AppMode::LatestPrompt(_)
+            | AppMode::MarkdownFilePicker(_)
+            | AppMode::DiffPicker(_)
+            | AppMode::DiffViewer(_)
+            | AppMode::DiffViewerLoading(_)
+            | AppMode::MarkdownLoading(_)
+            | AppMode::MarkdownViewer(_)
+            | AppMode::TodoQuickCapture(_)
+            | AppMode::FreshContextPrompt(_)
+            | AppMode::SteeringPrompt(_)
+    );
+    if over_dashboard {
+        draw_dashboard_chrome(frame, app);
     }
 
     if let AppMode::LatestPrompt(state) = &app.mode {
-        draw_view_pane(frame, app, &state.view, false, false);
         super::dialogs::draw_latest_prompt_dialog(frame, state, app.message.as_deref(), &app.theme);
         draw_mode_context_bar(frame, &app.mode, &app.theme);
         return;
     }
 
-    if let AppMode::PromptLibrary(state) = &app.mode
-        && let Some(view) = &state.from_view
-    {
-        draw_view_pane(frame, app, view, false, false);
-        super::dialogs::draw_prompt_library(frame, state, app.message.as_deref(), &app.theme);
-        draw_mode_context_bar(frame, &app.mode, &app.theme);
-        return;
-    }
-
     if let AppMode::DiffPicker(state) = &app.mode {
-        draw_view_pane(frame, app, &state.from_view, false, false);
         super::dialogs::draw_diff_picker(frame, state, &app.theme);
         draw_mode_context_bar(frame, &app.mode, &app.theme);
         return;
     }
 
-    let diff_from_view = if let AppMode::DiffViewer(state) = &app.mode {
-        Some(state.from_view.clone())
-    } else {
-        None
-    };
-    if let Some(view) = diff_from_view.as_ref() {
-        draw_view_pane(frame, app, view, false, false);
-    }
     if let AppMode::DiffViewer(state) = &mut app.mode {
         super::dialogs::draw_diff_viewer(frame, state, &app.theme);
         draw_mode_context_bar(frame, &app.mode, &app.theme);
@@ -651,108 +388,37 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
 
     if let AppMode::DiffViewerLoading(state) = &app.mode {
-        draw_view_pane(frame, app, &state.from_view, false, false);
         super::dialogs::draw_diff_viewer_loading(frame, state, &app.throbber_state, &app.theme);
         draw_mode_context_bar(frame, &app.mode, &app.theme);
         return;
     }
 
     if let AppMode::MarkdownLoading(state) = &app.mode {
-        if let Some(view) = state.from_view.clone() {
-            draw_view_pane(frame, app, &view, false, false);
-        }
         super::dialogs::draw_markdown_loading(frame, state, &app.throbber_state, &app.theme);
         draw_mode_context_bar(frame, &app.mode, &app.theme);
         return;
     }
 
-    let markdown_from_view = if let AppMode::MarkdownViewer(state) = &app.mode {
-        state.from_view.clone()
-    } else {
-        None
-    };
-    if let Some(view) = markdown_from_view.as_ref() {
-        draw_view_pane(frame, app, view, false, false);
-    }
     if let AppMode::MarkdownViewer(state) = &mut app.mode {
         super::dialogs::draw_markdown_viewer(frame, state, &app.theme);
         draw_mode_context_bar(frame, &app.mode, &app.theme);
         return;
     }
-    let compose_from_view = if let AppMode::Compose(state) = &app.mode {
-        Some(state.view.clone())
-    } else {
-        None
-    };
-    if let Some(view) = compose_from_view.as_ref() {
-        draw_view_pane(frame, app, view, false, false);
-    }
-    if let AppMode::Compose(state) = &mut app.mode {
-        super::dialogs::draw_compose_dialog(frame, state, &app.theme);
-        draw_mode_context_bar(frame, &app.mode, &app.theme);
-        // `draw_mode_context_bar` clears and redraws the whole top row for
-        // its breadcrumb, so the ambient PR badge — the compose box itself
-        // lives at the bottom of the frame, leaving the top-right corner
-        // free — has to be drawn after it, not before, or it gets wiped.
-        // Composing doesn't change which session (or PR) is underneath, so
-        // reuse the same badge `Viewing` shows.
-        if let Some(view) = compose_from_view.as_ref()
-            && view.session_kind.is_agent_harness()
-            && let Some(span) = pr_triage_badge_span(app, view)
-        {
-            draw_badge_row(frame, frame.area(), vec![span], Vec::new());
-        }
-        return;
-    }
 
-    let quick_capture_from_view = if let AppMode::TodoQuickCapture(state) = &app.mode {
-        Some(state.view.clone())
-    } else {
-        None
-    };
-    if let Some(view) = quick_capture_from_view.as_ref() {
-        draw_view_pane(frame, app, view, false, false);
-    }
     if let AppMode::TodoQuickCapture(state) = &app.mode {
         super::dialogs::draw_todo_quick_capture_dialog(frame, state, &app.theme);
         draw_mode_context_bar(frame, &app.mode, &app.theme);
         return;
     }
 
-    let fresh_context_prompt_from_view = if let AppMode::FreshContextPrompt(state) = &app.mode {
-        Some(state.view.clone())
-    } else {
-        None
-    };
-    if let Some(view) = fresh_context_prompt_from_view.as_ref() {
-        draw_view_pane(frame, app, view, false, false);
-    }
     if let AppMode::FreshContextPrompt(state) = &app.mode {
         super::dialogs::draw_fresh_context_prompt_dialog(frame, state, &app.theme);
         draw_mode_context_bar(frame, &app.mode, &app.theme);
         return;
     }
 
-    let steering_from_view = if let AppMode::SteeringPrompt(state) = &app.mode {
-        Some(state.view.clone())
-    } else {
-        None
-    };
-    if let Some(view) = steering_from_view.as_ref() {
-        draw_view_pane(frame, app, view, false, false);
-    }
     if let AppMode::SteeringPrompt(state) = &mut app.mode {
         super::dialogs::draw_steering_prompt_dialog(frame, state, &app.theme);
-        draw_mode_context_bar(frame, &app.mode, &app.theme);
-        return;
-    }
-
-    if let AppMode::CommandPicker(state) = &app.mode
-        && state.from_view.is_some()
-    {
-        let view = state.from_view.as_ref().unwrap();
-        draw_view_pane(frame, app, view, false, false);
-        super::picker::draw_command_picker(frame, state, &app.theme);
         draw_mode_context_bar(frame, &app.mode, &app.theme);
         return;
     }
@@ -762,87 +428,22 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         return;
     }
 
-    if let AppMode::MarkdownFilePicker(state) = &app.mode
-        && state.from_view.is_some()
-    {
-        let view = state.from_view.as_ref().unwrap();
-        draw_view_pane(frame, app, view, false, false);
+    if let AppMode::MarkdownFilePicker(state) = &app.mode {
         super::picker::draw_markdown_file_picker(frame, state, &app.theme);
         draw_mode_context_bar(frame, &app.mode, &app.theme);
         return;
     }
 
-    if let AppMode::BookmarkPicker(state) = &app.mode
-        && state.from_view.is_some()
-    {
-        let view = state.from_view.as_ref().unwrap();
-        draw_view_pane(frame, app, view, false, false);
-        let rows = app.bookmark_picker_rows();
-        super::picker::draw_bookmark_picker(frame, state, &rows, &app.theme);
-        draw_mode_context_bar(frame, &app.mode, &app.theme);
-        return;
-    }
-
-    if let AppMode::RenamingSession(state) = &app.mode
-        && let RenameReturnTo::SessionSwitcher(ref sw) = state.return_to
-    {
-        let return_kind = sw
-            .sessions
-            .iter()
-            .find(|entry| entry.tmux_window == sw.return_window)
-            .map(|entry| entry.kind.clone())
-            .unwrap_or(crate::project::SessionKind::Terminal);
-        let temp_view = crate::app::ViewState::new(
-            sw.project_name.clone(),
-            sw.feature_name.clone(),
-            sw.tmux_session.clone(),
-            sw.return_window.clone(),
-            sw.return_label.clone(),
-            return_kind,
-            sw.vibe_mode.clone(),
-            sw.review,
-        );
-        draw_view_pane(frame, app, &temp_view, false, false);
-        super::dialogs::draw_rename_session_dialog(frame, state, &app.theme);
-        draw_view_context_bar(frame, &temp_view, &app.theme);
-        return;
-    }
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(5),
-            Constraint::Length(3),
-        ])
-        .split(frame.area());
-
-    // FORK: G11 status pills from the badge model; cwd read once.
-    let pills = super::fork_chrome::header_pills(app);
-    super::header::draw(
-        frame,
-        chunks[0],
-        super::fork_chrome::cwd_label(),
-        env!("CARGO_PKG_VERSION"),
-        app.attention_badge_count(),
-        pills,
-        &app.theme,
-    );
-    // FORK: workspace layout (sidebar + live pane) when it is on and fits.
-    if !super::fork_workspace::draw(frame, app, chunks[1]) {
-        super::list::draw(frame, app, chunks[1]);
-    }
-    super::status::draw(frame, app, chunks[2]);
+    draw_dashboard_chrome(frame, app);
 
     if app.leader_active {
-        // FORK: with the workspace pane focused the leader menu is the
-        // view's, since those are the commands that apply.
-        let (title, commands) = if app.workspace_pane_focused() {
-            (" Ctrl+Space (pane) ", super::pane::LEADER_COMMANDS)
-        } else {
-            (" Ctrl+Space commands ", DASHBOARD_LEADER_COMMANDS)
-        };
-        super::pane::draw_command_menu(frame, frame.area(), title, commands, &app.theme);
+        super::pane::draw_command_menu(
+            frame,
+            frame.area(),
+            " Ctrl+Space commands ",
+            DASHBOARD_LEADER_COMMANDS,
+            &app.theme,
+        );
     }
 
     if let AppMode::ModelAnalysis(state) = &app.mode {
@@ -1186,10 +787,12 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     // FORK: with the panels on screen a toast sits inside the list panel, so
     // it never straddles the panel borders; a dialog has cleared them away.
-    let toast_area = if matches!(app.mode, AppMode::Normal) {
-        chunks[1].inner(ratatui::layout::Margin::new(1, 1))
-    } else {
-        frame.area()
+    let toast_area = match (
+        matches!(app.mode, AppMode::Normal),
+        app.fork_workspace.sidebar_rect,
+    ) {
+        (true, Some(body)) => body.inner(ratatui::layout::Margin::new(1, 1)),
+        _ => frame.area(),
     };
     super::draw_toasts(frame, toast_area, &app.toasts, &app.theme);
 }
@@ -1220,29 +823,7 @@ mod tests {
     use crate::app::agent_sidebar::*;
     use crate::project::TokenUsageSourceMatch;
 
-    // The pre-extraction signatures, over the TUI's runtime signals.
-    fn pr_triage_sidebar_text(app: &App, feature: &Feature) -> Option<String> {
-        let project = app
-            .store
-            .projects
-            .iter()
-            .find(|p| p.features.iter().any(|f| f.id == feature.id))
-            .unwrap();
-        let runtime = app.tui_sidebar_runtime(project, feature, &feature.tmux_session);
-        crate::app::agent_sidebar::pr_triage_sidebar_text(app, feature, &runtime)
-    }
-
-    fn fallback_sidebar_work_text(
-        app: &App,
-        project: &Project,
-        feature: &Feature,
-        view: &ViewState,
-    ) -> Option<String> {
-        let runtime = app.tui_sidebar_runtime(project, feature, &view.session);
-        crate::app::agent_sidebar::fallback_sidebar_work_text(&runtime)
-    }
-
-    use crate::app::{App, PendingInput, ViewState};
+    use crate::app::App;
     use crate::project::FeatureSession;
     use crate::project::{
         AgentKind, Feature, Project, ProjectStatus, ProjectStore, SessionKind, VibeMode,
@@ -1360,56 +941,6 @@ mod tests {
         assert!(!second_rendered.contains("toast should disappear"));
     }
 
-    #[test]
-    fn viewing_mode_promotes_status_message_to_toast() {
-        let mut app = App::new_for_test(
-            ProjectStore {
-                version: 5,
-                projects: vec![],
-                session_bookmarks: vec![],
-                available_harnesses: vec![],
-                prompt_templates: Vec::new(),
-                extra: HashMap::new(),
-            },
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.mode = crate::app::AppMode::Viewing(ViewState::new(
-            "demo".into(),
-            "feature".into(),
-            "aiw-feature".into(),
-            "claude".into(),
-            "Claude".into(),
-            SessionKind::Claude,
-            VibeMode::default(),
-            false,
-        ));
-        app.message = Some("Transient pane feedback".into());
-
-        let backend = TestBackend::new(100, 30);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal
-            .draw(|frame| draw(frame, &mut app))
-            .expect("draw pane view");
-
-        assert!(app.message.is_none());
-        assert_eq!(
-            app.toasts.last().map(|toast| toast.message.as_str()),
-            Some("Transient pane feedback")
-        );
-        let bottom_row = terminal
-            .backend()
-            .buffer()
-            .content()
-            .chunks(100)
-            .last()
-            .unwrap()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect::<String>();
-        assert!(!bottom_row.contains("Transient pane feedback"));
-    }
-
     fn codex_feature_session(session_id: &str) -> FeatureSession {
         FeatureSession {
             id: "session-1".into(),
@@ -1431,135 +962,6 @@ mod tests {
             token_usage: None,
             stopped: false,
         }
-    }
-
-    fn sidebar_usage_session(
-        id: &str,
-        kind: SessionKind,
-        window: &str,
-        label: &str,
-        status_text: &str,
-    ) -> FeatureSession {
-        FeatureSession {
-            id: id.into(),
-            kind,
-            label: label.into(),
-            tmux_window: window.into(),
-            claude_session_id: None,
-            todo_reference: None,
-            token_usage_source: None,
-            token_usage_source_match: None,
-            created_at: chrono::Utc::now(),
-            command: None,
-            on_stop: None,
-            pre_check: None,
-            status_text: Some(status_text.into()),
-            token_usage: None,
-            stopped: false,
-        }
-    }
-
-    fn sidebar_usage_app(kind: SessionKind) -> App {
-        let now = chrono::Utc::now();
-        let feature = Feature {
-            id: "feat-1".into(),
-            name: "feature".into(),
-            branch: "feature".into(),
-            workdir: PathBuf::from("/tmp/demo"),
-            is_worktree: false,
-            tmux_session: "aiw-feature".into(),
-            sessions: vec![
-                sidebar_usage_session(
-                    "session-1",
-                    kind.clone(),
-                    "agent-1",
-                    "Agent 1",
-                    "1.0k in · 100 out · 1.5k eff · $0.01",
-                ),
-                sidebar_usage_session(
-                    "session-2",
-                    kind.clone(),
-                    "agent-2",
-                    "Agent 2",
-                    "2.0k in · 200 out · 3.0k eff · $0.02",
-                ),
-            ],
-            collapsed: false,
-            mode: VibeMode::Vibeless,
-            review: false,
-            plan_mode: false,
-            agent: AgentKind::Claude,
-            enable_chrome: false,
-            remote_control: false,
-            pending_worktree_script: false,
-            ready: false,
-            status: ProjectStatus::Idle,
-            created_at: now,
-            last_accessed: now,
-            summary: None,
-            summary_updated_at: None,
-            nickname: None,
-            selected_plan_path: None,
-            triage_source: None,
-            review_source: None,
-            issue_source: None,
-        };
-        App::new_for_test(
-            ProjectStore {
-                version: 5,
-                projects: vec![Project {
-                    id: "proj-1".into(),
-                    name: "demo".into(),
-                    repo: PathBuf::from("/tmp/demo"),
-                    collapsed: false,
-                    features: vec![feature],
-                    created_at: now,
-                    preferred_agent: AgentKind::Claude,
-                    is_git: false,
-                }],
-                session_bookmarks: vec![],
-                available_harnesses: vec![],
-                prompt_templates: Vec::new(),
-                extra: HashMap::new(),
-            },
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        )
-    }
-
-    fn sidebar_usage_view(kind: SessionKind, window: &str, label: &str) -> ViewState {
-        ViewState::new(
-            "demo".into(),
-            "feature".into(),
-            "aiw-feature".into(),
-            window.into(),
-            label.into(),
-            kind,
-            VibeMode::Vibeless,
-            false,
-        )
-    }
-
-    fn sidebar_context(
-        used_tokens: u64,
-        provenance: crate::context_tracking::ContextProvenance,
-    ) -> crate::context_tracking::SessionContextState {
-        let now = chrono::Utc::now();
-        let mut state = crate::context_tracking::SessionContextState::default();
-        state
-            .accept_sample(
-                crate::context_tracking::ContextUsageSample {
-                    used_tokens,
-                    context_limit: Some(100_000),
-                    provenance,
-                    sampled_at: now,
-                    checked_at: now,
-                    reset: crate::context_tracking::ContextResetMetadata::default(),
-                },
-                crate::context_tracking::ContextThresholds::default(),
-            )
-            .unwrap();
-        state
     }
 
     #[test]
@@ -1659,171 +1061,6 @@ mod tests {
     }
 
     #[test]
-    fn sidebar_usage_follows_selected_agent_window() {
-        for kind in [SessionKind::Claude, SessionKind::Codex] {
-            let app = sidebar_usage_app(kind.clone());
-            let first = build_agent_sidebar_data(
-                &app,
-                &sidebar_usage_view(kind.clone(), "agent-1", "Agent 1"),
-            )
-            .unwrap();
-            let second =
-                build_agent_sidebar_data(&app, &sidebar_usage_view(kind, "agent-2", "Agent 2"))
-                    .unwrap();
-
-            assert!(first.status_text.contains("Input: 1.0k tokens"));
-            assert!(!first.status_text.contains("Input: 2.0k tokens"));
-            assert!(second.status_text.contains("Input: 2.0k tokens"));
-            assert!(!second.status_text.contains("Input: 1.0k tokens"));
-        }
-    }
-
-    #[test]
-    fn sidebar_data_resolves_direct_estimated_stale_and_reset_context_for_selected_session() {
-        let mut app = sidebar_usage_app(SessionKind::Codex);
-        let direct = sidebar_context(70_000, crate::context_tracking::ContextProvenance::Direct);
-        let mut estimated = sidebar_context(
-            85_000,
-            crate::context_tracking::ContextProvenance::Estimated,
-        );
-        estimated.mark_unavailable(chrono::Utc::now());
-        app.context_states.insert("session-1".into(), direct);
-        app.context_states.insert("session-2".into(), estimated);
-        app.context_hint_states.sync_all(&app.context_states);
-
-        let first = build_agent_sidebar_data(
-            &app,
-            &sidebar_usage_view(SessionKind::Codex, "agent-1", "Agent 1"),
-        )
-        .unwrap();
-        assert_eq!(
-            first
-                .context_snapshot
-                .as_ref()
-                .map(|snapshot| snapshot.provenance),
-            Some(crate::context_tracking::ContextProvenance::Direct)
-        );
-        assert!(first.context_hint_visible);
-
-        let second = build_agent_sidebar_data(
-            &app,
-            &sidebar_usage_view(SessionKind::Codex, "agent-2", "Agent 2"),
-        )
-        .unwrap();
-        let second_snapshot = second.context_snapshot.as_ref().unwrap();
-        assert_eq!(
-            second_snapshot.provenance,
-            crate::context_tracking::ContextProvenance::Estimated
-        );
-        assert_eq!(
-            second_snapshot.freshness,
-            crate::context_tracking::ContextFreshness::Stale
-        );
-        assert!(second.context_hint_visible);
-
-        app.context_states.remove("session-2");
-        app.context_hint_states.sync_all(&app.context_states);
-        let unavailable = build_agent_sidebar_data(
-            &app,
-            &sidebar_usage_view(SessionKind::Codex, "agent-2", "Agent 2"),
-        )
-        .unwrap();
-        assert!(unavailable.context_snapshot.is_none());
-        assert!(!unavailable.context_hint_visible);
-
-        let reset_event = crate::context_tracking::ContextResetEvent {
-            reason: crate::context_tracking::ContextResetReason::Compaction,
-            detected_at: chrono::Utc::now(),
-        };
-        app.context_states
-            .get_mut("session-1")
-            .unwrap()
-            .begin_reset(None, reset_event);
-        app.context_hint_states.sync_all(&app.context_states);
-        let reset_pending = build_agent_sidebar_data(
-            &app,
-            &sidebar_usage_view(SessionKind::Codex, "agent-1", "Agent 1"),
-        )
-        .unwrap();
-        assert!(reset_pending.context_snapshot.is_none());
-        assert!(!reset_pending.context_hint_visible);
-    }
-
-    #[test]
-    fn plan_sidebar_data_is_available_only_for_agent_harness_views() {
-        for kind in [
-            SessionKind::Claude,
-            SessionKind::Codex,
-            SessionKind::Pi,
-            SessionKind::Gemini, // FORK
-            SessionKind::Cursor, // FORK
-        ] {
-            let app = sidebar_usage_app(kind.clone());
-            let sidebar =
-                build_agent_sidebar_data(&app, &sidebar_usage_view(kind, "agent-1", "Agent 1"))
-                    .expect("agent harness should have sidebar data");
-            assert_eq!(sidebar.plan_text, "No plan selected");
-        }
-
-        for kind in [
-            SessionKind::Terminal,
-            SessionKind::Nvim,
-            SessionKind::Vscode,
-            SessionKind::Todos,
-            SessionKind::Custom,
-        ] {
-            let app = sidebar_usage_app(kind.clone());
-            assert!(
-                build_agent_sidebar_data(&app, &sidebar_usage_view(kind, "agent-1", "Agent 1"))
-                    .is_none()
-            );
-        }
-    }
-
-    #[test]
-    fn issue_source_is_included_in_agent_sidebar_data() {
-        let mut app = sidebar_usage_app(SessionKind::Codex);
-        app.store.projects[0].features[0].issue_source = Some(crate::project::IssueSource {
-            host: "github.com".to_string(),
-            owner: "acme".to_string(),
-            repository: "widget".to_string(),
-            number: 42,
-            comment_status: crate::project::IssueCommentStatus::Posted,
-        });
-
-        let sidebar = build_agent_sidebar_data(
-            &app,
-            &sidebar_usage_view(SessionKind::Codex, "agent-1", "Agent 1"),
-        )
-        .unwrap();
-        assert_eq!(
-            sidebar.issue_source_text.as_deref(),
-            Some("Repository: github.com/acme/widget\nIssue: #42\nComment: Posted")
-        );
-    }
-
-    #[test]
-    fn plan_sidebar_label_reflects_the_background_loaded_effective_plan() {
-        // The effective plan is resolved off the render thread by the
-        // sidebar-load pipeline (see `App::sidebar_effective_plan_cache`),
-        // not by `build_agent_sidebar_data` itself — populate the cache the
-        // way `poll_sidebar_load_results` would to exercise that plumbing.
-        let mut app = sidebar_usage_app(SessionKind::Codex);
-        app.sidebar_effective_plan_cache.insert(
-            "aiw-feature".to_string(),
-            "Current: AIW_PLAN.md".to_string(),
-        );
-
-        let sidebar = build_agent_sidebar_data(
-            &app,
-            &sidebar_usage_view(SessionKind::Codex, "agent-1", "Agent 1"),
-        )
-        .unwrap();
-
-        assert_eq!(sidebar.plan_text, "Current: AIW_PLAN.md");
-    }
-
-    #[test]
     fn format_codex_usage_source_confidence_uses_inferred_match_label() {
         let mut session = codex_feature_session("sess-current");
         session.token_usage_source_match = Some(TokenUsageSourceMatch::Inferred);
@@ -1886,206 +1123,6 @@ mod tests {
             },
             feature,
         )
-    }
-
-    #[test]
-    fn pr_triage_sidebar_text_is_none_without_an_active_pr() {
-        let (store, feature) = store_with_claude_feature();
-        let app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-
-        assert!(pr_triage_sidebar_text(&app, &feature).is_none());
-    }
-
-    #[test]
-    fn issue_sidebar_text_shows_canonical_repository_and_number_only_when_linked() {
-        let (_, mut feature) = store_with_claude_feature();
-        assert!(issue_source_sidebar_text(&feature).is_none());
-
-        feature.issue_source = Some(crate::project::IssueSource {
-            host: "github.example.com".to_string(),
-            owner: "acme".to_string(),
-            repository: "widget".to_string(),
-            number: 42,
-            comment_status: crate::project::IssueCommentStatus::Failed(
-                "request timed out".to_string(),
-            ),
-        });
-        assert_eq!(
-            issue_source_sidebar_text(&feature).as_deref(),
-            Some("Repository: github.example.com/acme/widget\nIssue: #42\nComment: Failed")
-        );
-    }
-
-    #[test]
-    fn pr_triage_sidebar_text_reports_pr_open_count_and_no_line_without_a_count() {
-        let (store, feature) = store_with_claude_feature();
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.active_prs.insert(
-            feature.id.clone(),
-            crate::app::ActivePrStatus {
-                branch: "feature".to_string(),
-                head_sha: "abc123".to_string(),
-                number: 321,
-                unresolved_threads: Some(4),
-            },
-        );
-
-        assert_eq!(
-            pr_triage_sidebar_text(&app, &feature),
-            Some("PR: #321 · 4 open".to_string())
-        );
-
-        app.active_prs
-            .get_mut(&feature.id)
-            .unwrap()
-            .unresolved_threads = None;
-        assert_eq!(
-            pr_triage_sidebar_text(&app, &feature),
-            Some("PR: #321".to_string())
-        );
-    }
-
-    #[test]
-    fn pr_triage_sidebar_text_adds_working_and_ai_review_lines() {
-        let (mut store, _) = store_with_claude_feature();
-        let dedicated_id = store.projects[0].features[0]
-            .add_session_named(
-                SessionKind::Claude,
-                crate::app::pr_review::TRIAGE_SESSION_LABEL.to_string(),
-            )
-            .id
-            .clone();
-        let feature = store.projects[0].features[0].clone();
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.active_prs.insert(
-            feature.id.clone(),
-            crate::app::ActivePrStatus {
-                branch: "feature".to_string(),
-                head_sha: "abc123".to_string(),
-                number: 321,
-                unresolved_threads: Some(4),
-            },
-        );
-
-        app.handle_ipc_message_value(serde_json::json!({
-            "type": "thinking-start",
-            "session_id": feature.tmux_session,
-            "aiw_feature_session_id": dedicated_id,
-        }));
-        assert_eq!(
-            pr_triage_sidebar_text(&app, &feature),
-            Some("PR: #321 · 4 open\nStatus: Working".to_string())
-        );
-
-        let pr = crate::github::PrRef {
-            number: 321,
-            head_sha: "abc123".to_string(),
-            url: "https://github.com/o/r/pull/321".to_string(),
-            owner: "o".to_string(),
-            repo: "r".to_string(),
-            head_ref: "main".to_string(),
-        };
-        let origin = crate::app::AiReviewState {
-            questions: Default::default(),
-            workdir: feature.workdir.clone(),
-            pr,
-            findings: Vec::new(),
-            summary: None,
-            attribution: None,
-            selected: 0,
-            detail_scroll: 0,
-            detail_content_lines: 0,
-            last_run: None,
-            harness: None,
-            harness_pick: None,
-            harness_pick_origin: None,
-            model: None,
-            model_picked: false,
-            reasoning: None,
-            model_pick: None,
-            finding_editor: None,
-            post_confirm: None,
-            marked: Default::default(),
-        };
-        let (_tx, rx) = std::sync::mpsc::channel();
-        app.ai_review_run.set_receiver_for_test(Some(rx));
-        app.ai_review_run.set_origin_for_test(Some(origin));
-        assert_eq!(
-            pr_triage_sidebar_text(&app, &feature),
-            Some("PR: #321 · 4 open\nStatus: Working\nAI review: Running".to_string())
-        );
-    }
-
-    fn render_viewing_mode_with_active_pr(sidebar_visible: bool) -> String {
-        let (store, feature) = store_with_claude_feature();
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.active_prs.insert(
-            feature.id.clone(),
-            crate::app::ActivePrStatus {
-                branch: "feature".to_string(),
-                head_sha: "abc123".to_string(),
-                number: 321,
-                unresolved_threads: Some(4),
-            },
-        );
-        let mut view = ViewState::new(
-            "demo".to_string(),
-            "feature".to_string(),
-            feature.tmux_session.clone(),
-            "claude".to_string(),
-            "Claude".to_string(),
-            SessionKind::Claude,
-            VibeMode::default(),
-            false,
-        );
-        view.sidebar_visible = sidebar_visible;
-        app.mode = crate::app::AppMode::Viewing(view);
-
-        let backend = TestBackend::new(140, 30);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
-        terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect::<String>()
-    }
-
-    #[test]
-    fn viewing_mode_shows_ambient_pr_badge_when_sidebar_is_hidden() {
-        let rendered = render_viewing_mode_with_active_pr(false);
-
-        assert!(rendered.contains("PR #321"));
-        assert!(rendered.contains("4 open"));
-        assert!(!rendered.contains("PR Triage"));
-    }
-
-    #[test]
-    fn viewing_mode_shows_pr_triage_sidebar_box_instead_of_badge_when_sidebar_is_visible() {
-        let rendered = render_viewing_mode_with_active_pr(true);
-
-        assert!(rendered.contains("PR Triage"));
-        assert!(rendered.contains("PR: #321"));
-        assert!(rendered.contains("4 open"));
-        assert!(!rendered.contains("[PR #321"));
     }
 
     fn pr_review_state_with_branches(
@@ -2395,458 +1432,5 @@ mod tests {
             .collect();
 
         assert!(!rendered.contains("reviewing PR for branch"));
-    }
-
-    #[test]
-    fn compose_mode_still_shows_the_ambient_pr_badge_with_sidebar_hidden() {
-        let (store, feature) = store_with_claude_feature();
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.active_prs.insert(
-            feature.id.clone(),
-            crate::app::ActivePrStatus {
-                branch: "feature".to_string(),
-                head_sha: "abc123".to_string(),
-                number: 321,
-                unresolved_threads: Some(4),
-            },
-        );
-        let mut view = ViewState::new(
-            "demo".to_string(),
-            "feature".to_string(),
-            feature.tmux_session.clone(),
-            "claude".to_string(),
-            "Claude".to_string(),
-            SessionKind::Claude,
-            VibeMode::default(),
-            false,
-        );
-        view.sidebar_visible = false;
-        assert!(
-            pr_triage_badge_span(&app, &view).is_some(),
-            "expected a badge span before entering Compose mode"
-        );
-        app.mode = crate::app::AppMode::Compose(crate::app::ComposeState::new(
-            view,
-            feature.workdir.clone(),
-            String::new(),
-            Vec::new(),
-        ));
-
-        let backend = TestBackend::new(140, 30);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
-        let rendered: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect();
-
-        assert!(rendered.contains("PR #321"));
-        assert!(rendered.contains("4 open"));
-    }
-
-    #[test]
-    fn fallback_sidebar_work_text_prefers_pending_input_message() {
-        let now = chrono::Utc::now();
-        let feature = Feature {
-            id: "feat-1".into(),
-            name: "feature".into(),
-            branch: "feature".into(),
-            workdir: PathBuf::from("/tmp/demo"),
-            is_worktree: false,
-            tmux_session: "aiw-feature".into(),
-            sessions: vec![codex_feature_session("sess-current")],
-            collapsed: false,
-            mode: VibeMode::Vibeless,
-            review: false,
-            plan_mode: false,
-            agent: AgentKind::Codex,
-            enable_chrome: false,
-            remote_control: false,
-            pending_worktree_script: false,
-            ready: false,
-            status: ProjectStatus::Idle,
-            created_at: now,
-            last_accessed: now,
-            summary: None,
-            summary_updated_at: None,
-            nickname: None,
-            selected_plan_path: None,
-            triage_source: None,
-            review_source: None,
-            issue_source: None,
-        };
-        let project = Project {
-            id: "proj-1".into(),
-            name: "demo".into(),
-            repo: PathBuf::from("/tmp/demo"),
-            collapsed: false,
-            features: vec![feature.clone()],
-            created_at: now,
-            preferred_agent: AgentKind::Codex,
-            is_git: false,
-        };
-        let mut app = App::new_for_test(
-            ProjectStore {
-                version: 5,
-                projects: vec![project.clone()],
-                session_bookmarks: vec![],
-                available_harnesses: vec![],
-                prompt_templates: Vec::new(),
-                extra: HashMap::new(),
-            },
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.pending_inputs.push(PendingInput {
-            session_id: "aiw-feature".into(),
-            cwd: "/tmp/demo".into(),
-            message: "Need approval before applying the patch.".into(),
-            notification_type: "input-request".into(),
-            file_path: PathBuf::new(),
-            target_file_path: None,
-            relative_path: None,
-            change_id: None,
-            tool: None,
-            old_snippet: None,
-            new_snippet: None,
-            original_file: None,
-            proposed_file: None,
-            is_new_file: None,
-            reason: None,
-            response_file: None,
-            project_name: Some("demo".into()),
-            feature_name: Some("feature".into()),
-            proceed_signal: None,
-            request_id: None,
-            reply_socket: None,
-        });
-
-        let view = ViewState::new(
-            "demo".into(),
-            "feature".into(),
-            "aiw-feature".into(),
-            "codex".into(),
-            "Codex".into(),
-            SessionKind::Codex,
-            VibeMode::Vibeless,
-            false,
-        );
-
-        assert_eq!(
-            fallback_sidebar_work_text(&app, &project, &feature, &view).as_deref(),
-            Some("State: waiting for input\nRequest: Need approval before applying the patch.")
-        );
-    }
-
-    #[test]
-    fn pending_diff_review_updates_claude_sidebar_work_text() {
-        let now = chrono::Utc::now();
-        let feature = Feature {
-            id: "feat-1".into(),
-            name: "feature".into(),
-            branch: "feature".into(),
-            workdir: PathBuf::from("/tmp/demo"),
-            is_worktree: false,
-            tmux_session: "aiw-feature".into(),
-            sessions: vec![FeatureSession {
-                id: "session-1".into(),
-                kind: SessionKind::Claude,
-                label: "Claude".into(),
-                tmux_window: "claude".into(),
-                claude_session_id: Some("claude-session".into()),
-                todo_reference: None,
-                token_usage_source: None,
-                token_usage_source_match: None,
-                created_at: now,
-                command: None,
-                on_stop: None,
-                pre_check: None,
-                status_text: None,
-                token_usage: None,
-                stopped: false,
-            }],
-            collapsed: false,
-            mode: VibeMode::Vibeless,
-            review: false,
-            plan_mode: false,
-            agent: AgentKind::Claude,
-            enable_chrome: false,
-            remote_control: false,
-            pending_worktree_script: false,
-            ready: false,
-            status: ProjectStatus::Idle,
-            created_at: now,
-            last_accessed: now,
-            summary: None,
-            summary_updated_at: None,
-            nickname: None,
-            selected_plan_path: None,
-            triage_source: None,
-            review_source: None,
-            issue_source: None,
-        };
-        let project = Project {
-            id: "proj-1".into(),
-            name: "demo".into(),
-            repo: PathBuf::from("/tmp/demo"),
-            collapsed: false,
-            features: vec![feature.clone()],
-            created_at: now,
-            preferred_agent: AgentKind::Claude,
-            is_git: false,
-        };
-        let mut app = App::new_for_test(
-            ProjectStore {
-                version: 5,
-                projects: vec![project],
-                session_bookmarks: vec![],
-                available_harnesses: vec![],
-                prompt_templates: Vec::new(),
-                extra: HashMap::new(),
-            },
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.pending_inputs.push(PendingInput {
-            session_id: "aiw-feature".into(),
-            cwd: "/tmp/demo".into(),
-            message: "Review the change before continuing.".into(),
-            notification_type: "diff-review".into(),
-            file_path: PathBuf::new(),
-            target_file_path: Some("src/main.rs".into()),
-            relative_path: Some("src/main.rs".into()),
-            change_id: None,
-            tool: Some("Edit".into()),
-            old_snippet: None,
-            new_snippet: None,
-            original_file: None,
-            proposed_file: None,
-            is_new_file: None,
-            reason: None,
-            response_file: None,
-            project_name: Some("demo".into()),
-            feature_name: Some("feature".into()),
-            proceed_signal: None,
-            request_id: None,
-            reply_socket: None,
-        });
-
-        let view = ViewState::new(
-            "demo".into(),
-            "feature".into(),
-            "aiw-feature".into(),
-            "claude".into(),
-            "Claude".into(),
-            SessionKind::Claude,
-            VibeMode::Vibeless,
-            false,
-        );
-
-        let sidebar = build_agent_sidebar_data(&app, &view).unwrap();
-        assert_eq!(
-            sidebar.work_text.as_deref(),
-            Some(
-                "State: waiting for diff review\nRequest: Review the change before continuing.\nHint: use leader V if the review prompt is not appearing."
-            )
-        );
-    }
-
-    #[test]
-    fn pending_change_reason_updates_claude_sidebar_work_text() {
-        let now = chrono::Utc::now();
-        let feature = Feature {
-            id: "feat-1".into(),
-            name: "feature".into(),
-            branch: "feature".into(),
-            workdir: PathBuf::from("/tmp/demo"),
-            is_worktree: false,
-            tmux_session: "aiw-feature".into(),
-            sessions: vec![FeatureSession {
-                id: "session-1".into(),
-                kind: SessionKind::Claude,
-                label: "Claude".into(),
-                tmux_window: "claude".into(),
-                claude_session_id: Some("claude-session".into()),
-                todo_reference: None,
-                token_usage_source: None,
-                token_usage_source_match: None,
-                created_at: now,
-                command: None,
-                on_stop: None,
-                pre_check: None,
-                status_text: None,
-                token_usage: None,
-                stopped: false,
-            }],
-            collapsed: false,
-            mode: VibeMode::Vibeless,
-            review: false,
-            plan_mode: false,
-            agent: AgentKind::Claude,
-            enable_chrome: false,
-            remote_control: false,
-            pending_worktree_script: false,
-            ready: false,
-            status: ProjectStatus::Idle,
-            created_at: now,
-            last_accessed: now,
-            summary: None,
-            summary_updated_at: None,
-            nickname: None,
-            selected_plan_path: None,
-            triage_source: None,
-            review_source: None,
-            issue_source: None,
-        };
-        let project = Project {
-            id: "proj-1".into(),
-            name: "demo".into(),
-            repo: PathBuf::from("/tmp/demo"),
-            collapsed: false,
-            features: vec![feature.clone()],
-            created_at: now,
-            preferred_agent: AgentKind::Claude,
-            is_git: false,
-        };
-        let mut app = App::new_for_test(
-            ProjectStore {
-                version: 5,
-                projects: vec![project],
-                session_bookmarks: vec![],
-                available_harnesses: vec![],
-                prompt_templates: Vec::new(),
-                extra: HashMap::new(),
-            },
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.pending_inputs.push(PendingInput {
-            session_id: "aiw-feature".into(),
-            cwd: "/tmp/demo".into(),
-            message: "".into(),
-            notification_type: "change-reason".into(),
-            file_path: PathBuf::new(),
-            target_file_path: Some("src/main.rs".into()),
-            relative_path: Some("src/main.rs".into()),
-            change_id: None,
-            tool: Some("Edit".into()),
-            old_snippet: None,
-            new_snippet: None,
-            original_file: None,
-            proposed_file: None,
-            is_new_file: None,
-            reason: None,
-            response_file: None,
-            project_name: Some("demo".into()),
-            feature_name: Some("feature".into()),
-            proceed_signal: None,
-            request_id: None,
-            reply_socket: None,
-        });
-
-        let view = ViewState::new(
-            "demo".into(),
-            "feature".into(),
-            "aiw-feature".into(),
-            "claude".into(),
-            "Claude".into(),
-            SessionKind::Claude,
-            VibeMode::Vibeless,
-            false,
-        );
-
-        let sidebar = build_agent_sidebar_data(&app, &view).unwrap();
-        assert_eq!(
-            sidebar.work_text.as_deref(),
-            Some(
-                "State: waiting for change reason\nRequest: Explain why this change is needed.\nHint: use leader V if the review prompt is not appearing."
-            )
-        );
-    }
-
-    #[test]
-    fn build_agent_sidebar_data_still_builds_for_codex_with_plan_sources_present() {
-        let now = chrono::Utc::now();
-        let feature = Feature {
-            id: "feat-1".into(),
-            name: "feature".into(),
-            branch: "feature".into(),
-            workdir: PathBuf::from("/tmp/demo"),
-            is_worktree: false,
-            tmux_session: "aiw-feature".into(),
-            sessions: vec![codex_feature_session("sess-current")],
-            collapsed: false,
-            mode: VibeMode::Vibeless,
-            review: false,
-            plan_mode: false,
-            agent: AgentKind::Codex,
-            enable_chrome: false,
-            remote_control: false,
-            pending_worktree_script: false,
-            ready: false,
-            status: ProjectStatus::Idle,
-            created_at: now,
-            last_accessed: now,
-            summary: None,
-            summary_updated_at: None,
-            nickname: None,
-            selected_plan_path: None,
-            triage_source: None,
-            review_source: None,
-            issue_source: None,
-        };
-        let project = Project {
-            id: "proj-1".into(),
-            name: "demo".into(),
-            repo: PathBuf::from("/tmp/demo"),
-            collapsed: false,
-            features: vec![feature],
-            created_at: now,
-            preferred_agent: AgentKind::Codex,
-            is_git: false,
-        };
-        let mut app = App::new_for_test(
-            ProjectStore {
-                version: 5,
-                projects: vec![project],
-                session_bookmarks: vec![],
-                available_harnesses: vec![],
-                prompt_templates: Vec::new(),
-                extra: HashMap::new(),
-            },
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.sidebar_model_cache
-            .insert("aiw-feature".into(), "Model: gpt-5.5".into());
-        app.apply_codex_live_event(
-            "aiw-feature",
-            &serde_json::json!({
-                "type": "plan",
-                "payload": { "text": "1. Inspect\n2. Patch" }
-            }),
-        );
-
-        let view = ViewState::new(
-            "demo".into(),
-            "feature".into(),
-            "aiw-feature".into(),
-            "codex".into(),
-            "Codex".into(),
-            SessionKind::Codex,
-            VibeMode::Vibeless,
-            false,
-        );
-
-        let sidebar = build_agent_sidebar_data(&app, &view).unwrap();
-        assert_eq!(sidebar.agent_kind, SessionKind::Codex);
-        assert!(sidebar.status_text.contains("Model: gpt-5.5"));
     }
 }

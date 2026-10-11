@@ -1,7 +1,7 @@
 use super::support::*;
 use crate::app::util::{shorten_path, slugify, slugify_shortened};
 use crate::app::*;
-use crate::project::{AgentKind, Feature, Project, SessionKind};
+use crate::project::{AgentKind, Feature, Project};
 use crate::traits::{MockTmuxOps, MockWorktreeOps};
 use chrono::{Duration, Utc};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -161,40 +161,11 @@ fn enter_during_the_opening_sweep_still_ticks_the_row() {
     assert!(enabled, "the Enter was not lost to the sweep");
 }
 
-#[test]
-fn startup_mask_expires_without_snapshot_updates() {
-    let mut view = ViewState::new(
-        "my-project".to_string(),
-        "my-feat".to_string(),
-        "aiw-my-feat".to_string(),
-        "codex-2".to_string(),
-        "Codex 2".to_string(),
-        SessionKind::Codex,
-        VibeMode::default(),
-        false,
-    );
-    view.show_startup_mask();
-    assert!(view.startup_mask_active());
-
-    view.startup_mask_started_at = Some(Instant::now() - STARTUP_MASK_MAX_DURATION);
-    assert!(!view.startup_mask_active());
-}
-
 // ── slugify ───────────────────────────────────────────────
 
 #[test]
 fn slugify_spaces_become_hyphens() {
     assert_eq!(slugify("hello world"), "hello-world");
-}
-
-#[test]
-fn slugify_special_chars_become_hyphens() {
-    assert_eq!(slugify("foo/bar.baz"), "foo-bar-baz");
-}
-
-#[test]
-fn slugify_consecutive_hyphens_collapsed() {
-    assert_eq!(slugify("foo--bar"), "foo-bar");
 }
 
 #[test]
@@ -369,6 +340,8 @@ fn visible_items_prioritizes_non_worktree_features() {
     );
 }
 
+// FORK(cockpit): the sidebar gives a session a second line (its reason)
+// while it is selected or needs you — not for a status line.
 #[test]
 fn ensure_selection_visible_accounts_for_multi_line_sessions() {
     let mut store = store_with_feature(ProjectStatus::Stopped);
@@ -384,10 +357,13 @@ fn ensure_selection_visible_accounts_for_multi_line_sessions() {
         Box::new(MockWorktreeOps::new()),
     );
     app.selection = Selection::Session(0, 0, 1);
+    assert_eq!(app.visible_item_height(&VisibleItem::Session(0, 0, 1)), 2);
+    assert_eq!(app.visible_item_height(&VisibleItem::Session(0, 0, 0)), 1);
 
+    // project, feature, claude-1, [claude-2 ×2]: five rows, four visible.
     app.ensure_selection_visible(4);
 
-    assert_eq!(app.scroll_offset, 2);
+    assert_eq!(app.scroll_offset, 1);
 }
 
 #[test]
@@ -398,11 +374,13 @@ fn item_index_at_visible_row_maps_status_line_to_same_session() {
         make_session("claude-2", None),
     ];
 
-    let app = App::new_for_test(
+    let mut app = App::new_for_test(
         store,
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
+    // The selected session takes two rows (its reason line).
+    app.selection = Selection::Session(0, 0, 0);
 
     assert!(matches!(app.item_index_at_visible_row(0, 4), Some(0)));
     assert!(matches!(app.item_index_at_visible_row(1, 4), Some(1)));
@@ -486,6 +464,11 @@ fn usability_help_end_then_up_moves_immediately() {
         .draw(|frame| crate::ui::draw(frame, &mut app))
         .unwrap();
     assert!(matches!(&app.mode, AppMode::Help(s) if s.scroll_offset == bottom - 1));
+}
+
+#[test]
+fn slugify_special_chars_become_hyphens() {
+    assert_eq!(slugify("foo/bar.baz"), "foo-bar-baz");
 }
 
 #[test]

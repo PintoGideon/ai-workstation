@@ -22,8 +22,6 @@ use crate::plan_interview::{
 use crate::project::{AgentKind, SessionKind, VibeMode};
 use crate::worktree::WorktreeInfo;
 
-pub const STARTUP_MASK_MAX_DURATION: Duration = Duration::from_secs(8);
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum ForkFeatureStep {
     Branch,
@@ -54,28 +52,6 @@ pub enum Selection {
     Session(usize, usize, usize),
 }
 
-#[derive(Clone, Default)]
-pub struct TextSelection {
-    pub start_row: u16,
-    pub start_col: u16,
-    pub end_row: u16,
-    pub end_col: u16,
-    pub is_selecting: bool,
-    pub has_selection: bool,
-}
-
-impl TextSelection {
-    pub fn normalized(&self) -> (u16, u16, u16, u16) {
-        if self.start_row < self.end_row
-            || (self.start_row == self.end_row && self.start_col <= self.end_col)
-        {
-            (self.start_row, self.start_col, self.end_row, self.end_col)
-        } else {
-            (self.end_row, self.end_col, self.start_row, self.start_col)
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct ViewState {
     pub project_name: String,
@@ -86,15 +62,6 @@ pub struct ViewState {
     pub session_kind: SessionKind,
     pub vibe_mode: VibeMode,
     pub review: bool,
-    pub scroll_offset: usize,
-    pub scroll_content: String,
-    pub scroll_mode: bool,
-    pub scroll_total_lines: usize,
-    pub scroll_passthrough: bool,
-    pub selection: TextSelection,
-    pub sidebar_visible: bool,
-    pub todos_expanded: bool,
-    pub startup_mask_started_at: Option<Instant>,
 }
 
 impl ViewState {
@@ -119,35 +86,7 @@ impl ViewState {
             session_kind,
             vibe_mode,
             review,
-            scroll_offset: 0,
-            scroll_content: String::new(),
-            scroll_mode: false,
-            scroll_total_lines: 0,
-            scroll_passthrough: false,
-            selection: TextSelection::default(),
-            sidebar_visible: true,
-            todos_expanded: false,
-            startup_mask_started_at: None,
         }
-    }
-
-    pub fn show_startup_mask(&mut self) {
-        self.startup_mask_started_at = Some(Instant::now());
-    }
-
-    pub fn startup_mask_active(&self) -> bool {
-        self.startup_mask_started_at
-            .is_some_and(|started_at| started_at.elapsed() < STARTUP_MASK_MAX_DURATION)
-    }
-
-    pub fn sidebar_session_kind(&self) -> Option<SessionKind> {
-        if !self.sidebar_visible {
-            return None;
-        }
-
-        self.session_kind
-            .is_agent_harness()
-            .then(|| self.session_kind.clone())
     }
 }
 
@@ -232,7 +171,6 @@ pub struct PendingEditorOpen {
 
 pub enum RenameReturnTo {
     Dashboard,
-    SessionSwitcher(super::SessionSwitcherState),
 }
 
 pub struct RenameSessionState {
@@ -488,232 +426,11 @@ impl SteeringPromptState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ComposeCommandSource {
-    BuiltIn,
-    Global,
-    Project,
-    Skill,
-}
-
-impl ComposeCommandSource {
-    pub fn label(self) -> &'static str {
-        match self {
-            ComposeCommandSource::BuiltIn => "Built-in",
-            ComposeCommandSource::Global => "Global",
-            ComposeCommandSource::Project => "Project",
-            ComposeCommandSource::Skill => "Skill",
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ComposeCommandEntry {
     /// Command name without the leading slash (e.g. "compact").
     pub name: String,
     pub description: String,
-    pub source: ComposeCommandSource,
-    /// True when the command opens a CC-owned interactive dialog;
-    /// submitting it drops the session into direct (passthrough) mode.
-    pub interactive: bool,
-}
-
-/// An image pasted into the compose box, shown as a `[Image N]`
-/// placeholder in the editor and delivered to Claude Code via the
-/// clipboard at submit time.
-#[derive(Clone)]
-pub struct ComposeImage {
-    pub placeholder: String,
-    pub data: Vec<u8>,
-    pub mime: String,
-}
-
-/// Unsent compose content saved when the box closes without sending.
-#[derive(Clone, Default)]
-pub struct ComposeDraft {
-    pub text: String,
-    pub images: Vec<ComposeImage>,
-}
-
-#[derive(Clone)]
-pub struct ComposeState {
-    pub view: ViewState,
-    pub workdir: PathBuf,
-    pub editor: TextEditor,
-    pub scroll_offset: usize,
-    pub sync_scroll_to_cursor: bool,
-    /// Full command catalog built when the compose box opens.
-    pub catalog: Vec<ComposeCommandEntry>,
-    /// Catalog indices currently matching the typed /prefix.
-    pub suggestions: Vec<usize>,
-    pub suggestion_index: usize,
-    /// Pasted images, in placeholder order.
-    pub images: Vec<ComposeImage>,
-    /// Background clipboard read currently feeding this compose box.
-    pub clipboard_paste_id: Option<u64>,
-    /// The compose buffer is being delivered to the harness in a
-    /// background worker. This is used for the slower WSL image path.
-    pub submit_in_progress: bool,
-}
-
-impl ComposeState {
-    pub fn new(
-        view: ViewState,
-        workdir: PathBuf,
-        text: String,
-        catalog: Vec<ComposeCommandEntry>,
-    ) -> Self {
-        let mut state = Self {
-            view,
-            workdir,
-            editor: TextEditor::new(text),
-            scroll_offset: 0,
-            sync_scroll_to_cursor: true,
-            catalog,
-            suggestions: Vec::new(),
-            suggestion_index: 0,
-            images: Vec::new(),
-            clipboard_paste_id: None,
-            submit_in_progress: false,
-        };
-        state.refresh_suggestions();
-        state
-    }
-
-    /// Register a pasted image and return the placeholder to insert
-    /// into the editor.
-    pub fn add_image(&mut self, data: Vec<u8>, mime: String) -> String {
-        let placeholder = format!("[Image {}]", self.images.len() + 1);
-        self.images.push(ComposeImage {
-            placeholder: placeholder.clone(),
-            data,
-            mime,
-        });
-        placeholder
-    }
-
-    pub fn request_cursor_scroll(&mut self) {
-        self.sync_scroll_to_cursor = true;
-    }
-
-    pub fn paste_in_progress(&self) -> bool {
-        self.clipboard_paste_id.is_some() || self.submit_in_progress
-    }
-
-    pub fn scroll_up(&mut self, lines: usize) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(lines);
-        self.sync_scroll_to_cursor = false;
-    }
-
-    pub fn scroll_down(&mut self, lines: usize) {
-        self.scroll_offset = self.scroll_offset.saturating_add(lines);
-        self.sync_scroll_to_cursor = false;
-    }
-
-    pub fn clear_prompt(&mut self) -> bool {
-        let cleared = self.editor.clear().text_changed || !self.images.is_empty();
-        self.images.clear();
-        self.scroll_offset = 0;
-        self.sync_scroll_to_cursor = false;
-        self.refresh_suggestions();
-        cleared
-    }
-
-    /// The /command token being typed, if the buffer is a single line
-    /// starting with '/' and no arguments have been typed yet.
-    pub fn pending_command_prefix(&self) -> Option<&str> {
-        let text = self.editor.text();
-        let rest = text.strip_prefix('/')?;
-        if rest.contains('\n') || rest.contains(' ') {
-            return None;
-        }
-        Some(rest)
-    }
-
-    /// True when the buffer holds a single-line /command (with or
-    /// without arguments) that should be delivered as keystrokes.
-    pub fn is_slash_command(&self) -> bool {
-        let text = self.editor.text().trim();
-        text.starts_with('/') && !text.contains('\n')
-    }
-
-    pub fn refresh_suggestions(&mut self) {
-        let previously_selected = self.suggestions.get(self.suggestion_index).copied();
-
-        match self.pending_command_prefix() {
-            Some(prefix) => {
-                // Fuzzy-rank the catalog so a query like "commit"
-                // matches namespaced commands such as "stn:commit".
-                let mut scored: Vec<(i32, usize)> = self
-                    .catalog
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(idx, entry)| {
-                        crate::app::compose::fuzzy_score(prefix, &entry.name)
-                            .map(|score| (score, idx))
-                    })
-                    .collect();
-                // Highest score first; ties keep catalog order, which
-                // preserves the built-in/global/project/skill grouping.
-                scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-                self.suggestions = scored.into_iter().map(|(_, idx)| idx).collect();
-            }
-            None => self.suggestions.clear(),
-        }
-
-        self.suggestion_index = previously_selected
-            .and_then(|catalog_idx| self.suggestions.iter().position(|idx| *idx == catalog_idx))
-            .unwrap_or(0);
-    }
-
-    pub fn selected_suggestion(&self) -> Option<&ComposeCommandEntry> {
-        self.suggestions
-            .get(self.suggestion_index)
-            .and_then(|idx| self.catalog.get(*idx))
-    }
-
-    pub fn select_next_suggestion(&mut self) {
-        if self.suggestions.is_empty() {
-            return;
-        }
-        self.suggestion_index = (self.suggestion_index + 1) % self.suggestions.len();
-    }
-
-    pub fn select_prev_suggestion(&mut self) {
-        if self.suggestions.is_empty() {
-            return;
-        }
-        self.suggestion_index = self
-            .suggestion_index
-            .checked_sub(1)
-            .unwrap_or(self.suggestions.len() - 1);
-    }
-
-    /// Replace the typed /prefix with the selected suggestion's name.
-    /// Returns true if a completion was applied.
-    pub fn complete_selected_suggestion(&mut self) -> bool {
-        let Some(entry) = self.selected_suggestion() else {
-            return false;
-        };
-        let completed = format!("/{}", entry.name);
-        if self.editor.text() == completed {
-            return false;
-        }
-        self.editor = TextEditor::new(completed);
-        self.refresh_suggestions();
-        self.request_cursor_scroll();
-        true
-    }
-
-    /// The command catalog entry matching the buffer exactly, if any.
-    pub fn exact_command_match(&self) -> Option<&ComposeCommandEntry> {
-        let text = self.editor.text().trim();
-        let rest = text.strip_prefix('/')?;
-        let name = rest.split_whitespace().next()?;
-        self.catalog
-            .iter()
-            .find(|entry| entry.name.eq_ignore_ascii_case(name))
-    }
 }
 
 /// One row in the `Latest Prompt` recall list: either a prompt actually sent
@@ -1727,12 +1444,8 @@ pub enum AppMode {
     DeletingProject(String),
     DeletingFeature(String, String),
     DeletingFeatureInProgress(DeletingFeatureState),
-    Viewing(ViewState),
-    // FORK: split view — several live agent sessions tiled (DESIGN.md §4.1).
-    SplitView(Box<crate::app::fork_split::SplitViewState>),
     Help(HelpState),
     NotificationPicker(usize, Option<ViewState>),
-    SessionSwitcher(super::SessionSwitcherState),
     RenamingSession(RenameSessionState),
     RenamingFeature(RenameFeatureState),
     SessionConfig(SessionConfigState),
@@ -1805,7 +1518,6 @@ pub enum AppMode {
     /// (`A`); shows a loading frame with the current stage.
     AiReviewRunning(AiReviewRunState),
     SteeringPrompt(SteeringPromptState),
-    Compose(ComposeState),
     SessionPicker(SessionPickerState),
     DiffReviewPrompt(DiffReviewState),
     RunningHook(RunningHookState),
@@ -2223,11 +1935,6 @@ pub enum PendingStart {
     /// was stopped individually with `x`) while the rest of its feature
     /// stays up.
     RestartSessionWindow { pi: usize, fi: usize, si: usize },
-    /// Opening a stopped feature or session from the dashboard (`Enter`).
-    /// Replayed against the current selection, which the dialog leaves alone.
-    EnterView { auto_compose: bool },
-    /// Jumping to a stopped feature from inside a session view (leader n/p).
-    SwitchViewToFeature { pi: usize, fi: usize },
     /// Creating and starting a newly accepted plan-mode feature. Unlike the
     /// ordinary creation autostart, this operation can be parked because the
     /// resource dialog retains the completed interview below.

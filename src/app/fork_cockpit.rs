@@ -150,9 +150,6 @@ impl App {
     /// (a pending selection is committed) and takes the keyboard. Returns
     /// `false`, with a message, when nothing under the selection runs.
     pub fn cockpit_focus_agent(&mut self) -> bool {
-        if !self.cockpit_active() {
-            return false;
-        }
         self.workspace_commit_now();
         let Some(live) = self.fork_workspace.live.clone() else {
             self.message = Some(match self.selection {
@@ -164,6 +161,19 @@ impl App {
         };
         self.cockpit_show(Some(live.clone()));
         self.mark_finished_seen(&live.session_id);
+        // Looking at the agent answers its generic "needs input" notes (a
+        // diff review is a dialog of its own and stays).
+        self.pending_inputs.retain(|input| {
+            if input.project_name.as_deref() == Some(&live.project_name)
+                && input.feature_name.as_deref() == Some(&live.feature_name)
+                && input.notification_type != "diff-review"
+            {
+                let _ = std::fs::remove_file(&input.file_path);
+                false
+            } else {
+                true
+            }
+        });
         self.message = None;
         self.cockpit_send(Request::FocusAgent);
         true
@@ -192,6 +202,8 @@ impl App {
         if self.block_if_feature_pending_worktree_script(pi, fi) {
             return Ok(());
         }
+        // Whatever asked to open the session (an overlay, a picker) is done.
+        self.mode = AppMode::Normal;
         self.cockpit_focus_agent();
         Ok(())
     }
@@ -223,7 +235,7 @@ impl App {
             ));
             return;
         }
-        self.workspace_commit_pending();
+        self.workspace_commit_now();
         let live = self.fork_workspace.live.clone();
         let (after, after_title) = self.cockpit_pane_for(live.as_ref());
         let (tmux_bin, _) = crate::tmux::TmuxManager::runtime_binary_and_socket();
@@ -288,8 +300,6 @@ mod tests {
         assert!(matches!(&requests[1], Request::BorderColour(c) if c.starts_with('#')));
         assert!(app.cockpit_active());
         assert!(app.workspace_active(), "the sidebar needs no 72 columns");
-        assert!(!app.workspace_pane_live(), "nothing is captured");
-        assert_eq!(app.workspace_snapshot_target(), None);
     }
 
     #[test]

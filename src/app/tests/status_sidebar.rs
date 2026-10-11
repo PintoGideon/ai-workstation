@@ -1,6 +1,5 @@
 use super::support::*;
 use crate::app::attention::{AttentionSource, AttentionState};
-use crate::app::util::{latest_prompt_path, read_latest_prompt};
 use crate::app::*;
 use crate::project::{
     AgentKind, Feature, FeatureSession, Project, SessionKind, TokenUsageSourceMatch,
@@ -11,35 +10,6 @@ use chrono::{TimeZone, Utc};
 use std::collections::HashMap;
 use tempfile::NamedTempFile;
 use tempfile::TempDir;
-
-#[test]
-fn read_latest_prompt_prefers_claude_path() {
-    let workdir = TempDir::new().unwrap();
-    let claude_path = latest_prompt_path(workdir.path());
-    let codex_path = workdir.path().join(".codex").join("latest-prompt.txt");
-    std::fs::create_dir_all(claude_path.parent().unwrap()).unwrap();
-    std::fs::create_dir_all(codex_path.parent().unwrap()).unwrap();
-    std::fs::write(&claude_path, "claude prompt").unwrap();
-    std::fs::write(&codex_path, "codex prompt").unwrap();
-
-    assert_eq!(
-        read_latest_prompt(workdir.path()).as_deref(),
-        Some("claude prompt")
-    );
-}
-
-#[test]
-fn read_latest_prompt_falls_back_to_codex_path() {
-    let workdir = TempDir::new().unwrap();
-    let codex_path = workdir.path().join(".codex").join("latest-prompt.txt");
-    std::fs::create_dir_all(codex_path.parent().unwrap()).unwrap();
-    std::fs::write(&codex_path, "codex prompt").unwrap();
-
-    assert_eq!(
-        read_latest_prompt(workdir.path()).as_deref(),
-        Some("codex prompt")
-    );
-}
 
 #[test]
 fn poll_sidebar_load_results_updates_feature_caches() {
@@ -425,7 +395,7 @@ fn active_pr_successor_prevents_returning_to_stashed_predecessor() {
         window: "pr-triage".to_string(),
         state: old_state,
     });
-    app.mode = AppMode::Viewing(ViewState::new(
+    app.return_to_dashboard(&ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
         "aiw-my-feat".to_string(),
@@ -460,7 +430,7 @@ fn active_pr_successor_prevents_returning_to_stashed_predecessor() {
     }]);
     app.pr_review_return_to_pane();
 
-    assert!(matches!(&app.mode, AppMode::Viewing(_)));
+    assert!(matches!(&app.mode, AppMode::Normal));
     assert!(app.pr_review_return.is_none());
 }
 
@@ -2006,31 +1976,6 @@ fn note_codex_prompt_submit_marks_codex_session_in_non_codex_feature_thinking() 
 }
 
 #[test]
-fn apply_codex_live_event_updates_feature_live_state() {
-    let workdir = TempDir::new().unwrap();
-    let store = store_with_codex_session(workdir.path(), false);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-
-    let changed = app.apply_codex_live_event(
-        "aiw-my-feat",
-        &serde_json::json!({
-            "type": "plan",
-            "payload": { "text": "1. Inspect\n2. Patch" }
-        }),
-    );
-
-    assert!(changed);
-    let live = app
-        .codex_live_thread("aiw-my-feat")
-        .expect("expected live codex state");
-    assert_eq!(live.plan_text.as_deref(), Some("1. Inspect\n2. Patch"));
-}
-
-#[test]
 fn poll_codex_sidebar_metadata_updates_caches() {
     let workdir = TempDir::new().unwrap();
     let store = store_with_codex_session(workdir.path(), false);
@@ -2066,96 +2011,6 @@ fn poll_codex_sidebar_metadata_updates_caches() {
         Some("Model: gpt-5.5")
     );
     assert!(!app.codex_sidebar_metadata_inflight.contains(&cache_key));
-}
-
-#[test]
-fn sync_session_status_skips_sidebar_refresh_when_sidebar_hidden() {
-    let workdir = TempDir::new().unwrap();
-    let store = store_with_codex_session(workdir.path(), false);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    let mut view = ViewState::new(
-        "my-project".to_string(),
-        "my-feat".to_string(),
-        "aiw-my-feat".to_string(),
-        "codex".to_string(),
-        "Codex".to_string(),
-        SessionKind::Codex,
-        VibeMode::default(),
-        false,
-    );
-    view.sidebar_visible = false;
-    app.mode = AppMode::Viewing(view);
-
-    app.sync_session_status();
-
-    assert!(!app.pending_sidebar_loads.contains("aiw-my-feat"));
-}
-
-#[test]
-fn toggling_sidebar_back_on_triggers_sidebar_refresh() {
-    let workdir = TempDir::new().unwrap();
-    let store = store_with_codex_session(workdir.path(), false);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    let mut view = ViewState::new(
-        "my-project".to_string(),
-        "my-feat".to_string(),
-        "aiw-my-feat".to_string(),
-        "codex".to_string(),
-        "Codex".to_string(),
-        SessionKind::Codex,
-        VibeMode::default(),
-        false,
-    );
-    view.sidebar_visible = false;
-    app.mode = AppMode::Viewing(view);
-
-    app.toggle_sidebar_in_view();
-
-    assert!(app.pending_sidebar_loads.contains("aiw-my-feat"));
-}
-
-#[test]
-fn ipc_input_request_updates_codex_live_work_state() {
-    let workdir = TempDir::new().unwrap();
-    let store = store_with_codex_session(workdir.path(), false);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "input-request",
-        "source": "codex-notify",
-        "session_id": "aiw-my-feat",
-        "cwd": workdir.path().display().to_string(),
-        "message": "Need approval before applying the patch.",
-        "tool_name": "Bash",
-        "relative_path": "src/main.rs"
-    }));
-
-    assert_eq!(
-        app.codex_live_thread("aiw-my-feat")
-            .and_then(|live| live.sidebar_work_text())
-            .as_deref(),
-        Some(
-            "State: waiting for input\nRequest: Need approval before applying the patch.\nTool: Bash\nFile: src/main.rs"
-        )
-    );
-    assert_eq!(app.toasts.len(), 1);
-    assert!(
-        app.toasts[0]
-            .message
-            .contains("New input request from my-feat")
-    );
 }
 
 /// Stamp `path` with an explicit modification time. Filesystem timestamp
@@ -2572,105 +2427,7 @@ fn ipc_exact_usage_source_replaces_inferred_source() {
 }
 
 #[test]
-fn ipc_prompt_submit_clears_codex_live_input_and_marks_thinking() {
-    let workdir = TempDir::new().unwrap();
-    let store = store_with_codex_session(workdir.path(), false);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.apply_codex_live_event(
-        "aiw-my-feat",
-        &serde_json::json!({
-            "type": "requestUserInput",
-            "payload": { "prompt": "Need approval before applying the patch." }
-        }),
-    );
-
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "prompt-submit",
-        "source": "codex-notify",
-        "session_id": "aiw-my-feat",
-        "cwd": workdir.path().display().to_string(),
-        "prompt": "Continue with the patch."
-    }));
-
-    assert!(app.ipc_thinking_sessions.contains("aiw-my-feat"));
-    assert_eq!(
-        app.codex_live_thread("aiw-my-feat")
-            .and_then(|live| live.sidebar_work_text()),
-        None
-    );
-}
-
-#[test]
-fn ipc_prompt_submit_clears_codex_live_review_work() {
-    let workdir = TempDir::new().unwrap();
-    let store = store_with_codex_session(workdir.path(), false);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.apply_codex_live_event(
-        "aiw-my-feat",
-        &serde_json::json!({
-            "type": "fileChange",
-            "payload": {
-                "relative_path": "src/main.rs",
-                "status": "proposed"
-            }
-        }),
-    );
-
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "prompt-submit",
-        "source": "codex-notify",
-        "session_id": "aiw-my-feat",
-        "cwd": workdir.path().display().to_string(),
-        "prompt": "Reviewed the diff and continue."
-    }));
-
-    assert_eq!(
-        app.codex_live_thread("aiw-my-feat")
-            .and_then(|live| live.sidebar_work_text()),
-        None
-    );
-}
-
-#[test]
-fn ipc_diff_review_updates_codex_live_review_state() {
-    let workdir = TempDir::new().unwrap();
-    let store = store_with_codex_session(workdir.path(), false);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "diff-review",
-        "source": "codex-notify",
-        "session_id": "aiw-my-feat",
-        "cwd": workdir.path().display().to_string(),
-        "file_path": "src/main.rs",
-        "message": "Review the change before continuing.",
-        "tool_name": "Edit"
-    }));
-
-    assert_eq!(
-        app.codex_live_thread("aiw-my-feat")
-            .and_then(|live| live.sidebar_work_text())
-            .as_deref(),
-        Some(
-            "State: waiting for diff review\nFile: src/main.rs\nTool: Edit\nRequest: Review the change before continuing.\nHint: use leader V if the review prompt is not appearing."
-        )
-    );
-}
-
-#[test]
-fn ipc_diff_review_opens_from_aiw_session_when_cwd_does_not_match_feature() {
+fn ipc_diff_review_queues_from_aiw_session_when_cwd_does_not_match_feature() {
     let workdir = TempDir::new().unwrap();
     let store = store_with_custom_session(workdir.path(), "custom-session");
     let mut app = App::new_for_test(
@@ -2679,7 +2436,7 @@ fn ipc_diff_review_opens_from_aiw_session_when_cwd_does_not_match_feature() {
         Box::new(MockWorktreeOps::new()),
     );
     app.config.diff_review_viewer = DiffReviewViewer::Aiw;
-    app.mode = AppMode::Viewing(ViewState::new(
+    app.return_to_dashboard(&ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
         "aiw-my-feat".to_string(),
@@ -2708,20 +2465,24 @@ fn ipc_diff_review_opens_from_aiw_session_when_cwd_does_not_match_feature() {
         "reply_socket": "/tmp/aiw-ipc-reply/req-1.sock"
     }));
 
-    match &app.mode {
-        AppMode::DiffReviewPrompt(state) => {
-            assert_eq!(state.relative_path, "src/main.rs");
-            assert_eq!(state.request_id.as_deref(), Some("req-1"));
-            assert_eq!(
-                state
-                    .return_to_view
-                    .as_ref()
-                    .map(|view| view.feature_name.as_str()),
-                Some("my-feat")
-            );
-        }
-        _ => panic!("expected diff review prompt"),
-    }
+    // FORK(cockpit): no view to pop the review over — it is queued for `V`,
+    // resolved to the feature by its AIW session even though the cwd does
+    // not match the feature's checkout.
+    assert!(matches!(app.mode, AppMode::Normal));
+    assert_eq!(app.pending_inputs.len(), 1);
+    let input = &app.pending_inputs[0];
+    assert_eq!(input.notification_type, "diff-review");
+    assert_eq!(input.feature_name.as_deref(), Some("my-feat"));
+    assert_eq!(input.relative_path.as_deref(), Some("src/main.rs"));
+    assert_eq!(input.request_id.as_deref(), Some("req-1"));
+    assert!(
+        app.toasts
+            .last()
+            .map(|toast| toast.message.contains("New diff review from my-feat"))
+            .unwrap_or(false),
+        "expected a diff review toast, got: {:?}",
+        app.toasts.last().map(|toast| toast.message.clone())
+    );
 }
 
 #[test]
@@ -2763,135 +2524,6 @@ fn ipc_diff_review_queues_with_toast_from_normal_mode() {
             .unwrap_or(false),
         "expected a diff review toast, got: {:?}",
         app.toasts.last().map(|toast| toast.message.clone())
-    );
-}
-
-#[test]
-fn ipc_diff_review_queues_when_viewing_a_different_feature() {
-    let workdir = TempDir::new().unwrap();
-    let store = store_with_custom_session(workdir.path(), "custom-session");
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
-    app.mode = AppMode::Viewing(ViewState::new(
-        "other-project".to_string(),
-        "other-feat".to_string(),
-        "aiw-other-feat".to_string(),
-        "custom".to_string(),
-        "Claude".to_string(),
-        SessionKind::Claude,
-        VibeMode::Vibeless,
-        false,
-    ));
-
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "diff-review",
-        "session_id": "claude-hook-session",
-        "aiw_session": "aiw-my-feat",
-        "cwd": workdir.path().display().to_string(),
-        "message": "Review: src/main.rs",
-        "relative_path": "src/main.rs",
-        "tool": "edit",
-        "change_id": "chg-ipc",
-        "request_id": "req-1"
-    }));
-
-    // Viewing a different feature: stay in that view, queue the review,
-    // and announce it with a toast.
-    match &app.mode {
-        AppMode::Viewing(view) => assert_eq!(view.feature_name, "other-feat"),
-        _ => panic!("expected to stay in the other feature's view"),
-    }
-    assert_eq!(app.pending_inputs.len(), 1);
-    assert_eq!(app.pending_inputs[0].notification_type, "diff-review");
-    assert!(
-        app.toasts
-            .last()
-            .map(|toast| toast.message.contains("New diff review from my-feat"))
-            .unwrap_or(false),
-        "expected a diff review toast, got: {:?}",
-        app.toasts.last().map(|toast| toast.message.clone())
-    );
-}
-
-#[test]
-fn ipc_tool_activity_temporarily_overrides_older_review_work() {
-    let workdir = TempDir::new().unwrap();
-    let store = store_with_codex_session(workdir.path(), false);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "diff-review",
-        "source": "codex-notify",
-        "session_id": "aiw-my-feat",
-        "cwd": workdir.path().display().to_string(),
-        "file_path": "src/main.rs",
-        "message": "Review the change before continuing."
-    }));
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "tool-start",
-        "session_id": "aiw-my-feat",
-        "cwd": workdir.path().display().to_string(),
-        "tool_name": "Bash"
-    }));
-
-    assert_eq!(
-        app.codex_live_thread("aiw-my-feat")
-            .and_then(|live| live.sidebar_work_text())
-            .as_deref(),
-        Some("State: running tool\nTool: Bash")
-    );
-
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "tool-stop",
-        "session_id": "aiw-my-feat",
-        "cwd": workdir.path().display().to_string(),
-        "tool_name": "Bash"
-    }));
-
-    assert_eq!(
-        app.codex_live_thread("aiw-my-feat")
-            .and_then(|live| live.sidebar_work_text())
-            .as_deref(),
-        Some(
-            "State: waiting for diff review\nFile: src/main.rs\nRequest: Review the change before continuing.\nHint: use leader V if the review prompt is not appearing."
-        )
-    );
-}
-
-#[test]
-fn ipc_change_reason_adds_default_request_when_message_is_missing() {
-    let workdir = TempDir::new().unwrap();
-    let store = store_with_codex_session(workdir.path(), false);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "change-reason",
-        "source": "codex-notify",
-        "session_id": "aiw-my-feat",
-        "cwd": workdir.path().display().to_string(),
-        "file_path": "src/main.rs",
-        "tool_name": "Edit"
-    }));
-
-    assert_eq!(
-        app.codex_live_thread("aiw-my-feat")
-            .and_then(|live| live.sidebar_work_text())
-            .as_deref(),
-        Some(
-            "State: waiting for change reason\nFile: src/main.rs\nTool: Edit\nRequest: Explain why this change is needed."
-        )
     );
 }
 

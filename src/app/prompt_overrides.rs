@@ -180,7 +180,7 @@ impl App {
             return;
         }
         if let Some(view) = from_view {
-            self.mode = AppMode::Viewing(view);
+            self.return_to_dashboard(&view);
         }
     }
 

@@ -154,7 +154,6 @@ pub(crate) fn realistic_app(tmux: MockTmuxOps) -> App {
     );
     // The tree, explicitly: the chrome and bench tests read tree rows. The
     // workspace benches and tests set the layout themselves.
-    app.config.aiw.dashboard_layout = crate::fork::config::DashboardLayout::Tree;
     app.selection = crate::app::Selection::Feature(1, 1);
     app.thinking_features.insert("aiw-harbor-12".to_string());
     app.thinking_features.insert("aiw-workflow-12".to_string());
@@ -247,34 +246,28 @@ fn dashboard_frame_bench() {
     }
 }
 
-/// The same frame budget for the workspace layout (DESIGN.md §15): sidebar
-/// with badges on every row plus the live pane, the selection alternating
-/// between a row needing you and a working one, with a pane full of text.
+/// The same frame budget for the cockpit sidebar (DESIGN.md §18): a 36-column
+/// pane with badges on every row and the info block, the selection
+/// alternating between a row needing you and a working one.
 #[test]
 #[ignore = "timing benchmark; run in release with --ignored --nocapture"]
 fn workspace_frame_bench() {
     const WARMUP: usize = 50;
     const FRAMES: usize = 2_000;
+    const SIDEBAR: u16 = crate::fork::cockpit::DEFAULT_SIDEBAR_WIDTH;
 
     let mut app = realistic_app(MockTmuxOps::new());
-    app.config.aiw.dashboard_layout = crate::fork::config::DashboardLayout::Workspace;
-    app.viewport_cols = WIDTH;
+    app.cockpit_attach(
+        crate::fork::cockpit::Link::recording(),
+        "/bin/aiw".into(),
+        "/s/cockpit.sock".into(),
+    );
+    app.viewport_cols = SIDEBAR;
     app.viewport_total_rows = HEIGHT;
     app.viewport_rows = HEIGHT - 3;
     app.selection = crate::app::Selection::Session(1, 0, 0);
-    app.workspace_tick();
-    std::thread::sleep(crate::app::fork_workspace::SELECTION_DEBOUNCE + Duration::from_millis(20));
-    app.workspace_tick();
-    app.pane_lines = (0..(HEIGHT - 8))
-        .map(|i| {
-            ratatui::text::Line::from(format!(
-                "{i:03} ⏺ Bash(cargo test) … running 3 tests … ok  {}",
-                "x".repeat(120)
-            ))
-        })
-        .collect();
-    app.workspace_focus_pane();
-    let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).unwrap();
+    app.workspace_commit_now();
+    let mut terminal = Terminal::new(TestBackend::new(SIDEBAR, HEIGHT)).unwrap();
     for _ in 0..WARMUP {
         render(&mut terminal, &mut app);
     }
@@ -298,7 +291,7 @@ fn workspace_frame_bench() {
     let p95 = samples[FRAMES * 95 / 100];
     let max = samples[FRAMES - 1];
     println!(
-        "workspace frame {WIDTH}x{HEIGHT} ({} build): mean {:.1}us p50 {:.1}us p95 {:.1}us max {:.1}us over {FRAMES} frames",
+        "sidebar frame {SIDEBAR}x{HEIGHT} ({} build): mean {:.1}us p50 {:.1}us p95 {:.1}us max {:.1}us over {FRAMES} frames",
         if cfg!(debug_assertions) {
             "debug"
         } else {
@@ -323,9 +316,8 @@ fn workspace_frame_bench() {
 #[ignore = "prints the rendered dashboard; nothing to assert"]
 fn dashboard_text_snapshot() {
     let mut app = realistic_app(MockTmuxOps::new());
-    // `AIW_SNAPSHOT_LAYOUT=workspace` prints the workspace layout instead.
+    // `AIW_SNAPSHOT_LAYOUT=workspace` prints a wide sidebar instead.
     if std::env::var("AIW_SNAPSHOT_LAYOUT").as_deref() == Ok("workspace") {
-        app.config.aiw.dashboard_layout = crate::fork::config::DashboardLayout::Workspace;
         app.selection = crate::app::Selection::Session(1, 0, 0);
         app.viewport_cols = 120;
         app.workspace_tick();

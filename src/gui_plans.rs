@@ -933,9 +933,6 @@ pub fn act(
                         draft_prompt: unsent.text,
                     });
                 }
-                if matches!(&app.mode, AppMode::Compose(_) | AppMode::Viewing(_)) {
-                    app.exit_view_without_resuming_plan_interview();
-                }
                 app.message = Some(if todo_plan_id.is_some() {
                     "Plan saved; TODO feature created".into()
                 } else {

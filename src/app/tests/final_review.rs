@@ -153,7 +153,7 @@ fn final_review_check_command_pass_reported_after_all_approved() {
 
     drain_final_review_check(&mut app);
 
-    assert!(matches!(app.mode, AppMode::Viewing(_)));
+    assert!(matches!(app.mode, AppMode::Normal));
     let msg = app.message.clone().unwrap_or_default();
     assert!(
         msg.contains("check `exit 0` passed"),

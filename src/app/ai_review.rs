@@ -1606,19 +1606,6 @@ impl App {
         }
     }
 
-    /// Leader-key entry point from inside an agent session, peer to
-    /// `open_pr_review_from_view`.
-    pub fn open_ai_review_from_view(&mut self) {
-        let AppMode::Viewing(view) = &self.mode else {
-            return;
-        };
-        let Some(workdir) = self.feature_for_view(view).map(|f| f.workdir.clone()) else {
-            self.message = Some("No active feature to review".to_string());
-            return;
-        };
-        self.open_ai_review_for_workdir(workdir);
-    }
-
     /// PR Triage's `A` key: open AI Review for the pane's already-resolved PR
     /// (no re-resolve), remembering the triage pane so closing AI Review
     /// (`esc`/`q`, with no post/generation left dangling) returns to it

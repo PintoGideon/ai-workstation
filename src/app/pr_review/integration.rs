@@ -762,11 +762,10 @@ impl App {
         // shared seam (seeds the compose box when interception is on, else
         // pastes without sending).
         self.selection = Selection::Session(pi, fi, si);
-        self.enter_view_without_auto_compose()?;
-        let AppMode::Viewing(view) = &self.mode else {
+        // FORK(cockpit): pasted unsent into the agent's pane (DESIGN.md §18).
+        let Some(view) = self.selection_view_state() else {
             return Ok(());
         };
-        let view = view.clone();
         self.deliver_prompt(prompt, Some(view))
     }
 
@@ -840,11 +839,7 @@ impl App {
             && self.session_indices_by_window(&stash.session, &stash.window).is_some_and(
                 |(pi, fi, si)| matches!(self.selection, Selection::Session(a, b, c) if (a, b, c) == (pi, fi, si)),
             );
-        let matches_current = on_dashboard_row
-            || matches!(
-                &self.mode,
-                AppMode::Viewing(view) if view.session == stash.session && view.window == stash.window
-            );
+        let matches_current = on_dashboard_row;
         if !matches_current {
             self.push_toast_warning("No PR Triage pane linked to this session");
             return;

@@ -415,9 +415,6 @@ impl App {
             self.show_error(error);
             return;
         }
-        if let AppMode::Viewing(view) = &mut self.mode {
-            view.show_startup_mask();
-        }
         self.message = Some(match choice {
             StoppedSessionChoice::Resume => format!("Resumed {} session", kind_label(&kind)),
             StoppedSessionChoice::Clear => {
@@ -615,11 +612,7 @@ impl App {
             return Ok(());
         }
 
-        let from_view = if let AppMode::Viewing(ref view) = self.mode {
-            Some((*view).clone())
-        } else {
-            None
-        };
+        let from_view: Option<ViewState> = None;
 
         let selected = builtin_sessions
             .iter()
@@ -633,105 +626,6 @@ impl App {
             pi,
             fi,
             from_view,
-        });
-        Ok(())
-    }
-
-    pub fn open_session_picker_from_switcher(&mut self) -> Result<()> {
-        use crate::app::{BuiltinSessionOption, SessionPickerState};
-
-        let (project_name, feature_name) = match &self.mode {
-            AppMode::SessionSwitcher(state) => {
-                (state.project_name.clone(), state.feature_name.clone())
-            }
-            _ => return Ok(()),
-        };
-
-        let pi = self
-            .store
-            .projects
-            .iter()
-            .position(|p| p.name == project_name);
-        let pi = match pi {
-            Some(pi) => pi,
-            None => return Ok(()),
-        };
-
-        let fi = self.store.projects[pi]
-            .features
-            .iter()
-            .position(|f| f.name == feature_name);
-        let fi = match fi {
-            Some(fi) => fi,
-            None => return Ok(()),
-        };
-
-        self.reload_extension_config();
-
-        let project = self.store.projects[pi].clone();
-
-        let vscode_available = self.vscode_available;
-
-        let allowed_agents = self.allowed_agents_for_repo(&project.repo);
-        let mut builtin_sessions: Vec<BuiltinSessionOption> = allowed_agents
-            .iter()
-            .map(|agent| BuiltinSessionOption {
-                kind: session_kind_for_agent(agent),
-                label: label_for_agent(agent),
-                disabled: None,
-            })
-            .collect();
-
-        builtin_sessions.extend(vec![
-            BuiltinSessionOption {
-                kind: SessionKind::Terminal,
-                label: "Terminal".to_string(),
-                disabled: None,
-            },
-            BuiltinSessionOption {
-                kind: SessionKind::Nvim,
-                label: "Neovim".to_string(),
-                disabled: None,
-            },
-            BuiltinSessionOption {
-                kind: SessionKind::Vscode,
-                label: "VSCode".to_string(),
-                disabled: if vscode_available {
-                    None
-                } else {
-                    Some("code not found in PATH".to_string())
-                },
-            },
-        ]);
-
-        // One TODOs session per feature; only offer it when this feature has
-        // none. Its editor opens on the feature's own worktree list, with the
-        // project and global lists reachable as side panes.
-        if !project
-            .features
-            .get(fi)
-            .is_some_and(|feature| feature.has_todos_session())
-        {
-            builtin_sessions.push(BuiltinSessionOption {
-                kind: SessionKind::Todos,
-                label: "TODOs".to_string(),
-                disabled: None,
-            });
-        }
-
-        let custom_sessions = self.active_extension.custom_sessions.clone();
-        let selected = builtin_sessions
-            .iter()
-            .position(|session| session.kind == session_kind_for_agent(&project.preferred_agent))
-            .unwrap_or(0);
-
-        self.mode = AppMode::SessionPicker(SessionPickerState {
-            builtin_sessions,
-            custom_sessions,
-            selected,
-            pi,
-            fi,
-            from_view: None,
         });
         Ok(())
     }
@@ -1505,7 +1399,7 @@ impl App {
         }
 
         self.selection = Selection::Session(pi, fi, si);
-        let mut view = ViewState::new(
+        let view = ViewState::new(
             project_name,
             feature_name,
             tmux_session,
@@ -1515,9 +1409,7 @@ impl App {
             mode,
             review,
         );
-        view.show_startup_mask();
-        self.mode = AppMode::Viewing(view);
-        self.pane_content.clear();
+        self.return_to_dashboard(&view);
         self.save()?;
         self.message = Some(format!("Added '{}'", label));
 

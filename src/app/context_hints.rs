@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::context_tracking::{ContextBand, SessionContextState};
 
-use super::{App, AppMode, ViewState};
+use super::{App, ViewState};
 
 /// Per-session lifecycle state for the context-usage sidebar hint.
 ///
@@ -73,10 +73,10 @@ impl ContextHintStates {
 
 impl App {
     pub(crate) fn context_hint_is_visible_in_current_view(&self) -> bool {
-        let session_id = match &self.mode {
-            AppMode::Viewing(view) => self.context_session_id_for_view(view),
-            _ => None,
-        };
+        // FORK(cockpit): the selected session.
+        let session_id = self
+            .selection_view_state()
+            .and_then(|view| self.context_session_id_for_view(&view));
         let Some(session_id) = session_id else {
             return false;
         };

@@ -44,7 +44,7 @@ impl App {
     /// always included even without a project context.
     fn available_skills(&self) -> Vec<crate::app::state::ComposeCommandEntry> {
         let workdir = self.resolve_skill_workdir();
-        crate::app::compose::build_skill_catalog(workdir.as_deref())
+        crate::app::fork_skills::build_skill_catalog(workdir.as_deref())
     }
 
     /// Best-effort project directory to scan for `.claude/skills`: the
@@ -67,7 +67,7 @@ impl App {
                     .iter()
                     .enumerate()
                     .filter_map(|(idx, skill)| {
-                        crate::app::compose::fuzzy_score(query, &skill.name)
+                        crate::app::fork_skills::fuzzy_score(query, &skill.name)
                             .map(|score| (score, idx))
                     })
                     .collect();

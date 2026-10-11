@@ -553,11 +553,7 @@ fn apply_bg_result(app: &mut App, result: SessionStatusBgResult) {
         );
     }
 
-    if app.has_active_sidebar() {
-        app.refresh_sidebar_for_current_view();
-    } else if !matches!(app.mode, AppMode::Viewing(_)) {
-        app.schedule_sidebar_loads_for_polling_fallback();
-    }
+    app.schedule_sidebar_loads_for_polling_fallback();
     app.flush_token_cache_to_db();
 }
 
@@ -1483,10 +1479,6 @@ impl App {
                 }
             }
         }
-    }
-
-    pub fn is_feature_thinking(&self, tmux_session: &str) -> bool {
-        self.thinking_features.contains(tmux_session)
     }
 
     /// The thinking verdict available to a process that does not own the IPC

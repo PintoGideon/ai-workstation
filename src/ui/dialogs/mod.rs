@@ -1,7 +1,6 @@
 mod ai_review;
 mod batch_creation;
 mod browse;
-mod compose;
 mod config_wizard;
 mod context_settings;
 mod debug;
@@ -38,7 +37,6 @@ mod todos;
 pub use ai_review::{draw_ai_review, draw_ai_review_running};
 pub use batch_creation::draw_create_batch_features_dialog;
 pub use browse::draw_browse_path_dialog;
-pub use compose::draw_compose_dialog;
 pub use config_wizard::draw_config_wizard_dialog;
 pub use context_settings::draw_context_settings_dialog;
 pub use debug::draw_debug_log;

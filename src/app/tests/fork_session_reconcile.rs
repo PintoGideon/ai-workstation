@@ -463,7 +463,9 @@ fn the_viewed_session_losing_its_window_returns_to_the_dashboard() {
         ],
         &[(FEATURE, "terminal", "bash")],
     );
-    app.mode = AppMode::Viewing(view_state_for("my-project", "my-feat"));
+    app.return_to_dashboard(&view_state_for("my-project", "my-feat"));
+    app.selection = Selection::Session(0, 0, 0);
+    app.workspace_commit_now();
 
     assert!(app.reconcile_vanished_windows());
 
@@ -487,10 +489,10 @@ fn the_viewed_session_stays_open_while_its_window_lives() {
         vec![session(SessionKind::Claude, "claude")],
         &[(FEATURE, "claude", "claude")],
     );
-    app.mode = AppMode::Viewing(view_state_for("my-project", "my-feat"));
+    app.return_to_dashboard(&view_state_for("my-project", "my-feat"));
 
     assert!(!app.reconcile_vanished_windows());
-    assert!(matches!(app.mode, AppMode::Viewing(_)));
+    assert!(matches!(app.mode, AppMode::Normal));
 }
 
 #[test]
@@ -499,7 +501,7 @@ fn the_viewed_feature_losing_its_whole_tmux_session_also_leaves_the_view() {
         vec![session(SessionKind::Claude, "claude")],
         &[("aiw-other", "x", "bash")],
     );
-    app.mode = AppMode::Viewing(view_state_for("my-project", "my-feat"));
+    app.return_to_dashboard(&view_state_for("my-project", "my-feat"));
 
     assert!(app.reconcile_vanished_windows());
 
@@ -530,48 +532,4 @@ fn a_missing_project_folder_is_flagged_and_announced_once() {
     std::fs::create_dir_all(&gone).unwrap();
     assert!(app.reconcile_missing_project_dirs());
     assert!(app.missing_project_repos.is_empty());
-}
-
-#[test]
-fn a_key_sent_to_a_vanished_session_leaves_the_view_once() {
-    let mut app = app_with(
-        vec![session(SessionKind::Claude, "claude")],
-        &[("aiw-other-feat", "claude", "claude")],
-    );
-    app.mode = AppMode::Viewing(view_state_for("my-project", "my-feat"));
-
-    let err = anyhow::anyhow!("tmux send-keys failed: can't find session: aiw-my-feat");
-    assert!(app.handle_vanished_tmux_target(&err));
-
-    assert!(matches!(app.mode, AppMode::Normal));
-    assert_eq!(listed(&app), vec![("claude".into(), true)]);
-    assert!(
-        app.message
-            .as_deref()
-            .is_some_and(|m| m.contains("window is gone")),
-        "{:?}",
-        app.message
-    );
-}
-
-#[test]
-fn a_vanished_target_still_leaves_the_view_when_tmux_cannot_be_listed() {
-    let mut app = app_with(vec![session(SessionKind::Claude, "claude")], &[]);
-    app.mode = AppMode::Viewing(view_state_for("my-project", "my-feat"));
-
-    let err = anyhow::anyhow!("tmux send-keys failed: can't find window: claude");
-    assert!(app.handle_vanished_tmux_target(&err));
-    assert!(matches!(app.mode, AppMode::Normal));
-}
-
-#[test]
-fn other_tmux_errors_are_not_treated_as_a_vanished_target() {
-    let mut app = app_with(
-        vec![session(SessionKind::Claude, "claude")],
-        &[(FEATURE, "claude", "claude")],
-    );
-    app.mode = AppMode::Viewing(view_state_for("my-project", "my-feat"));
-    let err = anyhow::anyhow!("tmux send-keys failed: no server running");
-    assert!(!app.handle_vanished_tmux_target(&err));
-    assert!(matches!(app.mode, AppMode::Viewing(_)));
 }

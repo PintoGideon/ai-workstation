@@ -9,7 +9,6 @@ mod codex_live;
 mod codex_session_picker;
 pub(crate) mod codex_sessions;
 pub mod commands;
-mod compose;
 mod config_wizard;
 mod context_hints;
 mod context_settings;
@@ -19,7 +18,6 @@ pub(crate) mod editor_ops;
 pub(crate) mod feature_ops;
 pub(crate) mod feature_setup;
 pub(crate) mod fix_cost;
-pub(crate) mod fork_attach; // FORK: native attach (DESIGN.md §15.4)
 pub mod fork_cockpit; // FORK: the cockpit sidebar (DESIGN.md §18)
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7, DESIGN.md §16)
 pub(crate) mod fork_launch; // FORK: launch-time arguments from the store (DESIGN.md §16)
@@ -27,11 +25,9 @@ pub(crate) mod fork_permissions; // FORK: permission approvals (P6, DESIGN.md §
 pub(crate) mod fork_prompt_paste; // FORK: prompts pasted unsent into the agent pane (DESIGN.md §18)
 mod fork_render_memo; // FORK: per-frame dialog values (DESIGN.md §12.3)
 pub(crate) mod fork_session_info; // FORK: the session info block (DESIGN.md §18)
-pub(crate) mod fork_split; // FORK: split view (DESIGN.md §4.1)
+pub(crate) mod fork_skills; // FORK: the skill catalogue (out of the compose box)
 pub(crate) mod fork_subagents; // FORK: subagent counts per session (P5, DESIGN.md §16)
 pub(crate) mod fork_telemetry; // FORK: per-session context and cost (P4, DESIGN.md §16)
-#[cfg(test)]
-mod fork_view_bench; // FORK: view refresh cost (DESIGN.md §12.3)
 pub(crate) mod fork_workspace; // FORK: workspace layout (DESIGN.md §15)
 pub(crate) mod github_workflow;
 mod handoff;
@@ -49,7 +45,6 @@ pub(crate) mod precall;
 mod project_ops;
 mod prompt_library;
 pub(crate) mod prompt_overrides;
-pub mod remote_control;
 mod rename;
 pub(crate) mod resource_gate;
 pub(crate) mod review;
@@ -61,19 +56,18 @@ mod search;
 mod session_config;
 pub(crate) mod session_ops;
 mod session_titles;
+mod session_tools; // FORK: the view's tools, now on the selection (DESIGN.md §18)
 pub mod setup;
 mod skill_picker;
 mod state;
 mod steering;
 pub(crate) mod supervised_edits;
-mod switcher;
 mod sync;
 mod syntax;
 pub(crate) mod toast;
 mod todos;
 pub(crate) mod triage_feature;
 pub mod util;
-mod view;
 
 #[cfg(test)]
 mod tests;
@@ -82,11 +76,9 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Condvar as StdCondvar, Mutex as StdMutex};
 
 use anyhow::Result;
-use ratatui::text::Line;
 use serde::{Deserialize, Serialize};
 use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::path::{Path, PathBuf};
@@ -106,7 +98,6 @@ use crate::project::{
 use crate::tmux::TmuxManager;
 use crate::token_tracking::{SessionTokenTracker, TokenPricingConfig};
 use crate::traits::{TmuxOps, WorktreeOps};
-use crate::ui::{render_ansi_lines, render_vt100_screen};
 use crate::usage::UsageManager;
 use crate::worktree::WorktreeManager;
 
@@ -126,38 +117,6 @@ pub use steering::{PromptAnalysis, analyze_prompt};
 pub use toast::{Toast, ToastKind};
 pub(crate) use todos::ReferencedTodoDeleted;
 
-pub const VIEW_PANE_REFRESH_INTERVAL: Duration = Duration::from_millis(75);
-/// Cadence for the main loop's idle drift-correction reseed. The view
-/// workers are event-driven (control-mode %output / pipe-pane FIFO), so
-/// this only exists to fix rare parser/pane drift — it must stay slow.
-pub const VIEW_DRIFT_RESEED_INTERVAL: Duration = Duration::from_secs(3);
-pub const VIEW_CURSOR_REFRESH_INTERVAL: Duration = Duration::from_millis(125);
-/// How often AIW re-anchors a live Claude pane with a SIGWINCH bounce.
-/// Claude Code's incremental renderer drifts its input-box anchor over
-/// time and leaves stale cells in the real tmux grid (the input box
-/// bleeds into the divider above it), which AIW can only display
-/// faithfully — the corruption is in the pane grid, not our render. A
-/// height bounce forces a full agent repaint. Runs on a timer regardless
-/// of activity (user-chosen mitigation); the brief flicker is the cost.
-pub const VIEW_REANCHOR_BOUNCE_INTERVAL: Duration = Duration::from_secs(3);
-/// Minimum dwell at the shrunk height before restoring, so tmux delivers
-/// two distinct SIGWINCHes instead of coalescing them into a no-op.
-pub const VIEW_REANCHOR_BOUNCE_DWELL: Duration = Duration::from_millis(60);
-/// How long to keep the displayed pane frozen after the restore SIGWINCH
-/// so Claude Code's full repaint lands before the first frame is
-/// revealed — this is what hides the bounce's flicker.
-pub const VIEW_REANCHOR_REVEAL_DELAY: Duration = Duration::from_millis(140);
-pub const VIEW_STARTUP_WARM_DURATION: Duration = Duration::from_millis(2500);
-pub const VIEW_STARTUP_PANE_REFRESH_INTERVAL: Duration = Duration::from_millis(125);
-pub const VIEW_STARTUP_CURSOR_REFRESH_INTERVAL: Duration = Duration::from_millis(350);
-pub const VIEW_BURST_DURATION: Duration = Duration::from_millis(175);
-pub const VIEW_BURST_PANE_REFRESH_INTERVAL: Duration = Duration::from_millis(16);
-pub const VIEW_BURST_CURSOR_REFRESH_INTERVAL: Duration = Duration::from_millis(40);
-pub const VIEW_BACKGROUND_SYNC_DEFER_INTERVAL: Duration = Duration::from_millis(1500);
-
-/// How long the dashboard PR sweep stands down after GitHub reports an
-/// exhausted GraphQL budget.
-///
 /// The budget refills on a rolling hourly window, so the exact reset is not
 /// knowable from a failed call. Fifteen minutes retries a few times an hour at
 /// a cost of one sweep each, rather than either giving up for the hour or
@@ -206,148 +165,12 @@ pub(crate) struct ActivePrStatus {
     pub unresolved_threads: Option<usize>,
 }
 
-/// Minimum spacing between control-mode streaming snapshots (keystroke
-/// bursts bypass this); each snapshot costs a full-frame redraw on the
-/// main thread.
-const VIEW_CONTROL_SNAPSHOT_MIN_INTERVAL: Duration = Duration::from_millis(150);
-
-/// Unconditional self-heal cadence for the control-mode view worker. The
-/// control stream is only a change-notifier, so a missed or coalesced
-/// redraw (scroll regions, another client repainting, a dropped %output,
-/// copy-mode) would otherwise leave a stale/garbled frame on screen until
-/// the 3s drift reseed. Re-capturing the full pane on this floor — even
-/// when no %output arrived — restores the pre-perf behavior where the
-/// view healed almost immediately. Typing latency is no longer a reason
-/// to stay event-driven now that the composer batches input, so
-/// correctness wins over idle subprocess savings while a pane is open.
-const VIEW_CONTROL_HEAL_INTERVAL: Duration = Duration::from_millis(250);
-
-/// FORK: the heal floor backs off (250 → 500 → 1000 ms) while consecutive heals
-/// capture exactly the same screen and cursor and the control stream reports
-/// nothing; any `%output`, layout/mode change or refresh request drops it back
-/// to [`VIEW_CONTROL_HEAL_INTERVAL`]. A quiet pane open on screen then costs
-/// one tmux process a second instead of eight.
-const VIEW_CONTROL_HEAL_MAX_INTERVAL: Duration = Duration::from_millis(1000);
-
-/// FORK: fingerprint of what a heal captured, to tell "nothing changed".
-fn heal_fingerprint(snapshot: &ViewSnapshot) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    snapshot.pane_content.hash(&mut hasher);
-    snapshot.cursor.hash(&mut hasher);
-    hasher.finish()
-}
-
-const VIEW_SNAPSHOT_REFRESH_NONE: u8 = 0;
-const VIEW_SNAPSHOT_REFRESH_NORMAL: u8 = 1;
-const VIEW_SNAPSHOT_REFRESH_BURST: u8 = 2;
-const VIEW_SNAPSHOT_REFRESH_PANE_BURST: u8 = 3;
-
 #[derive(Debug, Clone)]
 pub struct CodexSidebarMetadataResult {
     pub cache_key: String,
     pub title: Option<String>,
     pub prompt: Option<String>,
     pub model_text: Option<String>,
-}
-
-#[derive(Debug)]
-pub struct ViewSnapshot {
-    pub session: String,
-    pub window: String,
-    pub pane_content: Option<String>,
-    pub rendered_lines: Option<Vec<Line<'static>>>,
-    pub cursor: Option<Option<(u16, u16)>>,
-    pub capture_duration: Option<Duration>,
-    pub render_duration: Option<Duration>,
-    pub cursor_duration: Option<Duration>,
-    pub pipe_read_duration: Option<Duration>,
-}
-
-use crate::tmux::{parse_tmux_output_notification, sanitize_tmux_control_line};
-
-fn parser_cursor(parser: &vt100::Parser) -> Option<(u16, u16)> {
-    let (row, col) = parser.screen().cursor_position();
-    Some((col, row))
-}
-
-fn position_parser_cursor(parser: &mut vt100::Parser, cursor: (u16, u16), cols: u16, rows: u16) {
-    let (col, row) = cursor;
-    let row = row.min(rows.saturating_sub(1)).saturating_add(1);
-    let col = col.min(cols.saturating_sub(1)).saturating_add(1);
-    parser.process(format!("\x1b[{row};{col}H").as_bytes());
-}
-
-#[allow(clippy::too_many_arguments)]
-fn snapshot_from_parser(
-    session: &str,
-    window: &str,
-    cols: u16,
-    rows: u16,
-    parser: &vt100::Parser,
-    cursor_override: Option<(u16, u16)>,
-    include_content: bool,
-    capture_duration: Option<Duration>,
-    read_duration: Option<Duration>,
-) -> ViewSnapshot {
-    let screen = parser.screen();
-    // `contents_formatted()` builds the full screen as an escaped string;
-    // it is only consumed by selection mode, so skip it on the hot
-    // incremental path unless explicitly requested.
-    let pane_content =
-        include_content.then(|| String::from_utf8_lossy(&screen.contents_formatted()).into_owned());
-
-    ViewSnapshot {
-        session: session.to_string(),
-        window: window.to_string(),
-        pane_content,
-        rendered_lines: Some(render_vt100_screen(screen, cols, rows)),
-        cursor: Some(cursor_override.or_else(|| parser_cursor(parser))),
-        capture_duration,
-        render_duration: None,
-        cursor_duration: None,
-        pipe_read_duration: read_duration,
-    }
-}
-
-/// FORK: `TmuxManager::capture_pane_ansi_with_cursor` with the view workers'
-/// error handling: no content and no cursor when tmux could not be run.
-fn capture_with_cursor(session: &str, window: &str) -> (String, Option<(u16, u16)>) {
-    match TmuxManager::capture_pane_ansi_with_cursor(session, window) {
-        Ok((captured, cursor)) => (captured, Some(cursor)),
-        Err(_) => (String::new(), None),
-    }
-}
-
-fn reseed_control_view_parser(
-    session: &str,
-    window: &str,
-    cols: u16,
-    rows: u16,
-    parser: &mut vt100::Parser,
-) -> ViewSnapshot {
-    *parser = vt100::Parser::new(rows, cols, 0);
-    let capture_started_at = Instant::now();
-    // FORK: content and cursor from one tmux process instead of two.
-    let (captured, cursor) = capture_with_cursor(session, window);
-    let capture_duration = capture_started_at.elapsed();
-    let normalized = crate::ui::normalize_captured_pane(&captured);
-    parser.process(normalized.as_bytes());
-    if let Some(cursor) = cursor {
-        position_parser_cursor(parser, cursor, cols, rows);
-    }
-
-    snapshot_from_parser(
-        session,
-        window,
-        cols,
-        rows,
-        parser,
-        cursor,
-        true,
-        Some(capture_duration),
-        None,
-    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -396,26 +219,6 @@ pub struct CommandPickerState {
 pub enum CommandPickerFocus {
     Default,
     Local,
-}
-
-pub struct SwitcherEntry {
-    pub tmux_window: String,
-    pub kind: SessionKind,
-    pub label: String,
-    pub icon: Option<String>,
-    pub icon_nerd: Option<String>,
-}
-
-pub struct SessionSwitcherState {
-    pub project_name: String,
-    pub feature_name: String,
-    pub tmux_session: String,
-    pub sessions: Vec<SwitcherEntry>,
-    pub selected: usize,
-    pub return_window: String,
-    pub return_label: String,
-    pub vibe_mode: VibeMode,
-    pub review: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -479,12 +282,6 @@ pub struct AppConfig {
     /// configs written before versioning, which deserialize it as 0.
     #[serde(default)]
     pub config_version: u32,
-    /// FORK: whether typing in an agent session opens the compose box (AIW's
-    /// behaviour) instead of going straight to the agent. Off: keystrokes
-    /// always reach the agent directly; `Ctrl+Space e` still toggles the box
-    /// for the current session.
-    #[serde(default)]
-    pub compose_box: bool,
     pub nerd_font: bool,
     pub leader_timeout_seconds: u64,
     pub input_request_wait_seconds: f64,
@@ -509,11 +306,6 @@ pub struct AppConfig {
     /// so enabling this never forces RC onto an incompatible session.
     #[serde(default)]
     pub remote_control_default: bool,
-    /// Periodically repairs embedded tmux views while they are idle. This
-    /// can hide Claude Code rendering bugs, but costs extra refresh work and
-    /// is opt-in unless the workaround is needed locally.
-    #[serde(default)]
-    pub view_auto_refresh: bool,
     /// Maximum number of saved agent harness panes AIW auto-launches when a
     /// stopped feature is started. Extra saved agent panes are recreated as
     /// tmux windows but left at the shell prompt to avoid process stampedes.
@@ -773,7 +565,6 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             config_version: APP_CONFIG_VERSION,
-            compose_box: false, // FORK: type straight into agents by default
             nerd_font: true,
             leader_timeout_seconds: 5,
             input_request_wait_seconds: 1.5,
@@ -794,7 +585,6 @@ impl Default for AppConfig {
             appearance: Default::default(), // FORK
             token_pricing: TokenPricingConfig::default(),
             remote_control_default: false,
-            view_auto_refresh: false,
             max_agent_autostart_sessions: default_agent_restart_limit(),
             final_review_submit_prompt: true,
             final_review_post_to_pr: false,
@@ -822,18 +612,6 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
-    pub fn input_request_wait_duration(&self) -> Duration {
-        let seconds = if self.input_request_wait_seconds.is_finite()
-            && self.input_request_wait_seconds >= 0.0
-        {
-            self.input_request_wait_seconds
-        } else {
-            AppConfig::default().input_request_wait_seconds
-        };
-
-        Duration::from_secs_f64(seconds)
-    }
-
     /// The `--model` override for a given review action: `review_models`'s
     /// entry for [`ReviewAction::config_key`] if set, else the shared
     /// `review_model` default, else `None` (harness default).
@@ -897,63 +675,12 @@ impl AppConfig {
     }
 }
 
-/// Latest-wins snapshot mailbox: the renderer only ever needs the newest
-/// frame, so a single merged slot replaces an unbounded channel — backlog
-/// cannot form if the main thread stalls. Every delivery also writes to
-/// the wakeup pipe so the main loop leaves `poll()` immediately.
+/// The main loop's wake-up pipe: other event sources (the IPC listener,
+/// the file watcher, the tmux observer) write a byte so `poll()` returns
+/// at once instead of waiting out its timeout.
 #[derive(Clone)]
-struct SnapshotSender {
-    slot: Arc<StdMutex<Option<ViewSnapshot>>>,
-    wakeup_fd: Arc<OwnedFd>,
-}
-
-impl SnapshotSender {
-    fn send(&self, snap: ViewSnapshot) {
-        {
-            let mut slot = self.slot.lock().unwrap();
-            merge_snapshot_into_slot(&mut slot, snap);
-        }
-        let byte = 1u8;
-        unsafe {
-            libc::write(
-                self.wakeup_fd.as_raw_fd(),
-                &byte as *const u8 as *const _,
-                1,
-            )
-        };
-    }
-}
-
-/// Merge an undelivered snapshot with a newer one for the same pane:
-/// newest value wins per field, so a cursor-only update cannot wipe out
-/// pane content the main loop has not consumed yet.
-fn merge_snapshot_into_slot(slot: &mut Option<ViewSnapshot>, new: ViewSnapshot) {
-    match slot {
-        Some(old) if old.session == new.session && old.window == new.window => {
-            if new.pane_content.is_some() {
-                old.pane_content = new.pane_content;
-            }
-            if new.rendered_lines.is_some() {
-                old.rendered_lines = new.rendered_lines;
-            }
-            if new.cursor.is_some() {
-                old.cursor = new.cursor;
-            }
-            if new.capture_duration.is_some() {
-                old.capture_duration = new.capture_duration;
-            }
-            if new.render_duration.is_some() {
-                old.render_duration = new.render_duration;
-            }
-            if new.cursor_duration.is_some() {
-                old.cursor_duration = new.cursor_duration;
-            }
-            if new.pipe_read_duration.is_some() {
-                old.pipe_read_duration = new.pipe_read_duration;
-            }
-        }
-        _ => *slot = Some(new),
-    }
+struct WakeupPipe {
+    tx: Arc<OwnedFd>,
 }
 
 pub struct App {
@@ -1011,9 +738,6 @@ pub struct App {
     pub message: Option<String>,
     pub toasts: Vec<Toast>,
     pub should_quit: bool,
-    pub pane_content: String,
-    // FORK: split view state that outlives `AppMode::SplitView` (zoom stash).
-    pub fork_split: fork_split::SplitRuntime,
     /// FORK: workspace layout (sidebar + live pane) runtime, DESIGN.md §15.
     pub fork_workspace: fork_workspace::WorkspaceRuntime,
     /// FORK: the cockpit link (DESIGN.md §18).
@@ -1029,20 +753,14 @@ pub struct App {
     pub badge_ages: crate::fork::badges::BadgeAges,
     /// FORK: per-frame dialog values, see `fork_render_memo`.
     pub(crate) fork_render_memo: fork_render_memo::RenderMemo,
-    pub pane_lines: Vec<Line<'static>>,
-    pub pane_content_cols: u16,
-    pub pane_content_rows: u16,
     pub viewport_cols: u16,
     pub viewport_rows: u16,
     /// Full terminal height; viewport_rows is the dashboard list area
     /// (height minus chrome), while the view content area is
     /// viewport_total_rows - 1 (header only).
     pub viewport_total_rows: u16,
-    pub tmux_cursor: Option<(u16, u16)>,
     pub leader_active: bool,
     pub leader_activated_at: Option<Instant>,
-    pub last_view_activity_at: Option<Instant>,
-    pub view_input_batch: Option<ViewInputBatch>,
     pub pending_inputs: Vec<PendingInput>,
     /// Feature IDs stopped from the dashboard (`x`) during this run. Their
     /// missing tmux session is expected, so opening a saved agent pane
@@ -1076,14 +794,6 @@ pub struct App {
     /// FORK: ids of projects whose repo folder no longer exists on disk; set
     /// by the sweep (with a one-time toast) for the dashboard to mark the row.
     pub missing_project_repos: std::collections::HashSet<String>,
-    /// Tmux "session:window" targets where compose interception is
-    /// disabled and keys pass straight through to Claude Code.
-    pub compose_direct_targets: std::collections::HashSet<String>,
-    /// Unsent compose drafts keyed by tmux "session:window" target.
-    pub compose_drafts: HashMap<String, ComposeDraft>,
-    compose_clipboard_paste: Option<ComposeClipboardPaste>,
-    compose_submit: Option<ComposeSubmit>,
-    next_compose_clipboard_paste_id: u64,
     pub latest_prompt_cache: HashMap<String, String>,
     pub sidebar_model_cache: HashMap<String, String>,
     // FORK: `sidebar_plan_cache` removed — written (a plan-file read on the main
@@ -1158,8 +868,8 @@ pub struct App {
     /// Receiver for the background "all prompts" scan (leader-key latest-prompt
     /// menu). Reading and parsing every Claude/Codex transcript file
     /// for a session can be slow, so it runs off the UI thread; see
-    /// `app::view::open_latest_prompt_from_view`.
-    pub(crate) latest_prompt_menu_bg: Option<Receiver<view::LatestPromptScanResult>>,
+    /// `app::session_tools::open_latest_prompt_for_selection`.
+    pub(crate) latest_prompt_menu_bg: Option<Receiver<session_tools::LatestPromptScanResult>>,
     /// Receiver for the background AI-adaptive plan-interview round (a
     /// headless harness call). Carries the round number alongside the
     /// result so a late-arriving response can be matched or discarded. See
@@ -1272,8 +982,6 @@ pub struct App {
     /// runs the editor, and restores the screen.
     pub pending_editor: Option<PendingEditorOpen>,
     /// FORK: a session the user asked to attach to natively; drained by the
-    /// main loop like `pending_editor` (DESIGN.md §15.4).
-    pub pending_attach: Option<crate::fork::attach::PendingAttach>,
     /// FORK: permission requests parked on their IPC connection until the
     /// user answers (P6, DESIGN.md §16).
     pub pending_permissions: Vec<fork_permissions::PendingPermission>,
@@ -1324,20 +1032,8 @@ pub struct App {
     /// hand the job to the resolver instead of silently skipping it. See
     /// [`editor_ops::PendingEditorLaunch`].
     pub(crate) pending_editor_launches: Vec<editor_ops::PendingEditorLaunch>,
-    view_snapshot_tx: SnapshotSender,
-    view_snapshot_wakeup_rx: Option<OwnedFd>,
-    view_snapshot_stop: Option<Arc<AtomicBool>>,
-    view_snapshot_refresh: Option<Arc<AtomicU8>>,
-    view_snapshot_include_content: Option<Arc<AtomicBool>>,
-    view_snapshot_condvar: Option<Arc<(StdMutex<()>, StdCondvar)>>,
-    view_snapshot_target: Option<(String, String, u16, u16)>,
-    /// While set and in the future, `drain_view_snapshots` leaves the
-    /// displayed pane frozen on its last good frame. Used to hide the
-    /// re-anchor bounce: the shrink/restore SIGWINCH pair and Claude
-    /// Code's full repaint happen off-screen, and only the first clean
-    /// frame after the pane is back to full height is revealed — so a
-    /// clean pane shows no wobble and a corrupted one just resolves.
-    view_display_frozen_until: Option<Instant>,
+    wakeup: WakeupPipe,
+    wakeup_rx: Option<OwnedFd>,
     pub(crate) harness_check_tx: Sender<HarnessCheckResult>,
     harness_check_rx: Receiver<HarnessCheckResult>,
     /// FORK: how the harness screen finds out whether a CLI is installed
@@ -1353,17 +1049,6 @@ pub(crate) struct HarnessCheckResult {
     /// sweep on the first-run screen. The Manage screen's sweep only
     /// reports, so a harness the user unticked on purpose stays unticked.
     pub enable_on_success: bool,
-}
-
-struct ComposeClipboardPaste {
-    id: u64,
-    target: String,
-    rx: Receiver<Result<util::ClipboardContent, String>>,
-}
-
-struct ComposeSubmit {
-    target: String,
-    rx: Receiver<Result<(), String>>,
 }
 
 struct SidebarLoadResult {
@@ -1454,17 +1139,7 @@ impl Drop for SidebarLoadExecutor {
     }
 }
 
-pub struct ViewInputBatch {
-    pub session: String,
-    pub window: String,
-    pub text: String,
-}
-
 impl App {
-    pub fn note_view_activity(&mut self) {
-        self.last_view_activity_at = Some(Instant::now());
-    }
-
     fn has_dashboard_animation(&self) -> bool {
         !self.thinking_features.is_empty()
             || !self.background_hooks.is_empty()
@@ -1527,13 +1202,6 @@ impl App {
         base || self.has_active_toasts()
     }
 
-    pub fn should_defer_view_background_sync(&self) -> bool {
-        matches!(self.mode, AppMode::Viewing(_))
-            && self
-                .last_view_activity_at
-                .is_some_and(|instant| instant.elapsed() < VIEW_BACKGROUND_SYNC_DEFER_INTERVAL)
-    }
-
     pub fn redraw_signature(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
 
@@ -1544,7 +1212,6 @@ impl App {
         self.message.hash(&mut hasher);
         self.toasts.len().hash(&mut hasher);
         self.pending_inputs.len().hash(&mut hasher);
-        self.tmux_cursor.hash(&mut hasher);
         self.todo_project_visible.hash(&mut hasher);
         self.todo_global_visible.hash(&mut hasher);
 
@@ -1569,177 +1236,21 @@ impl App {
         self.fork_workspace.signature().hash(&mut hasher); // FORK: workspace layout
         self.fork_hook_state_signature().hash(&mut hasher); // FORK: DESIGN.md §16 badges
 
-        if let AppMode::Viewing(view) = &self.mode {
-            view.project_name.hash(&mut hasher);
-            view.feature_name.hash(&mut hasher);
-            view.session.hash(&mut hasher);
-            view.window.hash(&mut hasher);
-            view.session_label.hash(&mut hasher);
-            std::mem::discriminant(&view.session_kind).hash(&mut hasher);
-            std::mem::discriminant(&view.vibe_mode).hash(&mut hasher);
-            view.review.hash(&mut hasher);
-            view.scroll_offset.hash(&mut hasher);
-            view.scroll_mode.hash(&mut hasher);
-            view.scroll_total_lines.hash(&mut hasher);
-            view.scroll_passthrough.hash(&mut hasher);
-            view.selection.start_row.hash(&mut hasher);
-            view.selection.start_col.hash(&mut hasher);
-            view.selection.end_row.hash(&mut hasher);
-            view.selection.end_col.hash(&mut hasher);
-            view.selection.is_selecting.hash(&mut hasher);
-            view.selection.has_selection.hash(&mut hasher);
-            view.sidebar_visible.hash(&mut hasher);
-            view.todos_expanded.hash(&mut hasher);
-        }
-
-        if let AppMode::Compose(state) = &self.mode {
-            state.view.project_name.hash(&mut hasher);
-            state.view.feature_name.hash(&mut hasher);
-            state.view.session.hash(&mut hasher);
-            state.view.window.hash(&mut hasher);
-            state.view.session_label.hash(&mut hasher);
-            state.editor.text().hash(&mut hasher);
-            state.scroll_offset.hash(&mut hasher);
-            state.images.len().hash(&mut hasher);
-            state.clipboard_paste_id.hash(&mut hasher);
-            state.submit_in_progress.hash(&mut hasher);
-        }
-
         hasher.finish()
     }
 
-    pub fn has_pending_view_input(&self) -> bool {
-        self.view_input_batch.is_some()
-    }
-
-    pub fn pending_view_input_len(&self) -> usize {
-        self.view_input_batch
-            .as_ref()
-            .map(|batch| batch.text.len())
-            .unwrap_or(0)
-    }
-
-    pub fn pending_view_input_targets(&self, session: &str, window: &str) -> bool {
-        self.view_input_batch
-            .as_ref()
-            .is_some_and(|batch| batch.session == session && batch.window == window)
-    }
-
-    pub fn queue_view_literal_input(&mut self, session: &str, window: &str, text: &str) {
-        match &mut self.view_input_batch {
-            Some(batch) if batch.session == session && batch.window == window => {
-                batch.text.push_str(text);
-            }
-            _ => {
-                self.view_input_batch = Some(ViewInputBatch {
-                    session: session.to_string(),
-                    window: window.to_string(),
-                    text: text.to_string(),
-                });
-            }
-        }
-    }
-
-    pub fn flush_view_input_batch(&mut self) -> Result<bool> {
-        let Some(batch) = self.view_input_batch.take() else {
-            return Ok(false);
-        };
-
-        let started_at = Instant::now();
-        let result = self
-            .tmux
-            .send_literal(&batch.session, &batch.window, &batch.text);
-        self.perf
-            .record_duration("view.send_literal", started_at.elapsed());
-        if result.is_ok() {
-            if TmuxManager::uses_control_pty_input() {
-                self.request_view_snapshot_pane_burst();
-            } else {
-                self.request_view_snapshot_burst();
-            }
-        }
-        result.map(|_| true)
-    }
-
-    fn current_view_snapshot_target(&self) -> Option<(String, String, u16, u16)> {
-        // The compose box keeps the live pane visible above it, so the
-        // snapshot worker must stay on the viewed session while typing.
-        let view = match &self.mode {
-            AppMode::Viewing(view) => view,
-            AppMode::Compose(state) => &state.view,
-            // FORK: the workspace layout's live pane is the one capture
-            // target while the dashboard shows it.
-            AppMode::Normal => return self.workspace_snapshot_target(),
-            _ => return None,
-        };
-
-        if self.pane_content_cols == 0 || self.pane_content_rows == 0 {
-            return None;
-        }
-
-        Some((
-            view.session.clone(),
-            view.window.clone(),
-            self.pane_content_cols,
-            self.pane_content_rows,
-        ))
-    }
-
-    pub(crate) fn stop_view_snapshot_worker(&mut self) {
-        if let Some(stop) = self.view_snapshot_stop.take() {
-            stop.store(true, Ordering::Relaxed);
-        }
-        // Wake the worker so it notices the stop flag immediately.
-        if let Some(cv) = &self.view_snapshot_condvar {
-            cv.1.notify_one();
-        }
-        self.view_snapshot_refresh = None;
-        self.view_snapshot_include_content = None;
-        self.view_snapshot_condvar = None;
-        self.view_snapshot_target = None;
-    }
-
-    /// Keep the worker's include-content flag in sync with whether
-    /// selection currently needs `pane_content`. On the rising edge,
-    /// request a refresh so full content arrives promptly.
-    fn sync_view_snapshot_content_flag(&self) {
-        let Some(flag) = &self.view_snapshot_include_content else {
-            return;
-        };
-        let want = match &self.mode {
-            AppMode::Viewing(view) => view.selection.is_selecting || view.selection.has_selection,
-            _ => false,
-        };
-        if flag.swap(want, Ordering::Relaxed) != want && want {
-            self.request_view_snapshot_refresh();
-        }
-    }
-
-    pub fn request_view_snapshot_refresh(&self) {
-        self.request_view_snapshot_refresh_kind(VIEW_SNAPSHOT_REFRESH_NORMAL);
-    }
-
-    pub fn request_view_snapshot_burst(&self) {
-        self.request_view_snapshot_refresh_kind(VIEW_SNAPSHOT_REFRESH_BURST);
-    }
-
-    pub fn request_view_snapshot_pane_burst(&self) {
-        self.request_view_snapshot_refresh_kind(VIEW_SNAPSHOT_REFRESH_PANE_BURST);
-    }
-
     /// Returns the read end of the wakeup pipe so the main loop can use
-    /// `libc::poll()` to wake immediately when a snapshot is ready.
-    pub fn view_wakeup_rx_fd(&self) -> Option<RawFd> {
-        self.view_snapshot_wakeup_rx
-            .as_ref()
-            .map(|fd| fd.as_raw_fd())
+    /// `libc::poll()` to wake immediately when an event source wrote to it.
+    pub fn wakeup_rx_fd(&self) -> Option<RawFd> {
+        self.wakeup_rx.as_ref().map(|fd| fd.as_raw_fd())
     }
 
-    /// Write end of the wakeup pipe. Other event sources (e.g. the IPC
-    /// listener) write a byte to it so the main loop's `poll()` returns
-    /// immediately instead of waiting out its timeout.
-    pub fn view_wakeup_tx(&self) -> Arc<OwnedFd> {
-        self.view_snapshot_tx.wakeup_fd.clone()
+    /// Write end of the wakeup pipe. Other event sources (the IPC
+    /// listener, the file watcher, the tmux observer) write a byte to it so
+    /// the main loop's `poll()` returns immediately instead of waiting out
+    /// its timeout.
+    pub fn wakeup_tx(&self) -> Arc<OwnedFd> {
+        self.wakeup.tx.clone()
     }
 
     /// Consume the watcher's thinking-dirty flag. False when no watcher
@@ -1827,775 +1338,6 @@ impl App {
         watcher.sync_prompt_watches(workdirs);
     }
 
-    fn request_view_snapshot_refresh_kind(&self, kind: u8) {
-        if let Some(refresh) = &self.view_snapshot_refresh {
-            let mut current = refresh.load(Ordering::Relaxed);
-            while current < kind {
-                match refresh.compare_exchange_weak(
-                    current,
-                    kind,
-                    Ordering::Relaxed,
-                    Ordering::Relaxed,
-                ) {
-                    Ok(_) => break,
-                    Err(observed) => current = observed,
-                }
-            }
-        }
-        if let Some(cv) = &self.view_snapshot_condvar {
-            cv.1.notify_one();
-        }
-    }
-
-    /// Fallback worker: polls capture-pane at regular intervals.
-    // Worker wiring: every arg is a distinct channel/flag shared with the
-    // spawning thread.
-    #[allow(clippy::too_many_arguments)]
-    fn run_capture_pane_worker(
-        session: &str,
-        window: &str,
-        cols: u16,
-        rows: u16,
-        stop: &AtomicBool,
-        refresh: &AtomicU8,
-        condvar: &(StdMutex<()>, StdCondvar),
-        tx: &SnapshotSender,
-    ) {
-        let mut next_pane_refresh = Instant::now() - VIEW_PANE_REFRESH_INTERVAL;
-        let mut next_cursor_refresh = Instant::now() - VIEW_CURSOR_REFRESH_INTERVAL;
-        let mut burst_until = Instant::now();
-        let worker_started_at = Instant::now();
-
-        while !stop.load(Ordering::Relaxed) {
-            let now = Instant::now();
-            let refresh_kind = refresh.swap(VIEW_SNAPSHOT_REFRESH_NONE, Ordering::Relaxed);
-            let refresh_requested = refresh_kind != VIEW_SNAPSHOT_REFRESH_NONE;
-            let cursor_refresh_requested = matches!(
-                refresh_kind,
-                VIEW_SNAPSHOT_REFRESH_NORMAL | VIEW_SNAPSHOT_REFRESH_BURST
-            );
-            if matches!(
-                refresh_kind,
-                VIEW_SNAPSHOT_REFRESH_BURST | VIEW_SNAPSHOT_REFRESH_PANE_BURST
-            ) {
-                burst_until = now + VIEW_BURST_DURATION;
-            }
-            let burst_active = now < burst_until;
-            let startup_active = now.duration_since(worker_started_at) < VIEW_STARTUP_WARM_DURATION;
-            let pane_interval = if burst_active {
-                VIEW_BURST_PANE_REFRESH_INTERVAL
-            } else if startup_active {
-                VIEW_STARTUP_PANE_REFRESH_INTERVAL
-            } else {
-                VIEW_PANE_REFRESH_INTERVAL
-            };
-            let cursor_interval = if burst_active {
-                VIEW_BURST_CURSOR_REFRESH_INTERVAL
-            } else if startup_active {
-                VIEW_STARTUP_CURSOR_REFRESH_INTERVAL
-            } else {
-                VIEW_CURSOR_REFRESH_INTERVAL
-            };
-            let pane_due =
-                refresh_requested || now.duration_since(next_pane_refresh) >= pane_interval;
-            let cursor_due = cursor_refresh_requested
-                || now.duration_since(next_cursor_refresh) >= cursor_interval;
-
-            if pane_due || cursor_due {
-                let mut pane_content = None;
-                let mut rendered_lines = None;
-                let mut capture_duration = None;
-                let mut render_duration = None;
-                let mut cursor = None;
-                let mut cursor_duration = None;
-
-                if pane_due {
-                    let started_at = Instant::now();
-                    // FORK: one tmux process for content + cursor when both are due.
-                    let captured = if cursor_due {
-                        let (captured, combined_cursor) = capture_with_cursor(session, window);
-                        cursor = Some(combined_cursor);
-                        next_cursor_refresh = Instant::now();
-                        captured
-                    } else {
-                        TmuxManager::capture_pane_ansi(session, window).unwrap_or_default()
-                    };
-                    capture_duration = Some(started_at.elapsed());
-                    let render_started_at = Instant::now();
-                    rendered_lines = Some(render_ansi_lines(&captured, cols, rows));
-                    render_duration = Some(render_started_at.elapsed());
-                    pane_content = Some(captured);
-                    next_pane_refresh = Instant::now();
-                }
-
-                if cursor_due && cursor.is_none() {
-                    let cursor_started_at = Instant::now();
-                    cursor = Some(TmuxManager::cursor_position(session, window).ok());
-                    cursor_duration = Some(cursor_started_at.elapsed());
-                    next_cursor_refresh = Instant::now();
-                }
-
-                tx.send(ViewSnapshot {
-                    session: session.to_string(),
-                    window: window.to_string(),
-                    pane_content,
-                    rendered_lines,
-                    cursor,
-                    capture_duration,
-                    render_duration,
-                    cursor_duration,
-                    pipe_read_duration: None,
-                });
-                continue;
-            }
-
-            let guard = condvar.0.lock().unwrap();
-            let _ = condvar.1.wait_timeout(guard, Duration::from_millis(10));
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn run_control_mode_view_worker(
-        session: &str,
-        window: &str,
-        cols: u16,
-        rows: u16,
-        stop: &AtomicBool,
-        refresh: &AtomicU8,
-        _include_content: &AtomicBool,
-        auto_refresh: bool,
-        condvar: &(StdMutex<()>, StdCondvar),
-        tx: &SnapshotSender,
-    ) -> anyhow::Result<()> {
-        let (target_window_id, mut target_pane_id) =
-            TmuxManager::resolve_view_target_ids(session, window)?;
-        let mut client = TmuxManager::spawn_control_mode_view_client(
-            session,
-            window,
-            &target_pane_id,
-            cols,
-            rows,
-        )?;
-        let mut parser = vt100::Parser::new(rows, cols, 0);
-        let mut debug_lines_remaining = 20usize;
-
-        crate::debug::log_to_file(
-            crate::debug::LogLevel::Info,
-            "perf",
-            &format!(
-                "control-mode worker started for {session}:{window} window_id={target_window_id} pane_id={target_pane_id}"
-            ),
-        );
-
-        let mut debug_initial_lines_remaining = 10usize;
-        while let Some(raw_line) = client.try_recv()? {
-            if debug_initial_lines_remaining > 0 {
-                let line = sanitize_tmux_control_line(&raw_line);
-                if !line.is_empty() {
-                    crate::debug::log_to_file(
-                        crate::debug::LogLevel::Debug,
-                        "tmux",
-                        &format!("control view initial recv: {line:?}"),
-                    );
-                    debug_initial_lines_remaining -= 1;
-                }
-            }
-        }
-
-        tx.send(reseed_control_view_parser(
-            session,
-            window,
-            cols,
-            rows,
-            &mut parser,
-        ));
-
-        // The control stream is used purely as a change notifier;
-        // content always comes from capture-pane reseeds. Feeding
-        // %output into a persistent parser drifts whenever the agent
-        // emits sequences vt100 interprets differently than tmux
-        // (scroll regions, insert/delete line), which lands typed echo
-        // on the wrong row. A reseed costs ~5ms in this worker thread,
-        // so correctness wins: keystroke bursts reseed immediately for
-        // low-latency echo, streaming output is coalesced so the main
-        // thread is not saturated with full-frame redraws.
-        let mut burst_until = Instant::now();
-        let mut last_snapshot = Instant::now();
-        let mut pane_dirty = false;
-        // FORK: adaptive heal floor, see VIEW_CONTROL_HEAL_MAX_INTERVAL.
-        let mut heal_interval = VIEW_CONTROL_HEAL_INTERVAL;
-        let mut last_heal: Option<u64> = None;
-
-        while !stop.load(Ordering::Relaxed) {
-            let refresh_kind = refresh.swap(VIEW_SNAPSHOT_REFRESH_NONE, Ordering::Relaxed);
-            if refresh_kind != VIEW_SNAPSHOT_REFRESH_NONE {
-                heal_interval = VIEW_CONTROL_HEAL_INTERVAL; // FORK
-                last_heal = None;
-            }
-            match refresh_kind {
-                VIEW_SNAPSHOT_REFRESH_NORMAL => {
-                    // Periodic drift-correction reseed.
-                    tx.send(reseed_control_view_parser(
-                        session,
-                        window,
-                        cols,
-                        rows,
-                        &mut parser,
-                    ));
-                    pane_dirty = false;
-                    last_snapshot = Instant::now();
-                }
-                VIEW_SNAPSHOT_REFRESH_BURST | VIEW_SNAPSHOT_REFRESH_PANE_BURST => {
-                    burst_until = Instant::now() + VIEW_BURST_DURATION;
-                    pane_dirty = true;
-                }
-                _ => {}
-            }
-
-            // Non-blocking recv first; wait on condvar so burst signals from
-            // request_view_snapshot_refresh_kind() wake this loop immediately.
-            let line = match client.try_recv()? {
-                Some(line) => Some(line),
-                None => {
-                    let guard = condvar.0.lock().unwrap();
-                    let _ = condvar.1.wait_timeout(guard, Duration::from_millis(5));
-                    client.try_recv()?
-                }
-            };
-
-            if let Some(line) = line {
-                let mut pending_lines = vec![line];
-                while let Some(extra_line) = client.try_recv()? {
-                    pending_lines.push(extra_line);
-                }
-
-                for raw_line in pending_lines {
-                    let line = sanitize_tmux_control_line(&raw_line);
-                    if line.is_empty() {
-                        continue;
-                    }
-                    if debug_lines_remaining > 0 {
-                        crate::debug::log_to_file(
-                            crate::debug::LogLevel::Debug,
-                            "tmux",
-                            &format!("control view recv: {line:?}"),
-                        );
-                        debug_lines_remaining -= 1;
-                    }
-
-                    if let Some((pane_id, payload)) = parse_tmux_output_notification(line) {
-                        if pane_id == target_pane_id && !payload.is_empty() {
-                            pane_dirty = true;
-                        }
-                        continue;
-                    }
-
-                    if let Some(rest) = line.strip_prefix("%window-pane-changed ") {
-                        let mut parts = rest.split_whitespace();
-                        if parts.next() == Some(target_window_id.as_str())
-                            && let Some(new_pane_id) = parts.next()
-                        {
-                            target_pane_id = new_pane_id.to_string();
-                            pane_dirty = true;
-                        }
-                        continue;
-                    }
-
-                    // The window was resized (by us or by another client).
-                    if let Some(rest) = line.strip_prefix("%layout-change ") {
-                        if rest.split_whitespace().next() == Some(target_window_id.as_str()) {
-                            pane_dirty = true;
-                        }
-                        continue;
-                    }
-
-                    if let Some(rest) = line.strip_prefix("%pane-mode-changed ")
-                        && rest.trim() == target_pane_id
-                    {
-                        pane_dirty = true;
-                        continue;
-                    }
-
-                    if let Some(rest) = line.strip_prefix("%pause ") {
-                        let paused_pane = rest.trim();
-                        if paused_pane == target_pane_id {
-                            let _ = client.send_command(
-                                &crate::tmux::TmuxManager::refresh_client_pane_command(
-                                    paused_pane,
-                                    "continue",
-                                ),
-                            );
-                            pane_dirty = true;
-                        }
-                        continue;
-                    }
-                }
-            }
-
-            if pane_dirty {
-                heal_interval = VIEW_CONTROL_HEAL_INTERVAL; // FORK
-                last_heal = None;
-                let now = Instant::now();
-                if now < burst_until
-                    || now.duration_since(last_snapshot) >= VIEW_CONTROL_SNAPSHOT_MIN_INTERVAL
-                {
-                    tx.send(reseed_control_view_parser(
-                        session,
-                        window,
-                        cols,
-                        rows,
-                        &mut parser,
-                    ));
-                    pane_dirty = false;
-                    last_snapshot = Instant::now();
-                }
-            } else if auto_refresh && Instant::now().duration_since(last_snapshot) >= heal_interval
-            {
-                // Unconditional self-heal: the change-notifier can miss a
-                // redraw, so re-capture the full pane on a steady floor to
-                // keep a stale frame from persisting until the 3s drift
-                // reseed. See VIEW_CONTROL_HEAL_INTERVAL.
-                let snapshot = reseed_control_view_parser(session, window, cols, rows, &mut parser);
-                // FORK: back off while heals keep finding the same screen.
-                let fingerprint = heal_fingerprint(&snapshot);
-                heal_interval = if last_heal == Some(fingerprint) {
-                    (heal_interval * 2).min(VIEW_CONTROL_HEAL_MAX_INTERVAL)
-                } else {
-                    VIEW_CONTROL_HEAL_INTERVAL
-                };
-                last_heal = Some(fingerprint);
-                tx.send(snapshot);
-                last_snapshot = Instant::now();
-            }
-        }
-
-        let _ = client.child.kill();
-        Ok(())
-    }
-
-    /// Primary worker: uses pipe-pane to stream output and a persistent
-    /// vt100 parser for incremental screen updates. No capture-pane
-    /// subprocess is spawned after the initial seed.
-    /// Primary worker: uses pipe-pane as a change-notification mechanism.
-    /// When data arrives on the pipe, we know the pane has new output and
-    /// run capture-pane to get the current screen state. When nothing
-    /// arrives, we skip capture-pane entirely (zero subprocess overhead
-    /// while idle). This avoids the persistent-parser state-mismatch
-    /// problems while still eliminating polling when the pane is quiet.
-    #[allow(clippy::too_many_arguments)]
-    fn run_pipe_pane_worker(
-        session: &str,
-        window: &str,
-        cols: u16,
-        rows: u16,
-        stop: &AtomicBool,
-        refresh: &AtomicU8,
-        // FORK: an unfocused split-view tile: capture at most every
-        // `fork_split::BACKGROUND_TILE_REFRESH_INTERVAL` and skip the cursor
-        // (only the focused tile draws one) unless a refresh asks for it.
-        background: &AtomicBool,
-        condvar: &(StdMutex<()>, StdCondvar),
-        tx: &SnapshotSender,
-    ) -> anyhow::Result<()> {
-        use std::fs;
-        use std::io::Read as _;
-        use std::os::unix::fs::OpenOptionsExt;
-
-        // Slug the session name for a safe FIFO path.
-        let slug: String = session
-            .chars()
-            .map(|c| {
-                if c.is_alphanumeric() || c == '-' {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .collect();
-        let fifo_dir = std::path::PathBuf::from("/tmp/aiw-pipes");
-        fs::create_dir_all(&fifo_dir)?;
-        let fifo_path = fifo_dir.join(format!("{slug}-{window}.pipe"));
-
-        // Clean up any stale FIFO, then create a fresh one.
-        let _ = fs::remove_file(&fifo_path);
-        let c_path = std::ffi::CString::new(fifo_path.to_string_lossy().as_bytes())?;
-        let rc = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
-        if rc != 0 {
-            anyhow::bail!(
-                "mkfifo failed for {}: {}",
-                fifo_path.display(),
-                std::io::Error::last_os_error()
-            );
-        }
-
-        // Start pipe-pane: tmux streams pane output into our FIFO.
-        TmuxManager::start_pipe_pane(session, window, &fifo_path)?;
-
-        // Open FIFO with O_RDWR | O_NONBLOCK. O_RDWR keeps the FIFO open
-        // (no EOF) even before the pipe-pane writer connects, because
-        // we act as both reader and writer. O_NONBLOCK makes reads
-        // return WouldBlock instead of blocking when no data is ready.
-        let fifo_fd = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .custom_flags(libc::O_NONBLOCK)
-            .open(&fifo_path)?;
-        let mut fifo = std::io::BufReader::with_capacity(64 * 1024, fifo_fd);
-
-        let mut read_buf = [0u8; 16384];
-        let mut next_cursor_refresh = Instant::now() - VIEW_CURSOR_REFRESH_INTERVAL;
-        let mut last_capture = Instant::now() - VIEW_PANE_REFRESH_INTERVAL;
-        let mut pane_has_new_output = true; // Capture immediately on start.
-        let mut burst_until = Instant::now();
-
-        crate::debug::log_to_file(
-            crate::debug::LogLevel::Info,
-            "perf",
-            &format!("pipe-pane worker started for {session}:{window}"),
-        );
-
-        while !stop.load(Ordering::Relaxed) {
-            let read_started = Instant::now();
-
-            // Drain all available data from the FIFO (non-blocking).
-            // We don't parse it — we only care that *something* changed.
-            loop {
-                match fifo.read(&mut read_buf) {
-                    Ok(0) => {
-                        // With O_RDWR this shouldn't happen, but handle it.
-                        break;
-                    }
-                    Ok(_) => {
-                        pane_has_new_output = true;
-                    }
-                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        break;
-                    }
-                    Err(e) => {
-                        let _ = TmuxManager::stop_pipe_pane(session, window);
-                        let _ = fs::remove_file(&fifo_path);
-                        return Err(e.into());
-                    }
-                }
-            }
-
-            let pipe_read_duration = if pane_has_new_output {
-                Some(read_started.elapsed())
-            } else {
-                None
-            };
-
-            let now = Instant::now();
-            let refresh_kind = refresh.swap(VIEW_SNAPSHOT_REFRESH_NONE, Ordering::Relaxed);
-            let refresh_requested = refresh_kind != VIEW_SNAPSHOT_REFRESH_NONE;
-            let pane_refresh_requested = refresh_requested;
-            if refresh_requested {
-                pane_has_new_output = true;
-            }
-            let cursor_refresh_requested = matches!(
-                refresh_kind,
-                VIEW_SNAPSHOT_REFRESH_NORMAL | VIEW_SNAPSHOT_REFRESH_BURST
-            );
-            if matches!(
-                refresh_kind,
-                VIEW_SNAPSHOT_REFRESH_BURST | VIEW_SNAPSHOT_REFRESH_PANE_BURST
-            ) {
-                burst_until = now + VIEW_BURST_DURATION;
-            }
-            let burst_active = now < burst_until;
-
-            // Throttle captures: use burst interval after input,
-            // normal interval otherwise.
-            let in_background = background.load(Ordering::Relaxed); // FORK
-            let pane_interval = if burst_active {
-                VIEW_BURST_PANE_REFRESH_INTERVAL
-            } else if in_background {
-                fork_split::BACKGROUND_TILE_REFRESH_INTERVAL // FORK
-            } else {
-                VIEW_PANE_REFRESH_INTERVAL
-            };
-            let pane_due = pane_refresh_requested
-                || (pane_has_new_output && now.duration_since(last_capture) >= pane_interval);
-
-            let cursor_interval = if burst_active {
-                VIEW_BURST_CURSOR_REFRESH_INTERVAL
-            } else {
-                VIEW_CURSOR_REFRESH_INTERVAL
-            };
-            // Only poll the cursor (a `display-message` subprocess) when a
-            // pane capture happens anyway — cursor and content move
-            // together, and an idle pane must spawn no subprocesses.
-            let cursor_due = cursor_refresh_requested
-                || (pane_due
-                    && !in_background // FORK: unfocused tiles draw no cursor
-                    && now.duration_since(next_cursor_refresh) >= cursor_interval);
-
-            if pane_due || cursor_due {
-                let mut pane_content = None;
-                let mut rendered_lines = None;
-                let mut capture_duration = None;
-                let mut render_duration = None;
-                let mut cursor = None;
-                let mut cursor_duration = None;
-
-                if pane_due {
-                    pane_has_new_output = false;
-                    let started_at = Instant::now();
-                    // FORK: one tmux process for content + cursor when both are due.
-                    let captured = if cursor_due {
-                        let (captured, combined_cursor) = capture_with_cursor(session, window);
-                        cursor = Some(combined_cursor);
-                        next_cursor_refresh = Instant::now();
-                        captured
-                    } else {
-                        TmuxManager::capture_pane_ansi(session, window).unwrap_or_default()
-                    };
-                    capture_duration = Some(started_at.elapsed());
-                    let render_started = Instant::now();
-                    rendered_lines = Some(render_ansi_lines(&captured, cols, rows));
-                    render_duration = Some(render_started.elapsed());
-                    pane_content = Some(captured);
-                    last_capture = Instant::now();
-                }
-
-                if cursor_due && cursor.is_none() {
-                    let cursor_started = Instant::now();
-                    cursor = Some(TmuxManager::cursor_position(session, window).ok());
-                    cursor_duration = Some(cursor_started.elapsed());
-                    next_cursor_refresh = Instant::now();
-                }
-
-                tx.send(ViewSnapshot {
-                    session: session.to_string(),
-                    window: window.to_string(),
-                    pane_content,
-                    rendered_lines,
-                    cursor,
-                    capture_duration,
-                    render_duration,
-                    cursor_duration,
-                    pipe_read_duration,
-                });
-                continue;
-            }
-
-            // No work to do — wait for wake or timeout.
-            let guard = condvar.0.lock().unwrap();
-            let _ = condvar.1.wait_timeout(guard, Duration::from_millis(10));
-        }
-
-        // Cleanup.
-        let _ = TmuxManager::stop_pipe_pane(session, window);
-        let _ = fs::remove_file(&fifo_path);
-        Ok(())
-    }
-
-    pub fn ensure_view_snapshot_worker(&mut self) {
-        let Some((session, window, cols, rows)) = self.current_view_snapshot_target() else {
-            self.stop_view_snapshot_worker();
-            return;
-        };
-
-        if self.view_snapshot_target.as_ref()
-            == Some(&(session.clone(), window.clone(), cols, rows))
-        {
-            self.sync_view_snapshot_content_flag();
-            return;
-        }
-
-        self.stop_view_snapshot_worker();
-        self.view_display_frozen_until = None;
-        self.drain_view_snapshots();
-        self.pane_lines.clear();
-
-        let stop = Arc::new(AtomicBool::new(false));
-        let refresh = Arc::new(AtomicU8::new(VIEW_SNAPSHOT_REFRESH_NORMAL));
-        let include_content = Arc::new(AtomicBool::new(true));
-        let condvar = Arc::new((StdMutex::new(()), StdCondvar::new()));
-        let tx = self.view_snapshot_tx.clone();
-        let worker_session = session.clone();
-        let worker_window = window.clone();
-        let worker_cols = cols;
-        let worker_rows = rows;
-        let worker_stop = stop.clone();
-        let worker_refresh = refresh.clone();
-        let worker_include_content = include_content.clone();
-        let worker_condvar = condvar.clone();
-        let worker_auto_refresh = self.config.view_auto_refresh;
-
-        std::thread::spawn(move || {
-            if TmuxManager::uses_control_pty_input() {
-                let control_result = Self::run_control_mode_view_worker(
-                    &worker_session,
-                    &worker_window,
-                    worker_cols,
-                    worker_rows,
-                    &worker_stop,
-                    &worker_refresh,
-                    &worker_include_content,
-                    worker_auto_refresh,
-                    &worker_condvar,
-                    &tx,
-                );
-
-                if let Err(e) = &control_result {
-                    crate::debug::log_to_file(
-                        crate::debug::LogLevel::Warn,
-                        "perf",
-                        &format!(
-                            "control-mode view failed ({e}), falling back to pipe-pane snapshots"
-                        ),
-                    );
-                }
-
-                if control_result.is_ok() || worker_stop.load(Ordering::Relaxed) {
-                    return;
-                }
-            }
-
-            // Try pipe-pane approach first, fall back to polling capture-pane.
-            let pipe_result = Self::run_pipe_pane_worker(
-                &worker_session,
-                &worker_window,
-                worker_cols,
-                worker_rows,
-                &worker_stop,
-                &worker_refresh,
-                &AtomicBool::new(false), // FORK: the single view is always in front
-                &worker_condvar,
-                &tx,
-            );
-
-            if let Err(e) = &pipe_result {
-                crate::debug::log_to_file(
-                    crate::debug::LogLevel::Warn,
-                    "perf",
-                    &format!("pipe-pane failed ({e}), falling back to capture-pane polling"),
-                );
-            }
-
-            // Fallback: original polling approach if pipe-pane failed
-            // or if it exited early (e.g. FIFO issue).
-            if pipe_result.is_err() && !worker_stop.load(Ordering::Relaxed) {
-                Self::run_capture_pane_worker(
-                    &worker_session,
-                    &worker_window,
-                    worker_cols,
-                    worker_rows,
-                    &worker_stop,
-                    &worker_refresh,
-                    &worker_condvar,
-                    &tx,
-                );
-            }
-        });
-
-        self.view_snapshot_stop = Some(stop);
-        self.view_snapshot_refresh = Some(refresh);
-        self.view_snapshot_include_content = Some(include_content);
-        self.view_snapshot_condvar = Some(condvar);
-        self.view_snapshot_target = Some((session, window, cols, rows));
-        self.sync_view_snapshot_content_flag();
-    }
-
-    /// Freeze the displayed pane on its current frame for `dur`. Incoming
-    /// snapshots keep merging in the latest-wins mailbox but are not
-    /// applied until the freeze lapses, at which point the freshest frame
-    /// is revealed. Used to hide the re-anchor bounce.
-    pub fn freeze_view_display(&mut self, dur: Duration) {
-        self.view_display_frozen_until = Some(Instant::now() + dur);
-    }
-
-    fn update_startup_mask_for_pane_content(&mut self) {
-        let AppMode::Viewing(view) = &mut self.mode else {
-            return;
-        };
-        if view.startup_mask_started_at.is_none() {
-            return;
-        }
-
-        let launch_echo_visible = self.pane_content.contains("AIW_TMUX_BIN=")
-            || self.pane_content.contains("AIW_TMUX_SOCKET=")
-            || self.pane_content.contains("AIW_TMUX_WINDOW=")
-            || self.pane_content.contains("AIW_FEATURE_SESSION_ID=")
-            || self.pane_content.contains("AIW_SESSION_ID=")
-            || self.pane_content.contains("AIW_SESSION=");
-        if !view.startup_mask_active()
-            || (!self.pane_content.trim().is_empty() && !launch_echo_visible)
-        {
-            view.startup_mask_started_at = None;
-        }
-    }
-
-    pub fn drain_view_snapshots(&mut self) -> (bool, bool) {
-        // Hold the last good frame while a re-anchor bounce is in flight
-        // so the shrink/restore and Claude Code's repaint stay off-screen.
-        if let Some(until) = self.view_display_frozen_until {
-            if Instant::now() < until {
-                return (false, false);
-            }
-            self.view_display_frozen_until = None;
-        }
-
-        let current_target = self.current_view_snapshot_target();
-        let mut pane_changed = false;
-        let mut cursor_changed = false;
-
-        // Latest-wins mailbox: at most one (merged) snapshot is pending.
-        let pending = self.view_snapshot_tx.slot.lock().unwrap().take();
-        if let Some(snapshot) = pending {
-            if current_target.as_ref()
-                != Some(&(
-                    snapshot.session.clone(),
-                    snapshot.window.clone(),
-                    self.pane_content_cols,
-                    self.pane_content_rows,
-                ))
-            {
-                return (false, false);
-            }
-
-            if let Some(duration) = snapshot.capture_duration {
-                self.perf
-                    .record_duration("view.capture_pane_ansi", duration);
-            }
-            if let Some(duration) = snapshot.render_duration {
-                self.perf
-                    .record_duration("view.render_snapshot_lines", duration);
-            }
-            if let Some(duration) = snapshot.cursor_duration {
-                self.perf.record_duration("view.cursor_position", duration);
-            }
-            if let Some(duration) = snapshot.pipe_read_duration {
-                self.perf.record_duration("view.pipe_read", duration);
-            }
-
-            if let Some(pane_content) = snapshot.pane_content
-                && self.pane_content != pane_content
-            {
-                self.pane_content = pane_content;
-                self.update_startup_mask_for_pane_content();
-                pane_changed = true;
-            }
-
-            if let Some(rendered_lines) = snapshot.rendered_lines
-                && self.pane_lines != rendered_lines
-            {
-                self.pane_lines = rendered_lines;
-                pane_changed = true;
-            }
-
-            if let Some(cursor) = snapshot.cursor
-                && self.tmux_cursor != cursor
-            {
-                self.tmux_cursor = cursor;
-                cursor_changed = true;
-            }
-        }
-
-        (pane_changed, cursor_changed)
-    }
-
     pub fn new(db_path: PathBuf) -> Result<Self> {
         setup::ensure_notify_scripts();
         let db = crate::db::AiwDb::open_or_seed(&db_path, &crate::project::global_db_path())?;
@@ -2624,8 +1366,6 @@ impl App {
             .map(|p| merge_project_extension_config(&global_ext, &p.repo))
             .unwrap_or(global_ext);
         let (codex_sidebar_metadata_tx, codex_sidebar_metadata_rx) = std::sync::mpsc::channel();
-        let compose_direct_targets = compose::compose_targets_from_store(&store); // FORK
-        let view_snapshot_slot = Arc::new(StdMutex::new(None));
         let (wakeup_rx, wakeup_tx) = unsafe {
             let mut fds = [0i32; 2];
             libc::pipe(fds.as_mut_ptr());
@@ -2636,9 +1376,8 @@ impl App {
             libc::fcntl(fds[1], libc::F_SETFL, libc::O_NONBLOCK);
             (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1]))
         };
-        let view_snapshot_tx = SnapshotSender {
-            slot: view_snapshot_slot,
-            wakeup_fd: Arc::new(wakeup_tx),
+        let wakeup = WakeupPipe {
+            tx: Arc::new(wakeup_tx),
         };
         let (harness_check_tx, harness_check_rx) = channel();
         let mut theme = crate::theme::Theme::load(&config.theme);
@@ -2665,26 +1404,18 @@ impl App {
             message: None,
             toasts: Vec::new(),
             should_quit: false,
-            pane_content: String::new(),
-            fork_split: Default::default(),        // FORK: split view
-            fork_workspace: Default::default(),    // FORK: workspace layout
-            fork_cockpit: Default::default(),      // FORK: cockpit
+            fork_workspace: Default::default(), // FORK: workspace layout
+            fork_cockpit: Default::default(),   // FORK: cockpit
             fork_session_info: Default::default(), // FORK: session info block
-            unsent_prompt_handoff: None,           // FORK: GUI prompt hand-off
+            unsent_prompt_handoff: None,        // FORK: GUI prompt hand-off
             finished_seen: std::collections::HashSet::new(), // FORK: badges
-            badge_ages: Default::default(),        // FORK: badges
-            fork_render_memo: Default::default(),  // FORK: render memo
-            pane_lines: Vec::new(),
-            pane_content_cols: 0,
-            pane_content_rows: 0,
+            badge_ages: Default::default(),     // FORK: badges
+            fork_render_memo: Default::default(), // FORK: render memo
             viewport_cols: 0,
             viewport_rows: 0,
             viewport_total_rows: 0,
-            tmux_cursor: None,
             leader_active: false,
             leader_activated_at: None,
-            last_view_activity_at: None,
-            view_input_batch: None,
             pending_inputs: Vec::new(),
             user_stopped_features: std::collections::HashSet::new(),
             exited_sessions: std::collections::HashSet::new(),
@@ -2692,11 +1423,6 @@ impl App {
             reported_config_errors: HashMap::new(),
             config_error_checks: Default::default(),
             missing_project_repos: std::collections::HashSet::new(),
-            compose_direct_targets, // FORK: persisted in the store
-            compose_drafts: HashMap::new(),
-            compose_clipboard_paste: None,
-            compose_submit: None,
-            next_compose_clipboard_paste_id: 1,
             latest_prompt_cache,
             sidebar_model_cache: HashMap::new(),
             sidebar_effective_plan_cache: HashMap::new(),
@@ -2758,7 +1484,6 @@ impl App {
             ipc_thinking_sessions: std::collections::HashSet::new(),
             awaiting_review_fixes: HashMap::new(),
             pending_editor: None,
-            pending_attach: None,            // FORK: native attach
             pending_permissions: Vec::new(), // FORK: P6
             telemetry: HashMap::new(),       // FORK: P4
             fork_telemetry: Default::default(),
@@ -2789,20 +1514,14 @@ impl App {
             // Checked asynchronously — defaults to false until confirmed.
             vscode_available: false,
             pending_editor_launches: Vec::new(),
-            view_snapshot_tx,
-            view_snapshot_wakeup_rx: Some(wakeup_rx),
-            view_snapshot_stop: None,
-            view_snapshot_refresh: None,
-            view_snapshot_include_content: None,
-            view_snapshot_condvar: None,
-            view_snapshot_target: None,
-            view_display_frozen_until: None,
+            wakeup,
+            wakeup_rx: Some(wakeup_rx),
             harness_check_tx,
             harness_check_rx,
             harness_probe: Self::check_harness_available,
         };
 
-        match crate::fswatch::FsWatcher::start(app.view_wakeup_tx()) {
+        match crate::fswatch::FsWatcher::start(app.wakeup_tx()) {
             Ok(watcher) => app.fs_watcher = Some(watcher),
             Err(e) => {
                 crate::debug::log_to_file(
@@ -2818,9 +1537,7 @@ impl App {
         // events; leaving the observer unset keeps the faster 5s
         // status-sync polling instead of trusting a dead event stream.
         if TmuxManager::control_clients_compatible() {
-            app.tmux_observer = Some(crate::tmux_observer::TmuxObserver::start(
-                app.view_wakeup_tx(),
-            ));
+            app.tmux_observer = Some(crate::tmux_observer::TmuxObserver::start(app.wakeup_tx()));
         } else {
             crate::debug::log_to_file(
                 crate::debug::LogLevel::Warn,
@@ -2896,8 +1613,6 @@ impl App {
         let (sidebar_load_tx, sidebar_load_rx) = std::sync::mpsc::channel();
         let latest_prompt_cache = Self::build_latest_prompt_cache(&store);
         let (codex_sidebar_metadata_tx, codex_sidebar_metadata_rx) = std::sync::mpsc::channel();
-        let compose_direct_targets = compose::compose_targets_from_store(&store); // FORK
-        let view_snapshot_slot = Arc::new(StdMutex::new(None));
         let (wakeup_rx, wakeup_tx) = unsafe {
             let mut fds = [0i32; 2];
             libc::pipe(fds.as_mut_ptr());
@@ -2908,9 +1623,8 @@ impl App {
             libc::fcntl(fds[1], libc::F_SETFL, libc::O_NONBLOCK);
             (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1]))
         };
-        let view_snapshot_tx = SnapshotSender {
-            slot: view_snapshot_slot,
-            wakeup_fd: Arc::new(wakeup_tx),
+        let wakeup = WakeupPipe {
+            tx: Arc::new(wakeup_tx),
         };
         let (harness_check_tx, harness_check_rx) = channel();
         Self {
@@ -2941,26 +1655,18 @@ impl App {
             message: None,
             toasts: Vec::new(),
             should_quit: false,
-            pane_content: String::new(),
-            fork_split: Default::default(),        // FORK: split view
-            fork_workspace: Default::default(),    // FORK: workspace layout
-            fork_cockpit: Default::default(),      // FORK: cockpit
+            fork_workspace: Default::default(), // FORK: workspace layout
+            fork_cockpit: Default::default(),   // FORK: cockpit
             fork_session_info: Default::default(), // FORK: session info block
-            unsent_prompt_handoff: None,           // FORK: GUI prompt hand-off
+            unsent_prompt_handoff: None,        // FORK: GUI prompt hand-off
             finished_seen: std::collections::HashSet::new(), // FORK: badges
-            badge_ages: Default::default(),        // FORK: badges
-            fork_render_memo: Default::default(),  // FORK: render memo
-            pane_lines: Vec::new(),
-            pane_content_cols: 0,
-            pane_content_rows: 0,
+            badge_ages: Default::default(),     // FORK: badges
+            fork_render_memo: Default::default(), // FORK: render memo
             viewport_cols: 0,
             viewport_rows: 0,
             viewport_total_rows: 0,
-            tmux_cursor: None,
             leader_active: false,
             leader_activated_at: None,
-            last_view_activity_at: None,
-            view_input_batch: None,
             pending_inputs: Vec::new(),
             user_stopped_features: std::collections::HashSet::new(),
             exited_sessions: std::collections::HashSet::new(),
@@ -2968,11 +1674,6 @@ impl App {
             reported_config_errors: HashMap::new(),
             config_error_checks: Default::default(),
             missing_project_repos: std::collections::HashSet::new(),
-            compose_direct_targets, // FORK: persisted in the store
-            compose_drafts: HashMap::new(),
-            compose_clipboard_paste: None,
-            compose_submit: None,
-            next_compose_clipboard_paste_id: 1,
             latest_prompt_cache,
             sidebar_model_cache: HashMap::new(),
             sidebar_effective_plan_cache: HashMap::new(),
@@ -3034,7 +1735,6 @@ impl App {
             ipc_thinking_sessions: std::collections::HashSet::new(),
             awaiting_review_fixes: HashMap::new(),
             pending_editor: None,
-            pending_attach: None,            // FORK: native attach
             pending_permissions: Vec::new(), // FORK: P6
             telemetry: HashMap::new(),       // FORK: P4
             fork_telemetry: Default::default(),
@@ -3064,68 +1764,12 @@ impl App {
             last_file_notification_fingerprint: None,
             vscode_available: false,
             pending_editor_launches: Vec::new(),
-            view_snapshot_tx,
-            view_snapshot_wakeup_rx: Some(wakeup_rx),
-            view_snapshot_stop: None,
-            view_snapshot_refresh: None,
-            view_snapshot_include_content: None,
-            view_snapshot_condvar: None,
-            view_snapshot_target: None,
-            view_display_frozen_until: None,
+            wakeup,
+            wakeup_rx: Some(wakeup_rx),
             harness_check_tx,
             harness_check_rx,
             harness_probe: |kind| anyhow::bail!("{} is not probed in tests", kind.display_name()),
         }
-    }
-
-    pub(crate) fn has_active_sidebar(&self) -> bool {
-        matches!(
-            &self.mode,
-            AppMode::Viewing(view) if view.sidebar_session_kind().is_some()
-        )
-    }
-
-    pub(crate) fn refresh_sidebar_for_current_view(&mut self) {
-        let Some((project_name, feature_name, window, session_kind)) = (match &self.mode {
-            AppMode::Viewing(view) => view.sidebar_session_kind().map(|session_kind| {
-                (
-                    view.project_name.clone(),
-                    view.feature_name.clone(),
-                    view.window.clone(),
-                    session_kind,
-                )
-            }),
-            _ => None,
-        }) else {
-            return;
-        };
-
-        let Some((pi, fi)) = self
-            .store
-            .projects
-            .iter()
-            .enumerate()
-            .find(|(_, project)| project.name == project_name)
-            .and_then(|(pi, project)| {
-                project
-                    .features
-                    .iter()
-                    .enumerate()
-                    .find(|(_, feature)| feature.name == feature_name)
-                    .map(|(fi, _)| (pi, fi))
-            })
-        else {
-            return;
-        };
-
-        self.refresh_latest_prompt_for_feature(pi, fi);
-        self.request_codex_sidebar_metadata_for_view(
-            &project_name,
-            &feature_name,
-            &window,
-            &session_kind,
-        );
-        self.schedule_sidebar_load_for_feature(pi, fi);
     }
 
     #[allow(dead_code)] // exercised only by unit tests
@@ -3278,27 +1922,6 @@ impl App {
         self.codex_sidebar_metadata_inflight.retain(|key| keep(key));
     }
 
-    pub(crate) fn refresh_latest_prompt_for_feature(&mut self, pi: usize, fi: usize) {
-        let Some(feature) = self
-            .store
-            .projects
-            .get(pi)
-            .and_then(|project| project.features.get(fi))
-        else {
-            return;
-        };
-
-        if let Some(prompt) = latest_prompt_text_for_feature(feature)
-            .map(|prompt| prompt.trim().to_string())
-            .filter(|prompt| !prompt.is_empty())
-        {
-            self.latest_prompt_cache
-                .insert(feature.tmux_session.clone(), prompt);
-        } else {
-            self.latest_prompt_cache.remove(&feature.tmux_session);
-        }
-    }
-
     pub fn latest_prompt_for_session(&self, tmux_session: &str) -> Option<&str> {
         self.latest_prompt_cache
             .get(tmux_session)
@@ -3351,51 +1974,6 @@ impl App {
         });
     }
 
-    pub(crate) fn request_codex_sidebar_metadata_for_view(
-        &mut self,
-        project_name: &str,
-        feature_name: &str,
-        window: &str,
-        session_kind: &SessionKind,
-    ) {
-        if *session_kind != SessionKind::Codex {
-            return;
-        }
-
-        let context = self
-            .store
-            .projects
-            .iter()
-            .find(|project| project.name == project_name)
-            .and_then(|project| {
-                project
-                    .features
-                    .iter()
-                    .find(|feature| feature.name == feature_name)
-            })
-            .and_then(|feature| {
-                feature
-                    .sessions
-                    .iter()
-                    .find(|session| session.tmux_window == window)
-                    .and_then(|session| {
-                        session
-                            .token_usage_source
-                            .as_ref()
-                            .filter(|source| {
-                                source.provider == crate::token_tracking::TokenUsageProvider::Codex
-                            })
-                            .map(|source| (feature.workdir.clone(), source.id.clone()))
-                    })
-            });
-
-        let Some((workdir, session_id)) = context else {
-            return;
-        };
-
-        self.request_codex_sidebar_metadata_for_session(&workdir, &session_id);
-    }
-
     #[allow(dead_code)] // exercised only by unit tests
     pub fn cached_codex_session_title(&self, workdir: &Path, session_id: &str) -> Option<&str> {
         let cache_key = Self::codex_sidebar_cache_key(workdir, session_id);
@@ -3416,10 +1994,6 @@ impl App {
         self.codex_session_model_cache
             .get(&cache_key)
             .and_then(|model| model.as_deref())
-    }
-
-    pub fn codex_live_thread(&self, tmux_session: &str) -> Option<&CodexLiveThreadState> {
-        self.codex_live_threads.get(tmux_session)
     }
 
     pub fn apply_codex_live_event(&mut self, tmux_session: &str, raw: &serde_json::Value) -> bool {
@@ -3869,7 +2443,6 @@ impl App {
     /// Any `(pi, fi, si)` the caller held from before the call may be stale
     /// after `Ok(false)`; re-resolve by stable id before indexing again.
     pub(crate) fn save_reporting_conflict(&mut self) -> Result<bool> {
-        self.prune_compose_targets(); // FORK
         if let Some(db) = &self.db {
             let Some(expected) = self.store_version else {
                 // No known baseline -- either genuinely the first save this
@@ -3951,7 +2524,7 @@ impl App {
     /// `(pi, fi)` indices a reload would silently re-point. Anywhere else
     /// the check waits for the next call.
     pub fn refresh_store_if_changed_elsewhere(&mut self) -> Result<bool> {
-        if !matches!(self.mode, AppMode::Normal | AppMode::Viewing(_)) {
+        if !matches!(self.mode, AppMode::Normal) {
             return Ok(false);
         }
         let Some(db) = &self.db else {

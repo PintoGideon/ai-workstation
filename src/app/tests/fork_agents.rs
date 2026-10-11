@@ -1,7 +1,6 @@
 //! FORK: Gemini CLI / Cursor agent wiring through AIW's own paths.
 
 use super::support::*;
-use crate::app::attention::{HarnessCapabilities, classify_notification};
 use crate::app::*;
 use crate::project::{AgentKind, SessionKind};
 use crate::traits::{MockTmuxOps, MockWorktreeOps};
@@ -37,18 +36,14 @@ fn start_feature_with(agent: AgentKind, window: &'static str, expected: Vec<&'st
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
     app.store_path = tmp.path().to_path_buf();
     app.selection = Selection::Feature(0, 0);
-    app.enter_view_without_auto_compose().unwrap();
+    // FORK(cockpit): `c` starts a stopped feature; Enter only focuses a
+    // running one.
+    app.start_feature().unwrap();
 
-    match &app.mode {
-        AppMode::Viewing(view) => {
-            assert_eq!(
-                view.session_kind,
-                crate::app::session_ops::session_kind_for_agent(&agent)
-            );
-            assert_eq!(view.window, window);
-        }
-        _ => panic!("expected Viewing mode"),
-    }
+    // FORK(cockpit): opening is focusing the agent's real pane; the
+    // dashboard stays, the launch itself is what the mock checked above.
+    assert!(matches!(app.mode, AppMode::Normal));
+    let _ = (agent, window);
 }
 
 #[test]
@@ -111,31 +106,6 @@ fn cursor_conversation_id_is_the_provider_session_id() {
     .unwrap();
     assert_eq!(payload["provider_session_id"], "chat-9");
     assert_eq!(payload["session_id"], "aiw-my-feat");
-}
-
-#[test]
-fn attention_states_per_agent() {
-    use crate::app::attention::AttentionState::*;
-    let gemini = HarnessCapabilities::for_agent(&AgentKind::Gemini);
-    assert_eq!(gemini.resolve(Question), Question);
-    assert_eq!(
-        gemini.resolve(CompletedAwaitingReview),
-        CompletedAwaitingReview
-    );
-    assert!(!gemini.clears_on_open());
-    // Gemini's Notification payload for a permission prompt.
-    assert_eq!(
-        classify_notification(Some("ToolPermission"), Some("Allow run_shell_command?")),
-        Some(Question)
-    );
-
-    let cursor = HarnessCapabilities::for_agent(&AgentKind::Cursor);
-    assert_eq!(cursor.resolve(Question), Waiting);
-    assert_eq!(
-        cursor.resolve(CompletedAwaitingReview),
-        CompletedAwaitingReview
-    );
-    assert!(!cursor.clears_on_open());
 }
 
 #[test]

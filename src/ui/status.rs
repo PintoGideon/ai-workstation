@@ -206,39 +206,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 Line::from(spans)
             }
         }
-        AppMode::Compose(state) => Line::from(vec![
-            Span::styled("Enter", key_style()),
-            Span::raw(" send  "),
-            Span::styled("Shift+Enter", key_style()),
-            Span::raw(" newline  "),
-            Span::styled("Tab", key_style()),
-            Span::raw(" complete  "),
-            Span::styled(
-                if matches!(state.editor.vim_mode(), Some(VimMode::Normal)) {
-                    "i / a / o"
-                } else {
-                    "Esc"
-                },
-                key_style(),
-            ),
-            Span::raw(
-                if matches!(state.editor.vim_mode(), Some(VimMode::Normal)) {
-                    " edit  "
-                } else {
-                    " close  "
-                },
-            ),
-            Span::styled("Ctrl+V", key_style()),
-            Span::raw(" paste  "),
-            Span::styled("Ctrl+T", key_style()),
-            Span::raw(if state.editor.vim_mode().is_some() {
-                " vim off  "
-            } else {
-                " vim on  "
-            }),
-            Span::styled("Ctrl+Q", key_style()),
-            Span::raw(" close"),
-        ]),
         AppMode::SteeringPrompt(state) => Line::from(vec![
             Span::styled("Tab", key_style()),
             Span::raw(" inject  "),
@@ -456,7 +423,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::raw(" cancel"),
         ]),
         AppMode::NotificationPicker(_, _)
-        | AppMode::SessionSwitcher(_)
         | AppMode::ClaudeSessionPicker(_)
         | AppMode::CodexSessionPicker(_)
         | AppMode::StoppedSessionDialog(_)
@@ -524,45 +490,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                     Span::raw(" cancel"),
                 ])
             }
-        }
-        // FORK: split view draws its own footer (`ui/fork_split.rs`).
-        AppMode::SplitView(_) => Line::default(),
-        AppMode::Viewing(view) => {
-            let mut spans = Vec::new();
-            if view.session_kind.is_agent_harness() {
-                if app.compose_intercept_active(view) {
-                    spans.push(Span::styled(
-                        "[compose] ",
-                        Style::default().fg(theme.success.to_color()),
-                    ));
-                } else {
-                    spans.push(Span::styled(
-                        "[direct] ",
-                        Style::default().fg(theme.warning.to_color()),
-                    ));
-                }
-            }
-            spans.extend(vec![
-                Span::styled("Ctrl+Space", key_style()),
-                Span::raw(" commands  "),
-                Span::styled("Ctrl+Q", key_style()),
-                Span::raw(" exit view"),
-            ]);
-            let labels = app.bookmark_status_labels();
-            if !labels.is_empty() {
-                spans.push(Span::raw("  "));
-                spans.push(Span::styled("marks ", hint_style()));
-                for (idx, label) in labels.iter().enumerate() {
-                    spans.push(Span::styled(
-                        label.clone(),
-                        Style::default().fg(theme.info.to_color()),
-                    ));
-                    if idx + 1 < labels.len() {
-                        spans.push(Span::raw(" "));
-                    }
-                }
-            }
-            Line::from(spans)
         }
         AppMode::RunningHook(state) => {
             if state.child.is_some() {

@@ -596,42 +596,6 @@ impl App {
         feature.sessions.get(si)?;
         Some(session_badge(self, pi, fi, si, Utc::now()))
     }
-
-    /// The id of the session in tmux `session:window`, if listed.
-    pub fn session_id_for_window(&self, tmux_session: &str, window: &str) -> Option<String> {
-        self.store
-            .projects
-            .iter()
-            .flat_map(|p| p.features.iter())
-            .filter(|f| f.tmux_session == tmux_session)
-            .flat_map(|f| f.sessions.iter())
-            .find(|s| s.tmux_window == window)
-            .map(|s| s.id.clone())
-    }
-
-    /// The badge of the session in tmux `session:window`, if listed.
-    pub fn session_badge_for_window(
-        &self,
-        tmux_session: &str,
-        window: &str,
-    ) -> Option<SessionBadge> {
-        let now = Utc::now();
-        for (pi, project) in self.store.projects.iter().enumerate() {
-            for (fi, feature) in project.features.iter().enumerate() {
-                if feature.tmux_session != tmux_session {
-                    continue;
-                }
-                if let Some(si) = feature
-                    .sessions
-                    .iter()
-                    .position(|s| s.tmux_window == window)
-                {
-                    return Some(session_badge(self, pi, fi, si, now));
-                }
-            }
-        }
-        None
-    }
 }
 
 #[cfg(test)]

@@ -109,27 +109,6 @@ impl PaneTerminalModes {
 pub struct TmuxManager;
 
 static TMUX_CONTROL_MODE_ENABLED: AtomicBool = AtomicBool::new(true);
-/// FORK: prefix of the cursor line `capture_pane_ansi_with_cursor` appends.
-const CURSOR_MARKER: &str = "\u{1f}aiw-cursor ";
-
-/// FORK: split `capture-pane` output followed by the cursor marker line.
-fn split_capture_and_cursor(output: std::borrow::Cow<'_, str>) -> (String, (u16, u16)) {
-    let text = output.as_ref();
-    let body = text.strip_suffix('\n').unwrap_or(text);
-    let (content, last) = match body.rfind('\n') {
-        Some(index) => (&text[..=index], &body[index + 1..]),
-        None => ("", body),
-    };
-    let Some(cursor) = last.strip_prefix(CURSOR_MARKER) else {
-        return (output.into_owned(), (0, 0));
-    };
-    let mut parts = cursor.split_whitespace();
-    let cursor = match (parts.next(), parts.next(), parts.next()) {
-        (Some(x), Some(y), None) => (x.parse().unwrap_or(0), y.parse().unwrap_or(0)),
-        _ => (0, 0),
-    };
-    (content.to_string(), cursor)
-}
 
 // FORK: see `TmuxManager::processes_started`.
 static TMUX_PROCESSES_STARTED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -187,16 +166,6 @@ impl SpawnedTmuxControlClient {
             Ok(line) => Ok(Some(line)),
             Err(RecvTimeoutError::Timeout) => Ok(None),
             Err(RecvTimeoutError::Disconnected) => {
-                bail!("tmux control client output stream disconnected");
-            }
-        }
-    }
-
-    pub fn try_recv(&self) -> Result<Option<String>> {
-        match self.output_rx.try_recv() {
-            Ok(line) => Ok(Some(line)),
-            Err(mpsc::TryRecvError::Empty) => Ok(None),
-            Err(mpsc::TryRecvError::Disconnected) => {
                 bail!("tmux control client output stream disconnected");
             }
         }
@@ -546,10 +515,6 @@ impl TmuxManager {
         }
     }
 
-    pub fn uses_control_pty_input() -> bool {
-        Self::input_transport_mode() == TmuxInputTransportMode::ControlPty
-    }
-
     /// tmux version reported by the client binary (`tmux -V`).
     #[cfg(not(test))]
     fn client_version() -> Option<String> {
@@ -684,12 +649,6 @@ impl TmuxManager {
     /// [`Self::command`]); the perf pass measures view refresh cost with it.
     pub(crate) fn processes_started() -> u64 {
         TMUX_PROCESSES_STARTED.load(AtomicOrdering::Relaxed)
-    }
-
-    /// FORK: whether AIW owns the tmux server it talks to (its private
-    /// socket), so server-wide settings such as key bindings are its own.
-    pub(crate) fn manages_private_socket() -> bool {
-        Self::runtime().manages_private_socket
     }
 
     pub(crate) fn command() -> Command {
@@ -2279,122 +2238,6 @@ impl TmuxManager {
             .unwrap_or(false)
     }
 
-    /// FORK: the pane's visible content with ANSI (as [`Self::capture_pane_ansi`])
-    /// and its cursor (as [`Self::cursor_position`]) from **one** tmux process:
-    /// `capture-pane … ; display-message …`. The live views need both on every
-    /// refresh, and the process start is most of what a refresh costs.
-    ///
-    /// Like `cursor_position`, a cursor tmux did not report (window gone)
-    /// reads as `(0, 0)`; the content is then whatever tmux printed.
-    pub fn capture_pane_ansi_with_cursor(
-        session: &str,
-        window: &str,
-    ) -> Result<(String, (u16, u16))> {
-        let target = format!("{}:{}", session, window);
-        let marker_format = format!("{CURSOR_MARKER}#{{cursor_x}} #{{cursor_y}}");
-        let output = Self::command()
-            .args(["capture-pane", "-t", &target, "-e", "-p", ";"])
-            .args(["display-message", "-t", &target, "-p", &marker_format])
-            .output()
-            .context("Failed to capture pane with cursor")?;
-        Ok(split_capture_and_cursor(String::from_utf8_lossy(
-            &output.stdout,
-        )))
-    }
-
-    /// Get the cursor position in a tmux pane (x, y)
-    pub fn cursor_position(session: &str, window: &str) -> Result<(u16, u16)> {
-        let target = format!("{}:{}", session, window);
-        let output = Self::command()
-            .args([
-                "display-message",
-                "-t",
-                &target,
-                "-p",
-                "#{cursor_x} #{cursor_y}",
-            ])
-            .output()
-            .context("Failed to get cursor position")?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let parts: Vec<&str> = stdout.split_whitespace().collect();
-        if parts.len() == 2 {
-            let x: u16 = parts[0].parse().unwrap_or(0);
-            let y: u16 = parts[1].parse().unwrap_or(0);
-            Ok((x, y))
-        } else {
-            Ok((0, 0))
-        }
-    }
-
-    /// Get the current size (cols, rows) of a window's active pane.
-    pub fn pane_size(session: &str, window: &str) -> Result<(u16, u16)> {
-        let target = format!("{}:{}", session, window);
-        let output = Self::command()
-            .args([
-                "display-message",
-                "-t",
-                &target,
-                "-p",
-                "#{pane_width} #{pane_height}",
-            ])
-            .output()
-            .context("Failed to get pane size")?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let parts: Vec<&str> = stdout.split_whitespace().collect();
-        if parts.len() == 2
-            && let (Ok(w), Ok(h)) = (parts[0].parse::<u16>(), parts[1].parse::<u16>())
-        {
-            return Ok((w, h));
-        }
-        bail!("tmux did not return pane size for {target}");
-    }
-
-    /// True if a regular (non-control-mode) client is attached to the
-    /// session. AIW's own view/input clients attach in control mode, so
-    /// they are excluded.
-    pub fn has_attached_client(session: &str) -> bool {
-        Self::command()
-            .args([
-                "list-clients",
-                "-t",
-                session,
-                "-F",
-                "#{client_control_mode}",
-            ])
-            .output()
-            .map(|o| {
-                o.status.success()
-                    && String::from_utf8_lossy(&o.stdout)
-                        .lines()
-                        .any(|line| line.trim() == "0")
-            })
-            .unwrap_or(false)
-    }
-
-    /// Start piping pane output to a FIFO path.
-    /// Returns Ok(()) if the pipe-pane command succeeds.
-    pub fn start_pipe_pane(session: &str, window: &str, fifo_path: &Path) -> Result<()> {
-        let target = format!("{}:{}", session, window);
-        let cmd = format!("cat > {}", Self::shell_quote(&fifo_path.to_string_lossy()));
-        Self::run(
-            &["pipe-pane", "-t", &target, &cmd],
-            "Failed to start pipe-pane",
-            "tmux pipe-pane failed",
-        )
-    }
-
-    /// Stop piping pane output (pass empty command to cancel).
-    pub fn stop_pipe_pane(session: &str, window: &str) -> Result<()> {
-        let target = format!("{}:{}", session, window);
-        Self::run(
-            &["pipe-pane", "-t", &target],
-            "Failed to stop pipe-pane",
-            "tmux pipe-pane cancel failed",
-        )
-    }
-
     /// Resize a tmux pane to match the TUI rendering area
     pub fn resize_pane(session: &str, window: &str, cols: u16, rows: u16) -> Result<()> {
         let target = format!("{}:{}", session, window);
@@ -2752,44 +2595,6 @@ impl TmuxOps for TmuxManager {
 
     fn kill_session(&self, session: &str) -> Result<()> {
         TmuxManager::kill_session(session)
-    }
-}
-
-#[cfg(test)]
-mod fork_capture_tests {
-    use super::*;
-
-    #[test]
-    fn capture_and_cursor_split_cleanly() {
-        let out = format!("line one\n\u{1b}[31mred\u{1b}[0m\n\n{CURSOR_MARKER}4 2\n");
-        let (content, cursor) = split_capture_and_cursor(out.into());
-        assert_eq!(content, "line one\n\u{1b}[31mred\u{1b}[0m\n\n");
-        assert_eq!(cursor, (4, 2));
-    }
-
-    #[test]
-    fn an_empty_pane_still_reports_its_cursor() {
-        let (content, cursor) = split_capture_and_cursor(format!("{CURSOR_MARKER}0 0\n").into());
-        assert_eq!(content, "");
-        assert_eq!(cursor, (0, 0));
-    }
-
-    #[test]
-    fn a_missing_cursor_line_keeps_the_content_and_reads_as_origin() {
-        // capture-pane failed, so the `;` chain never ran display-message.
-        let (content, cursor) = split_capture_and_cursor("partial\n".into());
-        assert_eq!(content, "partial\n");
-        assert_eq!(cursor, (0, 0));
-        let (content, cursor) = split_capture_and_cursor("".into());
-        assert_eq!(content, "");
-        assert_eq!(cursor, (0, 0));
-    }
-
-    #[test]
-    fn pane_text_that_looks_like_numbers_is_not_taken_for_the_cursor() {
-        let (content, cursor) = split_capture_and_cursor("12 34\n".into());
-        assert_eq!(content, "12 34\n");
-        assert_eq!(cursor, (0, 0));
     }
 }
 

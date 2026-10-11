@@ -372,12 +372,9 @@ impl App {
             (pi, fi, Some(si)) => Selection::Session(pi, fi, si),
             (pi, fi, None) => Selection::Feature(pi, fi),
         };
-        if self.workspace_active() {
-            // The workspace pane follows the selection; nothing to open.
-            self.workspace_focus_sidebar();
-            return Ok(());
-        }
-        self.enter_view()
+        // The agent pane follows the selection; focus it.
+        self.cockpit_focus_agent();
+        Ok(())
     }
 
     /// The feature a hook message belongs to: by its tmux session, else by

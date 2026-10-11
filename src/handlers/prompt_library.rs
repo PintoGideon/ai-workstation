@@ -99,7 +99,7 @@ pub fn handle_prompt_library_key(app: &mut App, key: KeyCode) -> Result<()> {
                 }
             };
             match from_view {
-                Some(view) => app.mode = AppMode::Viewing(view),
+                Some(view) => app.return_to_dashboard(&view),
                 None => app.mode = AppMode::Normal,
             }
         }

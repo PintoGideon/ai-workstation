@@ -233,7 +233,7 @@ impl App {
         feature.touch();
         feature.status = ProjectStatus::Active;
 
-        let mut view = ViewState::new(
+        let view = ViewState::new(
             project_name,
             feature_name,
             tmux_session,
@@ -243,12 +243,9 @@ impl App {
             vibe_mode,
             review,
         );
-        view.show_startup_mask();
 
         self.save()?;
-        self.pane_content.clear();
-        self.mode = AppMode::Viewing(view);
-        self.refresh_sidebar_for_current_view();
+        self.return_to_dashboard(&view);
         self.message = Some("Restored claude session".into());
 
         Ok(())

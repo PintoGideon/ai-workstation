@@ -583,9 +583,12 @@ impl App {
     pub(crate) fn open_diff_review_prompt(&mut self, input: &PendingInput) {
         let response_file = input.response_file.clone().unwrap_or_default();
         let proceed_signal = input.proceed_signal.clone().unwrap_or_default();
-        let return_to_view = match &self.mode {
-            AppMode::Viewing(view) => Some(view.clone()),
-            _ => None,
+        // FORK(cockpit): back to the dashboard on the selected session's row
+        // afterwards.
+        let return_to_view = if matches!(self.mode, AppMode::Normal) {
+            self.selection_view_state()
+        } else {
+            None
         };
         let (diff_file, diff_error) = super::supervised_edits::load_edit_review_diff(input);
         self.mode = AppMode::DiffReviewPrompt(DiffReviewState {
@@ -685,12 +688,9 @@ impl App {
             return Ok(());
         }
 
-        let preferred_feature = match &self.mode {
-            AppMode::Viewing(view) => Some(view.feature_name.as_str()),
-            _ => self
-                .selected_feature()
-                .map(|(_, feature)| feature.name.as_str()),
-        };
+        let preferred_feature = self
+            .selected_feature()
+            .map(|(_, feature)| feature.name.as_str());
 
         let Some(idx) = self.pending_diff_review_index(preferred_feature) else {
             self.push_toast_info("No pending diff review");
@@ -712,8 +712,12 @@ impl App {
             return Ok(());
         };
 
+        // FORK(cockpit): the review opens here, over the dashboard, with the
+        // feature's row selected; nothing is "entered".
         self.selection = Selection::Feature(pi, fi);
-        self.enter_view()?;
+        self.pending_inputs.remove(idx);
+        self.open_diff_review_prompt(&input);
+        let _ = std::fs::remove_file(&input.file_path);
 
         let target = input
             .relative_path
@@ -1374,42 +1378,11 @@ impl App {
         // different feature the review is queued as a pending input (with
         // a toast) instead, so it never steals focus; entering the feature
         // view or selecting it from the picker opens it from there.
-        let (found_project_name_for_open, found_feature_name_for_open, _, _) =
-            self.project_feature_for_message(aiw_session.as_deref(), &cwd_path);
-        let open_diff_review_now = is_structured_diff_review
-            && match &self.mode {
-                AppMode::Viewing(view) => {
-                    found_feature_name_for_open.as_deref() == Some(&view.feature_name)
-                }
-                _ => false,
-            };
-        if open_diff_review_now {
-            let input = PendingInput {
-                session_id,
-                cwd,
-                message: msg.message.unwrap_or_default(),
-                notification_type,
-                file_path: PathBuf::new(),
-                target_file_path: msg.file_path,
-                relative_path: msg.relative_path,
-                change_id: msg.change_id,
-                tool: msg.tool.or(msg.tool_name),
-                old_snippet: msg.old_snippet,
-                new_snippet: msg.new_snippet,
-                original_file: msg.original_file,
-                proposed_file: msg.proposed_file,
-                is_new_file: msg.is_new_file,
-                reason: msg.reason,
-                response_file: msg.response_file,
-                project_name: found_project_name_for_open,
-                feature_name: found_feature_name_for_open,
-                proceed_signal: msg.proceed_signal,
-                request_id: msg.request_id.clone(),
-                reply_socket: msg.reply_socket.clone(),
-            };
-            self.open_diff_review_prompt(&input);
-            return;
-        }
+        // FORK(cockpit): there is no embedded view to pop a review over. From
+        // the dashboard a structured review is queued with a toast and `V`
+        // opens it, so the agent pane beside the sidebar is never covered
+        // unasked.
+        let _ = is_structured_diff_review;
 
         // Resolve project/feature from the AIW tmux session first, then cwd.
         let (project_name, feature_name, agent_name, indices) =
@@ -1418,26 +1391,6 @@ impl App {
         // For diff-review while viewing the matching
         // feature, write the proceed signal immediately when
         // using the legacy popup flow.
-        let mut auto_responded = false;
-        if notification_type == "diff-review"
-            && !self.use_custom_diff_review_viewer()
-            && let AppMode::Viewing(ref view) = self.mode
-            && feature_name.as_deref() == Some(&view.feature_name)
-        {
-            self.respond_to_notification(
-                msg.request_id.as_deref(),
-                msg.reply_socket.as_deref(),
-                msg.proceed_signal.as_deref(),
-                serde_json::json!({
-                    "type": "review-response",
-                    "decision": "proceed"
-                }),
-            );
-            auto_responded = true;
-        }
-        if auto_responded {
-            return;
-        }
 
         // IPC messages have no on-disk file_path; use a
         // sentinel so existing code that removes the file
@@ -1694,20 +1647,6 @@ impl App {
             // Only open immediately while viewing the requesting feature;
             // from anywhere else the review is queued as a pending input and
             // announced with a toast below.
-            let open_diff_review_now = self.is_structured_edit_review(&input.notification_type)
-                && matches!(
-                    &self.mode,
-                    AppMode::Viewing(view)
-                        if input.feature_name.as_deref() == Some(view.feature_name.as_str())
-                );
-            if open_diff_review_now {
-                // Keep the item in pending_inputs so
-                // check_pending_diff_review can detect the active review.
-                self.pending_inputs.push(input.clone());
-                self.open_diff_review_prompt(&input);
-                let _ = std::fs::remove_file(&input.file_path);
-                return true;
-            }
             inputs.push(input);
         }
 
@@ -1790,42 +1729,6 @@ impl App {
                 self.push_toast_warning(input_request_toast_message(first));
             } else {
                 self.push_toast_warning(format!("{} new input requests", new_input_requests.len()));
-            }
-        }
-
-        if let AppMode::Viewing(ref view) = self.mode {
-            let feat_name = view.feature_name.clone();
-            let responses: Vec<(Option<String>, Option<String>, Option<String>)> = self
-                .pending_inputs
-                .iter()
-                .filter(|input| {
-                    input.notification_type == "diff-review"
-                        && input.feature_name.as_deref() == Some(&feat_name)
-                })
-                .map(|input| {
-                    (
-                        input.request_id.clone(),
-                        input.reply_socket.clone(),
-                        input.proceed_signal.clone(),
-                    )
-                })
-                .collect();
-            if !self.use_custom_diff_review_viewer() {
-                for (request_id, reply_socket, proceed_signal) in responses {
-                    self.respond_to_notification(
-                        request_id.as_deref(),
-                        reply_socket.as_deref(),
-                        proceed_signal.as_deref(),
-                        serde_json::json!({
-                            "type": "review-response",
-                            "decision": "proceed"
-                        }),
-                    );
-                }
-                self.pending_inputs.retain(|input| {
-                    !(input.notification_type == "diff-review"
-                        && input.feature_name.as_deref() == Some(&feat_name))
-                });
             }
         }
 

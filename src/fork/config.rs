@@ -25,10 +25,6 @@ pub struct AiwConfig {
     /// press shows how many and the second press (within a few seconds)
     /// quits. Off by default, so `q` quits at once as it always has.
     pub confirm_quit: bool,
-    /// The dashboard layout: the workspace (a session sidebar beside a live
-    /// pane, DESIGN.md §15 — the default) or the project tree. `b` on the
-    /// dashboard toggles it and saves at once.
-    pub dashboard_layout: DashboardLayout,
     /// How long a permission hook waits for an answer from the dashboard
     /// before letting the harness show its own prompt (P6).
     pub permission_wait_seconds: u64,
@@ -50,37 +46,10 @@ impl Default for AiwConfig {
             worktree_base_dir: None,
             worktree_include: default_worktree_include(),
             confirm_quit: false,
-            dashboard_layout: DashboardLayout::Workspace,
             permission_wait_seconds: crate::fork::permissions::DEFAULT_WAIT_SECONDS,
             agent_context_prompt: true,
             claude_hooks_via_settings_flag: true,
             sidebar_width: crate::fork::cockpit::DEFAULT_SIDEBAR_WIDTH,
-        }
-    }
-}
-
-/// `dashboard_layout` in `config.json`. The workspace is the default; a
-/// config that says `"tree"` keeps the tree.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum DashboardLayout {
-    Tree,
-    #[default]
-    Workspace,
-}
-
-impl DashboardLayout {
-    pub fn toggled(self) -> Self {
-        match self {
-            DashboardLayout::Tree => DashboardLayout::Workspace,
-            DashboardLayout::Workspace => DashboardLayout::Tree,
-        }
-    }
-
-    pub fn name(self) -> &'static str {
-        match self {
-            DashboardLayout::Tree => "tree",
-            DashboardLayout::Workspace => "workspace",
         }
     }
 }
@@ -116,7 +85,6 @@ mod tests {
         let rendered = serde_json::to_value(&config).unwrap();
         assert!(rendered.get("worktree_base_dir").is_none());
         assert_eq!(rendered["worktree_include"][0], ".env*");
-        assert_eq!(rendered["dashboard_layout"], "workspace");
     }
 
     #[test]
@@ -134,25 +102,9 @@ mod tests {
         );
         let rendered = serde_json::to_value(&config).unwrap();
         assert_eq!(rendered["sidebar_width"], 36);
-    }
-
-    #[test]
-    fn dashboard_layout_round_trips() {
-        let config: crate::app::AppConfig =
-            serde_json::from_str(r#"{"dashboard_layout":"workspace"}"#).unwrap();
-        assert_eq!(config.aiw.dashboard_layout, DashboardLayout::Workspace);
-        assert_eq!(DashboardLayout::Workspace.toggled(), DashboardLayout::Tree);
-        let rendered = serde_json::to_value(&config).unwrap();
-        assert_eq!(rendered["dashboard_layout"], "workspace");
-    }
-
-    #[test]
-    fn an_existing_tree_setting_is_kept_over_the_workspace_default() {
-        assert_eq!(DashboardLayout::default(), DashboardLayout::Workspace);
-        let config: crate::app::AppConfig =
-            serde_json::from_str(r#"{"dashboard_layout":"tree"}"#).unwrap();
-        assert_eq!(config.aiw.dashboard_layout, DashboardLayout::Tree);
-        let rendered = serde_json::to_value(&config).unwrap();
-        assert_eq!(rendered["dashboard_layout"], "tree");
+        // The removed keys are neither read nor written back.
+        for gone in ["dashboard_layout", "compose_box", "view_auto_refresh"] {
+            assert!(rendered.get(gone).is_none(), "{gone} is still written");
+        }
     }
 }

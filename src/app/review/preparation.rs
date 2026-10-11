@@ -240,9 +240,10 @@ impl App {
     /// replaces the old tmux-session + vimdiff-popup script, which could not
     /// work against AIW's bundled control-mode tmux server.
     pub fn trigger_final_review(&mut self) -> Result<()> {
-        let view = match &self.mode {
-            AppMode::Viewing(view) => view.clone(),
-            _ => return Ok(()),
+        // FORK(cockpit): the selected feature's session.
+        let Some(view) = self.selection_view_state() else {
+            self.push_toast_warning("Select a feature or session first");
+            return Ok(());
         };
 
         let workdir = self

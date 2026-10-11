@@ -125,7 +125,7 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
             _ => {}
         },
         // FORK: split view — tile the selected feature's (or project's) agents.
-        KeyCode::Char('v') => app.open_split_view(),
+        KeyCode::Char('v') => app.cockpit_show_grid(),
         KeyCode::Char('x') => match &app.selection {
             Selection::Session(_, _, _) => {
                 app.stop_session()?;
@@ -430,19 +430,40 @@ fn handle_normal_leader_key(app: &mut App, key: KeyEvent) -> Result<()> {
     app.deactivate_leader();
 
     match key.code {
-        KeyCode::Char('i') => {
-            if app.attention_rows().is_empty() {
-                // FORK: a footer line, worded like the header pills.
-                app.message = Some("Nothing needs you".to_string());
-            } else {
-                app.mode = AppMode::NotificationPicker(0, None);
+        // FORK(cockpit): the commands the embedded view's leader had, for
+        // the selected session (DESIGN.md §18). `i` and `?` are plain
+        // dashboard keys and left the menu.
+        KeyCode::Char('f') => {
+            app.trigger_final_review()?;
+        }
+        KeyCode::Char('d') => {
+            app.open_diff_viewer()?;
+        }
+        KeyCode::Char('n') => {
+            app.open_current_plan_for_selection()?;
+        }
+        KeyCode::Char('m') => {
+            app.open_markdown_viewer_for_selection()?;
+        }
+        KeyCode::Char('l') => {
+            app.open_latest_prompt_for_selection();
+        }
+        KeyCode::Char('N') => {
+            app.open_todo_quick_capture();
+        }
+        KeyCode::Char('F') => {
+            app.open_fresh_context_prompt_for_selection();
+        }
+        KeyCode::Char('P') => {
+            app.pr_review_return_to_pane();
+        }
+        KeyCode::Char('B') => {
+            if let Err(e) = app.open_model_analysis() {
+                app.show_error(e);
             }
         }
-        KeyCode::Char('?') => {
-            app.mode = AppMode::Help(crate::app::HelpState {
-                from_view: None,
-                scroll_offset: 0,
-            });
+        KeyCode::Char('z') => {
+            app.request_todo_reference_completion();
         }
         KeyCode::Char('/') => {
             app.open_command_picker(None);
@@ -453,7 +474,7 @@ fn handle_normal_leader_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char('c') => {
             app.start_config_wizard();
         }
-        KeyCode::Char('m') => {
+        KeyCode::Char('C') => {
             app.open_review_memory_compact_confirm();
         }
         KeyCode::Char('h') => {

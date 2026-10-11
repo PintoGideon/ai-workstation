@@ -206,12 +206,6 @@ impl HarnessCapabilities {
             other => other,
         }
     }
-
-    /// `true` when attention for this harness can only be cleared by the user
-    /// opening the session, because no new-output signal will arrive.
-    pub fn clears_on_open(&self) -> bool {
-        !self.reports_new_output
-    }
 }
 
 /// Where an attention state came from, which decides whether it may replace a
@@ -486,14 +480,6 @@ impl App {
         entries
     }
 
-    /// The strongest attention state among a feature's sessions, for the
-    /// feature-row roll-up. Attention is tracked per tmux session and a
-    /// feature owns exactly one, so this is a lookup today; it exists as a
-    /// named concept so the roll-up rule lives in one place.
-    pub fn feature_attention(&self, tmux_session: &str) -> Option<AttentionState> {
-        self.attention.get(tmux_session).map(|record| record.state)
-    }
-
     /// The needs-attention overlay's rows: everything [`Self::needs_attention`]
     /// returns, in that order, followed by any pending input the attention
     /// layer did not account for.
@@ -592,14 +578,6 @@ mod tests {
                 record(agent, AttentionState::CompletedAwaitingReview).state,
                 AttentionState::CompletedAwaitingReview
             );
-        }
-    }
-
-    #[test]
-    fn only_hookless_harnesses_clear_on_open() {
-        assert!(HarnessCapabilities::for_agent(&AgentKind::Pi).clears_on_open());
-        for agent in [AgentKind::Claude, AgentKind::Codex] {
-            assert!(!HarnessCapabilities::for_agent(&agent).clears_on_open());
         }
     }
 

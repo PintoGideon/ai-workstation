@@ -346,29 +346,6 @@ fn pause_plan_interview_never_overwrites_an_existing_parked_interview() {
 }
 
 #[test]
-fn leaving_a_session_returns_to_the_paused_plan_interview() {
-    let (mut app, _store_file, _repo) = app_on_selected_feature();
-    app.start_plan_interview_for_selected_feature();
-    if let AppMode::PlanInterview(state) = &mut app.mode {
-        state.editor = crate::editor::TextEditor::new("Look up the router first".into());
-    }
-    app.pause_plan_interview();
-
-    // `exit_view` is the common destination of Ctrl+Q from every embedded
-    // session. The parked interview takes precedence over the usual dashboard
-    // return and retains even text that has not yet been committed as an answer.
-    app.exit_view();
-
-    match &app.mode {
-        AppMode::PlanInterview(state) => {
-            assert_eq!(state.editor.text(), "Look up the router first")
-        }
-        _ => panic!("leaving the inspection session must restore the interview"),
-    }
-    assert!(app.paused_plan_interview.is_none());
-}
-
-#[test]
 fn plan_interview_does_not_pause_while_a_paid_operation_is_running() {
     let (mut app, _store_file, _repo) = app_with_deferred_plan_interview();
     let (_tx, rx) = std::sync::mpsc::channel();
