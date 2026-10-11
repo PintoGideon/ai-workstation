@@ -13,12 +13,10 @@
 use anyhow::{Context, Result, bail};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 use std::fmt;
-use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 /// Static-method wrapper around the `gh` CLI. Add general GitHub operations
 /// here (PRs, issues, reviews, repo metadata) so they can be reused across
@@ -103,127 +101,6 @@ pub struct PrListEntry {
     /// `OPEN`, `CLOSED`, or `MERGED`.
     #[serde(default)]
     pub state: String,
-}
-
-/// `gh pr list` / `gh pr view` fields a manual PR review needs, shared by
-/// [`GhCli::list_reviewable_prs`] and [`GhCli::pr_revisions`] so the two can
-/// never disagree about which revision a row describes. Checked against the
-/// deserialized structs by a test, so a field added here without a matching
-/// struct field fails offline. (It cannot catch a name `gh` rejects: `gh`
-/// 2.53 has no `baseRefOid`, although GitHub's API does, so it is not asked
-/// for. See [`ReviewablePr::base_oid`].)
-const REVIEWABLE_PR_FIELDS: &str = "number,title,author,isDraft,updatedAt,\
-baseRefName,headRefName,headRefOid,isCrossRepository,headRepositoryOwner";
-
-/// One row of the manual "Review a PR" list: the triage picker's metadata plus
-/// the base/head revisions and fork identity a review has to pin itself to.
-/// Kept separate from [`PrListEntry`] so the triage picker's `gh pr list` call
-/// is unchanged.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReviewablePr {
-    pub number: u32,
-    #[serde(default)]
-    pub title: String,
-    #[serde(default, deserialize_with = "deserialize_author_login")]
-    pub author: String,
-    #[serde(default)]
-    pub is_draft: bool,
-    #[serde(default)]
-    pub updated_at: String,
-    #[serde(rename = "baseRefName")]
-    pub base_ref: String,
-    /// The base branch tip a review was pinned to. Never from `gh` (its
-    /// `--json` has no `baseRefOid` field): empty in a listed row, filled in
-    /// from the fetch once the PR is opened. GitHub diffs a PR against the
-    /// base branch's current tip, so the fetched tip is the right one.
-    #[serde(skip)]
-    pub base_oid: String,
-    #[serde(rename = "headRefName")]
-    pub head_ref: String,
-    #[serde(rename = "headRefOid")]
-    pub head_oid: String,
-    /// True when the head branch lives in a fork rather than the base repo.
-    #[serde(default)]
-    pub is_cross_repository: bool,
-    /// Login of the head repository's owner. Empty when GitHub no longer knows
-    /// it (a deleted fork).
-    #[serde(
-        default,
-        rename = "headRepositoryOwner",
-        deserialize_with = "deserialize_author_login"
-    )]
-    pub head_owner: String,
-}
-
-impl ReviewablePr {
-    /// The head branch as a reviewer should read it: `owner:branch` for a fork
-    /// PR, so two forks' `main` branches can't be mistaken for each other, and
-    /// the bare branch name otherwise.
-    pub fn branch_label(&self) -> String {
-        if self.is_cross_repository && !self.head_owner.is_empty() {
-            format!("{}:{}", self.head_owner, self.head_ref)
-        } else {
-            self.head_ref.clone()
-        }
-    }
-}
-
-/// One PR's current revisions, from `gh pr view` at the moment a review opens
-/// or posts. The row from [`GhCli::list_reviewable_prs`] can be stale by then.
-/// This call is what the fetched objects are verified against.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PrRevisions {
-    pub pr: ReviewablePr,
-    pub url: String,
-    pub owner: String,
-    pub repo: String,
-    /// `OPEN`, `CLOSED`, or `MERGED`.
-    pub state: String,
-}
-
-impl PrRevisions {
-    /// The [`PrRef`] that [`GhCli::create_review`] posts against, pinned to
-    /// this snapshot's head. A review posted through it lands on exactly the
-    /// commit that was reviewed.
-    #[allow(dead_code)] // exercised only by unit tests
-    pub fn pr_ref(&self) -> PrRef {
-        PrRef {
-            number: self.pr.number,
-            head_sha: self.pr.head_oid.clone(),
-            url: self.url.clone(),
-            owner: self.owner.clone(),
-            repo: self.repo.clone(),
-            head_ref: self.pr.head_ref.clone(),
-        }
-    }
-}
-
-/// Make a `git` command safe to run under the TUI: it can never prompt.
-///
-/// A fetch from an HTTPS URL that git holds no credentials for would
-/// otherwise ask for a username straight on the terminal, drawing over the
-/// TUI and hanging the worker on input it will never get. With prompts off it
-/// fails at once instead, and [`git_credentials_hint`] explains the fix.
-pub(crate) fn without_git_prompts(cmd: &mut Command) -> &mut Command {
-    cmd.env("GIT_TERMINAL_PROMPT", "0").stdin(Stdio::null())
-}
-
-/// When a git failure is a missing-credentials one, the next step to take.
-pub(crate) fn git_credentials_hint(stderr: &str) -> Option<&'static str> {
-    let lower = stderr.to_ascii_lowercase();
-    [
-        "terminal prompts disabled",
-        "could not read username",
-        "could not read password",
-        "authentication failed",
-    ]
-    .iter()
-    .any(|needle| lower.contains(needle))
-    .then_some(
-        "git has no credentials for this repository's HTTPS URL. \
-         Run `! gh auth setup-git` so git uses your gh login, then retry.",
-    )
 }
 
 /// A lightweight open issue snapshot used by the issue-fixer list and prompt.
@@ -411,46 +288,6 @@ pub struct ReviewThread {
     pub comment_ids: Vec<u64>,
 }
 
-/// One inline comment to post as part of a PR review (see
-/// [`GhCli::create_review`]). `line` is the file line number; `side` is
-/// `"RIGHT"` for the current file or `"LEFT"` for the base file. `start_line` /
-/// `start_side`, when set, make this a multi-line comment spanning
-/// `start_line`..`line`, matching the GitHub create-review API.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct PrReviewComment {
-    pub path: String,
-    pub line: u32,
-    pub side: &'static str,
-    /// First line of a multi-line comment span. `None` for a single-line comment.
-    pub start_line: Option<u32>,
-    /// Side of `start_line` (`"RIGHT"` / `"LEFT"`). `None` for a single-line
-    /// comment.
-    pub start_side: Option<&'static str>,
-    pub body: String,
-}
-
-/// A whole-file PR review comment (`subject_type: "file"`, see
-/// [`GhCli::create_file_comment`]) — no line to anchor to, so it attaches to
-/// the file itself rather than a diff row.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct PrFileComment {
-    pub path: String,
-    pub body: String,
-}
-
-/// Identity returned by GitHub after creating a PR review. Callers use the
-/// review id to associate the subsequently-fetched inline comments with the
-/// local findings that produced them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CreatedPrReview {
-    pub id: u64,
-}
-
-#[derive(Deserialize)]
-struct CreatedPrReviewResponse {
-    id: u64,
-}
-
 impl GhCli {
     /// Check that a working `gh` binary is on PATH. Mirrors
     /// `TmuxManager::check_available` / `ClaudeLauncher::check_available`.
@@ -513,29 +350,6 @@ impl GhCli {
         }
     }
 
-    /// Whether the authenticated `gh` user authored PR `pr_number` — i.e.
-    /// posting an approve / request-changes review would be a *self-review*,
-    /// which GitHub rejects. Two lightweight `gh` calls (the PR's author login
-    /// and the current user's login), compared case-insensitively. Any `gh`
-    /// failure bubbles up so callers fall back to the always-valid `COMMENT`
-    /// event rather than risk a 422 that discards the whole review.
-    pub fn is_self_review(workdir: &Path, pr_number: u32) -> Result<bool> {
-        let author = Self::gh_stdout(
-            workdir,
-            &[
-                "pr",
-                "view",
-                &pr_number.to_string(),
-                "--json",
-                "author",
-                "-q",
-                ".author.login",
-            ],
-        )?;
-        let me = Self::current_user(workdir)?;
-        Ok(!author.is_empty() && author.eq_ignore_ascii_case(&me))
-    }
-
     /// Resolve the authenticated `gh` user's login. Cheap (one `gh api` call),
     /// but callers driving UI (e.g. the PR picker) should memoize this for the
     /// session rather than re-resolving on every render.
@@ -578,14 +392,6 @@ impl GhCli {
             bail!("Could not load PR #{number}: {}", stderr.trim());
         }
         parse_pr_json(&output.stdout)
-    }
-
-    /// The URL of the repository `gh` resolves PRs against — honouring `gh repo
-    /// set-default`, an `upstream` remote, and fork checkouts — which is where
-    /// `pull/<n>/head` lives. Fetching `origin` blind would miss it in a fork
-    /// clone, whose `origin` is the fork.
-    pub fn base_repo_url(workdir: &Path) -> Result<String> {
-        Self::gh_stdout(workdir, &["repo", "view", "--json", "url", "-q", ".url"])
     }
 
     /// The PR's title, description body, and changed-file list — the minimal
@@ -636,38 +442,6 @@ impl GhCli {
             bail!("`gh pr list` failed: {}", stderr.trim());
         }
         parse_pr_list_json(&output.stdout)
-    }
-
-    /// List every open PR in the repository for the manual "Review a PR" list:
-    /// the user's own PRs and drafts included, newest-updated first, each with
-    /// the base/head revisions it would be reviewed at. Zero agent tokens (one
-    /// `gh pr list` call). Blocking: callers drive it from a worker thread.
-    pub fn list_reviewable_prs(workdir: &Path) -> Result<Vec<ReviewablePr>> {
-        let stdout = Self::gh_stdout(
-            workdir,
-            &[
-                "pr",
-                "list",
-                "--state",
-                "open",
-                "--limit",
-                "100",
-                "--json",
-                REVIEWABLE_PR_FIELDS,
-            ],
-        )?;
-        parse_reviewable_pr_list_json(stdout.as_bytes())
-    }
-
-    /// Resolve one PR's current base/head revisions (`gh pr view`), which a
-    /// review re-checks on open and again right before it posts.
-    pub fn pr_revisions(workdir: &Path, number: u32) -> Result<PrRevisions> {
-        let fields = format!("{REVIEWABLE_PR_FIELDS},url,state");
-        let stdout = Self::gh_stdout(
-            workdir,
-            &["pr", "view", &number.to_string(), "--json", &fields],
-        )?;
-        parse_pr_revisions_json(stdout.as_bytes())
     }
 
     /// Fetch one explicit page of open issues for a canonical repository.
@@ -954,87 +728,6 @@ impl GhCli {
         Ok(threads)
     }
 
-    /// Post a review on `pr` with a summary `body` and any inline `comments`,
-    /// pinned to the PR head commit. `event` is the GitHub review action —
-    /// `"COMMENT"`, `"REQUEST_CHANGES"`, or `"APPROVE"` (use `"COMMENT"` for a
-    /// self-review, since GitHub forbids approving / requesting changes on your
-    /// own PR).
-    ///
-    /// Best-effort by contract: GitHub rejects the *entire* review (HTTP 422) if
-    /// any one inline comment points at a line outside the PR diff, so callers
-    /// should treat an error as "couldn't post" and fall back to their own
-    /// record (e.g. the local feedback file) rather than assume partial success.
-    pub fn create_review(
-        workdir: &Path,
-        pr: &PrRef,
-        body: &str,
-        event: &str,
-        comments: &[PrReviewComment],
-    ) -> Result<CreatedPrReview> {
-        let payload = build_review_request_json(&pr.head_sha, body, event, comments);
-        let endpoint = format!("repos/{}/{}/pulls/{}/reviews", pr.owner, pr.repo, pr.number);
-
-        let mut child = Command::new("gh")
-            .args(["api", "--method", "POST", &endpoint, "--input", "-"])
-            .current_dir(workdir)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("Failed to run `gh api` to post the PR review.")?;
-        child
-            .stdin
-            .take()
-            .context("Failed to open stdin for `gh api`.")?
-            .write_all(payload.to_string().as_bytes())
-            .context("Failed to send the PR review payload to `gh api`.")?;
-        let output = child
-            .wait_with_output()
-            .context("Failed to run `gh api` to post the PR review.")?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            if is_missing_write_scope(&stderr) {
-                bail!(
-                    "Posting to GitHub needs the `repo` scope. Run `! gh auth refresh -s repo` and try again."
-                );
-            }
-            if is_review_rejected_entity_error(&stderr) {
-                bail!(
-                    "GitHub rejected the review (422) — most likely one of the inline comments \
-                     no longer lines up with the current diff (the PR moved since the review \
-                     was prepared). Reopen the PR at its current head and try again. Raw: {}",
-                    stderr.trim()
-                );
-            }
-            bail!("`gh api` (create review) failed: {}", stderr.trim());
-        }
-        let response: CreatedPrReviewResponse = serde_json::from_slice(&output.stdout)
-            .context("Failed to parse the created GitHub review response.")?;
-        Ok(CreatedPrReview { id: response.id })
-    }
-
-    /// Post a whole-file review comment (`subject_type: "file"`), pinned to the
-    /// PR head commit. GitHub's batch `create_review` endpoint has no
-    /// file-level comment support in its `comments` array (only `line` /
-    /// `start_line` anchoring), and there's no way to attach a comment to an
-    /// already-created review after the fact — so this goes through the
-    /// single review-comment endpoint instead and posts immediately as its
-    /// own comment, not bundled into a `create_review` review object.
-    pub fn create_file_comment(workdir: &Path, pr: &PrRef, path: &str, body: &str) -> Result<()> {
-        let mut cmd = Command::new("gh");
-        cmd.args(["api", "--method", "POST"])
-            .arg(format!(
-                "repos/{}/{}/pulls/{}/comments",
-                pr.owner, pr.repo, pr.number
-            ))
-            .args(["-f", &format!("commit_id={}", pr.head_sha)])
-            .args(["-f", &format!("path={path}")])
-            .args(["-f", "subject_type=file"])
-            .args(["-f", &format!("body={body}")])
-            .current_dir(workdir);
-        run_write(cmd, "post file-level comment")
-    }
-
     /// Post a reply into an existing inline review thread. `root_comment_id` is
     /// the **top-level** comment that started the thread (GitHub's replies
     /// endpoint rejects replying to a reply); callers reply to
@@ -1156,48 +849,6 @@ impl GithubTransport for GhCli {
     }
 }
 
-/// Build the JSON request body for the GitHub create-review API. Omits an empty
-/// `body` / `commit_id` and the `comments` array when there are none, so a
-/// summary-only review is a valid request.
-fn build_review_request_json(
-    commit_id: &str,
-    body: &str,
-    event: &str,
-    comments: &[PrReviewComment],
-) -> serde_json::Value {
-    let mut obj = serde_json::Map::new();
-    if !commit_id.is_empty() {
-        obj.insert("commit_id".into(), json!(commit_id));
-    }
-    if !body.is_empty() {
-        obj.insert("body".into(), json!(body));
-    }
-    obj.insert("event".into(), json!(event));
-    if !comments.is_empty() {
-        let arr: Vec<serde_json::Value> = comments
-            .iter()
-            .map(|c| {
-                let mut comment = serde_json::Map::new();
-                comment.insert("path".into(), json!(c.path));
-                comment.insert("line".into(), json!(c.line));
-                comment.insert("side".into(), json!(c.side));
-                // A multi-line comment carries the span's start; omitted for a
-                // single-line comment.
-                if let Some(start_line) = c.start_line {
-                    comment.insert("start_line".into(), json!(start_line));
-                }
-                if let Some(start_side) = c.start_side {
-                    comment.insert("start_side".into(), json!(start_side));
-                }
-                comment.insert("body".into(), json!(c.body));
-                serde_json::Value::Object(comment)
-            })
-            .collect();
-        obj.insert("comments".into(), json!(arr));
-    }
-    serde_json::Value::Object(obj)
-}
-
 /// Run a `gh` write command, mapping a missing-`repo`-scope failure (the common
 /// first-write 403) to an actionable message instead of a raw HTTP error.
 fn run_write(mut cmd: Command, what: &str) -> Result<()> {
@@ -1221,17 +872,6 @@ fn run_write(mut cmd: Command, what: &str) -> Result<()> {
 fn is_missing_write_scope(stderr: &str) -> bool {
     let s = stderr.to_lowercase();
     s.contains("http 403") || (s.contains("403") && s.contains("scope")) || s.contains("must have")
-}
-
-/// Whether a `create_review` failure is GitHub's 422 Unprocessable Entity —
-/// its documented response when any inline comment in the review doesn't
-/// land inside the PR's current diff. `gh api`'s stderr for this case is
-/// just a terse status line with no detail on which comment is at fault, so
-/// this drives a friendlier, actionable message instead of passing it
-/// through verbatim.
-fn is_review_rejected_entity_error(stderr: &str) -> bool {
-    let s = stderr.to_lowercase();
-    s.contains("422") || s.contains("unprocessable entity")
 }
 
 /// Run `gh api --paginate --slurp <endpoint>` and flatten the result.
@@ -1866,39 +1506,6 @@ fn parse_pr_list_json(stdout: &[u8]) -> Result<Vec<PrListEntry>> {
     Ok(entries)
 }
 
-/// Parse the manual-review `gh pr list` array, newest-updated first. Strict: a
-/// row missing its revisions fails the whole list, rather than showing a PR
-/// that could not be opened at a known commit.
-fn parse_reviewable_pr_list_json(stdout: &[u8]) -> Result<Vec<ReviewablePr>> {
-    let mut entries: Vec<ReviewablePr> =
-        serde_json::from_slice(stdout).context("Failed to parse `gh pr list` JSON output.")?;
-    // `updatedAt` is RFC 3339, so a lexical reverse sort is chronological.
-    entries.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-    Ok(entries)
-}
-
-fn parse_pr_revisions_json(stdout: &[u8]) -> Result<PrRevisions> {
-    #[derive(Deserialize)]
-    struct Extra {
-        url: String,
-        #[serde(default)]
-        state: String,
-    }
-    let pr: ReviewablePr =
-        serde_json::from_slice(stdout).context("Failed to parse `gh pr view` JSON output.")?;
-    let extra: Extra =
-        serde_json::from_slice(stdout).context("`gh pr view` output missing url.")?;
-    let (owner, repo) = parse_owner_repo(&extra.url)
-        .with_context(|| format!("Could not parse owner/repo from PR url: {}", extra.url))?;
-    Ok(PrRevisions {
-        pr,
-        url: extra.url,
-        owner,
-        repo,
-        state: extra.state,
-    })
-}
-
 fn parse_issue_page(stdout: &[u8], page: u32, per_page: u32) -> Result<GithubIssuePage> {
     let raw: Vec<GithubIssue> =
         serde_json::from_slice(stdout).context("Failed to parse GitHub issues JSON response.")?;
@@ -2410,24 +2017,6 @@ mod tests {
     }
 
     #[test]
-    fn detects_review_rejected_entity_error() {
-        // The exact terse line `gh api` gives for this case (confirmed from
-        // real use — the debug log showed exactly this).
-        assert!(is_review_rejected_entity_error(
-            "gh: Unprocessable Entity (HTTP 422)"
-        ));
-        assert!(is_review_rejected_entity_error(
-            "HTTP 422: Validation Failed"
-        ));
-        assert!(!is_review_rejected_entity_error(
-            "gh: HTTP 403: Resource not accessible by integration"
-        ));
-        assert!(!is_review_rejected_entity_error(
-            "could not resolve host github.com"
-        ));
-    }
-
-    #[test]
     fn parses_pr_list_and_sorts_newest_first() {
         let json = br#"[
             {"number":10,"title":"Old one","author":{"login":"alice"},"headRefName":"feat-a","updatedAt":"2026-01-01T00:00:00Z","isDraft":false,"state":"OPEN"},
@@ -2608,191 +2197,5 @@ mod tests {
             "url":"https://github.com/acme/aiw/pull/449","state":"CLOSED"}"#;
 
         assert!(parse_open_resolved_pr(json).unwrap().is_none());
-    }
-
-    #[test]
-    fn review_request_includes_commit_body_event_and_comments() {
-        let comments = vec![
-            PrReviewComment {
-                path: "src/a.rs".into(),
-                line: 12,
-                side: "RIGHT",
-                start_line: None,
-                start_side: None,
-                body: "this looks off".into(),
-            },
-            PrReviewComment {
-                path: "src/a.rs".into(),
-                line: 3,
-                side: "LEFT",
-                start_line: None,
-                start_side: None,
-                body: "why remove this?".into(),
-            },
-        ];
-        let v = build_review_request_json("abc123", "Summary", "COMMENT", &comments);
-        assert_eq!(v["commit_id"], "abc123");
-        assert_eq!(v["body"], "Summary");
-        assert_eq!(v["event"], "COMMENT");
-        let arr = v["comments"].as_array().unwrap();
-        assert_eq!(arr.len(), 2);
-        assert_eq!(arr[0]["path"], "src/a.rs");
-        assert_eq!(arr[0]["line"], 12);
-        assert_eq!(arr[0]["side"], "RIGHT");
-        // A single-line comment omits the span keys entirely.
-        assert!(arr[0].get("start_line").is_none());
-        assert!(arr[0].get("start_side").is_none());
-        assert_eq!(arr[1]["side"], "LEFT");
-    }
-
-    #[test]
-    fn review_request_emits_start_line_for_multiline_comment() {
-        let comments = vec![PrReviewComment {
-            path: "src/a.rs".into(),
-            line: 20,
-            side: "RIGHT",
-            start_line: Some(15),
-            start_side: Some("RIGHT"),
-            body: "this whole block".into(),
-        }];
-        let v = build_review_request_json("", "", "COMMENT", &comments);
-        let arr = v["comments"].as_array().unwrap();
-        assert_eq!(arr[0]["line"], 20);
-        assert_eq!(arr[0]["start_line"], 15);
-        assert_eq!(arr[0]["start_side"], "RIGHT");
-    }
-
-    #[test]
-    fn summary_only_review_omits_empty_body_and_comments() {
-        // No commit id, empty body, no inline comments: only `event` is present,
-        // which GitHub accepts as a (bodyless) review action.
-        let v = build_review_request_json("", "", "COMMENT", &[]);
-        let obj = v.as_object().unwrap();
-        assert!(!obj.contains_key("commit_id"));
-        assert!(!obj.contains_key("body"));
-        assert!(!obj.contains_key("comments"));
-        assert_eq!(v["event"], "COMMENT");
-    }
-
-    /// A fork PR and a same-repo draft, as `gh pr list --json` returns them.
-    const REVIEWABLE_PR_LIST_FIXTURE: &str = r#"[
-      {"number": 41, "title": "Fix parser", "author": {"login": "alice", "is_bot": false},
-       "isDraft": false, "updatedAt": "2026-09-20T10:00:00Z",
-       "baseRefName": "main",
-       "headRefName": "main", "headRefOid": "bbbb000000000000000000000000000000000000",
-       "isCrossRepository": true, "headRepositoryOwner": {"id": "U_1", "login": "alice"}},
-      {"number": 42, "title": "WIP: new cache", "author": {"login": "me"},
-       "isDraft": true, "updatedAt": "2026-09-24T10:00:00Z",
-       "baseRefName": "main",
-       "headRefName": "cache", "headRefOid": "cccc000000000000000000000000000000000000",
-       "isCrossRepository": false, "headRepositoryOwner": {"id": "O_1", "login": "acme"}}
-    ]"#;
-
-    #[test]
-    fn reviewable_pr_list_parses_a_fork_pr_as_owner_colon_branch() {
-        let entries = parse_reviewable_pr_list_json(REVIEWABLE_PR_LIST_FIXTURE.as_bytes()).unwrap();
-        let fork = entries.iter().find(|e| e.number == 41).unwrap();
-        assert!(fork.is_cross_repository);
-        assert_eq!(fork.author, "alice");
-        assert_eq!(fork.head_owner, "alice");
-        assert_eq!(fork.branch_label(), "alice:main");
-        assert_eq!(fork.base_ref, "main");
-        assert!(
-            fork.base_oid.is_empty(),
-            "the base tip comes from the fetch"
-        );
-        assert_eq!(fork.head_oid, "bbbb000000000000000000000000000000000000");
-        assert!(!fork.is_draft);
-    }
-
-    #[test]
-    fn reviewable_pr_list_keeps_drafts_and_sorts_newest_first() {
-        let entries = parse_reviewable_pr_list_json(REVIEWABLE_PR_LIST_FIXTURE.as_bytes()).unwrap();
-        assert_eq!(
-            entries.iter().map(|e| e.number).collect::<Vec<_>>(),
-            vec![42, 41]
-        );
-        let draft = &entries[0];
-        assert!(draft.is_draft);
-        assert_eq!(draft.title, "WIP: new cache");
-        // Same-repo head: the bare branch, never the base repo's owner.
-        assert_eq!(draft.branch_label(), "cache");
-    }
-
-    #[test]
-    fn reviewable_pr_list_parses_an_empty_list() {
-        assert!(parse_reviewable_pr_list_json(b"[]").unwrap().is_empty());
-    }
-
-    #[test]
-    fn reviewable_pr_list_rejects_a_row_without_a_head_revision() {
-        // A row we could not open at a known commit must not look openable.
-        let json = br#"[{"number": 7, "title": "x", "baseRefName": "main", "headRefName": "b"}]"#;
-        assert!(parse_reviewable_pr_list_json(json).is_err());
-    }
-
-    #[test]
-    fn a_deleted_fork_falls_back_to_the_bare_branch() {
-        let json = br#"[{"number": 9, "baseRefName": "main",
-            "headRefName": "patch-1", "headRefOid": "b",
-            "isCrossRepository": true, "headRepositoryOwner": null}]"#;
-        let entries = parse_reviewable_pr_list_json(json).unwrap();
-        assert_eq!(entries[0].branch_label(), "patch-1");
-    }
-
-    /// The `--json` field list is a string `gh` validates and serde never sees,
-    /// so pin it to the struct: every requested field must be one the fixture
-    /// (and therefore the struct) carries, and vice versa.
-    #[test]
-    fn reviewable_pr_fields_match_what_the_struct_reads() {
-        let requested: std::collections::BTreeSet<&str> = REVIEWABLE_PR_FIELDS.split(',').collect();
-        let fixture: Vec<serde_json::Map<String, serde_json::Value>> =
-            serde_json::from_str(REVIEWABLE_PR_LIST_FIXTURE).unwrap();
-        let present: std::collections::BTreeSet<&str> =
-            fixture[0].keys().map(String::as_str).collect();
-        assert_eq!(requested, present);
-    }
-
-    #[test]
-    fn pr_revisions_parse_into_a_pr_ref_pinned_to_the_head() {
-        let json = br#"{"number": 41, "title": "Fix parser", "author": {"login": "alice"},
-            "isDraft": false, "updatedAt": "2026-09-20T10:00:00Z",
-            "baseRefName": "main",
-            "headRefName": "main", "headRefOid": "bbbb",
-            "isCrossRepository": true, "headRepositoryOwner": {"login": "alice"},
-            "url": "https://github.com/acme/widgets/pull/41", "state": "OPEN"}"#;
-        let revisions = parse_pr_revisions_json(json).unwrap();
-        assert_eq!(revisions.state, "OPEN");
-        assert_eq!(revisions.pr.head_oid, "bbbb");
-        let pr = revisions.pr_ref();
-        assert_eq!(pr.number, 41);
-        assert_eq!(pr.head_sha, "bbbb");
-        assert_eq!((pr.owner.as_str(), pr.repo.as_str()), ("acme", "widgets"));
-    }
-
-    #[test]
-    fn git_credential_failures_get_the_setup_git_hint() {
-        for stderr in [
-            "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
-            "remote: Invalid username or password.\nfatal: Authentication failed for 'https://github.com/acme/x/'",
-        ] {
-            let hint = git_credentials_hint(stderr).unwrap();
-            assert!(hint.contains("gh auth setup-git"), "{stderr}");
-        }
-        assert_eq!(
-            git_credentials_hint("fatal: couldn't find remote ref refs/pull/8/head"),
-            None
-        );
-    }
-
-    #[test]
-    fn git_without_prompts_disables_terminal_prompts() {
-        let mut cmd = Command::new("git");
-        without_git_prompts(&mut cmd);
-        assert!(
-            cmd.get_envs()
-                .any(|(key, value)| key == "GIT_TERMINAL_PROMPT"
-                    && value == Some(std::ffi::OsStr::new("0")))
-        );
     }
 }

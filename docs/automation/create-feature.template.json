@@ -3,7 +3,6 @@
   "branch": "feature-1",
   "agent": "codex",
   "mode": "vibe",
-  "review": false,
   "create_terminal": false,
   "use_worktree": true,
   "enable_chrome": false,

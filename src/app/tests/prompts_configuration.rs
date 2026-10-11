@@ -166,66 +166,6 @@ fn app_config_default_diff_viewer_layout_is_unified() {
 }
 
 #[test]
-fn review_model_for_falls_back_to_shared_default_when_unset() {
-    let config = AppConfig {
-        review_model: Some("opus".to_string()),
-        ..AppConfig::default()
-    };
-    assert_eq!(
-        config.review_model_for(ReviewAction::Walkthrough),
-        Some("opus".to_string())
-    );
-    assert_eq!(
-        config.review_model_for(ReviewAction::ChangesetOverview),
-        Some("opus".to_string())
-    );
-    assert_eq!(config.review_model_for(ReviewAction::PlanPreflight), None);
-}
-
-#[test]
-fn plan_preflight_model_uses_only_its_explicit_override() {
-    let mut config = AppConfig {
-        review_model: Some("ordinary-review-model".to_string()),
-        ..AppConfig::default()
-    };
-    config.review_models.insert(
-        ReviewAction::PlanPreflight.config_key().to_string(),
-        "frontier-model".to_string(),
-    );
-    assert_eq!(
-        config.review_model_for(ReviewAction::PlanPreflight),
-        Some("frontier-model".to_string())
-    );
-}
-
-#[test]
-fn review_model_for_prefers_per_action_override() {
-    let mut config = AppConfig {
-        review_model: Some("opus".to_string()),
-        ..AppConfig::default()
-    };
-    config.review_models.insert(
-        ReviewAction::Walkthrough.config_key().to_string(),
-        "haiku".to_string(),
-    );
-    assert_eq!(
-        config.review_model_for(ReviewAction::Walkthrough),
-        Some("haiku".to_string())
-    );
-    // Unaffected actions still see the shared default.
-    assert_eq!(
-        config.review_model_for(ReviewAction::CoReview),
-        Some("opus".to_string())
-    );
-}
-
-#[test]
-fn review_model_for_is_none_when_nothing_configured() {
-    let config = AppConfig::default();
-    assert_eq!(config.review_model_for(ReviewAction::Walkthrough), None);
-}
-
-#[test]
 fn app_config_missing_leader_timeout_uses_default() {
     let config: AppConfig = serde_json::from_str(r#"{"nerd_font":false}"#).unwrap();
     assert_eq!(config.leader_timeout_seconds, 5);
@@ -874,66 +814,6 @@ fn resolve_prompt_renders_an_unknown_token_literally() {
 }
 
 #[test]
-fn resolve_headless_template_applies_a_global_db_override_and_falls_back_otherwise() {
-    use crate::db::AiwDb;
-    use crate::db::prompt_overrides::OverrideScope;
-    use crate::prompts::PromptId;
-
-    let store = store_with_feature(ProjectStatus::Idle);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    let db_file = NamedTempFile::new().unwrap();
-    app.db = Some(AiwDb::open(db_file.path()).unwrap());
-
-    let repo = app.store.projects[0].repo.clone();
-    let workdir = app.store.projects[0].features[0].workdir.clone();
-
-    // No override yet → built-in default.
-    let (before, source) = app.resolve_headless_template(
-        PromptId::SessionSummary,
-        &AgentKind::Claude,
-        &repo,
-        &workdir,
-    );
-    assert_eq!(source, crate::prompts::PromptSource::BuiltIn);
-    assert_eq!(before, PromptId::SessionSummary.spec().default_template);
-
-    // Write a global-scope shared override.
-    app.db
-        .as_ref()
-        .unwrap()
-        .upsert_prompt_override(
-            PromptId::SessionSummary.as_str(),
-            &OverrideScope::Global,
-            None,
-            "OVERRIDDEN {{recent_lines}}",
-        )
-        .unwrap();
-
-    let (after, source) = app.resolve_headless_template(
-        PromptId::SessionSummary,
-        &AgentKind::Claude,
-        &repo,
-        &workdir,
-    );
-    assert_eq!(source, crate::prompts::PromptSource::Global);
-    assert_eq!(after, "OVERRIDDEN {{recent_lines}}");
-
-    // And it interpolates through the render helper.
-    let rendered = app.resolve_headless_prompt(
-        PromptId::SessionSummary,
-        &AgentKind::Claude,
-        &repo,
-        &workdir,
-        &crate::prompts::PromptContext::new().with("recent_lines", "did work"),
-    );
-    assert_eq!(rendered, "OVERRIDDEN did work");
-}
-
-#[test]
 fn prompt_override_manager_saves_to_each_scope_and_survives_reopen() {
     use crate::db::AiwDb;
     use crate::prompts::{PromptId, PromptSource};
@@ -958,13 +838,13 @@ fn prompt_override_manager_saves_to_each_scope_and_survives_reopen() {
             PromptSource::Project,
         ),
         (
-            PromptId::ReviewWalkthrough,
+            PromptId::SessionSummary,
             "Global (all projects)",
             "GLOBAL walkthrough {{patch}}",
             PromptSource::Global,
         ),
         (
-            PromptId::ReviewCoReview,
+            PromptId::SessionSummary,
             "This feature",
             "FEATURE answer {{question}}",
             PromptSource::Feature,
@@ -1002,22 +882,25 @@ fn prompt_override_manager_saves_to_each_scope_and_survives_reopen() {
         app.prompt_overrides_close();
     }
 
-    // Reopen: each row now reports its override source, and the effective
-    // template (resolved the same way the call sites do) is the saved text.
+    // Reopen: the row reports the highest-precedence override (feature over
+    // project over global), and the effective template (resolved the same way
+    // the call sites do) is that scope's saved text.
     app.open_prompt_overrides(None);
     let rows = match &app.mode {
         AppMode::PromptOverrides(state) => state.rows.clone(),
         _ => panic!("manager not open"),
     };
     let repo_path = repo.path().to_path_buf();
-    for (id, _scope, template, expected) in cases {
-        let row = rows.iter().find(|r| r.id == id).unwrap();
-        assert_eq!(row.source, expected, "{} source after reopen", id.as_str());
-        let (effective, source) =
-            app.resolve_headless_template(id, &AgentKind::default(), &repo_path, &repo_path);
-        assert_eq!(source, expected, "{} resolved source", id.as_str());
-        assert_eq!(effective, template, "{} effective template", id.as_str());
-    }
+    let id = PromptId::SessionSummary;
+    let row = rows.iter().find(|r| r.id == id).unwrap();
+    assert_eq!(row.source, PromptSource::Feature, "source after reopen");
+    let (effective, source) =
+        app.resolve_headless_template(id, &AgentKind::default(), &repo_path, &repo_path);
+    assert_eq!(source, PromptSource::Feature, "resolved source");
+    assert_eq!(
+        effective, "FEATURE answer {{question}}",
+        "effective template"
+    );
 }
 
 #[test]
@@ -1050,68 +933,6 @@ fn dashboard_shift_e_opens_the_prompt_override_manager() {
     )
     .unwrap();
     assert!(matches!(app.mode, AppMode::Normal));
-}
-
-#[test]
-fn precall_edit_opens_the_manager_focused_and_returns_to_the_notice() {
-    use crate::app::precall::{PendingPrecall, PrecallAction};
-    use crate::prompts::PromptId;
-
-    let repo = tempfile::TempDir::new().unwrap();
-    let store = store_with_repo(repo.path().to_path_buf(), ProjectStatus::Idle);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.db = Some(crate::db::AiwDb::open(NamedTempFile::new().unwrap().path()).unwrap());
-    app.selection = Selection::Feature(0, 0);
-
-    app.mode = AppMode::PromptPrecall(Box::new(PendingPrecall {
-        action: PrecallAction::ReviewChangesetOverview,
-        prompt_id: PromptId::ReviewChangesetOverview,
-        harness: AgentKind::Claude,
-        model: None,
-        preview: "some rendered prompt".to_string(),
-        viewing: false,
-        scroll: 0,
-        prior_mode: Box::new(AppMode::Normal),
-    }));
-
-    // `e` opens the override manager, pre-selected on that prompt.
-    app.precall_edit();
-    let selected_id = match &app.mode {
-        AppMode::PromptOverrides(state) => state.rows[state.selected].id,
-        other => panic!("expected manager, got {:?}", std::mem::discriminant(other)),
-    };
-    assert_eq!(selected_id, PromptId::ReviewChangesetOverview);
-
-    // Closing the manager returns to the pre-call notice (not the dashboard).
-    app.prompt_overrides_close();
-    assert!(matches!(&app.mode, AppMode::PromptPrecall(p)
-        if p.prompt_id == PromptId::ReviewChangesetOverview));
-
-    // Cancel restores the mode the run was initiated from.
-    app.precall_cancel();
-    assert!(matches!(app.mode, AppMode::Normal));
-}
-
-#[test]
-fn automated_headless_runs_announce_with_a_toast_not_a_modal() {
-    let store = store_with_feature(ProjectStatus::Idle);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.announce_headless_run(crate::prompts::PromptId::SessionSummary, &AgentKind::Codex);
-    assert!(!matches!(app.mode, AppMode::PromptPrecall(_)));
-    assert!(
-        app.toasts
-            .iter()
-            .any(|t| t.message.contains("Headless AI call") && t.message.contains("Codex")),
-        "expected an announcing toast"
-    );
 }
 
 // Desktop debug history shares the DB reader without flushing pending writes.

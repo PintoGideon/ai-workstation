@@ -237,7 +237,7 @@ def finish(hook):
 
 def open_feature():
     evaluate('document.querySelector("button.tree-name[title^=\\"Round invoice totals\\"]").click()')
-    wait('document.body.innerText.includes("Final Review")')
+    wait('document.body.innerText.includes("Changes")')
 
 
 def edit_ready(path):

@@ -4,7 +4,6 @@ mod attention;
 mod automation;
 mod editor_lifecycle;
 mod feature_sessions;
-mod final_review;
 mod fork_agents; // FORK: Gemini/Cursor
 mod fork_session_reconcile; // FORK
 mod hooks_setup;

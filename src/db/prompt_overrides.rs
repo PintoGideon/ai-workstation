@@ -75,7 +75,7 @@ impl OverrideScope {
 /// One stored override row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptOverride {
-    /// Stable [`crate::prompts::PromptId`] key, e.g. `"review.walkthrough"`.
+    /// Stable [`crate::prompts::PromptId`] key, e.g. `"session.summary"`.
     pub prompt_id: String,
     pub scope: OverrideScope,
     /// `None` = shared across every harness; `Some(_)` = specific to one.

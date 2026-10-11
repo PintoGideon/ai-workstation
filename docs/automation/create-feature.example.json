@@ -3,7 +3,6 @@
   "branch": "automation-feature",
   "agent": "codex",
   "mode": "vibe",
-  "review": true,
   "use_worktree": true,
   "enable_chrome": false,
   "hook_choice": null,

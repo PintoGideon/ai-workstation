@@ -69,7 +69,6 @@ fn create_feature_automation_dry_run_returns_plan_without_mutating_store() {
         branch: "feature-1".to_string(),
         agent: AgentKind::Codex,
         mode: VibeMode::Vibe,
-        review: false,
         create_terminal: false,
         use_worktree: Some(true),
         enable_chrome: false,
@@ -123,7 +122,6 @@ fn create_feature_automation_dry_run_surfaces_hook_prompt_options() {
         branch: "feature-1".to_string(),
         agent: AgentKind::Codex,
         mode: VibeMode::Vibe,
-        review: false,
         create_terminal: false,
         use_worktree: Some(true),
         enable_chrome: false,
@@ -155,7 +153,6 @@ fn create_feature_automation_rejects_codex_vibeless_mode() {
         branch: "feature-1".to_string(),
         agent: AgentKind::Codex,
         mode: VibeMode::Vibeless,
-        review: true,
         create_terminal: false,
         use_worktree: Some(true),
         enable_chrome: false,
@@ -264,7 +261,6 @@ fn create_feature_automation_creates_and_starts_feature() {
         branch: "feature-1".to_string(),
         agent: AgentKind::Codex,
         mode: VibeMode::Vibe,
-        review: true,
         create_terminal: false,
         use_worktree: Some(true),
         enable_chrome: false,
@@ -284,7 +280,6 @@ fn create_feature_automation_creates_and_starts_feature() {
         "aiw-automation-project-feature-1"
     );
     assert!(app.store.projects[0].features[0].is_worktree);
-    assert!(app.store.projects[0].features[0].review);
     assert_eq!(app.store.projects[0].features[0].sessions.len(), 1);
 }
 
@@ -321,7 +316,6 @@ fn batch_feature_automation_dry_run_returns_plan_without_mutating_store() {
         feature_prefix: "plan-".to_string(),
         agent: AgentKind::Codex,
         mode: VibeMode::Vibe,
-        review: false,
         enable_chrome: false,
         dry_run: true,
     };
@@ -372,7 +366,6 @@ fn batch_feature_automation_rejects_review_as_a_mode() {
         feature_prefix: "plan-".to_string(),
         agent: AgentKind::Codex,
         mode: VibeMode::Vibeless,
-        review: true,
         enable_chrome: false,
         dry_run: true,
     };
@@ -468,7 +461,6 @@ fn batch_feature_automation_creates_project_and_starts_features() {
         feature_prefix: "plan-".to_string(),
         agent: AgentKind::Codex,
         mode: VibeMode::Vibe,
-        review: false,
         enable_chrome: false,
         dry_run: false,
     };

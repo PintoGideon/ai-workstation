@@ -61,7 +61,6 @@ Fields:
 - `branch`: feature / branch name to create
 - `agent`: `claude`, `codex`, `pi`, `gemini` or `cursor`
 - `mode`: `vibeless`, `vibe`, or `supervibe`
-- `review`: separate toggle for diff-review / final-review flows
 - `use_worktree`: whether to create a git worktree or reuse the project repo
 - `hook_choice`: optional answer for prompted `on_worktree_created` hooks
 - `dry_run`: validate and preview without changing AIW state
@@ -110,7 +109,6 @@ Key fields:
 - `feature_prefix`: generated features will be `prefix1`, `prefix2`, ...
 - `agent`: `claude`, `codex`, `pi`, `gemini` or `cursor`
 - `mode`: `vibeless`, `vibe`, or `supervibe`
-- `review`: separate toggle for diff-review / final-review flows
 - `dry_run`: validate and preview without changing AIW state
 
 ## Example

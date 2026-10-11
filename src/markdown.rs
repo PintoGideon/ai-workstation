@@ -16,7 +16,6 @@ const MARKDOWN_VIEW_CANDIDATES: &[&str] = &[
     "PLAN.md",
     ".claude/plan.md",
     ".claude/context.md",
-    ".claude/review-notes.md",
     ".claude/notes.md",
     "plan.md",
 ];

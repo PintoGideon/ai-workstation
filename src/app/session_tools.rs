@@ -46,7 +46,6 @@ impl App {
                 .map(|s| s.kind.clone())
                 .unwrap_or(crate::project::SessionKind::Terminal),
             feature.mode.clone(),
-            feature.review,
         ))
     }
 

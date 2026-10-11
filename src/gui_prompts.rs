@@ -269,7 +269,6 @@ mod tests {
             workdir,
             true,
             VibeMode::default(),
-            false,
             AgentKind::Claude,
             false,
         );

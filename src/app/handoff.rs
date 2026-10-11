@@ -518,7 +518,6 @@ mod tests {
             std::path::PathBuf::from("/tmp/handoff"),
             true,
             VibeMode::Vibeless,
-            false,
             AgentKind::Codex,
             false,
         );

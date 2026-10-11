@@ -236,7 +236,6 @@ fn draw_confirm_save(frame: &mut Frame, state: &ConfigWizardState, theme: &Theme
                 scroll: state.preview_scroll,
                 include_prologue: true,
                 new_file_presentation: false,
-                ..Default::default()
             },
             theme,
         );

@@ -100,7 +100,6 @@ pub struct FeaturePreset {
     pub branch_prefix: Option<String>,
     pub mode: VibeMode,
     pub agent: AgentKind,
-    pub review: bool,
     pub enable_chrome: bool,
 }
 
@@ -111,7 +110,6 @@ struct FeaturePresetDe {
     branch_prefix: Option<String>,
     mode: StoredVibeMode,
     agent: AgentKind,
-    review: bool,
     enable_chrome: bool,
 }
 
@@ -121,13 +119,12 @@ impl<'de> Deserialize<'de> for FeaturePreset {
         D: serde::Deserializer<'de>,
     {
         let preset = FeaturePresetDe::deserialize(deserializer)?;
-        let (mode, legacy_review) = preset.mode.into_mode_and_review();
+        let (mode, _legacy_review) = preset.mode.into_mode_and_review();
         Ok(Self {
             name: preset.name,
             branch_prefix: preset.branch_prefix,
             mode,
             agent: preset.agent,
-            review: preset.review || legacy_review,
             enable_chrome: preset.enable_chrome,
         })
     }
@@ -153,15 +150,9 @@ pub struct ExtensionConfig {
     /// The library view can export user templates here. Phase 3 surfaces
     /// these in the picker with a `Global` / `Project` source badge.
     pub prompt_templates: Vec<PromptTemplate>,
-    /// Shell command run (via `bash -c` in the feature's workdir) when
-    /// finishing a final review — a build/test gate. `None`/empty skips it
-    /// entirely (the default). Project overrides global, same as
-    /// `lifecycle_hooks`, so each repo can point this at its own proof / CI
-    /// script rather than a hardcoded `cargo build`.
-    pub final_review_check_command: Option<String>,
     /// Project-scope overrides of AIW's built-in headless prompt templates
     /// (the "Editable Headless Prompts" feature), keyed by stable prompt id
-    /// (e.g. `"review.walkthrough"`). Lives here — the tracked repo config —
+    /// (e.g. `"session.summary"`). Lives here — the tracked repo config —
     /// rather than in a `.aiw/prompts/` directory because `.aiw/` is
     /// gitignored dir-wide, so a file there would never be committed.
     /// Feature- and global-scope overrides are per-user and live in `aiw.db`.
@@ -172,16 +163,6 @@ pub struct ExtensionConfig {
     /// `aiw.json` carries, and nothing else.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub prompt_overrides: crate::prompts::project::ProjectPromptOverrides,
-    /// Soft size gate for batched review: the estimated prompt-token ceiling
-    /// above which the `W` AI PR review and final-review co-review split the
-    /// diff into slices instead of sending one prompt. `None` uses the
-    /// built-in per-harness default (`headless::default_prompt_budget_tokens`
-    /// — Claude/Codex 128k, Pi 96k). `0` disables pre-send splitting
-    /// entirely, leaving only the adaptive halving after an actual
-    /// "prompt too long" failure. Project overrides global, like
-    /// `final_review_check_command`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub review_prompt_budget_tokens: Option<usize>,
 }
 
 impl ExtensionConfig {
@@ -490,11 +471,6 @@ pub fn merge_project_extension_config_checked(
         keybindings.insert(action.clone(), *key);
     }
 
-    let final_review_check_command = project
-        .final_review_check_command
-        .clone()
-        .or_else(|| base.final_review_check_command.clone());
-
     let mut merged = ExtensionConfig {
         custom_sessions,
         lifecycle_hooks: LifecycleHooks {
@@ -509,10 +485,6 @@ pub fn merge_project_extension_config_checked(
             .clone()
             .or_else(|| base.allowed_agents.clone()),
         prompt_templates,
-        final_review_check_command,
-        review_prompt_budget_tokens: project
-            .review_prompt_budget_tokens
-            .or(base.review_prompt_budget_tokens),
         // Project scope only — never inherited from the global `extension`
         // block (see the field's doc comment).
         prompt_overrides: project.prompt_overrides,
@@ -739,71 +711,6 @@ mod tests {
     }
 
     #[test]
-    fn project_check_command_overrides_global() {
-        let global = ExtensionConfig {
-            final_review_check_command: Some("cargo build".to_string()),
-            ..Default::default()
-        };
-        let project_config = ExtensionConfig {
-            final_review_check_command: Some("./proof.sh".to_string()),
-            ..Default::default()
-        };
-        let tmp = TempDir::new().unwrap();
-        write_extension_config(&tmp, &project_config);
-
-        let merged = merge_project_extension_config(&global, tmp.path());
-        assert_eq!(
-            merged.final_review_check_command.as_deref(),
-            Some("./proof.sh")
-        );
-    }
-
-    #[test]
-    fn global_check_command_used_when_project_does_not_set_it() {
-        let global = ExtensionConfig {
-            final_review_check_command: Some("cargo build".to_string()),
-            ..Default::default()
-        };
-        // Project config present but doesn't set a check command.
-        let project_config = ExtensionConfig::default();
-        let tmp = TempDir::new().unwrap();
-        write_extension_config(&tmp, &project_config);
-
-        let merged = merge_project_extension_config(&global, tmp.path());
-        assert_eq!(
-            merged.final_review_check_command.as_deref(),
-            Some("cargo build")
-        );
-    }
-
-    #[test]
-    fn project_review_prompt_budget_overrides_global_and_falls_back_when_unset() {
-        let global = ExtensionConfig {
-            review_prompt_budget_tokens: Some(64_000),
-            ..Default::default()
-        };
-
-        let overriding = ExtensionConfig {
-            review_prompt_budget_tokens: Some(200_000),
-            ..Default::default()
-        };
-        let tmp = TempDir::new().unwrap();
-        write_extension_config(&tmp, &overriding);
-        assert_eq!(
-            merge_project_extension_config(&global, tmp.path()).review_prompt_budget_tokens,
-            Some(200_000)
-        );
-
-        let silent = ExtensionConfig::default();
-        let tmp = TempDir::new().unwrap();
-        write_extension_config(&tmp, &silent);
-        assert_eq!(
-            merge_project_extension_config(&global, tmp.path()).review_prompt_budget_tokens,
-            Some(64_000)
-        );
-    }
-
-    #[test]
     fn custom_sessions_deduplicated_by_name_project_wins() {
         let global = ExtensionConfig {
             custom_sessions: vec![
@@ -979,7 +886,6 @@ mod tests {
         let merged = merge_project_extension_config(&global, tmp.path());
         assert_eq!(merged.feature_presets.len(), 1);
         assert_eq!(merged.feature_presets[0].mode, VibeMode::Vibeless);
-        assert!(merged.feature_presets[0].review);
     }
 
     #[test]

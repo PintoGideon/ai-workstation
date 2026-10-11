@@ -167,7 +167,6 @@ pub fn draw_issue_setup(frame: &mut Frame, state: &IssueSetupState, theme: &Them
         state.settings.preset_label(),
         state.settings.agent().display_name().to_string(),
         state.settings.mode.display_name().to_string(),
-        if state.settings.review { "On" } else { "Off" }.to_string(),
         if state.settings.enable_chrome {
             "On"
         } else {

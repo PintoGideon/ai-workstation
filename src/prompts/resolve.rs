@@ -232,14 +232,12 @@ mod tests {
     #[test]
     fn no_override_returns_the_builtin_default_interpolated() {
         let ctx = PromptContext::new()
-            .with("file_path", "src/lib.rs")
-            .with("old_snippet", "a")
-            .with("new_snippet", "b");
-        let rendered = resolve_prompt(PromptId::ReviewDiffExplain, &AgentKind::Claude, &ctx);
-        assert!(rendered.starts_with("Explain these code changes concisely."));
-        assert!(rendered.contains("File: src/lib.rs"));
-        assert!(rendered.contains("Old:\n```\na\n```"));
-        assert!(rendered.contains("New:\n```\nb\n```"));
+            .with("harness_name", "Claude")
+            .with("max_chars", "80")
+            .with("recent_lines", "did a thing");
+        let rendered = resolve_prompt(PromptId::SessionSummary, &AgentKind::Claude, &ctx);
+        assert!(rendered.starts_with("Summarize this Claude session in one line (max 80 chars)."));
+        assert!(rendered.contains("did a thing"));
         assert!(!rendered.contains("{{"));
     }
 
@@ -251,13 +249,13 @@ mod tests {
 
     #[test]
     fn a_missing_declared_placeholder_is_rendered_literally() {
-        // `file_path` is a real placeholder for this prompt, but the caller
+        // `recent_lines` is a real placeholder for this prompt, but the caller
         // did not supply it: the token survives verbatim, unvalidated.
         let ctx = PromptContext::new()
-            .with("old_snippet", "x")
-            .with("new_snippet", "y");
-        let rendered = resolve_prompt(PromptId::ReviewDiffExplain, &AgentKind::Claude, &ctx);
-        assert!(rendered.contains("File: {{file_path}}"), "{rendered}");
+            .with("harness_name", "Claude")
+            .with("max_chars", "80");
+        let rendered = resolve_prompt(PromptId::SessionSummary, &AgentKind::Claude, &ctx);
+        assert!(rendered.contains("{{recent_lines}}"), "{rendered}");
     }
 
     #[test]

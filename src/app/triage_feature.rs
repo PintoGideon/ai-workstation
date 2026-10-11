@@ -95,7 +95,6 @@ impl App {
                 agents,
                 agent_index,
                 mode: VibeMode::default(),
-                review: false,
                 enable_chrome: false,
                 branch,
                 row: 0,
@@ -334,7 +333,6 @@ impl App {
             workdir,
             true,
             setup.mode.clone(),
-            setup.review,
             agent.clone(),
             setup.enable_chrome,
         );

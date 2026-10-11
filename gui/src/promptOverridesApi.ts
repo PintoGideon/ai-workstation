@@ -63,29 +63,6 @@ export interface SaveOverride {
 
 export type ClearOverride = Omit<SaveOverride, "template">;
 
-export interface PrecallOverrideTarget {
-  prompt_id: string;
-  harness: AgentSlug;
-  context: OverrideContext;
-  /** Why the manager opened on Global instead of the call's own context. */
-  context_note: string | null;
-}
-
-export function promptOverridesLoad(context: OverrideContext, harness: AgentSlug | null): Promise<OverridesView> {
-  return invoke("prompt_overrides_load", { context, harness });
-}
-
-export function promptOverridesSave(request: SaveOverride): Promise<OverridesView> {
-  return invoke("prompt_overrides_save", { request });
-}
-
-export function promptOverridesClear(request: ClearOverride): Promise<OverridesView> {
-  return invoke("prompt_overrides_clear", { request });
-}
-
-export function promptOverridesPrecallTarget(): Promise<PrecallOverrideTarget> {
-  return invoke("prompt_overrides_precall_target");
-}
 
 export const HARNESS_LABELS: Record<AgentSlug, string> = {
   claude: "Claude", codex: "Codex", pi: "Pi",

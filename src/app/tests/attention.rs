@@ -27,7 +27,6 @@ fn store_with_agents(agents: &[AgentKind]) -> ProjectStore {
             sessions: vec![],
             collapsed: false,
             mode: VibeMode::default(),
-            review: false,
             agent: agent.clone(),
             enable_chrome: false,
             pending_worktree_script: false,

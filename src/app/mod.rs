@@ -12,6 +12,7 @@ mod config_wizard;
 mod context_hints;
 mod context_settings;
 mod diff;
+pub(crate) mod diff_state;
 pub(crate) mod dormant;
 pub(crate) mod editor_ops;
 pub(crate) mod feature_ops;
@@ -35,13 +36,11 @@ pub(crate) mod issue_fixer;
 mod navigation;
 mod notifications;
 pub(crate) mod pr_review;
-pub(crate) mod precall;
 mod project_ops;
 mod prompt_library;
 pub(crate) mod prompt_overrides;
 mod rename;
 pub(crate) mod resource_gate;
-pub(crate) mod review;
 pub(crate) mod screenshots;
 mod search;
 mod session_config;
@@ -295,47 +294,6 @@ pub struct AppConfig {
     /// Set to 0 to restore the previous unlimited behavior.
     #[serde(default = "default_agent_restart_limit")]
     pub max_agent_autostart_sessions: usize,
-    /// When finishing a final review, whether to auto-submit the
-    /// "address the feedback" prompt to the feature's agent (paste +
-    /// Enter). When false, AIW pastes the prompt but does not send Enter,
-    /// so the reviewer can eyeball/edit it before submitting.
-    #[serde(default = "default_true")]
-    pub final_review_submit_prompt: bool,
-    /// When finishing a final review, also post the feedback to the branch's
-    /// GitHub PR (if one exists) as a review: line comments inline, whole-file
-    /// rejections and general feedback in the review summary. Best-effort and
-    /// off by default — the local `.claude/final-review-feedback.md` is always
-    /// written regardless. Requires an authenticated `gh` CLI.
-    #[serde(default)]
-    pub final_review_post_to_pr: bool,
-    /// Default explicit model name/id passed as `--model` to the headless CLI
-    /// for every review action listed on [`ReviewAction`], independent of
-    /// whatever model the feature's own interactive session runs. Format
-    /// depends on the harness running the review (a bare name/alias for
-    /// Claude/Codex, `provider/model` for Pi). `None` (default)
-    /// passes no explicit model, so the harness's own default model applies.
-    /// Overridden
-    /// per-action by `review_models`; see [`AppConfig::review_model_for`].
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub review_model: Option<String>,
-    /// Per-action overrides of `review_model`, keyed by
-    /// [`ReviewAction::config_key`] (e.g. `"changeset_overview"`). An action
-    /// missing here (or an unrecognized key) falls back to `review_model`.
-    /// Lets a cheap single-file pass (the walkthrough) run a lighter model
-    /// than a whole-changeset pass without forcing every action onto one
-    /// setting.
-    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub review_models: std::collections::BTreeMap<String, String>,
-    /// Default reasoning level for every review action, paired with
-    /// `review_model`. `None` (default) passes nothing, so the harness's own
-    /// level applies. A level the chosen harness cannot express is dropped
-    /// at dispatch (see `headless::reasoning_args`), never passed through.
-    /// Overridden per-action by `review_reasonings`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub review_reasoning: Option<crate::headless::ReasoningLevel>,
-    /// Per-action overrides of `review_reasoning`, keyed like `review_models`.
-    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub review_reasonings: std::collections::BTreeMap<String, crate::headless::ReasoningLevel>,
     /// Soft cap on how many agent-harness sessions may run at once across
     /// **all** projects (the store is machine-global, so the limit is too).
     /// Only agent harnesses count — terminals, editors, and TODOs sessions
@@ -388,14 +346,6 @@ pub struct AppConfig {
     /// `context_warning_percent` for the bands to remain meaningful.
     #[serde(default = "default_context_critical_percent")]
     pub context_critical_percent: u8,
-    /// Global fallback for [`crate::extension::ExtensionConfig::review_prompt_budget_tokens`]:
-    /// the estimated prompt-token ceiling above which `W` AI PR review and
-    /// final-review co-review split an oversized diff into slices. `None` uses
-    /// the built-in per-harness default (Claude/Codex 128k, Pi 96k);
-    /// `0` disables pre-send splitting (adaptive halving only). A project's
-    /// `aiw.json` `review_prompt_budget_tokens` overrides this.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub review_prompt_budget_tokens: Option<usize>,
     // FORK(no-cloud): the Remote Control server settings (`remote_bind`,
     // `remote_public_url`, `remote_tailscale_cli`, `remote_tailscale_socket`)
     // were removed with the feature; old config files still load (unknown
@@ -403,34 +353,6 @@ pub struct AppConfig {
     // FORK: AIW-only keys (worktree_base_dir, worktree_include) at top level.
     #[serde(flatten)]
     pub aiw: crate::fork::config::AiwConfig,
-}
-
-/// The distinct headless review call sites that each read `review_model`
-/// (optionally overridden per-action via `review_models`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReviewAction {
-    /// Explicit Expert review of a synthesized implementation plan.
-    PlanPreflight,
-    /// On-demand walkthrough for a noteless file (`w` in Final Review).
-    Walkthrough,
-    /// AI co-reviewer first pass over the current file (`A` in Final Review).
-    CoReview,
-    /// Whole-changeset overview + risk markers (`O` in Final Review).
-    ChangesetOverview,
-    /// Config-wizard / hook diff-review explanation.
-    DiffExplain,
-}
-
-impl ReviewAction {
-    pub fn config_key(self) -> &'static str {
-        match self {
-            ReviewAction::PlanPreflight => "plan_preflight",
-            ReviewAction::Walkthrough => "walkthrough",
-            ReviewAction::CoReview => "co_review",
-            ReviewAction::ChangesetOverview => "changeset_overview",
-            ReviewAction::DiffExplain => "diff_explain",
-        }
-    }
 }
 
 fn default_true() -> bool {
@@ -531,12 +453,6 @@ impl Default for AppConfig {
             appearance: Default::default(), // FORK
             token_pricing: TokenPricingConfig::default(),
             max_agent_autostart_sessions: default_agent_restart_limit(),
-            final_review_submit_prompt: true,
-            final_review_post_to_pr: false,
-            review_model: None,
-            review_models: std::collections::BTreeMap::new(),
-            review_reasoning: None,
-            review_reasonings: std::collections::BTreeMap::new(),
             max_concurrent_agents: default_max_concurrent_agents(),
             low_memory_warn_mb: default_low_memory_warn_mb(),
             kill_editor_on_stop: true,
@@ -546,43 +462,12 @@ impl Default for AppConfig {
             context_window_override: None,
             context_warning_percent: default_context_warning_percent(),
             context_critical_percent: default_context_critical_percent(),
-            review_prompt_budget_tokens: None,
             aiw: Default::default(), // FORK: AIW-only config keys
         }
     }
 }
 
 impl AppConfig {
-    /// The `--model` override for a given review action: `review_models`'s
-    /// entry for [`ReviewAction::config_key`] if set, else the shared
-    /// `review_model` default, else `None` (harness default).
-    pub fn review_model_for(&self, action: ReviewAction) -> Option<String> {
-        let action_model = self.review_models.get(action.config_key()).cloned();
-        if action == ReviewAction::PlanPreflight {
-            // An Expert plan review must never silently inherit an ordinary
-            // review model. The user either names its model at dispatch time
-            // or configures this action explicitly.
-            action_model
-        } else {
-            action_model.or_else(|| self.review_model.clone())
-        }
-    }
-
-    /// The reasoning level for a review action, resolved exactly like
-    /// [`Self::review_model_for`]: the per-action entry, else the shared
-    /// default (except Expert plan review, which never inherits one).
-    pub fn review_reasoning_for(
-        &self,
-        action: ReviewAction,
-    ) -> Option<crate::headless::ReasoningLevel> {
-        let action_level = self.review_reasonings.get(action.config_key()).copied();
-        if action == ReviewAction::PlanPreflight {
-            action_level
-        } else {
-            action_level.or(self.review_reasoning)
-        }
-    }
-
     /// The concurrency cap, or `None` when the check is disabled (`0`).
     pub fn agent_concurrency_limit(&self) -> Option<usize> {
         (self.max_concurrent_agents > 0).then_some(self.max_concurrent_agents)
@@ -634,16 +519,6 @@ pub struct App {
     /// `db::store::save_checked`. `None` when there is no DB (tests, or the
     /// JSON-file fallback), where there is nothing else to race against.
     pub(crate) store_version: Option<u64>,
-    /// Set by `precall_confirm` when the user clears a pre-call notice; the
-    /// re-dispatched `start_*` method consumes it to skip the gate and spawn.
-    pub precall_cleared: Option<precall::PrecallAction>,
-    /// Set while an interface that saves review progress itself (and must
-    /// report whether the save succeeded) drives the shared review actions, so
-    /// their best-effort `persist_review_progress` does not write a second time.
-    pub(crate) defer_review_progress_persist: bool,
-    /// Stashed pre-call notice while the user is in the override manager it
-    /// opened (`e`); restored when the manager closes.
-    pub precall_return: Option<Box<precall::PendingPrecall>>,
     pub config: AppConfig,
     pub active_extension: ExtensionConfig,
     pub theme: crate::theme::Theme,
@@ -815,11 +690,9 @@ pub struct App {
     /// feedback prompt into an agent session; drained by `sync_thinking_status`
     /// once that session is observed thinking-then-idle, at which point a
     /// "fixes ready — re-review?" notification is raised.
-    pub awaiting_review_fixes: HashMap<String, AwaitingReviewFix>,
     /// A file the reviewer asked to open in `$VISUAL`/`$EDITOR`. Set by the
     /// review viewer and drained by the main loop, which suspends the TUI,
     /// runs the editor, and restores the screen.
-    pub pending_editor: Option<PendingEditorOpen>,
     /// FORK: a session the user asked to attach to natively; drained by the
     /// FORK: permission requests parked on their IPC connection until the
     /// user answers (P6, DESIGN.md §16).
@@ -991,9 +864,7 @@ impl App {
             AppMode::RunningHook(state) => state.child.is_some(),
             AppMode::DeletingFeatureInProgress(state) => state.child.is_some(),
             AppMode::SyntaxLanguagePicker(state) => state.operation.is_some(),
-            AppMode::DiffReviewPrompt(state) => {
-                state.explanation_child.is_some() || state.hold_active()
-            }
+            AppMode::DiffReviewPrompt(state) => state.hold_active(),
             AppMode::DiffViewerLoading(_) => true,
             AppMode::MarkdownLoading(_) => true,
             AppMode::HarnessSetup(state) => state
@@ -1199,9 +1070,6 @@ impl App {
             store_path,
             db: Some(db),
             store_version: Some(store_version),
-            precall_cleared: None,
-            defer_review_progress_persist: false,
-            precall_return: None,
             config,
             active_extension,
             theme,
@@ -1271,8 +1139,6 @@ impl App {
             thinking_features: std::collections::HashSet::new(),
             attention: HashMap::new(),
             ipc_thinking_sessions: std::collections::HashSet::new(),
-            awaiting_review_fixes: HashMap::new(),
-            pending_editor: None,
             pending_permissions: Vec::new(), // FORK: P6
             telemetry: HashMap::new(),       // FORK: P4
             fork_telemetry: Default::default(),
@@ -1419,9 +1285,6 @@ impl App {
             store_path: PathBuf::new(),
             db: None,
             store_version: None,
-            precall_cleared: None,
-            defer_review_progress_persist: false,
-            precall_return: None,
             config: AppConfig {
                 // Whether a test warns before starting an agent must not
                 // depend on how much memory the machine running it happens to
@@ -1498,8 +1361,6 @@ impl App {
             thinking_features: std::collections::HashSet::new(),
             attention: HashMap::new(),
             ipc_thinking_sessions: std::collections::HashSet::new(),
-            awaiting_review_fixes: HashMap::new(),
-            pending_editor: None,
             pending_permissions: Vec::new(), // FORK: P6
             telemetry: HashMap::new(),       // FORK: P4
             fork_telemetry: Default::default(),
@@ -1908,33 +1769,6 @@ impl App {
             );
         }
         (text.into_owned(), source)
-    }
-
-    /// [`Self::resolve_headless_template`] followed by interpolation of `ctx`.
-    /// The common path: a call site that builds its context and dispatches on
-    /// the UI thread.
-    pub(crate) fn resolve_headless_prompt(
-        &self,
-        id: crate::prompts::PromptId,
-        harness: &AgentKind,
-        repo: &Path,
-        workdir: &Path,
-        ctx: &crate::prompts::PromptContext,
-    ) -> String {
-        let (text, _source) = self.resolve_headless_template(id, harness, repo, workdir);
-        crate::prompts::render_template(&text, ctx)
-    }
-
-    /// The batched-review size budget in estimated prompt tokens for a run of
-    /// `harness` against `repo`: the project's `aiw.json`
-    /// `review_prompt_budget_tokens`, else the global
-    /// `AppConfig::review_prompt_budget_tokens`, else the built-in per-harness
-    /// default. A configured `0` is honored (disables pre-send splitting).
-    pub(crate) fn review_prompt_budget(&self, repo: &Path, harness: &AgentKind) -> usize {
-        self.extension_for_repo(repo)
-            .review_prompt_budget_tokens
-            .or(self.config.review_prompt_budget_tokens)
-            .unwrap_or_else(|| crate::headless::default_prompt_budget_tokens(harness))
     }
 
     pub(crate) fn allowed_agents_for_repo(&self, repo: &Path) -> Vec<AgentKind> {

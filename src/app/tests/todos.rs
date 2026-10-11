@@ -1749,7 +1749,6 @@ fn active_todo_completion_keybind_updates_db_and_retains_reference() {
         "Agent".into(),
         SessionKind::Claude,
         VibeMode::default(),
-        false,
     ));
     crate::handlers::handle_key(
         &mut app,
@@ -1878,7 +1877,6 @@ fn request_todo_reference_completion_without_db_warns_instead_of_opening_dialog(
         "Agent".into(),
         SessionKind::Claude,
         VibeMode::default(),
-        false,
     ));
 
     app.request_todo_reference_completion();

@@ -193,7 +193,6 @@ mod tests {
             PathBuf::from("/tmp/wt"),
             true,
             VibeMode::Vibe,
-            false,
             AgentKind::Claude,
             false,
         );

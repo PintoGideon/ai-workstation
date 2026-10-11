@@ -119,7 +119,6 @@ mod tests {
             PathBuf::from("/wt/hx-12"),
             true,
             VibeMode::Vibe,
-            false,
             AgentKind::Claude,
             false,
         );
@@ -184,7 +183,6 @@ mod tests {
             PathBuf::from("/wt/hx-12"),
             true,
             VibeMode::Vibe,
-            false,
             AgentKind::Gemini,
             false,
         );

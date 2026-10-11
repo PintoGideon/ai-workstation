@@ -422,7 +422,6 @@ pub struct Theme {
     pub mode_vibeless: ColorDef,
     pub mode_vibe: ColorDef,
     pub mode_supervibe: ColorDef,
-    pub mode_review: ColorDef,
     pub status_detail: ColorDef,
     pub usage_low: ColorDef,
     pub usage_medium: ColorDef,
@@ -536,7 +535,6 @@ impl Theme {
             mode_vibeless: ColorDef::named("green"),
             mode_vibe: ColorDef::named("yellow"),
             mode_supervibe: ColorDef::named("magenta"),
-            mode_review: ColorDef::named("magenta"),
             usage_low: ColorDef::named("green"),
             usage_medium: ColorDef::named("yellow"),
             usage_high: ColorDef::named("red"),
@@ -584,7 +582,6 @@ impl Theme {
             mode_vibeless: ColorDef::named("green"),
             mode_vibe: ColorDef::named("yellow"),
             mode_supervibe: ColorDef::named("magenta"),
-            mode_review: ColorDef::named("magenta"),
             usage_low: ColorDef::named("green"),
             usage_medium: ColorDef::named("yellow"),
             usage_high: ColorDef::named("red"),
@@ -632,7 +629,6 @@ impl Theme {
             mode_vibeless: ColorDef::rgb(80, 250, 123),
             mode_vibe: ColorDef::rgb(255, 184, 108),
             mode_supervibe: ColorDef::rgb(255, 121, 198),
-            mode_review: ColorDef::rgb(189, 147, 249),
             usage_low: ColorDef::rgb(80, 250, 123),
             usage_medium: ColorDef::rgb(255, 184, 108),
             usage_high: ColorDef::rgb(255, 85, 85),
@@ -680,7 +676,6 @@ impl Theme {
             mode_vibeless: ColorDef::rgb(163, 190, 140),
             mode_vibe: ColorDef::rgb(235, 203, 139),
             mode_supervibe: ColorDef::rgb(180, 142, 173),
-            mode_review: ColorDef::rgb(180, 142, 173),
             usage_low: ColorDef::rgb(163, 190, 140),
             usage_medium: ColorDef::rgb(235, 203, 139),
             usage_high: ColorDef::rgb(191, 97, 106),
@@ -728,7 +723,6 @@ impl Theme {
             mode_vibeless: ColorDef::rgb(64, 160, 43),
             mode_vibe: ColorDef::rgb(223, 142, 29),
             mode_supervibe: ColorDef::rgb(234, 118, 203),
-            mode_review: ColorDef::rgb(114, 135, 253),
             usage_low: ColorDef::rgb(64, 160, 43),
             usage_medium: ColorDef::rgb(223, 142, 29),
             usage_high: ColorDef::rgb(210, 15, 57),
@@ -776,7 +770,6 @@ impl Theme {
             mode_vibeless: ColorDef::rgb(166, 218, 149),
             mode_vibe: ColorDef::rgb(229, 200, 144),
             mode_supervibe: ColorDef::rgb(244, 184, 228),
-            mode_review: ColorDef::rgb(186, 187, 241),
             usage_low: ColorDef::rgb(166, 218, 149),
             usage_medium: ColorDef::rgb(229, 200, 144),
             usage_high: ColorDef::rgb(231, 130, 132),
@@ -824,7 +817,6 @@ impl Theme {
             mode_vibeless: ColorDef::rgb(166, 218, 149),
             mode_vibe: ColorDef::rgb(238, 212, 159),
             mode_supervibe: ColorDef::rgb(245, 189, 230),
-            mode_review: ColorDef::rgb(183, 189, 248),
             usage_low: ColorDef::rgb(166, 218, 149),
             usage_medium: ColorDef::rgb(238, 212, 159),
             usage_high: ColorDef::rgb(237, 135, 150),
@@ -872,7 +864,6 @@ impl Theme {
             mode_vibeless: ColorDef::rgb(166, 227, 161),
             mode_vibe: ColorDef::rgb(249, 226, 175),
             mode_supervibe: ColorDef::rgb(245, 194, 231),
-            mode_review: ColorDef::rgb(180, 190, 254),
             usage_low: ColorDef::rgb(166, 227, 161),
             usage_medium: ColorDef::rgb(249, 226, 175),
             usage_high: ColorDef::rgb(243, 139, 168),
@@ -955,7 +946,6 @@ impl Theme {
             // bright_orange: #fe8019
             mode_supervibe: ColorDef::rgb(254, 128, 25),
             // bright_purple: #d3869b
-            mode_review: ColorDef::rgb(211, 134, 155),
             // bright_green: #b8bb26
             usage_low: ColorDef::rgb(184, 187, 38),
             // bright_yellow: #fabd2f
@@ -1044,7 +1034,6 @@ impl Theme {
             // orange: #d65d0e
             mode_supervibe: ColorDef::rgb(214, 93, 14),
             // purple: #b16286
-            mode_review: ColorDef::rgb(177, 98, 134),
             // green: #98971a
             usage_low: ColorDef::rgb(152, 151, 26),
             // yellow: #d79921
@@ -1098,7 +1087,6 @@ impl Theme {
             mode_vibeless: fg.green.color_def(),
             mode_vibe: fg.yellow.color_def(),
             mode_supervibe: fg.orange.color_def(),
-            mode_review: fg.purple.color_def(),
             usage_low: fg.green.color_def(),
             usage_medium: fg.yellow.color_def(),
             usage_high: fg.red.color_def(),

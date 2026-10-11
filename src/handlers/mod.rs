@@ -20,7 +20,6 @@ mod mouse;
 mod normal;
 mod picker;
 mod pr_review;
-mod precall;
 mod prompt_library;
 mod prompt_overrides;
 mod search;
@@ -43,10 +42,7 @@ pub use dialog::{
     handle_resource_confirm_key, handle_session_config_key, handle_stopped_session_dialog_key,
     handle_theme_picker_key,
 };
-pub use diff::{
-    handle_diff_picker_key, handle_diff_viewer_key, handle_diff_viewer_wheel,
-    handle_review_harness_pick_key,
-};
+pub use diff::{handle_diff_picker_key, handle_diff_viewer_key, handle_diff_viewer_wheel};
 pub use diff_review::handle_diff_review_key;
 pub use dormant::handle_dormant_key;
 pub use feature_creation::handle_create_feature_key;
@@ -72,9 +68,8 @@ pub use picker::{
 };
 pub use pr_review::{
     handle_pr_investigation_loading_key, handle_pr_number_prompt_key, handle_pr_picker_key,
-    handle_pr_review_key, handle_pr_review_list_key, handle_pr_review_loading_key,
+    handle_pr_review_key, handle_pr_review_loading_key,
 };
-pub use precall::handle_prompt_precall_key;
 pub use prompt_library::{
     handle_placeholder_fill_key, handle_prompt_editor_key, handle_prompt_library_key,
 };
@@ -132,7 +127,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::DiffViewer(_) => handle_diff_viewer_key(app, key),
         AppMode::PrNumberPrompt(_) => handle_pr_number_prompt_key(app, key),
         AppMode::PrPicker(_) => handle_pr_picker_key(app, key),
-        AppMode::PrReviewList(_) => handle_pr_review_list_key(app, key),
         AppMode::IssueBrowser(_) => handle_issue_browser_key(app, key),
         AppMode::IssueSetup(_) => handle_issue_setup_key(app, key),
         AppMode::IssueDuplicateWarning(_) => handle_issue_duplicate_warning_key(app, key),
@@ -152,7 +146,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::LatestPrompt(_) => handle_latest_prompt_key(app, key.code),
         AppMode::PromptLibrary(_) => handle_prompt_library_key(app, key.code),
         AppMode::PromptOverrides(_) => handle_prompt_overrides_key(app, key, visible_rows),
-        AppMode::PromptPrecall(_) => handle_prompt_precall_key(app, key),
         AppMode::PromptEditor(_) => handle_prompt_editor_key(app, key),
         AppMode::PlaceholderFill(_) => handle_placeholder_fill_key(app, key),
         AppMode::SkillPicker(_) => handle_skill_picker_key(app, key),
@@ -169,7 +162,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::MarkdownViewer(_) => handle_markdown_viewer_key(app, key),
         AppMode::HarnessSetup(_) => handle_harness_setup_key(app, key.code),
         AppMode::ConfigWizard(_) => handle_config_wizard_key(app, key),
-        AppMode::ReviewHarnessPick(_) => handle_review_harness_pick_key(app, key.code),
         AppMode::ContextSettings(_) => handle_context_settings_key(app, key),
     }
 }

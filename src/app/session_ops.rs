@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use super::setup::{ensure_notification_hooks, ensure_review_claude_md};
+use super::setup::ensure_notification_hooks;
 use super::util::slugify;
 use super::*;
 use crate::project::LaunchOpts;
@@ -1331,12 +1331,10 @@ impl App {
         let tmux_session = feature.tmux_session.clone();
         let feature_name = feature.name.clone();
         let mode = feature.mode.clone();
-        let review = feature.review;
         let extra_args: Vec<String> = feature.mode.cli_flags(LaunchOpts {
             enable_chrome: feature.enable_chrome,
         });
         ensure_notification_hooks(&workdir, &repo, &mode, &agent, feature.is_worktree);
-        ensure_review_claude_md(&workdir, feature.review);
         let session = match label {
             Some(label) => feature.add_session_named(kind.clone(), label),
             None => feature.add_session(kind.clone()),
@@ -1397,7 +1395,6 @@ impl App {
             label.clone(),
             kind,
             mode,
-            review,
         );
         self.return_to_dashboard(&view);
         self.save()?;
@@ -1491,7 +1488,6 @@ impl App {
             enable_chrome: feature.enable_chrome,
         });
         ensure_notification_hooks(&workdir, &repo, &mode, &agent, feature.is_worktree);
-        ensure_review_claude_md(&workdir, feature.review);
 
         let feature_id = feature.id.clone();
         let session = feature.add_session_named(kind.clone(), label.to_string());

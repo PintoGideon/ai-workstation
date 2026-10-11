@@ -208,7 +208,6 @@ mod tests {
             PathBuf::from("/tmp/gui-todos-test-workdir"),
             false,
             VibeMode::default(),
-            false,
             AgentKind::default(),
             false,
         );

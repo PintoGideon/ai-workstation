@@ -3,12 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import {
   LibraryScope,
-  ReviewAction,
-  ReviewView,
-  reviewBegin,
-  reviewAct,
-  reviewSnapshot,
-  reviewTakeCompletion,
   AgentSlug,
   NewSessionKind,
   CollapseTarget,
@@ -57,13 +51,12 @@ import SessionSidebar from "./SessionSidebar";
 import ProjectsSidebar from "./ProjectsSidebar";
 import PromptLibraryPanel from "./PromptLibraryPanel";
 import PromptOverridesPanel from "./PromptOverridesPanel";
-import { OverrideContext, promptOverridesPrecallTarget } from "./promptOverridesApi";
+import { OverrideContext } from "./promptOverridesApi";
 import DormancyPanel from "./DormancyPanel";
 import DebugLogPanel from "./DebugLogPanel";
 import DiffPanel from "./DiffPanel";
 import SupervisedEditsPanel, { SupervisedEditsPanelHandle, usePendingEdits } from "./SupervisedEditsPanel";
 import ScreenshotsPanel from "./ScreenshotsPanel";
-import ReviewPanel from "./ReviewPanel";
 import type { PrTriageTarget } from "./prTriageApi";
 import TodoPanel, { TodoAgentTarget, TodoDestination } from "./TodoPanel";
 import RecoveryDialog from "./RecoveryDialog";
@@ -96,7 +89,6 @@ import {
   Toasts,
 } from "./ui";
 
-const PrReviewPanel = lazy(() => import("./PrReviewPanel"));
 const PrTriagePanel = lazy(() => import("./PrTriagePanel"));
 const SNAPSHOT_KEY = ["workspace-snapshot"];
 const TODOS_TAB = "todos";
@@ -150,7 +142,7 @@ export default function App() {
   const [pendingSessionByFeature, setPendingSessionByFeature] = useState<Record<string, string>>({});
   const [promptLibrary, setPromptLibrary] = useState<{ scope: LibraryScope; target: SessionTarget | null } | null>(null);
   const [promptOverrides, setPromptOverrides] = useState<{
-    context: OverrideContext; promptId: string | null; harness: AgentSlug | null; fromPrecall: boolean;
+    context: OverrideContext; promptId: string | null; harness: AgentSlug | null;
     contextNote?: string | null;
   } | null>(null);
   const [showDormancy, setShowDormancy] = useState(false);
@@ -226,12 +218,7 @@ export default function App() {
     else proceed();
   }
   const [screenshotTarget, setScreenshotTarget] = useState<{ target: FeatureTarget | null; sessionId: string | null } | null>(null);
-  const [prReviewProject, setPrReviewProject] = useState<string | null>(null);
   const [prTriageTarget, setPrTriageTarget] = useState<PrTriageTarget | null>(null);
-  const [review, setReview] = useState<ReviewView | null>(null);
-  const [reviewBusy, setReviewBusy] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
-  const reviewPending = useRef(false);
   const [deleteFeatureDialog, setDeleteFeatureDialog] = useState<{
     target: FeatureTarget;
     projectName: string;
@@ -454,21 +441,9 @@ export default function App() {
     const context: OverrideContext = selectedFeature && selectedProject
       ? { kind: "feature", project_id: selectedProject.id, feature_id: selectedFeature.id }
       : selectedProject ? { kind: "project", project_id: selectedProject.id } : { kind: "global" };
-    setPromptOverrides({ context, promptId: null, harness: null, fromPrecall: false });
+    setPromptOverrides({ context, promptId: null, harness: null });
   }
 
-  /** The pre-call notice's "Edit prompt": the pending call keeps waiting. */
-  async function editPrecallPrompt() {
-    try {
-      const target = await promptOverridesPrecallTarget();
-      setPromptOverrides({
-        context: target.context, promptId: target.prompt_id, harness: target.harness, fromPrecall: true,
-        contextNote: target.context_note,
-      });
-    } catch (err) {
-      reportError(err);
-    }
-  }
 
   function insertLibraryPrompt(target: SessionTarget, text: string) {
     const project = queryClient.getQueryData<WorkspaceSnapshot>(SNAPSHOT_KEY)?.projects.find((project) => project.id === target.project_id);
@@ -518,78 +493,6 @@ export default function App() {
         return next;
       });
     }
-  }
-
-  // Poll while AI work or a project check is in flight, and nothing
-  // else changes the review without an explicit action.
-  useEffect(() => {
-    if (!review || reviewBusy || (!review.ai.running && review.check?.status !== "running")) return;
-    let cancelled = false;
-    let polling = false;
-    const workflowId = review.workflow_id;
-    const timer = window.setInterval(() => {
-      if (polling || reviewPending.current) return;
-      polling = true;
-      void reviewSnapshot(workflowId).then(async (next) => {
-        // Null means the backend already closed this review. Always collect
-        // its one-shot result, even if an action began or this effect reset.
-        if (next === null) { await finishReview(workflowId); return; }
-        if (cancelled || reviewPending.current) return;
-        setReview((current) => current?.workflow_id === workflowId && next.workflow_id === workflowId
-          && next.revision > current.revision ? next : current);
-      }).catch(() => { /* Explicit actions report conflicts. */ }).finally(() => { polling = false; });
-    }, 1000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [review?.workflow_id, review?.ai.running, review?.check?.status, reviewBusy]);
-
-  async function beginReview(target: FeatureTarget) {
-    if (reviewPending.current) return;
-    reviewPending.current = true;
-    setReviewBusy(true);
-    setReviewError(null);
-    try { setReview(await reviewBegin(target)); }
-    catch (err) { reportError(err); }
-    finally { reviewPending.current = false; setReviewBusy(false); }
-  }
-
-  /** Re-read the open review after a parser install so its files gain colours. */
-  async function refreshReviewSyntax() {
-    const workflowId = review?.workflow_id;
-    if (!workflowId || reviewPending.current) return;
-    try {
-      const next = await reviewSnapshot(workflowId);
-      if (next) setReview((current) => current?.workflow_id === workflowId && next.revision >= current.revision ? next : current);
-    } catch { /* The next action reports a closed or changed review. */ }
-  }
-
-  /** Close a completed review and apply its handoff exactly once. */
-  async function finishReview(workflowId: string) {
-    const done = await reviewTakeCompletion(workflowId);
-    setReview((current) => current?.workflow_id === workflowId ? null : current);
-    if (!done) return;
-    pushToast({ tone: "info", title: "Final Review", message: done.message });
-    // A submitted prompt shows its agent working; an unsent one joins the
-    // session's composer draft for the reviewer to edit and send.
-    if (done.handoff) openSession(done.handoff.target, done.handoff.draft_prompt ?? undefined);
-    void queryClient.invalidateQueries({ queryKey: SNAPSHOT_KEY });
-  }
-
-  async function actReview(action: ReviewAction): Promise<boolean> {
-    if (!review || reviewPending.current) return false;
-    reviewPending.current = true;
-    setReviewBusy(true);
-    setReviewError(null);
-    try {
-      const next = await reviewAct(review, action);
-      if (next === null && action.kind === "complete") {
-        await finishReview(review.workflow_id);
-        return true;
-      }
-      setReview(next);
-      // A failed pause returns the retained review with its save error.
-      return !(action.kind === "pause" && next !== null);
-    } catch (err) { setReviewError(asGuiError(err).message); return false; }
-    finally { reviewPending.current = false; setReviewBusy(false); }
   }
 
   async function launchTodoAgent(todoId: string, target: FeatureTarget, approved: boolean) {
@@ -1042,14 +945,10 @@ export default function App() {
         }} />}
       {showDebugLog && <DebugLogPanel onClose={() => setShowDebugLog(false)} />}
       {screenshotTarget && <ScreenshotsPanel target={screenshotTarget.target} sessionId={screenshotTarget.sessionId} onClose={() => setScreenshotTarget(null)} />}
-      {prReviewProject && <Suspense fallback={<Modal label="Loading PR Review" title="Loading PR Review" onClose={() => setPrReviewProject(null)}><Spinner /></Modal>}>
-        <PrReviewPanel key={prReviewProject} projectId={prReviewProject} onClose={() => setPrReviewProject(null)} />
-      </Suspense>}
       {prTriageTarget && <Suspense fallback={<Modal label="Loading PR reader" title="Loading PR reader" onClose={() => setPrTriageTarget(null)}><Spinner /></Modal>}>
         <PrTriagePanel key={`${prTriageTarget.project_id}:${prTriageTarget.feature_id}`} target={prTriageTarget} onClose={() => setPrTriageTarget(null)} onHandoff={(handoff) => openSession(handoff.target, handoff.draft_prompt)} />
       </Suspense>}
       {diffTarget && <DiffPanel key={`${diffTarget.project_id}:${diffTarget.feature_id}`} target={diffTarget} onClose={() => setDiffTarget(null)} />}
-      {review && <ReviewPanel key={review.workflow_id} view={review} busy={reviewBusy} error={reviewError} onAct={actReview} onEditPrompt={() => void editPrecallPrompt()} onSyntaxInstalled={() => void refreshReviewSyntax()} />}
       <main className="main">
         {view?.kind === "todos" && (
           <div className="page">
@@ -1082,7 +981,6 @@ export default function App() {
               setView({ kind: "feature", projectId: selectedProject.id, featureId: feature.id })}
             onNewFeature={() => setCreateFeatureFor(selectedProject.id)}
             onPrTriage={() => setPrTriageTarget({ project_id: selectedProject.id })}
-            onPrReview={() => setPrReviewProject(selectedProject.id)}
             todoPanel={
               <TodoPanel
                 scope={{ kind: "project", project_id: selectedProject.id }}
@@ -1114,8 +1012,6 @@ export default function App() {
             onScreenshots={(sessionId) => setScreenshotTarget({ target: { project_id: selectedProject.id, feature_id: selectedFeature.id }, sessionId })}
             onPrTriage={() => setPrTriageTarget({ project_id: selectedProject.id, feature_id: selectedFeature.id })}
             onReusePrompt={(target, prompt) => openSession(target, prompt)}
-            onReview={() => void beginReview({ project_id: selectedProject.id, feature_id: selectedFeature.id })}
-            reviewBusy={reviewBusy}
             onNewSession={() => void openNewSession(selectedProject, selectedFeature)}
             newSessionLoading={newSessionLoading}
             editors={workspace.data?.sidebar?.features[selectedFeature.id]?.editors ?? []}
@@ -1396,7 +1292,7 @@ export default function App() {
 
       {promptOverrides && <PromptOverridesPanel
         initialContext={promptOverrides.context} initialPromptId={promptOverrides.promptId}
-        initialHarness={promptOverrides.harness} fromPrecall={promptOverrides.fromPrecall}
+        initialHarness={promptOverrides.harness}
         contextNote={promptOverrides.contextNote ?? null} projects={projects} onClose={() => setPromptOverrides(null)}
       />}
 
@@ -1471,7 +1367,6 @@ function ProjectView({
   onOpenFeature,
   onNewFeature,
   onPrTriage,
-  onPrReview,
   todoPanel,
 }: {
   project: Project;
@@ -1481,7 +1376,6 @@ function ProjectView({
   onOpenFeature: (feature: Feature) => void;
   onNewFeature: () => void;
   onPrTriage: () => void;
-  onPrReview: () => void;
   todoPanel: ReactNode;
 }) {
   const running = project.features.filter((feature) => feature.status !== "stopped").length;
@@ -1500,9 +1394,6 @@ function ProjectView({
           <>
             {project.is_git && <button className="btn btn-secondary" onClick={onPrTriage}>
               <Icon name="inbox" size={12} /> PR Triage
-            </button>}
-            {project.is_git && <button className="btn btn-secondary" onClick={onPrReview}>
-              <Icon name="file" size={12} /> PR Review
             </button>}
             <button className="btn btn-primary" onClick={onNewFeature}>
               <Icon name="plus" /> New feature
@@ -1588,8 +1479,6 @@ function FeatureView({
   onPrTriage,
   onScreenshots,
   onReusePrompt,
-  onReview,
-  reviewBusy,
   onNewSession,
   newSessionLoading,
   editors,
@@ -1628,8 +1517,6 @@ function FeatureView({
   onScreenshots: (sessionId: string | null) => void;
   /** The agent sidebar's prompt reuse: append to that session's draft. */
   onReusePrompt: (target: SessionTarget, prompt: string) => void;
-  onReview: () => void;
-  reviewBusy: boolean;
   onNewSession: () => void;
   newSessionLoading: boolean;
   /** VS Code windows AIW launched for this feature. */
@@ -1721,9 +1608,6 @@ function FeatureView({
             {pendingEdits > 0 && <button className="btn btn-secondary" onClick={onSupervisedEdits}>
               <Icon name="check" size={12} /> Supervised edits
               {pendingEdits > 0 && <span className="nav-count nav-count-attention">{pendingEdits}</span>}
-            </button>}
-            {project.is_git && <button className="btn btn-secondary" onClick={onReview} disabled={reviewBusy}>
-              {reviewBusy ? <Spinner /> : <Icon name="file" size={12} />} Final Review
             </button>}
             <button className="btn btn-secondary" onClick={() => onScreenshots(null)}>Screenshots</button>
             {activeSession && <button className="btn btn-secondary" onClick={() => onScreenshots(activeSession.id)}>Session screenshots</button>}

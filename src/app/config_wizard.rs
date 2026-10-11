@@ -137,7 +137,7 @@ impl App {
                         mode_to_index(&preset.mode).to_string(),
                         agent_to_index(&preset.agent).to_string(),
                     ];
-                    state.field_toggles = vec![preset.review, preset.enable_chrome];
+                    state.field_toggles = vec![preset.enable_chrome];
                 }
                 ConfigCategory::LifecycleHooks => {
                     let hook =
@@ -240,8 +240,7 @@ impl App {
                                 .and_then(|value| value.parse::<usize>().ok())
                                 .unwrap_or(0),
                         ),
-                        review: *state.field_toggles.first().unwrap_or(&false),
-                        enable_chrome: *state.field_toggles.get(1).unwrap_or(&false),
+                        enable_chrome: *state.field_toggles.first().unwrap_or(&false),
                     };
 
                     upsert_or_push(&mut state.presets, state.editing_index, preset);
@@ -426,14 +425,6 @@ fn build_extension_config(state: &ConfigWizardState) -> ExtensionConfig {
             .as_ref()
             .map(|config| config.prompt_templates.clone())
             .unwrap_or_default(),
-        final_review_check_command: loaded
-            .as_ref()
-            .and_then(|config| config.final_review_check_command.clone()),
-        // The wizard doesn't edit the batched-review size budget; carry it
-        // through untouched.
-        review_prompt_budget_tokens: loaded
-            .as_ref()
-            .and_then(|config| config.review_prompt_budget_tokens),
         // The wizard doesn't edit prompt overrides; carry them through.
         prompt_overrides: loaded
             .map(|config| config.prompt_overrides)

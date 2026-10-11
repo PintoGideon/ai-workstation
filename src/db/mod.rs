@@ -6,7 +6,6 @@ mod migrations;
 pub mod pr_comment_triage;
 pub mod pr_investigations;
 mod pr_review_cache;
-pub mod pr_review_drafts;
 mod pr_terminal_state;
 pub mod prompt_overrides;
 pub mod prompt_templates;
@@ -177,29 +176,6 @@ impl AiwDb {
 
     pub fn delete_prompt_template(&self, id: &str) -> Result<()> {
         prompt_templates::delete(&self.conn, id)
-    }
-
-    pub fn upsert_pr_review_draft(&self, draft: &pr_review_drafts::PrReviewDraft) -> Result<()> {
-        pr_review_drafts::upsert(&self.conn, draft)
-    }
-
-    pub fn load_pr_review_draft(
-        &self,
-        repo_key: &str,
-        pr_number: u32,
-    ) -> Result<Option<pr_review_drafts::PrReviewDraft>> {
-        pr_review_drafts::load(&self.conn, repo_key, pr_number)
-    }
-
-    pub fn load_pr_review_drafts_for_repo(
-        &self,
-        repo_key: &str,
-    ) -> Result<Vec<pr_review_drafts::PrReviewDraft>> {
-        pr_review_drafts::load_for_repo(&self.conn, repo_key)
-    }
-
-    pub fn delete_pr_review_draft(&self, repo_key: &str, pr_number: u32) -> Result<()> {
-        pr_review_drafts::delete(&self.conn, repo_key, pr_number)
     }
 
     pub fn load_unsent_prompts_for_workdir(

@@ -434,7 +434,6 @@ fn app_in_creating_feature_mode(
         mode: VibeMode::default(),
         mode_index: 0,
         mode_focus: 0,
-        review: false,
         create_terminal: true,
         session_name: "Claude 1".to_string(),
         source_index: 0,
@@ -828,7 +827,6 @@ fn restore_claude_session_only_affects_the_targeted_session() {
         sessions: vec![],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::Claude,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -962,7 +960,6 @@ fn finish_feature_launch_vibeless_injects_custom_diff_review_hook_on_worktree_cr
         workdir: workdir.clone(),
         is_worktree: true,
         mode: VibeMode::Vibeless,
-        review: false,
         agent: AgentKind::Claude,
         create_terminal: false,
         session_name: "Claude 1".to_string(),
@@ -1064,24 +1061,6 @@ fn start_create_feature_uses_project_preferred_agent_when_allowed() {
 }
 
 #[test]
-fn create_feature_mode_review_focus_describes_review_notes() {
-    let store = store_with_feature(ProjectStatus::Stopped);
-    let mut app = app_in_creating_feature_mode(store, "my-project", "other-feat", true);
-    if let AppMode::CreatingFeature(state) = &mut app.mode {
-        state.step = CreateFeatureStep::Mode;
-        state.mode_focus = 2;
-        assert_eq!(
-            state.focused_mode_description(),
-            Some(
-                "High token usage: writes developer notes with every code change for a detailed code review."
-            )
-        );
-    } else {
-        panic!("expected CreatingFeature mode");
-    }
-}
-
-#[test]
 fn create_feature_mode_harness_and_vibemode_focus_have_no_description() {
     let store = store_with_feature(ProjectStatus::Stopped);
     let mut app = app_in_creating_feature_mode(store, "my-project", "other-feat", true);
@@ -1152,7 +1131,6 @@ fn open_session_picker_selects_project_preferred_agent_by_default() {
         sessions: vec![],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::Claude,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1296,7 +1274,6 @@ fn create_feature_session_name_enter_creates_and_starts_feature() {
         mode: VibeMode::Vibeless,
         mode_index: 0,
         mode_focus: 5,
-        review: false,
         create_terminal: false,
         session_name: "Pairing Claude".to_string(),
         source_index: 0,
@@ -1608,7 +1585,6 @@ fn feature_add_session_named_uses_custom_label_and_default_window() {
         PathBuf::from("/tmp/test-workdir"),
         false,
         VibeMode::default(),
-        false,
         AgentKind::Claude,
         false,
     );
@@ -1648,7 +1624,6 @@ fn reload_extension_config_uses_project_repo_for_worktree_feature() {
         sessions: vec![],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::default(),
         enable_chrome: false,
         pending_worktree_script: false,
@@ -2685,7 +2660,6 @@ fn store_with_single_claude_session() -> ProjectStore {
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::default(),
         enable_chrome: false,
         pending_worktree_script: false,

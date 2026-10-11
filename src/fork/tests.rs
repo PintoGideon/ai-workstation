@@ -350,7 +350,6 @@ fn port_block_is_reserved_for_the_session_and_released_on_delete() {
         PathBuf::from("/tmp/aiw-ports-repo"),
         false,
         crate::project::VibeMode::default(),
-        false,
         AgentKind::default(),
         false,
     );
@@ -400,7 +399,6 @@ fn starting_a_feature_whose_worktree_vanished_recreates_it_first() {
         gone.clone(),
         true,
         crate::project::VibeMode::Vibe,
-        false,
         AgentKind::Claude,
         false,
     );
@@ -587,7 +585,6 @@ fn running_hook_state(child: Option<std::process::Child>) -> crate::app::Running
         issue_source: None,
         branch: "slow".to_string(),
         mode: crate::project::VibeMode::default(),
-        review: false,
         agent: AgentKind::Claude,
         create_terminal: false,
         session_name: "Claude 1".to_string(),

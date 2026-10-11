@@ -52,7 +52,6 @@ export interface Feature {
   /** Shared with the TUI tree; Rust defaults it to collapsed. */
   collapsed?: boolean;
   nickname?: string | null;
-  review?: boolean;
   pending_worktree_script?: boolean;
   ready?: boolean;
   created_at?: string;
@@ -189,7 +188,6 @@ export interface CreateFeatureRequest {
   branch: string;
   agent: AgentSlug;
   mode: ModeSlug;
-  review: boolean;
   create_terminal: boolean;
   use_worktree: boolean | null;
   enable_chrome: boolean;
@@ -543,115 +541,6 @@ export interface DiffView {
 }
 export const loadDiff = (target: FeatureTarget, options: DiffOptions): Promise<DiffView> =>
   invoke("load_diff", { target, options });
-
-export interface ReviewLocation { old_line: number | null; new_line: number | null }
-export interface ReviewSpan { start: ReviewLocation; end: ReviewLocation }
-export type ReviewSeverity = "blocker" | "suggestion" | "nit" | "question" | "praise";
-export interface ReviewFile {
-  diff: DiffFile;
-  verdict: "approved" | "rejected" | "undecided";
-  feedback: string;
-  severity: ReviewSeverity;
-  comment: { text: string; severity: ReviewSeverity; resolved: boolean; carried: boolean } | null;
-  line_comments: (ReviewSpan & { editable: boolean; anchor: string; text: string; severity: ReviewSeverity; resolved: boolean; draft: boolean; anchor_lost: boolean; suggestion: string | null; apply_blocked: string | null })[];
-  notes: string | null;
-  walkthrough: string | null;
-  changed_since_last: boolean;
-}
-export interface ReviewView {
-  workflow_id: string;
-  revision: number;
-  target: FeatureTarget;
-  feature_name: string;
-  branch: string;
-  base_ref: string;
-  files: ReviewFile[];
-  selected_path: string | null;
-  general_feedback: string;
-  has_prior_review: boolean;
-  error: string | null;
-  save_error: string | null;
-  applied_suggestions: string[];
-  history: ReviewHistory | null;
-  summary: ReviewSummary | null;
-  check_command: string | null;
-  check: { command: string; status: "running" | "passed" | "failed" | "cancelled" | "stale"; output: string } | null;
-  finish: ReviewFinish | null;
-  ai: ReviewAi;
-}
-/** What completing would record and hand off; present with the summary. */
-export interface ReviewFinish {
-  approved: number;
-  needs_work: number;
-  skipped: number;
-  file_comments: number;
-  line_comments: number;
-  general_feedback: boolean;
-  /** Open suggestions a saved apply-on-finish opt-in writes before recording. */
-  apply_suggestions: number;
-  post_to_pr: boolean;
-  /** Whether a handed-off prompt is submitted or left as an unsent draft. */
-  submit_prompt: boolean;
-  handoff: { session_id: string; label: string; stopped: boolean } | null;
-  /** The configured check is running as part of a confirmed completion. */
-  completing: boolean;
-}
-export interface ReviewCompletion {
-  workflow_id: string;
-  message: string;
-  /** `draft_prompt` is unsent composer text; null when the prompt was submitted. */
-  handoff: { target: SessionTarget; draft_prompt: string | null } | null;
-}
-export interface ReviewSummary {
-  rows: { path: string | null; title: string; text: string; severity: ReviewSeverity | null; suggestion: string | null; apply_blocked: string | null }[];
-  undecided: number;
-  pending_suggestions: number;
-  failures: string[];
-}
-export interface ReviewHistory {
-  selected: number;
-  rounds: { title: string; carried_unresolved: number }[];
-  markdown: string;
-  current_unresolved: number;
-  archive_available: boolean;
-  archive_loaded: boolean;
-  error: string | null;
-}
-export interface ReviewAi {
-  precall: PrecallView | null;
-  running: boolean;
-  walkthrough_path: string | null;
-  co_review_path: string | null;
-  overview_running: boolean;
-  overview: string | null;
-  harnesses: AgentSlug[];
-  message: string | null;
-}
-export type ReviewAction =
-  | { kind: "summary_open" | "summary_close" | "apply_finish_suggestions" | "cancel_check" }
-  | { kind: "run_check"; command: string }
-  | { kind: "complete"; check_command: string | null; apply_suggestions: number; handoff_session: string | null; deliver: boolean }
-  | { kind: "history_open" | "history_load_older" | "history_close" }
-  | { kind: "history_select"; round: number }
-  | { kind: "select" | "approve" | "skip" | "toggle_resolved"; path: string }
-  | { kind: "reject"; path: string; feedback: string; severity: ReviewSeverity }
-  | { kind: "comment"; path: string; text: string; severity: ReviewSeverity }
-  | (ReviewSpan & { kind: "line_comment"; path: string; text: string; severity: ReviewSeverity })
-  | (ReviewSpan & { kind: "suggestion"; path: string; text: string })
-  | (ReviewSpan & { kind: "toggle_line_resolved" | "apply_suggestion"; path: string })
-  | { kind: "general"; text: string }
-  | { kind: "walkthrough" | "co_review"; path: string }
-  | (ReviewSpan & { kind: "accept_draft" | "dismiss_draft"; path: string })
-  | { kind: "overview" | "cancel_ai" | "precall_confirm" | "precall_cancel" | "precall_toggle_view" }
-  | { kind: "undo" | "refresh" | "reload" | "retry_save" | "pause" | "discard" };
-export const reviewBegin = (target: FeatureTarget): Promise<ReviewView> => invoke("review_begin", { target });
-/** Null once a confirmed completion finished while polling; take its result. */
-export const reviewSnapshot = (workflowId: string): Promise<ReviewView | null> => invoke("review_snapshot", { workflowId });
-/** A completed review's result, returned once. */
-export const reviewTakeCompletion = (workflowId: string): Promise<ReviewCompletion | null> =>
-  invoke("review_take_completion", { workflowId });
-export const reviewAct = (view: ReviewView, action: ReviewAction): Promise<ReviewView | null> =>
-  invoke("review_act", { workflowId: view.workflow_id, revision: view.revision, action });
 
 export type LibraryScope = { kind: "global" } | { kind: "project"; project_id: string }
   | { kind: "feature"; project_id: string; feature_id: string };

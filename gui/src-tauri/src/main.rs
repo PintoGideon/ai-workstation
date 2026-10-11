@@ -32,15 +32,13 @@ use ai_workstation::gui_contract::{
 use ai_workstation::gui_debug_log::{self, DebugLogView};
 use ai_workstation::gui_diff::{self, DiffOptions, DiffView};
 use ai_workstation::gui_dormancy::{self, DormancyStopResult, DormancyView, DormantObservation};
-use ai_workstation::gui_pr_review::{self, PrReviewAction, PrReviewView};
 use ai_workstation::gui_pr_triage::{
     self, PrTriageAction, PrTriagePrefetch, PrTriageReads, PrTriageTarget, PrTriageView,
 };
 use ai_workstation::gui_prompt_overrides::{
-    self, ClearOverride, OverrideContext, OverridesView, PrecallOverrideTarget, SaveOverride,
+    self, ClearOverride, OverrideContext, OverridesView, SaveOverride,
 };
 use ai_workstation::gui_prompts::{self, LibraryScope, LibraryView, ResolvePrompt};
-use ai_workstation::gui_review::{self, ReviewAction, ReviewView};
 use ai_workstation::gui_screenshots::{
     self, EvidenceListing, EvidenceOwner, EvidenceSelection, ImageData,
 };
@@ -123,61 +121,6 @@ fn prompt_overrides_clear(
     gui_prompt_overrides::clear(
         &mut state.0.lock().expect("gui handle mutex poisoned"),
         request,
-    )
-}
-
-#[tauri::command]
-fn prompt_overrides_precall_target(
-    state: State<AppState>,
-) -> Result<PrecallOverrideTarget, GuiError> {
-    gui_prompt_overrides::precall_target(&mut state.0.lock().expect("gui handle mutex poisoned"))
-}
-
-#[tauri::command]
-async fn review_begin(
-    state: State<'_, AppState>,
-    target: FeatureTarget,
-) -> Result<ReviewView, GuiError> {
-    gui_review::begin(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        target,
-    )
-}
-
-#[tauri::command]
-async fn review_snapshot(
-    state: State<'_, AppState>,
-    workflow_id: String,
-) -> Result<Option<ReviewView>, GuiError> {
-    gui_review::poll_open(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-    )
-}
-
-#[tauri::command]
-fn review_take_completion(
-    state: State<AppState>,
-    workflow_id: String,
-) -> Option<gui_review::ReviewCompletion> {
-    gui_review::take_completion(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-    )
-}
-
-#[tauri::command]
-async fn review_act(
-    state: State<'_, AppState>,
-    workflow_id: String,
-    revision: u64,
-    action: ReviewAction,
-) -> Result<Option<ReviewView>, GuiError> {
-    gui_review::act(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-        revision,
-        action,
     )
 }
 
@@ -966,43 +909,6 @@ async fn pr_triage_read(reads: PrTriageReads) -> Result<PrTriagePrefetch, GuiErr
 }
 
 #[tauri::command]
-async fn pr_review_begin(
-    state: State<'_, AppState>,
-    project_id: String,
-) -> Result<PrReviewView, GuiError> {
-    gui_pr_review::begin(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        project_id,
-    )
-}
-
-#[tauri::command]
-async fn pr_review_snapshot(
-    state: State<'_, AppState>,
-    workflow_id: String,
-) -> Result<PrReviewView, GuiError> {
-    gui_pr_review::poll(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-    )
-}
-
-#[tauri::command]
-async fn pr_review_act(
-    state: State<'_, AppState>,
-    workflow_id: String,
-    revision: u64,
-    action: PrReviewAction,
-) -> Result<Option<PrReviewView>, GuiError> {
-    gui_pr_review::act(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-        revision,
-        action,
-    )
-}
-
-#[tauri::command]
 async fn pr_triage_begin(
     state: State<'_, AppState>,
     target: PrTriageTarget,
@@ -1241,11 +1147,6 @@ fn main() {
             prompt_overrides_load,
             prompt_overrides_save,
             prompt_overrides_clear,
-            prompt_overrides_precall_target,
-            review_begin,
-            review_snapshot,
-            review_act,
-            review_take_completion,
             load_diff,
             supported_harnesses,
             supported_modes,
@@ -1288,9 +1189,6 @@ fn main() {
             dormancy_load,
             debug_log_load,
             dormancy_stop,
-            pr_review_begin,
-            pr_review_snapshot,
-            pr_review_act,
             pr_triage_begin,
             pr_triage_snapshot,
             pr_triage_act,

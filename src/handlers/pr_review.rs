@@ -243,22 +243,6 @@ pub fn handle_pr_picker_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Enter => app.pr_picker_choose(),
         KeyCode::Char('a') => app.pr_picker_toggle_closed(),
         KeyCode::Char('#') | KeyCode::Char('g') => app.pr_picker_to_number_prompt(),
-        KeyCode::Tab | KeyCode::BackTab => app.pr_picker_switch_to_review_tab(),
-        _ => {}
-    }
-    Ok(())
-}
-
-/// Key handling for the PR picker's Review tab. Only its own keys: the
-/// Triage tab's `a`/`#` act on triage and are not offered here.
-pub fn handle_pr_review_list_key(app: &mut App, key: KeyEvent) -> Result<()> {
-    match key.code {
-        KeyCode::Esc | KeyCode::Char('q') => app.close_pr_review_list(),
-        KeyCode::Down | KeyCode::Char('j') => app.pr_review_list_select_next(),
-        KeyCode::Up | KeyCode::Char('k') => app.pr_review_list_select_prev(),
-        KeyCode::Tab | KeyCode::BackTab => app.pr_review_list_switch_to_triage_tab(),
-        KeyCode::Char('r') => app.pr_review_list_retry(),
-        KeyCode::Enter => app.pr_review_list_open_selected(),
         _ => {}
     }
     Ok(())

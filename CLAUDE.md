@@ -249,11 +249,9 @@ registry that the user can view and override. See
 `docs/backlog/editable-prompts-call-site-inventory.md` for the call-site map
 and `AIW_PLAN.md` for the design decisions.
 
-- **Registry (`src/prompts/`).** `PromptId::ALL` is the 9 stable ids
-  (`review.walkthrough`/`.co_review`/`.changeset_overview`/`.diff_explain`,
-  `session.summary`, and the batched-review set
-  `review.batch`/`.hunk_split`/`.synthesis`/`.findings_summary`). `defaults.rs`
-  holds the built-in text; every template uses granular tokens.
+- **Registry (`src/prompts/`).** `PromptId::ALL` is the stable id list
+  (`session.summary`). `defaults.rs` holds the built-in text; every
+  template uses granular tokens.
 - **Interpolation is unvalidated.** `render_template` substitutes `{{name}}`
   from a `PromptContext`; a token with no value — declared or not — is left
   literally, and substituted values are never re-scanned. An override may drop
@@ -307,54 +305,9 @@ the model thinks.
   so it offers none. `ReasoningLevel::supported_for(harness)` is the verified
   set; a level the harness cannot express is **dropped, never passed through**
   (Codex has no `max`; Claude has no `minimal`).
-- **`ModelSel`** (`model` + `reasoning`) is what every `HeadlessRunner` entry and
-  `ClaudeLauncher::spawn_headless` accept via `impl Into<ModelSel>`, so a
-  caller with only a model (`Option<&str>`) is unchanged.
-- **Config.** `review_reasoning` / `review_reasonings` mirror `review_model` /
-  `review_models` (`AppConfig::review_reasoning_for`). Applies to Final Review
-  (walkthrough, co-review, overview, diff explain).
-
-### Batched Review of Oversized Diffs
-
-When a co-review's diff would overflow the model, it is split into bounded
-prompts and the findings recombined. Full rationale in
-`docs/batched-review.md`; `AIW_PLAN.md` has the design decisions.
-
-- **`src/diff_split.rs`** — lossless text-level splitting. `SplitDiff::parse`
-  (`split_inclusive('\n')`, CRLF- and no-trailing-newline-safe) →
-  `FileSection { path, header, hunks: Vec<HunkGroup> }`. `pack_file_sections`
-  greedily packs sections into `ReviewBatch::{Files, OversizedFile}` under a
-  token budget; `split_file_by_hunk` divides an oversized file into
-  `HunkSubunit`s (header repeated per slice, `oversized` flag for an
-  un-splittable lone hunk). `merge_hunk_findings` + `HunkOutcome` build the
-  deterministic per-file block.
-- **`src/review_batch.rs`** — orchestration. `trait BatchReviewRunner`
-  (`HeadlessBatchRunner` = prod; `review` renders `review.batch` per file
-  slice, `review_hunk` renders `review.hunk_split` per hunk group with
-  `{{file_path}}` / `{{hunk_label}}` populated) and `trait SynthesisRunner`
-  (`HeadlessSynthesisRunner`). `review_batches` runs each batch, halving on
-  `PromptTooLong` down to a hunk, recording an un-reviewable slice as
-  `UncoveredSlice` rather than dropping it. `synthesize` folds the per-batch
-  texts through `review.synthesis` (shrinking via `review.findings_summary`
-  and halving on overflow; deterministic concat fallback with
-  `synthesis_ran=false`). `batched_review` chains parse → pack → review →
-  synthesize into one `SynthesizedReview { text, synthesis_ran, uncovered }`.
-  `BatchProgress` enum feeds the UI.
-- **Size estimation / typed error** live in `src/headless.rs`:
-  `estimate_prompt_tokens` (bytes ÷ `PROMPT_ESTIMATE_BYTES_PER_TOKEN`),
-  `default_prompt_budget_tokens` (Claude/Codex 128k, Pi 96k),
-  `will_overflow` / `will_overflow_with_budget` (budget `0` = gate off), and
-  `PromptTooLong` + `is_prompt_too_long_message` / `as_prompt_too_long`
-  (best-effort classifier over the four CLIs' overflow phrasings), emitted by
-  `run_command`.
-- **Wired into** final-review co-review (`app/review.rs`: `generate_co_review`
-  → worker thread `run_batched_co_review` → `DiffViewerState::co_review_bg` →
-  `poll_co_review` → `apply_co_review_text`; a `0` budget skips the pre-send
-  hunk-split entirely and the single pass truncates the body with a visible
-  marker).
-- **Config**: `AppConfig::review_prompt_budget_tokens` (global) /
-  `ExtensionConfig::review_prompt_budget_tokens` (project `aiw.json`,
-  project-over-global), resolved by `App::review_prompt_budget(repo, harness)`.
+- **`ModelSel`** (`model` + `reasoning`) is what every `HeadlessRunner` entry
+  accepts via `impl Into<ModelSel>`, so a caller with only a model
+  (`Option<&str>`) is unchanged.
 
 ### Agent Limits & Resource Health (resources/)
 
@@ -391,7 +344,7 @@ resources/
      session adds, `enter_view`, and `switch_view_to_feature`.
    - `Warn(&str)` — toast and proceed, for flows whose resume state lives
      in the `AppMode` the dialog would replace (TODO spawn, PR triage,
-     final review, saved-transcript pickers).
+     saved-transcript pickers).
 
   The gate only fires when the call will actually launch, so re-entering a
   running feature never asks. Creation paths call `autostart_allowed()`

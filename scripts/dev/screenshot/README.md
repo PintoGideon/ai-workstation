@@ -134,41 +134,6 @@ configuration/state directories are private. Port 1420 must be free. The TUI
 setup frame remains internal, and only native PNG frames are the deliverable;
 no extra seed files are needed.
 
-The manual Final Review scenario reuses the same isolated native GUI fixture.
-Its seven frames cover the stopped-feature entry, notes and saved line threads,
-verdicts and whole-file comments, split layout, unsaved-draft protection,
-pause/reopen, changed-patch rejection and approval invalidation after refresh.
-It checks both the visible UI and saved review progress without starting an agent.
-
-```bash
-scripts/dev/screenshot/aiw-capture.sh \
-  --scenario scripts/dev/screenshot/scenarios/gui-manual-review.txt \
-  --out-dir /tmp/aiw-gui-review-proof
-```
-
-The Final Review AI scenario uses offline Claude/Codex executables in a private
-Git checkout. Eight asserted native frames cover the controls, resolved prompt
-preview, walkthrough and overview, co-review drafts, local multiline question,
-repository-aware answer, accepted finding persistence and changed-patch refusal.
-It checks the saved progress and invocation log through real Rust IPC; opening,
-editing, cancelling and reopening must not start additional calls. No paid
-harness or terminal agent is launched.
-
-If Claude's native versions exist under HOME, this scenario also requires
-`bubblewrap` (`bwrap`). The GUI's mount namespace masks those versions so
-discovery selects the private fixture executables. A clean CI HOME uses the
-private PATH directly, without creating a namespace. HOME and installed files
-stay unchanged. Its GUI uses
-software rendering; the WebKit process sandbox is disabled only for this
-isolated offline capture. The helper owns its GUI/Vite process groups and a
-private tmux socket.
-
-```bash
-scripts/dev/screenshot/aiw-capture.sh \
-  --scenario scripts/dev/screenshot/scenarios/gui-review-ai.txt \
-  --out-dir /tmp/aiw-gui-review-ai-proof
-```
-
 ## Capture contract
 
 The driver and the two Python helpers have deliberately separate output

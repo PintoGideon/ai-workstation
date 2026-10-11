@@ -50,7 +50,6 @@ pub struct CreateFeatureRequest {
     pub branch: String,
     pub agent: AgentKind,
     pub mode: VibeMode,
-    pub review: bool,
     pub create_terminal: bool,
     pub use_worktree: Option<bool>,
     pub enable_chrome: bool,
@@ -67,7 +66,6 @@ impl CreateFeatureRequest {
             "branch": self.branch,
             "agent": self.agent,
             "mode": self.mode,
-            "review": self.review,
             "create_terminal": self.create_terminal,
             "use_worktree": self.use_worktree,
             "enable_chrome": self.enable_chrome,
@@ -86,7 +84,6 @@ pub struct CreateBatchFeaturesRequest {
     pub feature_prefix: String,
     pub agent: AgentKind,
     pub mode: VibeMode,
-    pub review: bool,
     pub enable_chrome: bool,
     pub dry_run: bool,
 }
@@ -100,7 +97,6 @@ impl Default for CreateBatchFeaturesRequest {
             feature_prefix: "feature".to_string(),
             agent: AgentKind::default(),
             mode: VibeMode::default(),
-            review: false,
             enable_chrome: false,
             dry_run: false,
         }
@@ -118,7 +114,6 @@ impl CreateBatchFeaturesRequest {
             "feature_prefix": self.feature_prefix,
             "agent": self.agent,
             "mode": self.mode,
-            "review": self.review,
             "enable_chrome": self.enable_chrome,
             "dry_run": self.dry_run,
         })

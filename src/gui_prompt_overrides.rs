@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::app::{App, AppMode};
+use crate::app::App;
 use crate::db::prompt_overrides::{OverrideScope, PromptOverrides};
 use crate::gui_contract::{GuiError, GuiHandle, GuiResult};
 use crate::project::AgentKind;
@@ -135,17 +135,6 @@ pub struct ClearOverride {
     pub harness: Option<AgentKind>,
     pub revision: String,
     pub view_harness: Option<AgentKind>,
-}
-
-/// What the "Edit prompt" link of a pending pre-call notice opens.
-#[derive(Debug, Clone, Serialize)]
-pub struct PrecallOverrideTarget {
-    pub prompt_id: &'static str,
-    pub harness: AgentKind,
-    pub context: OverrideContext,
-    /// Set when the call's feature or project couldn't be found and the
-    /// manager opens on Global, which may not be what the call resolves.
-    pub context_note: Option<String>,
 }
 
 struct Resolved {
@@ -517,79 +506,6 @@ fn write(
     Ok(())
 }
 
-/// The prompt, harness and context of the pending pre-call notice, for its
-/// "Edit prompt" link. Continuing that call re-resolves its prompt, so a save
-/// made in the manager applies to it.
-pub fn precall_target(gui: &mut GuiHandle) -> GuiResult<PrecallOverrideTarget> {
-    let app = gui.app_for_workflow();
-    let AppMode::PromptPrecall(pending) = &app.mode else {
-        return Err(GuiError::conflict("There is no pending AI call to edit"));
-    };
-    let (workdir, project_name): (Option<&PathBuf>, Option<&String>) =
-        match pending.prior_mode.as_ref() {
-            AppMode::DiffViewer(state) => (Some(&state.workdir), None),
-            _ => (None, None),
-        };
-    let feature = workdir.and_then(|workdir| {
-        app.store.projects.iter().find_map(|project| {
-            project
-                .features
-                .iter()
-                .find(|feature| &feature.workdir == workdir)
-                .map(|feature| OverrideContext::Feature {
-                    project_id: project.id.clone(),
-                    feature_id: feature.id.clone(),
-                })
-        })
-    });
-    // A creation-time interview has no feature yet: its project still applies.
-    // That launch names its project, and the launch itself resolves it by that
-    // name (the store's key; creating a duplicate is refused), so use exactly
-    // that lookup. Otherwise a workdir that is a project's own checkout.
-    let project = || {
-        project_name
-            .map(|name| app.store.find_project(name))
-            .unwrap_or_else(|| {
-                workdir.and_then(|workdir| {
-                    app.store
-                        .projects
-                        .iter()
-                        .find(|project| &project.repo == workdir)
-                })
-            })
-            .map(|project| OverrideContext::Project {
-                project_id: project.id.clone(),
-            })
-    };
-    let (context, context_note) = match feature.or_else(project) {
-        Some(context) => (context, None),
-        None => (
-            OverrideContext::Global,
-            Some(match (project_name, workdir) {
-                (Some(name), _) => format!(
-                    "Project \"{name}\" for this call was not found, so this opened on Global. \
-                     Choose the right context before editing."
-                ),
-                (None, Some(workdir)) => format!(
-                    "No AIW feature or project matches {}, so this opened on Global. \
-                     Feature and project overrides for this call may differ.",
-                    workdir.display()
-                ),
-                (None, None) => "AIW couldn't tell which feature or project this call runs in, so \
-                     this opened on Global. Feature and project overrides for this call may \
-                     differ."
-                    .into(),
-            }),
-        ),
-    };
-    Ok(PrecallOverrideTarget {
-        prompt_id: pending.prompt_id.as_str(),
-        harness: pending.harness.clone(),
-        context,
-        context_note,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -620,7 +536,6 @@ mod tests {
             workdir,
             true,
             VibeMode::default(),
-            false,
             AgentKind::Codex,
             false,
         );
@@ -694,10 +609,13 @@ mod tests {
             AgentKind::Codex,
             "feature agent is the default"
         );
-        let walkthrough = row(&view, PromptId::ReviewWalkthrough);
-        assert_eq!(walkthrough.source, OverrideLayer::BuiltIn);
-        assert_eq!(walkthrough.placeholders, ["file_path", "patch"]);
-        assert_eq!(walkthrough.effective_template, walkthrough.default_template);
+        let summary = row(&view, PromptId::SessionSummary);
+        assert_eq!(summary.source, OverrideLayer::BuiltIn);
+        assert_eq!(
+            summary.placeholders,
+            ["harness_name", "max_chars", "recent_lines"]
+        );
+        assert_eq!(summary.effective_template, summary.default_template);
         assert!(view.scopes.iter().all(|scope| scope.available));
 
         let project = load(&mut fx.gui, &fx.project.clone(), None).unwrap();
@@ -779,7 +697,7 @@ mod tests {
     fn stale_saves_after_external_db_or_aiw_json_edits_are_refused() {
         let mut fx = fixture();
         let ctx = fx.feature.clone();
-        let id = PromptId::ReviewWalkthrough;
+        let id = PromptId::SessionSummary;
         let view = load(&mut fx.gui, &ctx, None).unwrap();
 
         // Another process writes a global override for the same prompt.
@@ -802,7 +720,7 @@ mod tests {
         let view = load(&mut fx.gui, &ctx, None).unwrap();
         std::fs::write(
             fx.dir.path().join("repo/aiw.json"),
-            r#"{"prompt_overrides":{"review.walkthrough":{"template":"hand"}}}"#,
+            r#"{"prompt_overrides":{"session.summary":{"template":"hand"}}}"#,
         )
         .unwrap();
         let req = save_req(&ctx, &view, id, OverrideLayer::Global, None, "mine");
@@ -810,14 +728,6 @@ mod tests {
             save(&mut fx.gui, req).unwrap_err().kind,
             GuiErrorKind::Conflict
         );
-        // An unrelated prompt's revision is untouched.
-        let other = PromptId::SessionSummary;
-        save(
-            &mut fx.gui,
-            save_req(&ctx, &view, other, OverrideLayer::Global, None, "ok"),
-        )
-        .unwrap();
-
         // After reloading, the same draft saves against the current version.
         let view = load(&mut fx.gui, &ctx, None).unwrap();
         save(
@@ -869,7 +779,7 @@ mod tests {
     fn clear_removes_exactly_one_slot_and_refuses_stale_or_missing_ones() {
         let mut fx = fixture();
         let ctx = fx.feature.clone();
-        let id = PromptId::ReviewWalkthrough;
+        let id = PromptId::SessionSummary;
         let view = load(&mut fx.gui, &ctx, None).unwrap();
         save(
             &mut fx.gui,
@@ -922,7 +832,7 @@ mod tests {
     fn deleted_features_reassigned_checkouts_and_empty_templates_are_refused() {
         let mut fx = fixture();
         let ctx = fx.feature.clone();
-        let id = PromptId::ReviewCoReview;
+        let id = PromptId::SessionSummary;
         let view = load(&mut fx.gui, &ctx, None).unwrap();
         let empty = save(
             &mut fx.gui,

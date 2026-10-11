@@ -3,7 +3,6 @@
   "branch": "restore-me",
   "agent": "__HARNESS__",
   "mode": "vibe",
-  "review": false,
   "create_terminal": false,
   "use_worktree": false,
   "enable_chrome": false,

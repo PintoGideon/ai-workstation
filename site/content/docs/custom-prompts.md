@@ -4,7 +4,7 @@ description = "Edit the exact prompts AIW sends for headless AI calls."
 weight = 70
 +++
 
-Behind the final-review diff helpers and session summaries, AIW makes one-shot
+Behind session summaries, AIW makes one-shot
 ("headless") AI calls with prompts it builds for you. Press `E` on the
 dashboard — or `Ctrl+Space`, then `E` from a session — to open the
 **prompt-override manager**. It lists every template with its effective
@@ -35,9 +35,6 @@ the stable prompt id (shown in the manager):
 ```json
 {
   "prompt_overrides": {
-    "review.walkthrough": {
-      "template": "Explain this change... {{patch}} ..."
-    },
     "session.summary": {
       "template": "shared text with {{recent_lines}}",
       "harnesses": { "codex": "codex-specific text with {{recent_lines}}" }

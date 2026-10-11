@@ -27,7 +27,6 @@ Add or update an entry in the `feature_presets` array in
   "branch_prefix": "fix/",
   "mode": "normal",
   "agent": "claude",
-  "review": true,
   "enable_chrome": false
 }
 ```
@@ -38,7 +37,6 @@ Add or update an entry in the `feature_presets` array in
 | `branch_prefix` | no | any string | Prepended to the branch name the user types |
 | `mode` | no | `"normal"`, `"vibeless"` | `vibeless` = diff review on every edit |
 | `agent` | no | `"claude"`, `"codex"`, `"pi"`, `"gemini"`, `"cursor"` | Agent harness to use |
-| `review` | no | `true`, `false` | Enable final review pass when feature finishes |
 | `enable_chrome` | no | `true`, `false` | Allow agent to control a browser |
 
 ## Config path (read the legacy file too)

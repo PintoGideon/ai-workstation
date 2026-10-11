@@ -2,7 +2,6 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::{App, AppMode};
-use crate::claude::ClaudeLauncher;
 
 const PATCH_PAGE_STEP: usize = 20;
 
@@ -26,13 +25,6 @@ fn hold_active(app: &App) -> bool {
 pub fn handle_diff_review_key(app: &mut App, key: KeyEvent) -> Result<()> {
     // Ctrl+J/K jump further than j/k, matching the final-review diff viewer.
     let step = super::diff::scroll_step(&key);
-    if matches!(
-        &app.mode,
-        AppMode::DiffReviewPrompt(state) if state.explanation_child.is_some()
-    ) {
-        return Ok(());
-    }
-
     let editing_feedback = matches!(
         &app.mode,
         AppMode::DiffReviewPrompt(state) if state.editing_feedback
@@ -104,9 +96,6 @@ pub fn handle_diff_review_key(app: &mut App, key: KeyEvent) -> Result<()> {
         }
         KeyCode::Enter => {
             submit_diff_review(app, false, false)?;
-        }
-        KeyCode::Char('e') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-            generate_diff_review_explanation(app);
         }
         KeyCode::Char('i') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.open_syntax_language_picker_for_selected_diff_file();
@@ -224,74 +213,6 @@ fn submit_diff_review(app: &mut App, reject: bool, skip: bool) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn generate_diff_review_explanation(app: &mut App) {
-    let (workdir, relative_path, old_snippet, new_snippet) = match &app.mode {
-        AppMode::DiffReviewPrompt(state) => (
-            state.workdir.clone(),
-            state.relative_path.clone(),
-            state.old_snippet.clone(),
-            state.new_snippet.clone(),
-        ),
-        _ => return,
-    };
-
-    if let Some(explanation) = find_review_note(&workdir, &relative_path) {
-        if let AppMode::DiffReviewPrompt(state) = &mut app.mode {
-            state.explanation = Some(explanation.trim().to_string());
-        }
-        return;
-    }
-
-    let repo =
-        crate::worktree::WorktreeManager::repo_root(&workdir).unwrap_or_else(|_| workdir.clone());
-    let ctx = crate::prompts::PromptContext::new()
-        .with("file_path", relative_path)
-        .with("old_snippet", old_snippet)
-        .with("new_snippet", new_snippet);
-    let prompt = app.resolve_headless_prompt(
-        crate::prompts::PromptId::ReviewDiffExplain,
-        &crate::project::AgentKind::Claude,
-        &repo,
-        &workdir,
-        &ctx,
-    );
-    if !app.precall_gate(
-        crate::app::precall::PrecallAction::ReviewDiffExplain,
-        &crate::project::AgentKind::Claude,
-        &prompt,
-    ) {
-        return;
-    }
-
-    let model = app
-        .config
-        .review_model_for(crate::app::ReviewAction::DiffExplain);
-    let reasoning = app
-        .config
-        .review_reasoning_for(crate::app::ReviewAction::DiffExplain);
-    match ClaudeLauncher::spawn_headless(
-        &workdir,
-        &prompt,
-        crate::headless::ModelSel::new(model.as_deref(), reasoning),
-    ) {
-        Ok(child) => {
-            if let AppMode::DiffReviewPrompt(state) = &mut app.mode {
-                state.explanation = None;
-                state.explanation_child = Some(child);
-            }
-        }
-        Err(err) => {
-            if let AppMode::DiffReviewPrompt(state) = &mut app.mode {
-                state.explanation = Some(format!("Explanation unavailable: {err}"));
-            }
-        }
-    }
-}
-
-fn find_review_note(workdir: &std::path::Path, relative_path: &str) -> Option<String> {
-    crate::app::review::load_review_notes(workdir).remove(relative_path)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -318,7 +239,6 @@ mod tests {
         );
         app.mode = AppMode::DiffReviewPrompt(DiffReviewState {
             session_id: "sess-1".to_string(),
-            workdir: workdir.to_path_buf(),
             relative_path: "src/main.rs".to_string(),
             tool: "edit".to_string(),
             old_snippet: "old".to_string(),
@@ -329,8 +249,6 @@ mod tests {
             reason: String::new(),
             editing_feedback: false,
             layout: crate::app::DiffViewerLayout::Unified,
-            explanation: None,
-            explanation_child: None,
             response_file: workdir.join("response.json"),
             proceed_signal: workdir.join("proceed"),
             request_id: None,
@@ -355,30 +273,6 @@ mod tests {
             patch: String::new(),
             hunks: vec![],
         }
-    }
-
-    #[test]
-    fn find_review_note_matches_titled_and_grouped_headings() {
-        let dir = TempDir::new().unwrap();
-        let claude = dir.path().join(".claude");
-        std::fs::create_dir_all(&claude).unwrap();
-        std::fs::write(
-            claude.join("review-notes.md"),
-            "## src/main.rs — entrypoint\n\nThe note.\n\n---\n\n### src/lib.rs — lib\n\nLib note.\n",
-        )
-        .unwrap();
-
-        // The old exact-`## path` matcher missed the titled and grouped forms;
-        // the shared parser resolves both.
-        assert_eq!(
-            find_review_note(dir.path(), "src/main.rs").as_deref(),
-            Some("The note.")
-        );
-        assert_eq!(
-            find_review_note(dir.path(), "src/lib.rs").as_deref(),
-            Some("Lib note.")
-        );
-        assert!(find_review_note(dir.path(), "src/none.rs").is_none());
     }
 
     #[test]
@@ -461,29 +355,6 @@ mod tests {
             _ => panic!("expected diff review prompt"),
         }
         assert!(!tmp.path().join("response.json").exists());
-    }
-
-    #[test]
-    fn feedback_mode_treats_e_as_text_not_explain() {
-        let tmp = TempDir::new().unwrap();
-        let mut app = make_app_with_prompt(tmp.path());
-        if let AppMode::DiffReviewPrompt(state) = &mut app.mode {
-            state.editing_feedback = true;
-        }
-
-        handle_diff_review_key(
-            &mut app,
-            KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
-        )
-        .unwrap();
-
-        match &app.mode {
-            AppMode::DiffReviewPrompt(state) => {
-                assert_eq!(state.reason, "e");
-                assert!(state.explanation.is_none());
-            }
-            _ => panic!("expected diff review prompt"),
-        }
     }
 
     #[test]
@@ -589,7 +460,6 @@ mod tests {
                 "Claude".to_string(),
                 crate::project::SessionKind::Claude,
                 crate::project::VibeMode::Vibeless,
-                false,
             ));
         }
 

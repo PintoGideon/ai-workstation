@@ -211,7 +211,6 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                     // Pre-fill fields from preset.
                     state.mode = preset.mode;
                     state.agent = preset.agent.clone();
-                    state.review = preset.review;
                     state.enable_chrome = preset.enable_chrome;
                     if let Some(ref prefix) = preset.branch_prefix
                         && !prefix.is_empty()
@@ -295,9 +294,9 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                     // For Claude: 0=agent 1=mode 2=review 3=chrome
                     // For others: 0=agent 1=mode 2=review
                     let max_focus = if state.agent == AgentKind::Claude {
-                        3
-                    } else {
                         2
+                    } else {
+                        1
                     };
                     if state.mode_focus < max_focus {
                         state.mode_focus += 1;
@@ -314,9 +313,9 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
             KeyCode::Enter => {
                 if let AppMode::CreatingFeature(state) = &mut app.mode {
                     let max_focus = if state.agent == AgentKind::Claude {
-                        3
-                    } else {
                         2
+                    } else {
+                        1
                     };
                     if state.mode_focus < max_focus {
                         state.mode_focus += 1;
@@ -343,10 +342,7 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                             state.mode_index = (state.mode_index + 1) % VibeMode::ALL.len();
                             state.mode = VibeMode::ALL[state.mode_index].clone();
                         }
-                        2 => {
-                            state.review = !state.review;
-                        }
-                        3 if state.agent == AgentKind::Claude => {
+                        2 if state.agent == AgentKind::Claude => {
                             state.enable_chrome = !state.enable_chrome;
                         }
                         _ => {}
@@ -372,10 +368,7 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                             };
                             state.mode = VibeMode::ALL[state.mode_index].clone();
                         }
-                        2 => {
-                            state.review = !state.review;
-                        }
-                        3 if state.agent == AgentKind::Claude => {
+                        2 if state.agent == AgentKind::Claude => {
                             state.enable_chrome = !state.enable_chrome;
                         }
                         _ => {}

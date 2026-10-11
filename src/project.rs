@@ -477,8 +477,6 @@ pub struct Feature {
     #[serde(default)]
     pub mode: VibeMode,
     #[serde(default)]
-    pub review: bool,
-    #[serde(default)]
     pub agent: AgentKind,
     #[serde(default)]
     pub enable_chrome: bool,
@@ -597,8 +595,6 @@ struct FeatureDe {
     #[serde(default)]
     mode: StoredVibeMode,
     #[serde(default)]
-    review: bool,
-    #[serde(default)]
     agent: AgentKind,
     #[serde(default)]
     enable_chrome: bool,
@@ -627,7 +623,7 @@ impl<'de> Deserialize<'de> for Feature {
         D: serde::Deserializer<'de>,
     {
         let feature = FeatureDe::deserialize(deserializer)?;
-        let (mode, legacy_review) = feature.mode.into_mode_and_review();
+        let (mode, _legacy_review) = feature.mode.into_mode_and_review();
         Ok(Self {
             id: feature.id,
             name: feature.name,
@@ -638,7 +634,6 @@ impl<'de> Deserialize<'de> for Feature {
             sessions: feature.sessions,
             collapsed: feature.collapsed,
             mode,
-            review: feature.review || legacy_review,
             agent: feature.agent,
             enable_chrome: feature.enable_chrome,
             pending_worktree_script: false,
@@ -719,7 +714,6 @@ impl Feature {
         workdir: PathBuf,
         is_worktree: bool,
         mode: VibeMode,
-        review: bool,
         agent: AgentKind,
         enable_chrome: bool,
     ) -> Self {
@@ -730,7 +724,6 @@ impl Feature {
             workdir,
             is_worktree,
             mode,
-            review,
             agent,
             enable_chrome,
             tmux_session,
@@ -745,7 +738,6 @@ impl Feature {
         workdir: PathBuf,
         is_worktree: bool,
         mode: VibeMode,
-        review: bool,
         agent: AgentKind,
         enable_chrome: bool,
     ) -> Self {
@@ -756,7 +748,6 @@ impl Feature {
             workdir,
             is_worktree,
             mode,
-            review,
             agent,
             enable_chrome,
             tmux_session,
@@ -770,7 +761,6 @@ impl Feature {
         workdir: PathBuf,
         is_worktree: bool,
         mode: VibeMode,
-        review: bool,
         agent: AgentKind,
         enable_chrome: bool,
         tmux_session: String,
@@ -786,7 +776,6 @@ impl Feature {
             sessions: Vec::new(),
             collapsed: true,
             mode,
-            review,
             agent,
             enable_chrome,
             pending_worktree_script: false,
@@ -1085,7 +1074,6 @@ fn merge_feature(target: &mut Feature, incoming: Feature) {
     target.sessions = merge_session_vec(std::mem::take(&mut target.sessions), incoming.sessions);
     target.collapsed = incoming.collapsed;
     target.mode = incoming.mode;
-    target.review = incoming.review;
     target.agent = incoming.agent;
     target.enable_chrome = incoming.enable_chrome;
     target.pending_worktree_script = incoming.pending_worktree_script;
@@ -1392,7 +1380,6 @@ impl ProjectStore {
                             sessions,
                             collapsed: true,
                             mode: VibeMode::default(),
-                            review: false,
                             agent: AgentKind::default(),
                             enable_chrome: false,
                             pending_worktree_script: false,
@@ -1775,7 +1762,6 @@ mod tests {
             PathBuf::from("/tmp/wd"),
             true,
             VibeMode::Vibeless,
-            false,
             AgentKind::Codex,
             false,
         );
@@ -1800,7 +1786,6 @@ mod tests {
             PathBuf::from("/tmp/wd"),
             true,
             VibeMode::Vibeless,
-            false,
             AgentKind::Codex,
             false,
         );
@@ -1890,7 +1875,6 @@ mod tests {
             sessions: vec![],
             collapsed: true,
             mode: VibeMode::default(),
-            review: false,
             agent: AgentKind::default(),
             enable_chrome: false,
             pending_worktree_script: false,
@@ -1952,7 +1936,6 @@ mod tests {
                     }],
                     collapsed: true,
                     mode: VibeMode::Vibeless,
-                    review: false,
                     agent: AgentKind::Claude,
                     enable_chrome: false,
                     pending_worktree_script: false,
@@ -2034,7 +2017,6 @@ mod tests {
                         ],
                         collapsed: false,
                         mode: VibeMode::Vibe,
-                        review: true,
                         agent: AgentKind::Codex,
                         enable_chrome: true,
                         pending_worktree_script: true,
@@ -2059,7 +2041,6 @@ mod tests {
                         sessions: vec![],
                         collapsed: true,
                         mode: VibeMode::SuperVibe,
-                        review: false,
                         agent: AgentKind::Pi,
                         enable_chrome: false,
                         pending_worktree_script: false,
@@ -2124,7 +2105,6 @@ mod tests {
         assert_eq!(merged_feature.name, "feature-one-renamed");
         assert_eq!(merged_feature.tmux_session, "aiw-b");
         assert_eq!(merged_feature.mode, VibeMode::Vibe);
-        assert!(merged_feature.review);
         assert!(merged_feature.pending_worktree_script);
         assert_eq!(merged_feature.sessions.len(), 2);
     }
@@ -2198,7 +2178,6 @@ mod tests {
             "/home/user/my-project".into(),
             false,
             VibeMode::Vibe,
-            false,
             AgentKind::Claude,
             false,
         );
@@ -2485,11 +2464,9 @@ mod tests {
         let store = ProjectStore::load(tmp.path()).unwrap();
         let feature = &store.projects[0].features[0];
         assert_eq!(feature.mode, VibeMode::Vibeless);
-        assert!(feature.review);
 
         let saved = std::fs::read_to_string(tmp.path()).unwrap();
         assert!(saved.contains("\"mode\": \"vibeless\""));
-        assert!(saved.contains("\"review\": true"));
     }
 
     // ── Feature::next_label ───────────────────────────────────
@@ -2614,7 +2591,6 @@ mod tests {
         .unwrap();
 
         assert_eq!(feature.mode, VibeMode::Vibeless);
-        assert!(feature.review);
     }
 
     #[test]

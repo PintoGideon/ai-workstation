@@ -5,7 +5,6 @@
   "feature_prefix": "plan-",
   "agent": "codex",
   "mode": "vibe",
-  "review": false,
   "enable_chrome": false,
   "dry_run": false
 }

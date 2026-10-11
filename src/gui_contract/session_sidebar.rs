@@ -536,7 +536,6 @@ mod tests {
             workdir.to_path_buf(),
             true,
             VibeMode::default(),
-            false,
             agent,
             false,
         );

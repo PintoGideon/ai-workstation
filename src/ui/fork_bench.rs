@@ -95,7 +95,6 @@ pub(crate) fn realistic_store() -> ProjectStore {
                         collapsed: false,
                         mode: [VibeMode::Vibeless, VibeMode::Vibe, VibeMode::SuperVibe][fi % 3]
                             .clone(),
-                        review: fi == 1,
                         agent: AgentKind::Claude,
                         enable_chrome: false,
                         pending_worktree_script: false,

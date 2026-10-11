@@ -729,7 +729,6 @@ mod tests {
             "Claude 1".to_string(),
             crate::project::SessionKind::Claude,
             VibeMode::Vibeless,
-            false,
         )
     }
 
@@ -767,7 +766,6 @@ mod tests {
             workdir.to_path_buf(),
             true,
             VibeMode::Vibeless,
-            false,
             AgentKind::Claude,
             false,
         ));

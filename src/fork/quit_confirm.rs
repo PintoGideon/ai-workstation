@@ -83,7 +83,6 @@ mod tests {
             std::path::PathBuf::from("/tmp/p"),
             false,
             crate::project::VibeMode::default(),
-            false,
             crate::project::AgentKind::default(),
             false,
         );

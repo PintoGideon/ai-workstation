@@ -56,24 +56,6 @@ pub struct DiffLineLocation {
     pub new_line: Option<usize>,
 }
 
-/// Which source-file coordinate system a line number belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub enum DiffSide {
-    /// The base file (`-` / GitHub `LEFT`).
-    Old,
-    /// The current file (`+` / GitHub `RIGHT`).
-    New,
-}
-
-impl DiffLineLocation {
-    pub fn line_on(self, side: DiffSide) -> Option<usize> {
-        match side {
-            DiffSide::Old => self.old_line,
-            DiffSide::New => self.new_line,
-        }
-    }
-}
-
 /// Source coordinates for every physical row in one hunk. Addressable rows
 /// carry a [`DiffLineLocation`]; the no-newline marker carries `None`. Keeping
 /// marker slots makes the result safe to zip with `hunk.lines` when producing
@@ -116,78 +98,7 @@ pub fn line_locations_in_hunk(hunk: &DiffHunk) -> Vec<Option<DiffLineLocation>> 
     out
 }
 
-/// `DiffFile::addressable_lines()` over bare hunks, so a caller holding a
-/// freshly built hunk list (context expansion) can see where its lines would
-/// land before committing it to the file.
-pub fn addressable_lines_in(hunks: &[DiffHunk]) -> Vec<DiffLineLocation> {
-    hunks
-        .iter()
-        .flat_map(line_locations_in_hunk)
-        .flatten()
-        .collect()
-}
-
 impl DiffFile {
-    /// Commentable diff lines (context / added / removed) across every hunk, in
-    /// display order, each tagged with its base/current line numbers. Hunk
-    /// headers and no-newline markers are not addressable. This walks the hunks
-    /// in the same order the unified patch renderer does, so an index into the
-    /// returned vector matches a rendered diff row.
-    pub fn addressable_lines(&self) -> Vec<DiffLineLocation> {
-        addressable_lines_in(&self.hunks)
-    }
-
-    /// The index into `addressable_lines()` of each hunk's first addressable
-    /// line, in hunk order. The anchor list for jump-by-hunk navigation of the
-    /// review line cursor. Hunks with no addressable lines are skipped so a
-    /// jump always lands on a real cursor position.
-    pub fn hunk_start_indices(&self) -> Vec<usize> {
-        let mut out = Vec::new();
-        let mut idx = 0usize;
-        for hunk in &self.hunks {
-            let addressable = hunk
-                .lines
-                .iter()
-                .filter(|l| !matches!(l.kind, DiffLineKind::NoNewlineMarker))
-                .count();
-            if addressable > 0 {
-                out.push(idx);
-            }
-            idx += addressable;
-        }
-        out
-    }
-
-    /// The content of each addressable line, in the same order (and 1:1) as
-    /// `addressable_lines()`, with the single-char diff prefix (`+`/`-`/space)
-    /// stripped. Used to pre-fill a suggested-change editor with the current
-    /// text of the line(s) a comment covers.
-    pub fn addressable_line_texts(&self) -> Vec<String> {
-        let mut out = Vec::new();
-        for hunk in &self.hunks {
-            for line in &hunk.lines {
-                if matches!(line.kind, DiffLineKind::NoNewlineMarker) {
-                    continue;
-                }
-                // The prefix byte is ASCII, so slicing at 1 is a valid boundary.
-                out.push(line.text.get(1..).unwrap_or("").to_string());
-            }
-        }
-        out
-    }
-
-    /// Whether opening this file in `$EDITOR` can do anything useful. A deletion
-    /// has no file left on disk and a binary blob has nothing an editor can show,
-    /// so both footers use this to hide the `E` hint rather than advertise a key
-    /// that can only report why it won't work.
-    pub fn can_open_in_editor(&self) -> bool {
-        !self.is_binary && !matches!(self.status, DiffFileStatus::Deleted)
-    }
-
-    /// Whether this file's hunks can be re-rendered with more context. Needs
-    /// both blobs: expansion pulls the surrounding lines out of them. Added,
-    /// deleted, untracked and binary files never qualify — one side has no
-    /// content, and for the first three the diff already shows every line.
     pub fn can_expand_context(&self) -> bool {
         !self.is_binary
             && !self.hunks.is_empty()
@@ -729,50 +640,6 @@ pub fn load_commit_snapshot(
         branch,
         base_ref: subject,
         base_commit: parent.unwrap_or_default(),
-        files,
-        total_additions,
-        total_deletions,
-    })
-}
-
-/// Load the changes between two commits, `base..head`, reading both sides of
-/// every file from git objects. The working tree, the index, and `HEAD` are
-/// never consulted, so the result is the same from any checkout of the
-/// repository. Paths are repository-relative (no `--relative`): a pull
-/// request's diff is the whole repository's.
-///
-/// `branch` and `base_ref` are left empty for the caller to label.
-pub fn load_range_snapshot(
-    workdir: &Path,
-    base: &str,
-    head: &str,
-    ignore_whitespace: bool,
-) -> Result<DiffSnapshot> {
-    let patch = git_capture(
-        workdir,
-        &with_whitespace_flag(
-            &[
-                "diff",
-                "--find-renames",
-                "--no-ext-diff",
-                "--no-color",
-                "--unified=3",
-                base,
-                head,
-            ],
-            ignore_whitespace,
-        ),
-        false,
-    )?;
-    let mut files = parse_unified_diff(&patch)?;
-    hydrate_commit_file_contents(workdir, Some(base), head, &mut files)?;
-    files.sort_by(|a, b| a.path.cmp(&b.path));
-    let total_additions = files.iter().map(|file| file.additions).sum();
-    let total_deletions = files.iter().map(|file| file.deletions).sum();
-    Ok(DiffSnapshot {
-        branch: String::new(),
-        base_ref: String::new(),
-        base_commit: base.to_string(),
         files,
         total_additions,
         total_deletions,
@@ -1340,99 +1207,6 @@ index 1111111..2222222 100644
         assert_eq!(file.new_content, None);
     }
 
-    #[test]
-    fn addressable_lines_number_each_commentable_diff_line() {
-        let files = parse_unified_diff(
-            "\
-diff --git a/src/lib.rs b/src/lib.rs
-index 1111111..2222222 100644
---- a/src/lib.rs
-+++ b/src/lib.rs
-@@ -1,2 +1,3 @@
- line1
--line2
-+line2 updated
-+line3
-",
-        )
-        .unwrap();
-        let locs = files[0].addressable_lines();
-
-        // One context, one removed, two added — markers/headers excluded.
-        assert_eq!(
-            locs,
-            vec![
-                DiffLineLocation {
-                    old_line: Some(1),
-                    new_line: Some(1)
-                },
-                DiffLineLocation {
-                    old_line: Some(2),
-                    new_line: None
-                },
-                DiffLineLocation {
-                    old_line: None,
-                    new_line: Some(2)
-                },
-                DiffLineLocation {
-                    old_line: None,
-                    new_line: Some(3)
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn hunk_start_indices_anchor_each_hunk_and_skip_empty_ones() {
-        let make_hunk = |lines: Vec<DiffLine>| DiffHunk {
-            header: "@@".into(),
-            old_start: 1,
-            old_lines: 1,
-            new_start: 1,
-            new_lines: 1,
-            lines,
-        };
-        let file = DiffFile {
-            old_path: Some("a.rs".into()),
-            path: "a.rs".into(),
-            status: DiffFileStatus::Modified,
-            additions: 2,
-            deletions: 0,
-            is_binary: false,
-            old_content: None,
-            new_content: None,
-            patch: String::new(),
-            hunks: vec![
-                // Two addressable lines: indices 0 and 1.
-                make_hunk(vec![
-                    DiffLine {
-                        kind: DiffLineKind::Context,
-                        text: " ctx".into(),
-                    },
-                    DiffLine {
-                        kind: DiffLineKind::Added,
-                        text: "+one".into(),
-                    },
-                ]),
-                // No addressable lines: must be skipped, not anchored.
-                make_hunk(vec![DiffLine {
-                    kind: DiffLineKind::NoNewlineMarker,
-                    text: "\\ No newline at end of file".into(),
-                }]),
-                // One addressable line at index 2.
-                make_hunk(vec![DiffLine {
-                    kind: DiffLineKind::Added,
-                    text: "+two".into(),
-                }]),
-            ],
-        };
-
-        assert_eq!(file.hunk_start_indices(), vec![0, 2]);
-        // Indices are valid positions in addressable_lines().
-        assert_eq!(file.addressable_lines().len(), 3);
-    }
-
-    /// `l1\nl2\n…\nl{n}\n`, the base every context-expansion test edits.
     fn numbered_content(n: usize) -> String {
         (1..=n)
             .map(|i| format!("l{i}\n"))
@@ -1582,21 +1356,6 @@ index 1111111..2222222 100644
             file.hunks = file.hunks_with_context(25).unwrap();
             file.hunks = file.hunks_with_context(DIFF_DEFAULT_CONTEXT).unwrap();
             assert_eq!(file.hunks, original);
-        }
-    }
-
-    #[test]
-    fn hunks_with_context_keeps_comment_anchors_addressable() {
-        // Line comments anchor to `DiffLineLocation`s; expansion must leave
-        // every one of them present (it only ever adds context lines).
-        let mut file = one_change_in_thirty_lines();
-        let before = file.addressable_lines();
-        file.hunks = file.hunks_with_context(10).unwrap();
-        let after = file.addressable_lines();
-
-        assert!(after.len() > before.len());
-        for loc in &before {
-            assert!(after.contains(loc), "expansion dropped {loc:?}");
         }
     }
 
@@ -1848,50 +1607,6 @@ index 1111111..2222222 100644
         assert!(file.patch.contains("+first"));
         assert!(!file.patch.contains("second"));
         assert!(!file.patch.contains("uncommitted"));
-    }
-
-    #[test]
-    fn range_snapshot_is_exactly_merge_base_to_head_and_ignores_the_checkout() {
-        let repo = init_repo_with_main();
-        let dir = repo.path();
-        let merge_base = rev_parse(dir, "HEAD");
-        // The PR: edits src.txt, adds pr_new.txt, lives on a branch we leave.
-        git(dir, &["checkout", "--quiet", "-b", "pr"]);
-        std::fs::write(dir.join("src.txt"), "base\npr line\n").unwrap();
-        std::fs::write(dir.join("pr_new.txt"), "from the pr\n").unwrap();
-        git(dir, &["add", "src.txt", "pr_new.txt"]);
-        git(dir, &["commit", "-m", "pr change"]);
-        let head = rev_parse(dir, "HEAD");
-        // The user's own feature, checked out, with dirt on the same file.
-        git(dir, &["checkout", "--quiet", "main"]);
-        git(dir, &["checkout", "--quiet", "-b", "my-feature"]);
-        std::fs::write(dir.join("feature.txt"), "mine\n").unwrap();
-        git(dir, &["add", "feature.txt"]);
-        git(dir, &["commit", "-m", "feature change"]);
-        std::fs::write(dir.join("src.txt"), "dirty local edit\n").unwrap();
-        std::fs::write(dir.join("untracked.txt"), "stray\n").unwrap();
-
-        let snapshot = load_range_snapshot(dir, &merge_base, &head, false).unwrap();
-
-        let expected = Command::new("git")
-            .args(["diff", "--name-only", &merge_base, &head])
-            .current_dir(dir)
-            .output()
-            .unwrap();
-        let expected: Vec<String> = String::from_utf8_lossy(&expected.stdout)
-            .lines()
-            .map(str::to_string)
-            .collect();
-        let paths: Vec<String> = snapshot.files.iter().map(|f| f.path.clone()).collect();
-        assert_eq!(paths, expected);
-        assert_eq!(paths, ["pr_new.txt", "src.txt"]);
-
-        let src = snapshot.files.iter().find(|f| f.path == "src.txt").unwrap();
-        // Both sides come from objects, never the dirty working tree.
-        assert_eq!(src.old_content.as_deref(), Some("base\n"));
-        assert_eq!(src.new_content.as_deref(), Some("base\npr line\n"));
-        assert_eq!(snapshot.base_commit, merge_base);
-        assert!(snapshot.branch.is_empty(), "the caller labels the range");
     }
 
     fn init_repo_with_main() -> TempDir {

@@ -331,7 +331,6 @@ fn active_pr_successor_prevents_returning_to_stashed_predecessor() {
         "PR Triage".to_string(),
         SessionKind::Claude,
         VibeMode::default(),
-        false,
     ));
 
     let feature = &app.store.projects[0].features[0];
@@ -705,54 +704,6 @@ fn sync_thinking_status_keeps_a_question_raised_while_the_session_is_busy() {
 }
 
 #[test]
-fn sync_thinking_status_raises_review_ready_after_watched_session_finishes() {
-    let repo = TempDir::new().unwrap();
-    let mut store = store_with_repo(repo.path().to_path_buf(), ProjectStatus::Idle);
-    store.projects[0].features[0].agent = AgentKind::Codex;
-
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.ipc = Some(crate::ipc::start(&repo.path().join("ipc.sock")).unwrap());
-
-    app.awaiting_review_fixes.insert(
-        "aiw-my-feat".to_string(),
-        AwaitingReviewFix {
-            started_thinking: false,
-        },
-    );
-
-    // Still working: `started_thinking` flips true, no notification yet.
-    app.ipc_thinking_sessions.insert("aiw-my-feat".to_string());
-    app.sync_thinking_status();
-    assert!(
-        app.awaiting_review_fixes
-            .get("aiw-my-feat")
-            .is_some_and(|w| w.started_thinking),
-        "watched session should be marked as having started thinking"
-    );
-    assert!(
-        app.pending_inputs.is_empty(),
-        "no notification should fire while still thinking"
-    );
-
-    // Goes idle: the watched session raises a distinct "review-ready"
-    // notification instead of (not in addition to) the generic one, and the
-    // watch entry is cleared.
-    app.ipc_thinking_sessions.remove("aiw-my-feat");
-    app.sync_thinking_status();
-
-    assert!(!app.awaiting_review_fixes.contains_key("aiw-my-feat"));
-    assert_eq!(app.pending_inputs.len(), 1);
-    let notif = &app.pending_inputs[0];
-    assert_eq!(notif.notification_type, "review-ready");
-    assert_eq!(notif.message, "Fixes ready — re-review?");
-    assert_eq!(notif.feature_name.as_deref(), Some("my-feat"));
-}
-
-#[test]
 fn visible_animation_is_enabled_for_dashboard_thinking_features() {
     let store = store_with_feature(ProjectStatus::Idle);
     let mut app = App::new_for_test(
@@ -817,7 +768,6 @@ pub(super) fn store_with_single_agent_session(
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: agent.clone(),
         enable_chrome: false,
         pending_worktree_script: false,
@@ -969,7 +919,6 @@ fn sync_session_status_shows_agent_token_usage() {
         sessions: vec![session],
         collapsed: true,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::Claude,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1266,7 +1215,6 @@ fn sync_session_status_marks_discovered_codex_usage_as_inferred() {
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::Codex,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1395,7 +1343,6 @@ fn sync_session_status_does_not_infer_stale_codex_usage_for_new_session() {
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::Codex,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1504,7 +1451,6 @@ fn sync_session_status_does_not_duplicate_inferred_sources_in_feature() {
         sessions: vec![first, second],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::Codex,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1597,7 +1543,6 @@ fn sync_session_status_checks_sidebar_inputs_off_thread() {
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::Claude,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -2056,42 +2001,6 @@ fn queued_diff_reviews_are_not_collapsed_into_one() {
 }
 
 #[test]
-fn ipc_turn_end_archives_superseded_review_notes_for_review_features() {
-    let workdir = TempDir::new().unwrap();
-    let claude = workdir.path().join(".claude");
-    std::fs::create_dir_all(&claude).unwrap();
-    std::fs::write(
-        claude.join("review-notes.md"),
-        "## src/main.rs — first\n\nOld context.\n\n---\n\n\
-         ## src/main.rs — current\n\nCurrent context.\n\n---\n",
-    )
-    .unwrap();
-
-    let mut store = store_with_codex_session(workdir.path(), false);
-    store.projects[0].features[0].review = true;
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-
-    app.handle_ipc_message_value(serde_json::json!({
-        "type": "input-request",
-        "source": "codex-notify",
-        "session_id": "aiw-my-feat",
-        "cwd": workdir.path().display().to_string(),
-        "message": "Codex finished and is waiting for input"
-    }));
-
-    let live = std::fs::read_to_string(claude.join("review-notes.md")).unwrap();
-    assert!(live.contains("Current context."));
-    assert!(!live.contains("Old context."));
-    let archive = std::fs::read_to_string(claude.join("review-notes-archive.md")).unwrap();
-    assert!(archive.contains("Old context."));
-    assert!(!archive.contains("Current context."));
-}
-
-#[test]
 fn ipc_event_binds_exact_codex_usage_source_by_feature_session_id() {
     let workdir = TempDir::new().unwrap();
     let store = store_with_codex_session(workdir.path(), false);
@@ -2219,7 +2128,6 @@ fn ipc_diff_review_queues_from_aiw_session_when_cwd_does_not_match_feature() {
         "Claude".to_string(),
         SessionKind::Claude,
         VibeMode::Vibeless,
-        false,
     ));
 
     app.handle_ipc_message_value(serde_json::json!({

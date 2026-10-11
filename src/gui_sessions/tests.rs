@@ -49,7 +49,6 @@ fn store(root: &Path, status: ProjectStatus) -> ProjectStore {
         workdir,
         true,
         VibeMode::default(),
-        false,
         AgentKind::default(),
         false,
     );

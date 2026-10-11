@@ -61,7 +61,6 @@ impl App {
                 session.label.clone(),
                 session.kind.clone(),
                 feature.mode.clone(),
-                feature.review,
             );
             (
                 view,

@@ -201,12 +201,7 @@ fn draw_create_feature_preset_picker(
                 };
                 let agent_str = preset.agent.display_name();
                 let mode_str = preset.mode.display_name().to_ascii_lowercase();
-                let detail = format!(
-                    " {} | {}{}",
-                    agent_str,
-                    mode_str,
-                    if preset.review { " | review log" } else { "" }
-                );
+                let detail = format!(" {} | {}", agent_str, mode_str);
                 let line = Line::from(vec![
                     Span::styled(
                         if is_selected { "  > " } else { "    " },
@@ -463,12 +458,10 @@ fn draw_create_feature_branch_mode(
             Constraint::Length(1),                                  // [5] spacer
             Constraint::Length(5),                                  // [6] mode
             Constraint::Length(1),                                  // [7] spacer
-            Constraint::Length(1),                                  // [8] review checkbox
-            Constraint::Length(0),                                  // [9] spacer
-            Constraint::Length(if has_chrome_row { 1 } else { 0 }), // [10] chrome checkbox
-            Constraint::Length(1), // [11] spacer before focused help
-            Constraint::Min(0),    // [12] focused option help
-            Constraint::Length(1), // [13] hints
+            Constraint::Length(if has_chrome_row { 1 } else { 0 }), // [8] chrome checkbox
+            Constraint::Length(1), // [9] spacer before focused help
+            Constraint::Min(0),    // [10] focused option help
+            Constraint::Length(1), // [11] hints
         ])
         .split(inner);
 
@@ -630,37 +623,9 @@ fn draw_create_feature_branch_mode(
     let mode_widget = Paragraph::new(mode_lines);
     frame.render_widget(mode_widget, chunks[6]);
 
-    // Review checkbox (chunks[8])
-    let review_active = state.step == CreateFeatureStep::Mode && state.mode_focus == 2;
-    let review_check = if state.review { "[x]" } else { "[ ]" };
-    let review_style = if review_active {
-        Style::default().fg(theme.text.to_color())
-    } else {
-        Style::default().fg(theme.text_muted.to_color())
-    };
-    let review_lines = vec![Line::from(vec![
-        Span::styled(
-            " Review: ",
-            if review_active {
-                Style::default().fg(theme.primary.to_color())
-            } else {
-                Style::default().fg(theme.text_muted.to_color())
-            },
-        ),
-        Span::styled(format!("{} Final review log", review_check), review_style),
-        Span::styled(
-            " HIGH TOKEN USAGE",
-            Style::default()
-                .fg(theme.warning.to_color())
-                .add_modifier(Modifier::BOLD),
-        ),
-    ])];
-    let review_widget = Paragraph::new(review_lines);
-    frame.render_widget(review_widget, chunks[8]);
-
-    // Chrome checkbox (chunks[10])
+    // Chrome checkbox (chunks[8])
     let chrome_active = state.step == CreateFeatureStep::Mode
-        && state.mode_focus == 3
+        && state.mode_focus == 2
         && state.agent == AgentKind::Claude;
     let chrome_check = if state.enable_chrome { "[x]" } else { "[ ]" };
     let chrome_style = if chrome_active {
@@ -670,7 +635,7 @@ fn draw_create_feature_branch_mode(
     };
     let chrome_label_style =
         if state.step == CreateFeatureStep::Mode && state.agent == AgentKind::Claude {
-            if state.mode_focus == 3 {
+            if state.mode_focus == 2 {
                 Style::default().fg(theme.primary.to_color())
             } else {
                 Style::default().fg(theme.text_muted.to_color())
@@ -688,19 +653,19 @@ fn draw_create_feature_branch_mode(
             ),
         ])];
         let chrome_widget = Paragraph::new(chrome_lines);
-        frame.render_widget(chrome_widget, chunks[10]);
+        frame.render_widget(chrome_widget, chunks[8]);
     }
 
     if state.step == CreateFeatureStep::Mode
         && let Some(description) = state.focused_mode_description()
     {
-        let help_area = if chunks[12].height > 3 {
+        let help_area = if chunks[10].height > 3 {
             Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Length(3), Constraint::Min(0)])
-                .split(chunks[12])[0]
+                .split(chunks[10])[0]
         } else {
-            chunks[12]
+            chunks[10]
         };
         let help = Paragraph::new(Line::from(vec![
             Span::styled("  Details  ", Style::default().fg(theme.primary.to_color())),
@@ -749,7 +714,7 @@ fn draw_create_feature_branch_mode(
             Span::raw(" cancel"),
         ]))
     };
-    frame.render_widget(hints, chunks[13]);
+    frame.render_widget(hints, chunks[11]);
 }
 
 pub fn draw_confirm_supervibe_dialog(frame: &mut Frame, theme: &Theme) {

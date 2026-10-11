@@ -375,7 +375,6 @@ mod tests {
             sessions: Vec::new(),
             collapsed: true,
             mode: VibeMode::default(),
-            review: false,
             agent: Default::default(),
             enable_chrome: false,
             pending_worktree_script: false,

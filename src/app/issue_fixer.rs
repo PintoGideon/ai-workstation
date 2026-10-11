@@ -124,20 +124,18 @@ pub(crate) enum IssueSetupRow {
     Preset,
     Harness,
     Mode,
-    Review,
     Chrome,
     Worktree,
     Prompt,
 }
 
 impl IssueSetupRow {
-    pub(crate) const ALL: [Self; 9] = [
+    pub(crate) const ALL: [Self; 8] = [
         Self::FeatureName,
         Self::Branch,
         Self::Preset,
         Self::Harness,
         Self::Mode,
-        Self::Review,
         Self::Chrome,
         Self::Worktree,
         Self::Prompt,
@@ -150,7 +148,6 @@ impl IssueSetupRow {
             Self::Preset => "Preset",
             Self::Harness => "Harness",
             Self::Mode => "Vibe mode",
-            Self::Review => "Review mode",
             Self::Chrome => "Chrome",
             Self::Worktree => "Worktree",
             Self::Prompt => "Prompt",
@@ -228,13 +225,6 @@ impl IssueSetupState {
                 self.settings.row = crate::app::FeatureSetupRow::ALL
                     .iter()
                     .position(|row| *row == crate::app::FeatureSetupRow::Mode)
-                    .unwrap_or(0);
-                let _ = self.settings.adjust(delta);
-            }
-            IssueSetupRow::Review => {
-                self.settings.row = crate::app::FeatureSetupRow::ALL
-                    .iter()
-                    .position(|row| *row == crate::app::FeatureSetupRow::Review)
                     .unwrap_or(0);
                 let _ = self.settings.adjust(delta);
             }
@@ -542,7 +532,6 @@ impl App {
             agents,
             agent_index,
             mode: VibeMode::Vibeless,
-            review: false,
             enable_chrome: false,
             branch,
             row: 0,
@@ -721,7 +710,6 @@ impl App {
         create.agent = state.agent();
         create.agent_index = state.settings.agent_index;
         create.mode = state.mode();
-        create.review = state.settings.review;
         create.enable_chrome = state.settings.enable_chrome;
         create.create_terminal = state.create_terminal;
         create.session_name = state.session_name;
@@ -1310,7 +1298,6 @@ mod tests {
             repo.path().to_path_buf(),
             false,
             VibeMode::Vibeless,
-            false,
             AgentKind::Claude,
             false,
         );
@@ -1369,7 +1356,6 @@ mod tests {
                 repo.path().join(format!("feature-{index}")),
                 true,
                 VibeMode::Vibeless,
-                false,
                 AgentKind::Claude,
                 false,
             );
@@ -1476,7 +1462,6 @@ mod tests {
             repo.path().join("existing"),
             true,
             VibeMode::Vibeless,
-            false,
             AgentKind::Claude,
             false,
         );
@@ -1525,7 +1510,6 @@ mod tests {
             workdir: repo.path().to_path_buf(),
             is_worktree: false,
             mode: VibeMode::Vibeless,
-            review: false,
             agent: AgentKind::Claude,
             create_terminal: false,
             session_name: "Claude 1".to_string(),
@@ -1591,7 +1575,6 @@ mod tests {
             repo.path().join("fix-issue-42"),
             true,
             VibeMode::Vibeless,
-            false,
             AgentKind::Claude,
             false,
         );
@@ -1608,7 +1591,6 @@ mod tests {
             repo.path().join("unrelated"),
             true,
             VibeMode::Vibeless,
-            false,
             AgentKind::Claude,
             false,
         );
@@ -1628,7 +1610,6 @@ mod tests {
             workdir: repo.path().join("fix-issue-42"),
             is_worktree: true,
             mode: VibeMode::Vibeless,
-            review: false,
             agent: AgentKind::Claude,
             create_terminal: false,
             session_name: "Claude 1".to_string(),

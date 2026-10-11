@@ -12,7 +12,6 @@ use crate::project::VibeMode;
 // FORK(cockpit): the selected session's commands (DESIGN.md §18) — the
 // embedded view's leader menu moved here when the view went.
 const DASHBOARD_LEADER_COMMANDS: &[(&str, &str)] = &[
-    ("f", "Final review of the selected feature"),
     ("d", "Diff viewer"),
     ("n", "Current plan"),
     ("m", "Markdown files"),
@@ -74,7 +73,6 @@ fn draw_view_context_bar(
         &view.feature_name,
         Some(&view.session_label),
         Some(&view.vibe_mode),
-        view.review,
         theme,
     );
 }
@@ -85,7 +83,7 @@ fn draw_feature_context_bar(
     feature_name: &str,
     theme: &crate::theme::Theme,
 ) {
-    draw_context_bar(frame, project_name, feature_name, None, None, false, theme);
+    draw_context_bar(frame, project_name, feature_name, None, None, theme);
 }
 
 fn draw_mode_context_bar(frame: &mut Frame, mode: &AppMode, theme: &crate::theme::Theme) {
@@ -109,7 +107,6 @@ fn mode_view_context(mode: &AppMode) -> Option<&crate::app::ViewState> {
         AppMode::LatestPrompt(state) => Some(&state.view),
         AppMode::PromptLibrary(state) => state.from_view.as_ref(),
         AppMode::PromptOverrides(state) => state.from_view.as_ref(),
-        AppMode::PromptPrecall(pending) => mode_view_context(pending.prior_mode.as_ref()),
         AppMode::PromptEditor(state) => mode_view_context(state.return_to.as_ref()),
         AppMode::PlaceholderFill(state) => state.from_view.as_ref(),
         AppMode::SkillPicker(state) => mode_view_context(state.return_to.as_ref()),
@@ -127,7 +124,6 @@ fn draw_context_bar(
     feature_name: &str,
     session_label: Option<&str>,
     vibe_mode: Option<&VibeMode>,
-    review: bool,
     theme: &crate::theme::Theme,
 ) {
     let viewport = frame.area();
@@ -168,12 +164,6 @@ fn draw_context_bar(
             VibeMode::SuperVibe => (" [supervibe]", theme.mode_supervibe.to_color()),
         };
         spans.push(Span::styled(label, Style::default().fg(color)));
-    }
-    if review {
-        spans.push(Span::styled(
-            " [review]",
-            Style::default().fg(theme.mode_review.to_color()),
-        ));
     }
 
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
@@ -254,11 +244,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
     if let AppMode::PrPicker(state) = &app.mode {
         super::dialogs::draw_pr_picker(frame, state, &app.theme);
-        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
-        return;
-    }
-    if let AppMode::PrReviewList(state) = &app.mode {
-        super::dialogs::draw_pr_review_list(frame, state, &app.theme);
         super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
         return;
     }
@@ -535,7 +520,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
 
     if let AppMode::DiffReviewPrompt(state) = &app.mode {
-        super::dialogs::draw_diff_review_dialog(frame, state, &app.throbber_state, &app.theme);
+        super::dialogs::draw_diff_review_dialog(frame, state, &app.theme);
     }
 
     if let AppMode::RunningHook(state) = &app.mode {
@@ -590,10 +575,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         );
     }
 
-    if let AppMode::ReviewHarnessPick(state) = &app.mode {
-        super::dialogs::draw_review_harness_pick(frame, state, &app.theme);
-    }
-
     if let AppMode::DebugLog(state) = &app.mode {
         super::dialogs::draw_debug_log(
             frame,
@@ -618,10 +599,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     if let AppMode::PromptOverrides(state) = &app.mode {
         super::dialogs::draw_prompt_overrides(frame, state, &app.theme);
-    }
-
-    if let AppMode::PromptPrecall(pending) = &app.mode {
-        super::dialogs::draw_prompt_precall(frame, pending, &app.theme);
     }
 
     if let AppMode::PlaceholderFill(state) = &app.mode {
@@ -964,7 +941,6 @@ mod tests {
             sessions: vec![],
             collapsed: false,
             mode: VibeMode::Vibeless,
-            review: false,
             agent: AgentKind::Claude,
             enable_chrome: false,
             pending_worktree_script: false,

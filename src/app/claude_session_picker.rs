@@ -194,15 +194,7 @@ impl App {
             target_session_id,
         )?;
 
-        let (
-            project_name,
-            feature_name,
-            tmux_session,
-            session_window,
-            session_label,
-            vibe_mode,
-            review,
-        ) = {
+        let (project_name, feature_name, tmux_session, session_window, session_label, vibe_mode) = {
             let project = &self.store.projects[pi];
             let feature = &project.features[fi];
 
@@ -225,7 +217,6 @@ impl App {
                 session.tmux_window.clone(),
                 session.label.clone(),
                 feature.mode.clone(),
-                feature.review,
             )
         };
 
@@ -241,7 +232,6 @@ impl App {
             session_label,
             SessionKind::Claude,
             vibe_mode,
-            review,
         );
 
         self.save()?;
@@ -292,7 +282,6 @@ impl App {
             &feature.agent,
             feature.is_worktree,
         );
-        setup::ensure_review_claude_md(&feature.workdir, feature.review);
 
         App::initialize_feature_sessions(feature, false, None);
 

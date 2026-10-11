@@ -339,10 +339,6 @@ pub struct GuiHandle {
     app: App,
     /// Configured-session launches whose pre-check is running outside the lock.
     pub(crate) custom_session_adds: std::collections::HashSet<(String, String)>,
-    pub(crate) review_context: Option<crate::gui_review::ReviewContext>,
-    /// A completed review's result, until the interface takes it once.
-    pub(crate) review_completion: Option<crate::gui_review::ReviewCompletion>,
-    pub(crate) pr_review_context: Option<crate::gui_pr_review::PrReviewContext>,
     pub(crate) pr_triage_context: Option<crate::gui_pr_triage::PrTriageContext>,
 }
 
@@ -351,10 +347,7 @@ impl GuiHandle {
         Ok(Self {
             app: App::new(db_path)?,
             custom_session_adds: Default::default(),
-            review_context: None,
-            review_completion: None,
             pr_triage_context: None,
-            pr_review_context: None,
         })
     }
 
@@ -368,10 +361,7 @@ impl GuiHandle {
         Self {
             app,
             custom_session_adds: Default::default(),
-            review_context: None,
-            review_completion: None,
             pr_triage_context: None,
-            pr_review_context: None,
         }
     }
 
@@ -2052,7 +2042,6 @@ mod tests {
             PathBuf::from("/tmp/test-workdir"),
             false,
             VibeMode::default(),
-            false,
             AgentKind::default(),
             false,
         );
@@ -2077,10 +2066,7 @@ mod tests {
         GuiHandle {
             app: App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new())),
             custom_session_adds: Default::default(),
-            review_context: None,
-            review_completion: None,
             pr_triage_context: None,
-            pr_review_context: None,
         }
     }
 
@@ -2101,10 +2087,7 @@ mod tests {
         GuiHandle {
             app,
             custom_session_adds: Default::default(),
-            review_context: None,
-            review_completion: None,
             pr_triage_context: None,
-            pr_review_context: None,
         }
     }
 
@@ -4113,10 +4096,7 @@ mod tests {
         GuiHandle {
             app,
             custom_session_adds: Default::default(),
-            review_context: None,
-            review_completion: None,
             pr_triage_context: None,
-            pr_review_context: None,
         }
     }
 
@@ -4139,7 +4119,6 @@ mod tests {
             std::env::temp_dir(),
             false,
             crate::project::VibeMode::default(),
-            false,
             AgentKind::default(),
             false,
         );
@@ -4309,17 +4288,13 @@ mod tests {
             GuiHandle {
                 app,
                 custom_session_adds: Default::default(),
-                review_context: None,
-                review_completion: None,
                 pr_triage_context: None,
-                pr_review_context: None,
             },
             CreateFeatureRequest {
                 project_name: "demo".into(),
                 branch: "todo-work".into(),
                 agent: AgentKind::default(),
                 mode: VibeMode::default(),
-                review: false,
                 create_terminal: false,
                 use_worktree: Some(true),
                 enable_chrome: false,

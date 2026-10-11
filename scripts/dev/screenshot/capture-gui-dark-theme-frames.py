@@ -255,12 +255,6 @@ try:
     capture("003-highlighted-diff.png", f"{mode.capitalize()}: Rust syntax colors on added diff rows with file navigation and controls.", ["Changes · Round invoice totals", "invoice.rs", "Round currency at the boundary.", "rounded_total"])
     click("Close")
     wait('!document.querySelector(".diff-reader")')
-    click("Final Review")
-    wait('!!document.querySelector(".diff-file")')
-    choose_rust()
-    capture("004-final-review.png", f"{mode.capitalize()}: Final Review uses the same readable text, syntax colors, surfaces and controls.", ["Final Review", "invoice.rs", "rounded_total", "Pause review"])
-    click("Pause review")
-    wait('!document.querySelector(".diff-reader")')
     if mode == "after":
         set_dark(False)
         wait('getComputedStyle(document.querySelector(".term-frame")).backgroundColor==="rgb(13, 16, 20)"')

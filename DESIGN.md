@@ -22,7 +22,7 @@ Status legend: ✅ done · 🔨 in progress · ⏳ planned.
 ## 2. Kept from upstream (no work needed)
 
 Projects → Features (branch/worktree) → Sessions · Claude, Codex, Pi · permission modes (Vibeless / Vibe /
-SuperVibe) · needs-you list `i` · dormant `z` · resource guards · final review · PR triage and review ·
+SuperVibe) · needs-you list `i` · dormant `z` · resource guards · PR triage ·
 prompt library · prompt overrides · TODO lists · usage/cost panels · themes · config wizard ·
 `doctor` / `automation` commands.
 
@@ -738,8 +738,7 @@ mode `Normal` and the sidebar on that session's row (the feature's row when the 
 **Keys.** Sidebar: `j/k`, `Enter` (focus the agent), `h/l`, `/`, `i`, `a`/`X`, `e`, `c`, `x`, `r`, `d`, `N`/`n`,
 `s`, `z`, `G`, `W`, `K`, `L`, `E`, `T`, `A`, `?`, `q`, `v`. Gone: `b`, `o`, `Tab`, the pane's own leader.
 `Ctrl+Q` is tmux's. The old view's leader commands that still matter moved to the dashboard's
-`Ctrl+Space` menu, for the selected session (`App::selection_view_state`, `src/app/session_tools.rs`): `f`
-final review, `d` diff viewer, `m` Markdown, `l` past/unsent prompts, `N` TODO capture, `F`
+`Ctrl+Space` menu, for the selected session (`App::selection_view_state`, `src/app/session_tools.rs`): `d` diff viewer, `m` Markdown, `l` past/unsent prompts, `N` TODO capture, `F`
 fresh-context session, `P` back to PR Triage, `z` complete the referenced TODO; the bookmark,
 picker, wizard and refresh entries stayed; `i`, `?`, `A` left the menu (they are plain keys). The session
 switcher (`w`), remote-control URL copy, scroll mode and text selection went with the view: the sidebar *is*
@@ -780,6 +779,14 @@ new.
 detection (`src/app/remote_control.rs`), the compose-only
 clipboard helpers, the TUI's agent-sidebar runtime, the dead `DASHBOARD_SESSION_FILTER_ENABLED` paths in view
 code. The GUI contract, `aiw-gui`, automation, hooks and IPC are unchanged.
+
+**Removed: harness-native duplicates (2026-10-11).** Final Review (the verdict/comment viewer, review notes,
+walkthrough / co-review / changeset-overview passes, batched review of oversized diffs, PR submission from the
+viewer), Review mode (the `review` feature flag and its CLAUDE.md block), the PR picker's "Review a PR" tab and
+its drafts, and the headless pre-call notice. Claude Code's `/code-review` and Codex's `/review` do this inside
+the agent. The plain diff viewer (`d`: current changes or one commit, file tree, context ladder, whitespace
+toggle, base-ref override) and the Vibeless per-edit approval popup stay. `features.review`, `pr_review_drafts`
+and `review_source` remain in the schema, unread.
 
 **Measured** (`cargo +1.99.0 test --locked --release fork_bench -- --ignored --nocapture`, 36×60 sidebar with
 the info block, 3 projects × 10 sessions, the selection alternating between a `⛔` row and a `●` row, 2,000

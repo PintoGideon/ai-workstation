@@ -363,7 +363,6 @@ mod tests {
             "/tmp/legacy-repo".into(),
             false,
             VibeMode::Vibe,
-            false,
             AgentKind::Claude,
             false,
         );

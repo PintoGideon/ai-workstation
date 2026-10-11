@@ -389,7 +389,6 @@ impl App {
             final_workdir.clone(),
             use_worktree,
             request.mode.clone(),
-            request.review,
             request.agent.clone(),
             request.enable_chrome,
         );
@@ -546,7 +545,6 @@ impl App {
                 workdir.clone(),
                 true,
                 request.mode.clone(),
-                request.review,
                 request.agent.clone(),
                 request.enable_chrome,
             );

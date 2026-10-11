@@ -982,7 +982,6 @@ mod tests {
             "Claude 1".into(),
             crate::project::SessionKind::Claude,
             VibeMode::Vibeless,
-            false,
         )
     }
 

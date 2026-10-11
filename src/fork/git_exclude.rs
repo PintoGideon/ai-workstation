@@ -52,10 +52,6 @@ pub(crate) const AIW_HELPER_PATTERNS: &[&str] = &[
     ".claude/.gitignore",
     ".claude/notifications/",
     ".claude/latest-prompt.txt",
-    ".claude/review-notes.md",
-    ".claude/review-notes-archive.md",
-    ".claude/final-review-feedback.md",
-    ".claude/final-review-feedback-archive.md",
     ".claude/context.md",
     ".claude/skills/aiw-*/",
     // Codex

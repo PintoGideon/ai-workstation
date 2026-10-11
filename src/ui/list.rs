@@ -371,12 +371,6 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
                         ));
                     }
                     line_spans.extend(mode_badge_spans);
-                    if feature.review {
-                        line_spans.push(Span::styled(
-                            " [review]",
-                            Style::default().fg(theme.mode_review.to_color()),
-                        ));
-                    }
                     if is_being_deleted {
                         line_spans.push(Span::styled(
                             " [deleting...]",
@@ -839,7 +833,6 @@ mod tests {
             sessions,
             collapsed: true,
             mode: VibeMode::default(),
-            review: false,
             agent: AgentKind::Claude,
             enable_chrome: false,
             pending_worktree_script: false,
@@ -939,7 +932,6 @@ mod tests {
             sessions: vec![session],
             collapsed: false,
             mode: VibeMode::default(),
-            review: false,
             agent: AgentKind::Claude,
             enable_chrome: false,
             pending_worktree_script: false,

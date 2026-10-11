@@ -37,12 +37,7 @@ fn diff_review_language_status(
     highlight::language_install_state_for_path(std::path::Path::new(&state.relative_path))
 }
 
-pub fn draw_diff_review_dialog(
-    frame: &mut Frame,
-    state: &DiffReviewState,
-    throbber_state: &throbber_widgets_tui::ThrobberState,
-    theme: &Theme,
-) {
+pub fn draw_diff_review_dialog(frame: &mut Frame, state: &DiffReviewState, theme: &Theme) {
     let hold_remaining = state.hold_remaining_secs();
     let area = centered_rect(92, 82, frame.area());
     crate::ui::draw_modal_overlay(frame, area, theme);
@@ -56,19 +51,13 @@ pub fn draw_diff_review_dialog(
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let explanation_loading = state.explanation_child.is_some();
-    let explanation_open = state.explanation.is_some() || explanation_loading;
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1), // file
             Constraint::Length(1), // tool
             Constraint::Min(7),    // diff
-            if explanation_open {
-                Constraint::Length(6)
-            } else {
-                Constraint::Length(2)
-            },
+            Constraint::Length(1), // separator
             Constraint::Length(2), // hints
         ])
         .split(inner);
@@ -118,7 +107,6 @@ pub fn draw_diff_review_dialog(
                 scroll: state.patch_scroll,
                 include_prologue: new_file_presentation,
                 new_file_presentation,
-                ..Default::default()
             },
             theme,
         );
@@ -183,74 +171,14 @@ pub fn draw_diff_review_dialog(
         frame.render_widget(diff_widget, chunks[2]);
     }
 
-    if explanation_loading {
-        let throbber = throbber_widgets_tui::Throbber::default()
-            .throbber_style(
-                Style::default()
-                    .fg(theme.info.to_color())
-                    .add_modifier(Modifier::BOLD),
-            )
-            .throbber_set(throbber_widgets_tui::BRAILLE_EIGHT_DOUBLE)
-            .use_type(throbber_widgets_tui::WhichUse::Spin);
-        let span = throbber.to_symbol_span(throbber_state);
-        let explanation_widget = Paragraph::new(Line::from(vec![
-            Span::styled(" ", Style::default()),
-            span,
-            Span::styled(
-                " Generating explanation...",
-                Style::default().fg(theme.info.to_color()),
-            ),
-        ]))
-        .block(
-            Block::default()
-                .borders(Borders::TOP)
-                .border_style(Style::default().fg(theme.text_muted.to_color()))
-                .title(Span::styled(
-                    " explanation ",
-                    Style::default().fg(theme.text_muted.to_color()),
-                )),
-        );
-        frame.render_widget(explanation_widget, chunks[3]);
-    } else if let Some(explanation) = &state.explanation {
-        let explanation_lines = explanation
-            .lines()
-            .map(|line| {
-                Line::from(Span::styled(
-                    format!(" {line}"),
-                    Style::default().fg(theme.text.to_color()),
-                ))
-            })
-            .collect::<Vec<_>>();
-        let explanation_widget = Paragraph::new(explanation_lines)
-            .block(
-                Block::default()
-                    .borders(Borders::TOP)
-                    .border_style(Style::default().fg(theme.text_muted.to_color()))
-                    .title(Span::styled(
-                        " explanation ",
-                        Style::default().fg(theme.text_muted.to_color()),
-                    )),
-            )
-            .wrap(Wrap { trim: false });
-        frame.render_widget(explanation_widget, chunks[3]);
-    } else {
-        let explanation_hint = Paragraph::new(Line::from(vec![
-            Span::styled(" e", Style::default().fg(theme.info.to_color())),
-            Span::styled(
-                " explain these changes",
-                Style::default().fg(theme.text_muted.to_color()),
-            ),
-        ]))
-        .block(
-            Block::default()
-                .borders(Borders::TOP)
-                .border_style(Style::default().fg(theme.text_muted.to_color())),
-        );
-        frame.render_widget(explanation_hint, chunks[3]);
-    }
+    frame.render_widget(
+        Block::default()
+            .borders(Borders::TOP)
+            .border_style(Style::default().fg(theme.text_muted.to_color())),
+        chunks[3],
+    );
 
     let hints = Paragraph::new(diff_review_hint_lines(
-        explanation_loading,
         new_file_presentation,
         state.layout.clone(),
         diff_review_language_status(state),
@@ -296,7 +224,6 @@ pub fn draw_diff_review_dialog(
 }
 
 fn diff_review_hint_lines(
-    explanation_loading: bool,
     new_file_presentation: bool,
     layout: DiffViewerLayout,
     syntax_status: Option<(
@@ -306,13 +233,6 @@ fn diff_review_hint_lines(
     hold_remaining: f64,
     theme: &Theme,
 ) -> Vec<Line<'static>> {
-    if explanation_loading {
-        return vec![Line::from(vec![
-            Span::styled(" e", Style::default().fg(theme.info.to_color())),
-            Span::raw(" generating explanation..."),
-        ])];
-    }
-
     if hold_remaining > 0.0 {
         let secs = hold_remaining.ceil() as u64;
         return vec![Line::from(vec![
@@ -797,7 +717,6 @@ mod tests {
     fn diff_review_hints_include_syntax_install_for_new_files() {
         let theme = Theme::default();
         let lines = diff_review_hint_lines(
-            false,
             true,
             DiffViewerLayout::Unified,
             Some((

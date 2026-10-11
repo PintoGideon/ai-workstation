@@ -99,7 +99,6 @@ fn contextual_syntax_install_returns_to_diff_viewer_and_refreshes() {
             "Claude".into(),
             SessionKind::Claude,
             VibeMode::Vibe,
-            false,
         ),
         workdir.path().to_path_buf(),
     );
@@ -188,7 +187,6 @@ fn contextual_syntax_install_returns_to_diff_review_prompt() {
         }),
         return_to: Some(Box::new(AppMode::DiffReviewPrompt(DiffReviewState {
             session_id: "sess-1".to_string(),
-            workdir: workdir.path().to_path_buf(),
             relative_path: "src/main.rs".to_string(),
             tool: "edit".to_string(),
             old_snippet: "old".to_string(),
@@ -198,8 +196,6 @@ fn contextual_syntax_install_returns_to_diff_review_prompt() {
             reason: String::new(),
             editing_feedback: false,
             layout: DiffViewerLayout::Unified,
-            explanation: None,
-            explanation_child: None,
             response_file: workdir.path().join("response.json"),
             proceed_signal: workdir.path().join("proceed"),
             request_id: None,
@@ -346,7 +342,6 @@ fn sync_session_status_skips_non_custom_sessions() {
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::default(),
         enable_chrome: false,
         pending_worktree_script: false,
@@ -407,7 +402,6 @@ fn on_stop_persists_on_feature_session() {
         PathBuf::from("/tmp/test"),
         false,
         VibeMode::default(),
-        false,
         AgentKind::default(),
         false,
     );
@@ -430,7 +424,6 @@ fn on_stop_none_when_not_provided() {
         PathBuf::from("/tmp/test"),
         false,
         VibeMode::default(),
-        false,
         AgentKind::default(),
         false,
     );

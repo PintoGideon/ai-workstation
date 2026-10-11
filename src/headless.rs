@@ -1,95 +1,10 @@
 use anyhow::{Context, Result};
 use std::io::Write;
 use std::path::Path;
-use std::process::{Child, Command, ExitStatus, Output, Stdio};
+use std::process::{Command, Stdio};
 
 use crate::project::AgentKind;
-use crate::resources::limits::HeadlessLease;
 use serde::{Deserialize, Serialize};
-
-/// How long an abandoned run gets to exit on `SIGTERM` before it is killed.
-/// Spent on a background thread, never on the UI thread.
-const ABANDONED_RUN_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
-
-/// A headless harness process whose lifetime outlives the call that started
-/// it — the poll-driven runs (Final Review walkthroughs and co-reviews, the
-/// changeset overview, the diff-review explanation) that park a `Child` in app
-/// state and check on it each tick.
-///
-/// The concurrency lease rides along with the child instead of being scoped to
-/// a function, so a run that is abandoned mid-flight — the reviewer closes the
-/// diff viewer, dismisses the overlay, walks away — is cleaned up when the
-/// state holding it is dropped.
-///
-/// **Dropping this kills the run.** `std::process::Child` deliberately does
-/// not: dropping its handle detaches the process, which would leave an
-/// abandoned harness burning CPU and memory while no longer counting against
-/// the limit — exactly the accounting lie the limit exists to prevent. So
-/// `Drop` terminates the process *tree* (a harness spawns its own children)
-/// and reaps it, and holds the lease until the process is actually gone rather
-/// than releasing the slot to a process that is still dying.
-///
-/// The termination runs on a detached thread because the grace period is
-/// measured in seconds and drops happen on the UI thread.
-#[derive(Debug)]
-pub struct LeasedChild {
-    /// `None` only after [`Self::wait_with_output`] has taken the child,
-    /// which is the one path where the run finished on its own terms.
-    child: Option<Child>,
-    lease: Option<HeadlessLease>,
-}
-
-impl LeasedChild {
-    pub fn new(child: Child) -> Self {
-        Self {
-            child: Some(child),
-            lease: Some(HeadlessLease::acquire()),
-        }
-    }
-
-    /// Non-blocking status check; `Ok(None)` while the run is still going.
-    pub fn try_wait(&mut self) -> std::io::Result<Option<ExitStatus>> {
-        match self.child.as_mut() {
-            Some(child) => child.try_wait(),
-            None => Ok(None),
-        }
-    }
-
-    /// Collect the finished run's output, releasing the lease afterwards.
-    pub fn wait_with_output(mut self) -> std::io::Result<Output> {
-        match self.child.take() {
-            // `self` still drops here, but with no child left to terminate.
-            Some(child) => child.wait_with_output(),
-            // Unreachable: this method consumes `self`, so it cannot run
-            // twice. An error rather than a fabricated empty success, which
-            // would read as "the run produced nothing".
-            None => Err(std::io::Error::other("headless run already collected")),
-        }
-    }
-}
-
-impl Drop for LeasedChild {
-    fn drop(&mut self) {
-        let Some(mut child) = self.child.take() else {
-            return;
-        };
-        // Finished on its own: reaping is all that is left, and `Child`'s own
-        // drop cannot do even that.
-        if matches!(child.try_wait(), Ok(Some(_))) {
-            return;
-        }
-
-        let pid = child.id() as i64;
-        // The lease travels with the doomed process so the slot frees up when
-        // the memory does, not when the handle went out of scope.
-        let lease = self.lease.take();
-        std::thread::spawn(move || {
-            crate::resources::procs::terminate_tree(pid, ABANDONED_RUN_GRACE);
-            let _ = child.wait();
-            drop(lease);
-        });
-    }
-}
 
 /// Harness-agnostic entry point for one-shot, non-interactive agent work.
 ///
@@ -99,77 +14,12 @@ impl Drop for LeasedChild {
 pub struct HeadlessRunner;
 
 // ---------------------------------------------------------------------------
-// Prompt-size estimation
-//
-// A pre-send soft gate for the batched-review orchestrator: if a rendered
-// prompt is estimated to overflow the harness it is split into bounded
-// prompts *before* the call rather than after a "prompt too long" failure.
-// The estimate is deliberately crude — real tokenizers and context windows
-// are not exposed by any of the four CLIs — so it fails safe toward splitting,
-// and the adaptive halving in `crate::review_batch` is the hard backstop.
-//
-// `allow(dead_code)`: the callers are `crate::review_batch` and the review
-// call sites; a couple of the entry points here (`will_overflow`,
-// `PROMPT_ESTIMATE_BYTES_PER_TOKEN`) have no caller yet.
-// ---------------------------------------------------------------------------
-
-/// Bytes per token for the size estimate. GPT/Claude-family tokenizers land
-/// near four bytes per token on source and prose; four keeps the estimate a
-/// touch pessimistic on dense code.
-#[allow(dead_code)]
-pub const PROMPT_ESTIMATE_BYTES_PER_TOKEN: usize = 4;
-
-/// Rough token count of `prompt`, rounding up. Uses byte length rather than
-/// `chars().count()` on purpose: multibyte text then estimates *higher*, which
-/// errs toward splitting instead of toward an over-long prompt.
-#[allow(dead_code)]
-pub fn estimate_prompt_tokens(prompt: &str) -> usize {
-    prompt.len().div_ceil(PROMPT_ESTIMATE_BYTES_PER_TOKEN)
-}
-
-/// Conservative ceiling on the *prompt* tokens a single one-shot run for
-/// `harness` should carry. Set well under each harness's real context window
-/// so there is room for its system prompt, tool schemas, and the response.
-/// These are only the built-in defaults; `AppConfig` /
-/// `ExtensionConfig::review_prompt_budget_tokens` override them without a
-/// rebuild (resolved by `App::review_prompt_budget`).
-#[allow(dead_code)]
-pub const fn default_prompt_budget_tokens(harness: &AgentKind) -> usize {
-    match harness {
-        // ~200k-token context; keep a wide margin for tools + output.
-        AgentKind::Claude => 128_000,
-        // Comparable large context through `codex exec`.
-        AgentKind::Codex => 128_000,
-        AgentKind::Pi => 96_000,
-        // FORK: no headless support yet; value unused.
-        AgentKind::Gemini | AgentKind::Cursor => 96_000,
-    }
-}
-
-/// Whether `prompt` should be assumed to overflow `harness` and be split
-/// before sending, using [`default_prompt_budget_tokens`]. Callers with a
-/// configured budget use [`will_overflow_with_budget`] directly.
-#[allow(dead_code)]
-pub fn will_overflow(prompt: &str, harness: &AgentKind) -> bool {
-    will_overflow_with_budget(prompt, default_prompt_budget_tokens(harness))
-}
-
-/// Whether `prompt`'s estimated token count exceeds `budget_tokens`. A budget
-/// of `0` disables the gate (never reports overflow) so config can opt out of
-/// pre-send splitting and lean entirely on adaptive halving.
-#[allow(dead_code)]
-pub fn will_overflow_with_budget(prompt: &str, budget_tokens: usize) -> bool {
-    budget_tokens != 0 && estimate_prompt_tokens(prompt) > budget_tokens
-}
-
-// ---------------------------------------------------------------------------
 // Overflow-error classification
 //
 // The hard backstop behind the soft size gate: when a harness rejects a
 // prompt as too long *despite* the estimate clearing the budget, the run
 // fails with a typed [`PromptTooLong`] instead of a generic error string so
-// `crate::review_batch` can halve that batch and retry rather than
-// abandoning coverage. Any failure the classifier does not recognize stays a
+// a caller can tell it apart from auth or network failures. Any failure the classifier does not recognize stays a
 // plain `anyhow` error: the CLIs' "too long" phrasings are unverified across
 // versions, so the classifier is deliberately conservative.
 // ---------------------------------------------------------------------------
@@ -355,11 +205,7 @@ pub struct ModelSel<'a> {
     pub reasoning: Option<ReasoningLevel>,
 }
 
-impl<'a> ModelSel<'a> {
-    pub fn new(model: Option<&'a str>, reasoning: Option<ReasoningLevel>) -> Self {
-        Self { model, reasoning }
-    }
-}
+impl<'a> ModelSel<'a> {}
 
 impl<'a> From<Option<&'a str>> for ModelSel<'a> {
     fn from(model: Option<&'a str>) -> Self {
@@ -663,7 +509,7 @@ fn read_only_command_for(harness: &AgentKind) -> Result<HeadlessCommand> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resources::limits::{in_flight_headless_runs, lock_lease_tests, wait_for_in_flight};
+    use crate::resources::limits::{lock_lease_tests, wait_for_in_flight};
 
     // FORK: Gemini/Cursor are refused before anything is spawned.
 
@@ -691,113 +537,6 @@ mod tests {
             ModelSel::default(),
         );
         assert!(result.is_err(), "spawn of a missing binary must fail");
-        assert_eq!(wait_for_in_flight(base), base);
-    }
-
-    /// Poll until `pid` is gone, or give up after `secs`.
-    fn wait_for_exit(pid: i64, secs: u64) -> bool {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(secs);
-        while std::time::Instant::now() < deadline {
-            if !crate::resources::procs::pid_alive(pid) {
-                return true;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        }
-        !crate::resources::procs::pid_alive(pid)
-    }
-
-    #[test]
-    fn dropping_an_abandoned_leased_child_kills_the_run_and_releases_its_lease() {
-        let _guard = lock_lease_tests();
-        // Stands in for a poll-driven run (walkthrough, co-review) that the
-        // reviewer walks away from before it finishes. `& wait` gives it a
-        // child of its own, the way a real harness has subprocesses: a kill
-        // that only reached the top process would leave that behind.
-        // Wait for any lease leaked by an earlier test to drain before reading
-        // the baseline. A run abandoned elsewhere in the suite (closing the
-        // changeset-overview modal, say) keeps its lease for
-        // `ABANDONED_RUN_GRACE` past the end of that test, so capturing the
-        // count directly can record a baseline that then falls away underneath
-        // the assertion below.
-        let base = wait_for_in_flight(0);
-        let child = Command::new("sh")
-            .args(["-c", "sleep 30 & wait"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("sh should be available");
-        let pid = child.id() as i64;
-        let mut leased = LeasedChild::new(child);
-        assert!(in_flight_headless_runs() > base);
-        assert!(leased.try_wait().expect("try_wait").is_none());
-        // Let the shell fork before the tree is walked.
-        std::thread::sleep(std::time::Duration::from_millis(200));
-        let tree =
-            crate::resources::procs::process_tree(&crate::resources::procs::list_processes(), pid);
-        assert!(tree.len() > 1, "expected a subprocess, got {tree:?}");
-
-        drop(leased);
-
-        // The process is really gone, not merely detached and uncounted.
-        for pid in &tree {
-            assert!(
-                wait_for_exit(*pid, 10),
-                "pid {pid} survived the abandoned run"
-            );
-        }
-        // And the slot comes back only once it is.
-        assert_eq!(wait_for_in_flight(base), base);
-    }
-
-    #[test]
-    fn dropping_a_finished_leased_child_reaps_it_without_a_kill() {
-        let _guard = lock_lease_tests();
-        // Wait for any lease leaked by an earlier test to drain before reading
-        // the baseline. A run abandoned elsewhere in the suite (closing the
-        // changeset-overview modal, say) keeps its lease for
-        // `ABANDONED_RUN_GRACE` past the end of that test, so capturing the
-        // count directly can record a baseline that then falls away underneath
-        // the assertion below.
-        let base = wait_for_in_flight(0);
-        let child = Command::new("true")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("true should be available");
-        let pid = child.id() as i64;
-        let leased = LeasedChild::new(child);
-        // Give it time to exit. Nothing has reaped it, so it is a zombie and
-        // still answers `kill(pid, 0)`.
-        std::thread::sleep(std::time::Duration::from_millis(200));
-
-        drop(leased);
-
-        // Dropping reaps it. `Child`'s own drop would have left the zombie
-        // behind, which is the other half of what it does not do for us.
-        assert!(wait_for_exit(pid, 5), "pid {pid} was never reaped");
-        assert_eq!(wait_for_in_flight(base), base);
-    }
-
-    #[test]
-    fn collecting_a_leased_child_releases_its_lease() {
-        let _guard = lock_lease_tests();
-        // Wait for any lease leaked by an earlier test to drain before reading
-        // the baseline. A run abandoned elsewhere in the suite (closing the
-        // changeset-overview modal, say) keeps its lease for
-        // `ABANDONED_RUN_GRACE` past the end of that test, so capturing the
-        // count directly can record a baseline that then falls away underneath
-        // the assertion below.
-        let base = wait_for_in_flight(0);
-        let child = Command::new("true")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("true should be available");
-        let leased = LeasedChild::new(child);
-        assert!(in_flight_headless_runs() > base);
-
-        let output = leased.wait_with_output().expect("wait_with_output");
-        assert!(output.status.success());
         assert_eq!(wait_for_in_flight(base), base);
     }
 
@@ -1017,57 +756,6 @@ mod tests {
                 *level
             );
         }
-    }
-
-    #[test]
-    fn estimate_prompt_tokens_rounds_up_by_byte_length() {
-        assert_eq!(estimate_prompt_tokens(""), 0);
-        assert_eq!(estimate_prompt_tokens("a"), 1);
-        assert_eq!(estimate_prompt_tokens("aaaa"), 1);
-        assert_eq!(estimate_prompt_tokens("aaaaa"), 2);
-        // Multibyte text is measured by bytes, so it estimates higher — the
-        // safe direction (splits sooner rather than sending an over-long
-        // prompt). "é" is two bytes; ten of them → 20 bytes → 5 tokens.
-        assert_eq!(estimate_prompt_tokens(&"é".repeat(10)), 5);
-    }
-
-    #[test]
-    fn every_harness_has_a_nonzero_default_budget() {
-        for harness in AgentKind::ALL {
-            assert!(
-                default_prompt_budget_tokens(&harness) > 0,
-                "{harness:?} needs a positive default prompt budget"
-            );
-        }
-    }
-
-    #[test]
-    fn will_overflow_gates_on_the_default_budget() {
-        for harness in AgentKind::ALL {
-            let budget = default_prompt_budget_tokens(&harness);
-            assert!(!will_overflow("a short prompt", &harness));
-            // One byte per token-worth over the budget, guaranteed to exceed.
-            let huge = "x".repeat((budget + 1) * PROMPT_ESTIMATE_BYTES_PER_TOKEN);
-            assert!(
-                will_overflow(&huge, &harness),
-                "{harness:?} should flag a prompt past its budget"
-            );
-        }
-    }
-
-    #[test]
-    fn a_zero_budget_disables_the_gate() {
-        let huge = "x".repeat(1_000_000);
-        assert!(!will_overflow_with_budget(&huge, 0));
-    }
-
-    #[test]
-    fn will_overflow_with_budget_compares_estimate_to_budget() {
-        // Exactly at the budget is not overflow; one token over is.
-        let at_budget = "x".repeat(100 * PROMPT_ESTIMATE_BYTES_PER_TOKEN);
-        assert!(!will_overflow_with_budget(&at_budget, 100));
-        let over = "x".repeat(100 * PROMPT_ESTIMATE_BYTES_PER_TOKEN + 1);
-        assert!(will_overflow_with_budget(&over, 100));
     }
 
     #[test]

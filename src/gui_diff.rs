@@ -273,7 +273,6 @@ pub(crate) mod tests {
             repo,
             false,
             VibeMode::default(),
-            false,
             AgentKind::Claude,
             false,
         );

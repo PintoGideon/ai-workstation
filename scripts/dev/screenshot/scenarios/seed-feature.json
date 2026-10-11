@@ -3,7 +3,6 @@
   "branch": "demo-feature",
   "agent": "claude",
   "mode": "vibe",
-  "review": false,
   "create_terminal": true,
   "use_worktree": true,
   "enable_chrome": false,

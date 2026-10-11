@@ -12,7 +12,7 @@
 //! Shape:
 //! ```json
 //! "prompt_overrides": {
-//!   "review.walkthrough": { "template": "…text with {{tokens}}…" },
+//!   "session.summary": { "template": "…text with {{tokens}}…" },
 //!   "review.question": {
 //!     "template": "…shared…",
 //!     "harnesses": { "codex": "…codex-specific…" }
@@ -304,16 +304,12 @@ mod tests {
     fn effective_reads_by_prompt_id_string() {
         let mut map = ProjectPromptOverrides::new();
         map.insert(
-            "review.walkthrough".to_string(),
+            "session.summary".to_string(),
             entry(Some("repo review prompt {{annotated_diff}}"), &[]),
         );
         assert_eq!(
-            effective(&map, PromptId::ReviewWalkthrough, &AgentKind::Claude),
-            Some("repo review prompt {{annotated_diff}}")
-        );
-        assert_eq!(
             effective(&map, PromptId::SessionSummary, &AgentKind::Claude),
-            None
+            Some("repo review prompt {{annotated_diff}}")
         );
     }
 
@@ -359,7 +355,7 @@ mod tests {
             r#"{
                 "custom_sessions": [],
                 "prompt_overrides": {
-                    "review.walkthrough": {
+                    "session.summary": {
                         "template": "hand-written {{patch}}",
                         "harnesses": { "codex": "hand-written codex {{patch}}" }
                     }
@@ -370,11 +366,11 @@ mod tests {
 
         let map = load_from_repo(dir.path());
         assert_eq!(
-            effective(&map, PromptId::ReviewWalkthrough, &AgentKind::Claude),
+            effective(&map, PromptId::SessionSummary, &AgentKind::Claude),
             Some("hand-written {{patch}}")
         );
         assert_eq!(
-            effective(&map, PromptId::ReviewWalkthrough, &AgentKind::Codex),
+            effective(&map, PromptId::SessionSummary, &AgentKind::Codex),
             Some("hand-written codex {{patch}}")
         );
     }

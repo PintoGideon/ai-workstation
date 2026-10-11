@@ -1,4 +1,4 @@
-//! Syntax highlighting for the desktop GUI's diffs and Final Review
+//! Syntax highlighting for the desktop GUI's diffs
 //! reader.
 //!
 //! Decision: highlighting happens here, in Rust, through the TUI's own

@@ -154,7 +154,6 @@ mod tests {
             workdir,
             is_worktree,
             VibeMode::Vibe,
-            false,
             AgentKind::Claude,
             false,
         )

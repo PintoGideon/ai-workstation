@@ -296,134 +296,7 @@ it("opens current changes from a stopped Git feature without launching a session
 it("offers Changes only for Git projects", async () => {
   const client = await openFeature([], [], "stopped");
   expect(screen.queryByRole("button", { name: "Changes", exact: true })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Final Review", exact: true })).toBeNull();
   expect(screen.queryByRole("button", { name: "PR Triage", exact: true })).toBeNull();
-  client.clear();
-});
-
-it("opens Final Review on a stopped feature and pauses with its workflow identity once", async () => {
-  const client = await openFeature([], [], "stopped", true);
-  const original = vi.mocked(invoke).getMockImplementation()!;
-  let finishPause!: () => void;
-  vi.mocked(invoke).mockImplementation((command, args, options) => {
-    if (command === "review_begin") return Promise.resolve({
-      workflow_id: "review-id", revision: 7, target: { project_id: "project", feature_id: "feature" },
-      feature_name: "my-feat", branch: "my-feat", base_ref: "main", files: [], selected_path: null,
-        general_feedback: "", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null, summary: null,
-        ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude"], message: null },
-    });
-    if (command === "review_act") return new Promise((resolve) => { finishPause = () => resolve(null); });
-    return original(command, args, options);
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Final Review", exact: true }));
-  await screen.findByText("No changes to review.");
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith("review_begin", { target: { project_id: "project", feature_id: "feature" } });
-  const pause = screen.getByRole("button", { name: "Pause review" });
-  fireEvent.click(pause);
-  fireEvent.click(pause);
-  await waitFor(() => expect(vi.mocked(invoke).mock.calls.filter(([command]) => command === "review_act")).toHaveLength(1));
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith("review_act", { workflowId: "review-id", revision: 7, action: { kind: "pause" } });
-  await act(async () => finishPause());
-  expect(screen.queryByRole("dialog", { name: "Final Review" })).toBeNull();
-  expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "start_feature" || command === "add_session")).toBe(false);
-  client.clear();
-});
-
-it("polls review completions by workflow/revision and cannot resurrect a paused review", async () => {
-  const client = await openFeature([], [], "stopped", true);
-  const original = vi.mocked(invoke).getMockImplementation()!;
-  const base = {
-    workflow_id: "review-poll", revision: 7, target: { project_id: "project", feature_id: "feature" },
-    feature_name: "my-feat", branch: "my-feat", base_ref: "main", files: [], selected_path: null,
-    general_feedback: "", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null, summary: null,
-    ai: { precall: null, running: true, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null as string | null, harnesses: ["claude"], message: null },
-  };
-  // The overview landed while another AI request is still running, so polling continues.
-  let response: Promise<typeof base> = Promise.resolve({ ...base, revision: 8, ai: { ...base.ai, overview: "Completed overview" } });
-  vi.mocked(invoke).mockImplementation((command, args, options) => {
-    if (command === "review_begin") return Promise.resolve(base);
-    if (command === "review_snapshot") return response;
-    if (command === "review_act") return Promise.resolve(null);
-    return original(command, args, options);
-  });
-  vi.useFakeTimers();
-  try {
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Final Review", exact: true })));
-    await act(async () => vi.advanceTimersByTimeAsync(1000));
-    expect(screen.getByText("Completed overview")).toBeTruthy();
-    expect(vi.mocked(invoke)).toHaveBeenCalledWith("review_snapshot", { workflowId: "review-poll" });
-    response = Promise.resolve({ ...base, revision: 7, ai: { ...base.ai, overview: "Stale overview" } });
-    await act(async () => vi.advanceTimersByTimeAsync(1000));
-    expect(screen.queryByText("Stale overview")).toBeNull();
-    let deliver!: (next: typeof base) => void;
-    response = new Promise((resolve) => { deliver = resolve; });
-    await act(async () => vi.advanceTimersByTimeAsync(1000));
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Pause review" })));
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Discard and continue" })));
-    await act(async () => deliver({ ...base, revision: 9 }));
-    expect(screen.queryByRole("dialog", { name: "Final Review" })).toBeNull();
-    const mutations = vi.mocked(invoke).mock.calls.filter(([command]) => command === "review_act");
-    expect(mutations).toHaveLength(1);
-    expect(mutations[0][1]).toEqual({ workflowId: "review-poll", revision: 8, action: { kind: "pause" } });
-  } finally { vi.useRealTimers(); client.clear(); }
-});
-
-it("does not poll a review with no AI work in flight", async () => {
-  const client = await openFeature([], [], "stopped", true);
-  const original = vi.mocked(invoke).getMockImplementation()!;
-  const idle = {
-    workflow_id: "review-idle", revision: 1, target: { project_id: "project", feature_id: "feature" },
-    feature_name: "my-feat", branch: "my-feat", base_ref: "main", files: [], selected_path: null,
-    general_feedback: "", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null, summary: null,
-    ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude"], message: null },
-  };
-  vi.mocked(invoke).mockImplementation((command, args, options) => {
-    if (command === "review_begin") return Promise.resolve(idle);
-    if (command === "review_snapshot") return Promise.resolve(idle);
-    return original(command, args, options);
-  });
-  vi.useFakeTimers();
-  try {
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Final Review", exact: true })));
-    await act(async () => vi.advanceTimersByTimeAsync(5000));
-    expect(vi.mocked(invoke).mock.calls.filter(([command]) => command === "review_snapshot")).toHaveLength(0);
-  } finally { vi.useRealTimers(); client.clear(); }
-});
-
-it.each(["claude", "codex", "pi"])("adds a library prompt to an existing %s draft without sending or replacing another draft", async (kind) => {
-  const client = await openFeature([session("First", kind), session("Second", kind)]);
-  fireEvent.change(draftInput(), { target: { value: "First message" } });
-  fireEvent.click(screen.getByRole("tab", { name: /Second/ }));
-  fireEvent.change(draftInput(), { target: { value: "Second message" } });
-  fireEvent.click(screen.getByRole("tab", { name: /First/ }));
-  const original = vi.mocked(invoke).getMockImplementation()!;
-  const target = { project_id: "project", feature_id: "feature", session_id: "Second" };
-  vi.mocked(invoke).mockImplementation((command, args, options) => {
-    if (command === "prompt_library_load") return Promise.resolve({
-      entries: [{ key: "plain", name: "Library fixture", source: "User", body: "Library prompt", tags: [], description: null, slots: [] }],
-      available_keys: ["plain"],
-      targets: ["First", "Second"].map((id) => ({ target: { ...target, session_id: id }, label: id, stopped: false })),
-    });
-    if (command === "prompt_library_resolve") return Promise.resolve("Library prompt");
-    return original(command, args, options);
-  });
-  fireEvent.click(within(draftInput().closest(".composer")!).getByRole("button", { name: "Prompt library" }));
-  fireEvent.click(await screen.findByRole("button", { name: /Library fixture/ }));
-  await screen.findByText("Library prompt", { selector: "pre[aria-label='Resolved prompt']" });
-  fireEvent.change(screen.getByRole("combobox", { name: "Agent session" }), {
-    target: { value: JSON.stringify(["project", "feature", "Second"]) },
-  });
-  await waitFor(() => expect((screen.getByRole("button", { name: "Add to draft" }) as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.click(screen.getByRole("button", { name: "Add to draft" }));
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Prompt library" })).toBeNull());
-  expect(draftInput().value).toBe("Second message\n\nLibrary prompt");
-  expect(document.activeElement).toBe(draftInput());
-  fireEvent.click(screen.getByRole("tab", { name: /First/ }));
-  expect(draftInput().value).toBe("First message");
-  expect(promptCalls()).toHaveLength(0);
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith("prompt_library_load", {
-    scope: { kind: "feature", project_id: "project", feature_id: "feature" }, query: "",
-  });
   client.clear();
 });
 
@@ -458,138 +331,6 @@ it("refuses a late library handoff after the session is deleted in the workspace
   expect(screen.queryByRole("textbox", { name: "Draft prompt" })).toBeNull();
   expect(promptCalls()).toHaveLength(0);
   client.clear();
-});
-
-it("polls a running project check without AI work and stops when its result arrives", async () => {
-  const client = await openFeature([], [], "stopped", true);
-  const original = vi.mocked(invoke).getMockImplementation()!;
-  const base = {
-    workflow_id: "review-check", revision: 7, target: { project_id: "project", feature_id: "feature" },
-    feature_name: "my-feat", branch: "my-feat", base_ref: "main", files: [], selected_path: null,
-    general_feedback: "", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null,
-    summary: { rows: [], undecided: 0, pending_suggestions: 0, failures: [] }, check_command: "cargo test",
-    check: { command: "cargo test", status: "running", output: "" },
-    ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude"], message: null },
-  };
-  vi.mocked(invoke).mockImplementation((command, args, options) => {
-    if (command === "review_begin") return Promise.resolve(base);
-    if (command === "review_snapshot") return Promise.resolve({ ...base, revision: 8, check: { ...base.check, status: "passed", output: "tests passed" } });
-    return original(command, args, options);
-  });
-  vi.useFakeTimers();
-  try {
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Final Review", exact: true })));
-    expect(screen.getByText("Check running: cargo test")).toBeTruthy();
-    await act(async () => vi.advanceTimersByTimeAsync(1000));
-    expect(screen.getByText("Check passed: cargo test")).toBeTruthy();
-    expect(screen.getByLabelText("Project check output").textContent).toBe("tests passed");
-    await act(async () => vi.advanceTimersByTimeAsync(5000));
-    const polls = vi.mocked(invoke).mock.calls.filter(([command]) => command === "review_snapshot");
-    expect(polls).toEqual([["review_snapshot", { workflowId: "review-check" }]]);
-  } finally { vi.useRealTimers(); client.clear(); }
-});
-
-const completionBase = {
-  workflow_id: "review-done", revision: 3, target: { project_id: "project", feature_id: "feature" },
-  feature_name: "my-feat", branch: "my-feat", base_ref: "main", files: [], selected_path: null,
-  general_feedback: "Rename it", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null,
-  summary: { rows: [], undecided: 0, pending_suggestions: 0, failures: [] }, check_command: null, check: null,
-  finish: { approved: 0, needs_work: 1, skipped: 0, file_comments: 0, line_comments: 0, general_feedback: true, apply_suggestions: 0,
-    post_to_pr: false, submit_prompt: false, handoff: { session_id: "Agent", label: "Agent", stopped: false }, completing: false },
-  ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude"], message: null },
-};
-
-it("completes once and appends the unsent feedback prompt to the agent's composer draft", async () => {
-  const client = await openFeature([session("Agent", "claude")], [], "idle", true);
-  fireEvent.change(draftInput(), { target: { value: "Existing message" } });
-  const original = vi.mocked(invoke).getMockImplementation()!;
-  let finishAct!: () => void;
-  vi.mocked(invoke).mockImplementation((command, args, options) => {
-    if (command === "review_begin") return Promise.resolve(completionBase);
-    if (command === "review_act") return new Promise((resolve) => { finishAct = () => resolve(null); });
-    if (command === "review_take_completion") return Promise.resolve({
-      workflow_id: "review-done", message: "Final review: 0 approved, 1 need work — the feedback prompt is an unsent draft in Agent",
-      handoff: { target: { project_id: "project", feature_id: "feature", session_id: "Agent" }, draft_prompt: "Address the feedback" },
-    });
-    return original(command, args, options);
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Final Review", exact: true }));
-  fireEvent.click(await screen.findByRole("button", { name: "Complete review…" }));
-  const confirm = screen.getByRole("alertdialog", { name: "Complete Final Review" });
-  expect(within(confirm).getByText(/opens the "address the feedback" prompt as an unsent draft in Agent/)).toBeTruthy();
-  const handoff = within(confirm).getByRole("button", { name: "Complete and hand off to Agent" });
-  fireEvent.click(handoff);
-  fireEvent.click(handoff);
-  await waitFor(() => expect(vi.mocked(invoke).mock.calls.filter(([command]) => command === "review_act")).toHaveLength(1));
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith("review_act", { workflowId: "review-done", revision: 3,
-    action: { kind: "complete", check_command: null, apply_suggestions: 0, handoff_session: "Agent", deliver: true } });
-  await act(async () => finishAct());
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Final Review" })).toBeNull());
-  expect(draftInput().value).toBe("Existing message\n\nAddress the feedback");
-  expect(await screen.findByText(/unsent draft in Agent/)).toBeTruthy();
-  expect(vi.mocked(invoke).mock.calls.filter(([command]) => command === "review_take_completion"))
-    .toEqual([["review_take_completion", { workflowId: "review-done" }]]);
-  expect(promptCalls()).toHaveLength(0);
-  client.clear();
-});
-
-it("finishes a completion whose check ends while polling and stops polling", async () => {
-  const client = await openFeature([session("Agent", "claude")], [], "idle", true);
-  const original = vi.mocked(invoke).getMockImplementation()!;
-  const running = { ...completionBase, check_command: "cargo test", check: { command: "cargo test", status: "running", output: "" },
-    finish: { ...completionBase.finish, submit_prompt: true, completing: true } };
-  vi.mocked(invoke).mockImplementation((command, args, options) => {
-    if (command === "review_begin") return Promise.resolve(running);
-    if (command === "review_snapshot") return Promise.resolve(null);
-    if (command === "review_take_completion") return Promise.resolve({
-      workflow_id: "review-done", message: "Final review: check `cargo test` passed — sent to Agent",
-      handoff: { target: { project_id: "project", feature_id: "feature", session_id: "Agent" }, draft_prompt: null },
-    });
-    return original(command, args, options);
-  });
-  vi.useFakeTimers();
-  try {
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Final Review", exact: true })));
-    expect(screen.getByText(/Completing: the configured check is running/)).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Return to review" }) as HTMLButtonElement).disabled).toBe(true);
-    await act(async () => vi.advanceTimersByTimeAsync(1000));
-    expect(screen.queryByRole("dialog", { name: "Final Review" })).toBeNull();
-    expect(screen.getByText(/sent to Agent/)).toBeTruthy();
-    expect(draftInput().value).toBe("");
-    await act(async () => vi.advanceTimersByTimeAsync(5000));
-    expect(vi.mocked(invoke).mock.calls.filter(([command]) => command === "review_snapshot")).toHaveLength(1);
-    expect(vi.mocked(invoke).mock.calls.filter(([command]) => command === "review_take_completion")).toHaveLength(1);
-  } finally { vi.useRealTimers(); client.clear(); }
-});
-
-it("collects a completed poll result when cancellation starts while the poll is in flight", async () => {
-  const client = await openFeature([session("Agent", "claude")], [], "idle", true);
-  const original = vi.mocked(invoke).getMockImplementation()!;
-  const running = { ...completionBase, check_command: "cargo test", check: { command: "cargo test", status: "running", output: "" },
-    finish: { ...completionBase.finish, completing: true } };
-  let resolvePoll!: (value: null) => void;
-  let rejectAction!: (error: unknown) => void;
-  vi.mocked(invoke).mockImplementation((command, args, options) => {
-    if (command === "review_begin") return Promise.resolve(running);
-    if (command === "review_snapshot") return new Promise((resolve) => { resolvePoll = resolve; });
-    if (command === "review_act") return new Promise((_, reject) => { rejectAction = reject; });
-    if (command === "review_take_completion") return Promise.resolve({
-      workflow_id: "review-done", message: "Final review complete — draft in Agent",
-      handoff: { target: { project_id: "project", feature_id: "feature", session_id: "Agent" }, draft_prompt: "Address the feedback" },
-    });
-    return original(command, args, options);
-  });
-  vi.useFakeTimers();
-  try {
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Final Review", exact: true })));
-    await act(async () => vi.advanceTimersByTimeAsync(1000));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel completion" }));
-    await act(async () => resolvePoll(null));
-    await act(async () => rejectAction({ kind: "conflict", message: "Review is closed" }));
-    expect(screen.queryByRole("dialog", { name: "Final Review" })).toBeNull();
-    expect(draftInput().value).toBe("Address the feedback");
-    expect(vi.mocked(invoke).mock.calls.filter(([command]) => command === "review_take_completion")).toHaveLength(1);
-  } finally { vi.useRealTimers(); client.clear(); }
 });
 
 it("badges a feature with waiting supervised edits and opens them from the feature page", async () => {
@@ -666,57 +407,6 @@ it.each(["draft", "sending"])("guards an arrival toast target switch with %s in 
     fireEvent.click(review);
     expect(await screen.findByText("Supervised edits · Docs")).toBeTruthy();
   }
-  client.clear();
-});
-
-it("opens prompt overrides from navigation and from a pending review AI call without leaving the review", async () => {
-  const client = await openFeature([], [], "stopped", true);
-  const original = vi.mocked(invoke).getMockImplementation()!;
-  const overrides = (context: unknown) => ({
-    context, context_label: "demo / my-feat", repo: "/demo", workdir: "/demo", harness: "claude",
-    scopes: [{ scope: "global", label: "Global (all projects)", available: true, reason: null }],
-    project_config_error: null,
-    rows: ["review.walkthrough", "review.co_review"].map((id) => ({
-      id, title: id === "review.co_review" ? "Final Review: AI co-review" : "Final Review: file walkthrough",
-      summary: "", placeholders: [], source: "built_in", source_harness: null, effective_template: `${id} text`,
-      default_template: `${id} text`, stored: [], revision: "r",
-    })),
-  });
-  vi.mocked(invoke).mockImplementation((command, args, options) => {
-    if (command === "prompt_overrides_load") return Promise.resolve(overrides((args as { context: unknown }).context));
-    if (command === "prompt_overrides_precall_target") return Promise.resolve({
-      prompt_id: "review.co_review", harness: "claude", context: { kind: "feature", project_id: "project", feature_id: "feature" },
-    });
-    if (command === "review_begin") return Promise.resolve({
-      workflow_id: "review-id", revision: 7, target: { project_id: "project", feature_id: "feature" },
-      feature_name: "my-feat", branch: "my-feat", base_ref: "main", files: [], selected_path: null,
-      general_feedback: "", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null, summary: null,
-      ai: { precall: { title: "Final Review: AI co-review", harness: "Claude", preview: "rendered", viewing: false },
-        running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude"], message: null },
-    });
-    return original(command, args, options);
-  });
-
-  fireEvent.click(screen.getByRole("button", { name: "Prompt overrides" }));
-  await screen.findByRole("dialog", { name: "Prompt overrides" });
-  await waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("prompt_overrides_load",
-    { context: { kind: "feature", project_id: "project", feature_id: "feature" }, harness: null }));
-  fireEvent.click(screen.getByRole("button", { name: "Done" }));
-  expect(screen.queryByRole("dialog", { name: "Prompt overrides" })).toBeNull();
-
-  fireEvent.click(screen.getByRole("button", { name: "Final Review", exact: true }));
-  fireEvent.click(await screen.findByRole("button", { name: "Edit prompt" }));
-  const manager = await screen.findByRole("dialog", { name: "Prompt overrides" });
-  expect(within(manager).getByText(/Opened from a pending AI call/)).toBeTruthy();
-  await waitFor(() => expect(within(manager).getByRole("button", { name: /Final Review: AI co-review/ }).getAttribute("aria-pressed")).toBe("true"));
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith("prompt_overrides_load",
-    { context: { kind: "feature", project_id: "project", feature_id: "feature" }, harness: "claude" });
-  // Escape closes only the manager; the review and its pending call remain.
-  fireEvent.keyDown(document.body, { key: "Escape" });
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Prompt overrides" })).toBeNull());
-  expect(screen.getByRole("dialog", { name: "Final Review" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Continue AI call" })).toBeTruthy();
-  expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "review_act")).toBe(false);
   client.clear();
 });
 
@@ -963,7 +653,8 @@ it("opens debug history from workspace navigation and preserves the session draf
   client.clear();
 });
 
-it.each(["PR Triage", "PR Review"])("opens %s from a project without choosing a feature", async (label) => {
+it("opens PR Triage from a project without choosing a feature", async () => {
+  const label = "PR Triage";
   const client = await openFeature([], [], "stopped", true);
   const original = vi.mocked(invoke).getMockImplementation()!;
   vi.mocked(invoke).mockImplementation((command, args, options) => {
@@ -972,21 +663,16 @@ it.each(["PR Triage", "PR Review"])("opens %s from a project without choosing a 
       feature_name: "demo", stage: "pick", picker: { entries: [], loading: false, include_closed: false, error: null, branch_pr: null },
       review: null, harnesses: [], fix_targets: [],
     });
-    if (command === "pr_review_begin") return Promise.resolve({
-      workflow_id: "review-project", revision: 0, project_name: "demo", stage: "pick", entries: [], loading: false, files: [], summary: "", submission: null,
-    });
     return original(command, args, options);
   });
-  // A project with no features still offers both repository workflows.
+  // A project with no features still offers the repository workflow.
   const snapshot = client.getQueryData<WorkspaceSnapshot>(["workspace-snapshot"])!;
   await act(async () => { client.setQueryData(["workspace-snapshot"], { ...snapshot, projects: [{ ...snapshot.projects[0], features: [] }] }); });
   fireEvent.click(screen.getByRole("button", { name: "demo", exact: true }));
   fireEvent.click(screen.getByRole("button", { name: label, exact: true }));
   expect(await screen.findByRole("dialog", { name: label })).toBeTruthy();
   expect(screen.getByRole("region", { name: "Choose a pull request" })).toBeTruthy();
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith(label === "PR Triage" ? "pr_triage_begin" : "pr_review_begin",
-    label === "PR Triage" ? { target: { project_id: "project" } } : { projectId: "project" });
-  expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "review_begin")).toBe(false);
+  expect(vi.mocked(invoke)).toHaveBeenCalledWith("pr_triage_begin", { target: { project_id: "project" } });
   client.clear();
 });
 
@@ -994,6 +680,5 @@ it("hides project PR actions for ordinary directories", async () => {
   const client = await openFeature([]);
   fireEvent.click(screen.getByRole("button", { name: "demo", exact: true }));
   expect(screen.queryByRole("button", { name: "PR Triage" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "PR Review" })).toBeNull();
   client.clear();
 });

@@ -53,8 +53,7 @@ non-git directories without it.
 Optional tools:
 
 - An authenticated [GitHub CLI](https://cli.github.com/) (`gh`) enables PR
-  triage, posting final-review feedback, and the dashboard's
-  open/merged/closed PR badge.
+  triage and the dashboard's open/merged/closed PR badge.
 - A [Nerd Font](https://www.nerdfonts.com/) provides the best icon rendering.
 - The `code` command enables VS Code sessions.
 - A C compiler and git are required only for installing optional tree-sitter
@@ -266,7 +265,7 @@ receive AIW permission-mode flags.
 | `e` | Queue a follow-up for the selected agent: delivered only when its current turn ends |
 | `I` | On a TODOs session row: start an agent on the next TODO in priority order, across the lists currently showing |
 | `z` | Show dormant features: idle and unattended |
-| `G` | Open GitHub PR triage; on a project row, review a PR yourself |
+| `G` | Open GitHub PR triage |
 | `L` | Open the prompt library |
 | `E` | Edit headless AI prompt templates (overrides) |
 | `T` | Choose a theme |
@@ -380,10 +379,6 @@ With the feature (or one of its sessions) selected, press `Ctrl+Space`, then
 changes. When you finish, AIW writes the feedback and hands it to an agent.
 With an authenticated `gh` CLI, AIW can also post the feedback to the branch's
 pull request.
-
-The optional AI co-reviewer that drafts line comments for the current file
-reviews an oversized file hunk group by hunk group rather than sending one
-truncated prompt; the status line reports if any group could not be reviewed.
 
 ### Work through pull-request feedback
 
@@ -527,7 +522,7 @@ the deletion. Nothing is killed or removed until you answer.
 
 ### Override the AI prompts AIW sends
 
-Behind the final-review diff helpers and session summaries, AIW makes one-shot
+Behind session summaries, AIW makes one-shot
 ("headless") AI calls with prompts it builds for you. Press `E` on the
 dashboard — or `Ctrl+Space`, then `E` from a session — to open the
 **prompt-override manager**. It lists every template with its effective source
@@ -557,9 +552,6 @@ the stable prompt id (shown in the manager):
 ```json
 {
   "prompt_overrides": {
-    "review.walkthrough": {
-      "template": "Explain this change... {{patch}} ..."
-    },
     "session.summary": {
       "template": "shared text with {{recent_lines}}",
       "harnesses": { "codex": "codex-specific text with {{recent_lines}}" }

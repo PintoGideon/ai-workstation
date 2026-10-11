@@ -32,7 +32,7 @@ install the harnesses you intend to use. Tests mock paid harness execution.
 Use [the architecture guide](docs/development/architecture.md) to choose a module.
 `cli.rs` owns startup, event deadlines and polling; `handlers/` dispatches input;
 `ui/` renders; `app/` orchestrates feature workflows; `db/` owns persistence.
-PR Triage and Final Review each have a directory with owned state.
+PR Triage has a directory with owned state.
 Central AppMode remains the routing boundary. Feature test suites live under
 `src/app/tests/`, with shared fixtures in `support.rs`; small unit suites stay
 with their implementation.

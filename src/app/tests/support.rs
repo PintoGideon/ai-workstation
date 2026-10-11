@@ -23,7 +23,6 @@ pub(super) fn store_with_feature(status: ProjectStatus) -> ProjectStore {
         sessions: vec![],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::default(),
         enable_chrome: false,
         pending_worktree_script: false,
@@ -70,7 +69,6 @@ pub(super) fn store_with_repo(repo: PathBuf, status: ProjectStatus) -> ProjectSt
         sessions: vec![],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::default(),
         enable_chrome: false,
         pending_worktree_script: false,
@@ -143,7 +141,6 @@ pub(super) fn store_with_worktree_agent(
         sessions,
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: agent.clone(),
         enable_chrome: false,
         pending_worktree_script: false,
@@ -212,7 +209,6 @@ pub(super) fn store_with_custom_session(
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::default(),
         enable_chrome: false,
         pending_worktree_script: false,
@@ -279,7 +275,6 @@ pub(super) fn store_with_codex_session(
         sessions: vec![session],
         collapsed: false,
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::Codex,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -452,20 +447,6 @@ pub(super) fn enter_pr_review_for_feature(app: &mut App, n: u64) {
     });
 }
 
-/// Enter the PR picker directly (bypassing the real `gh pr list` call
-/// `open_pr_picker` would make) so bootstrap-pick tests can exercise the
-/// overlay's state transitions without hitting the network.
-pub(super) fn enter_pr_picker_for_test(app: &mut App) {
-    app.mode = AppMode::PrPicker(crate::app::PrPickerState {
-        workdir: std::path::PathBuf::from("/tmp/test-workdir"),
-        entries: vec![],
-        selected: 0,
-        include_closed: false,
-        error: None,
-        current_user: None,
-    });
-}
-
 pub(super) fn view_state_for(project_name: &str, feature_name: &str) -> ViewState {
     ViewState::new(
         project_name.to_string(),
@@ -475,7 +456,6 @@ pub(super) fn view_state_for(project_name: &str, feature_name: &str) -> ViewStat
         "Claude".to_string(),
         SessionKind::Claude,
         VibeMode::default(),
-        false,
     )
 }
 

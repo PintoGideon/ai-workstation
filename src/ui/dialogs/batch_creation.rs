@@ -322,14 +322,9 @@ fn draw_batch_feature_settings(frame: &mut Frame, state: &CreateBatchFeaturesSta
             Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Length(3),
-            Constraint::Length(3),
         ]
     } else {
-        vec![
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(3),
-        ]
+        vec![Constraint::Length(3), Constraint::Length(3)]
     };
 
     let settings_chunks = Layout::default()
@@ -337,7 +332,6 @@ fn draw_batch_feature_settings(frame: &mut Frame, state: &CreateBatchFeaturesSta
         .constraints(constraints)
         .split(chunks[1]);
 
-    let review_value = if state.review { "On" } else { "Off" };
     let chrome_value = if state.enable_chrome { "On" } else { "Off" };
 
     let fields: Vec<(String, String)> = if state.agent == AgentKind::Claude {
@@ -347,7 +341,6 @@ fn draw_batch_feature_settings(frame: &mut Frame, state: &CreateBatchFeaturesSta
                 state.agent.display_name().to_string(),
             ),
             ("Mode".to_string(), state.mode.display_name().to_string()),
-            ("Review".to_string(), review_value.to_string()),
             ("Chrome".to_string(), chrome_value.to_string()),
         ]
     } else {
@@ -357,7 +350,6 @@ fn draw_batch_feature_settings(frame: &mut Frame, state: &CreateBatchFeaturesSta
                 state.agent.display_name().to_string(),
             ),
             ("Mode".to_string(), state.mode.display_name().to_string()),
-            ("Review".to_string(), review_value.to_string()),
         ]
     };
 

@@ -413,12 +413,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             ])
         }
         AppMode::DiffReviewPrompt(state) => {
-            if state.explanation_child.is_some() {
-                Line::from(Span::styled(
-                    "Generating explanation...",
-                    Style::default().fg(theme.info.to_color()),
-                ))
-            } else if state.hold_active() {
+            if state.hold_active() {
                 let secs = state.hold_remaining_secs().ceil() as u64;
                 Line::from(vec![
                     Span::styled(
@@ -570,16 +565,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 ])
             }
         }
-        AppMode::PromptPrecall(_) => Line::from(vec![
-            Span::styled(" v", key_style()),
-            Span::raw(" view prompt  "),
-            Span::styled("e", key_style()),
-            Span::raw(" edit  "),
-            Span::styled("Enter", key_style()),
-            Span::raw(" continue  "),
-            Span::styled("Esc", key_style()),
-            Span::raw(" cancel"),
-        ]),
         AppMode::PromptEditor(_) => Line::from(vec![
             Span::styled(" Tab", key_style()),
             Span::raw(" switch field  "),
@@ -657,19 +642,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::raw(" number  "),
             Span::styled("Esc", key_style()),
             Span::raw(" cancel"),
-        ]),
-        AppMode::PrReviewList(_) => Line::from(vec![
-            Span::raw(" Review a PR  "),
-            Span::styled("j/k", key_style()),
-            Span::raw(" move  "),
-            Span::styled("Enter", key_style()),
-            Span::raw(" review  "),
-            Span::styled("r", key_style()),
-            Span::raw(" reload  "),
-            Span::styled("Tab", key_style()),
-            Span::raw(" triage  "),
-            Span::styled("Esc", key_style()),
-            Span::raw(" close"),
         ]),
         AppMode::PrReviewLoading(_) => Line::from(vec![
             Span::raw(" Loading PR Triage comments (experimental)...  "),
@@ -783,14 +755,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::raw(" confirm  "),
             Span::styled("Esc", key_style()),
             Span::raw(" close"),
-        ]),
-        AppMode::ReviewHarnessPick(_) => Line::from(vec![
-            Span::styled(" j/k", key_style()),
-            Span::raw(" navigate  "),
-            Span::styled("Enter", key_style()),
-            Span::raw(" run fixes here  "),
-            Span::styled("q/Esc", key_style()),
-            Span::raw(" skip"),
         ]),
         AppMode::Dormant(_) => Line::from(vec![
             Span::styled(" Enter", key_style()),

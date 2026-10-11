@@ -16,12 +16,10 @@ mod hooks;
 mod issue_fixer;
 mod markdown;
 mod pr_review;
-mod precall;
 mod project;
 mod prompt_library;
 mod prompt_overrides;
 mod resource_gate;
-mod review_harness;
 mod search;
 mod session;
 mod theme;
@@ -49,16 +47,14 @@ pub use issue_fixer::{draw_issue_browser, draw_issue_duplicate_warning, draw_iss
 pub use markdown::{draw_markdown_loading, draw_markdown_viewer};
 pub use pr_review::{
     PrReviewUsage, draw_pr_investigation_loading, draw_pr_number_prompt, draw_pr_picker,
-    draw_pr_review, draw_pr_review_list, draw_pr_review_loading,
+    draw_pr_review, draw_pr_review_loading,
 };
-pub use precall::draw_prompt_precall;
 pub use project::{draw_create_project_dialog, draw_delete_project_confirm};
 pub use prompt_library::{
     draw_placeholder_fill, draw_prompt_editor, draw_prompt_library, draw_skill_picker,
 };
 pub use prompt_overrides::draw_prompt_overrides;
 pub use resource_gate::draw_resource_confirm_dialog;
-pub use review_harness::draw_review_harness_pick;
 pub use search::draw_search_dialog;
 pub use session::{
     draw_new_session_name_dialog, draw_project_agent_config_dialog, draw_rename_feature_dialog,

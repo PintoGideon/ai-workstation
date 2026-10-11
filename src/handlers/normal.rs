@@ -386,9 +386,6 @@ fn handle_normal_leader_key(app: &mut App, key: KeyEvent) -> Result<()> {
         // FORK(cockpit): the commands the embedded view's leader had, for
         // the selected session (DESIGN.md §18). `i` and `?` are plain
         // dashboard keys and left the menu.
-        KeyCode::Char('f') => {
-            app.trigger_final_review()?;
-        }
         KeyCode::Char('d') => {
             app.open_diff_viewer()?;
         }

@@ -281,8 +281,7 @@ editable prompt overrides have their own manager (below). Native desktop
 interaction and macOS runtime validation for this library increment remain open.
 
 Open **Prompt overrides** in workspace navigation to change the prompts AIW
-sends for headless AI calls (Final Review walkthroughs and session
-summaries). It is separate from the prompt library: library templates are text
+sends for headless AI calls (session summaries). It is separate from the prompt library: library templates are text
 you insert into an agent draft, while overrides replace AIW's own built-in
 prompts. Choose a context (global, a project, or a feature) and the harness to
 preview. Each prompt shows the layer in effect, its placeholders, effective
@@ -295,7 +294,7 @@ Escape, switching prompts or contexts ask before discarding unsaved text. The
 list refreshes while open. If the TUI, another window or a hand edit changes
 that prompt's overrides, saving is blocked until you choose **Reload current
 version**, which keeps your text. A malformed `aiw.json` is reported and never
-overwritten. A pending Final Review or planning AI call offers **Edit prompt**,
+overwritten. A pending PR Triage investigation offers **Edit prompt**,
 which opens the manager on that prompt. The call keeps waiting and uses your
 saved override when you continue, though its preview still shows the earlier
 text. Native macOS validation remains open.
@@ -364,124 +363,6 @@ current contents. Native WSLg captures verify opening from a stopped feature, sw
 and context, selecting a commit and displaying a binary notice through real
 Rust IPC. Other native interactions and macOS remain unvalidated. Command
 tests use isolated Git repositories; component tests mock the IPC calls.
-
-Use **Final Review** on a Git feature to approve, reject or skip files, undo a
-verdict, write whole-file or line/range comments with severity, resolve/reopen
-comments, edit suggested replacements, and save overall feedback. Click a line
-number to select it; Shift-click another to extend a range in diff order. Use
-**Comment on selection** or **Suggest replacement**, or edit a saved thread.
-Empty saves clear prose or replacement code while keeping the other part of
-the thread. Authoring suggestions saves them for later feedback. **Apply suggestion
-locally** offers an explicit confirmation before writing a kept, unresolved
-replacement to the checkout. It checks the unchanged reviewed file and the exact
-current-side span; deletion-side ranges, lost anchors and AI drafts cannot be
-applied. Success resolves the thread, consumes its replacement, refreshes the
-diff and clears the changed file's approval and verdict undo. **Applied locally**
-lists the persisted application history. A failed source write keeps the suggestion;
-a failed progress save retains the already-applied source change and offers
-**Retry save**. Closing without saving does not undo source changes.
-Lost anchors stay visible and require refresh before editing. Developer notes and saved line threads/suggestions are
-shown alongside unified or side-by-side diffs. **Pause review** preserves progress
-in the same format the TUI resumes; reopening either interface continues it.
-Unsaved form edits require explicit discard before leaving, and failed saves
-retain edits with **Retry save**, or **Close without saving** when the save
-cannot succeed. **Refresh changes** reloads the diff and clears
-approvals and verdict-undo entries for changed patches, and reopening a paused
-review drops approvals whose patch changed meanwhile; **Reload
-saved review** adopts progress changed in another interface. Edit a given review
-in one interface at a time; detected external saves block edits until reload.
-**Generate walkthrough**, **Changeset overview** and **AI co-review file** reuse
-AIW's Claude review tools. Each new call offers a prompt preview and requires
-**Continue AI call**; cancelling runs nothing. Walkthroughs are cached for files
-without developer notes, and co-review findings stay AI drafts until **Accept AI
-draft** or **Dismiss AI draft**. Accepting a draft uses the same verdict rules
-and saved progress as a human line comment.
-
-**Ask about file** or **Ask about selection** opens a local question draft.
-Choose an allowed Claude, Codex or Pi harness, then ask explicitly.
-The answering harness reads the repository and reviewed diff; follow-ups include
-earlier answers for the current review version. Questions, answers and AI notes
-stay in memory while this review is open; pause/reopen retains verdicts/comments,
-including accepted co-review findings, but starts a new conversation. Failed
-questions can be retried, cancelled pre-call notices retain question text, and
-closing an unsent question requires explicit discard. Polling never starts a new
-AI call. Changed patches, moved/deleted feature targets or external progress edits
-discard pending AI results and require refresh/reload before continuing.
-**Cancel AI request** releases question and single-process runs; an already-started
-batched co-review may finish its current work, but its late findings are discarded.
-
-From an answered question, choose **Draft inline comment** (for questions about
-selected lines) or **Draft overall feedback**. The answering harness drafts the
-feedback after another prompt preview and confirmation. Edit **AI comment draft**,
-then choose **Open comment editor** to check the repository again without another
-AI call. Transfer appends to existing feedback, preserves a containing thread's
-full range and severity, and refuses ambiguous overlaps. Nothing is saved until
-**Save comment** or **Save overall feedback**. Failed transfers retain your edits;
-leaving a generated or transferred draft requires explicit discard.
-
-**Review history** opens a read-only round browser. **Current** shows this open
-review's verdicts, feedback, resolved threads, AI drafts and prior agent replies;
-unsaved form text stays in its editor. Completed rounds appear newest first with
-their original feedback, suggestions, check output and agent replies.
-**Load older rounds** reads archived history on demand. **Return to review**
-or Escape closes the browser and keeps local drafts. Browsing saves no progress
-and leaves outstanding save errors available for retry after returning.
-Seven asserted native WSLg frames verify Current/completed rounds, archived
-history, restored draft text, archive read failures and retry after repair through
-real Rust IPC. Source and progress assertions confirm browsing writes neither.
-Reproduce with `scripts/dev/screenshot/scenarios/gui-review-history.txt`. Remaining
-interactions and macOS validation stay open.
-
-**Pre-finish summary** shows every file verdict, open kept thread and overall
-feedback, including files hidden by your filter. Browsing keeps unsaved drafts
-and writes no progress. **Apply pending suggestions** requires a separate
-confirmation before writing source files through the same batch engine as TUI
-finishing. Successful replacements settle their threads, refresh the diff and
-clear changed-file approvals; blocked jobs stay open with an explanation. The
-review stays open so you can inspect and review changed code again. Failed
-progress saves keep the source changes and require **Retry save** before another
-application; closing without saving does not undo those source writes.
-
-**Complete review…** in the summary opens a confirmation that lists what the
-round records: verdict and comment counts, files without a verdict (recorded as
-skipped), any saved apply-on-finish batch, the configured check and PR posting.
-Completing works like the TUI finish. It applies that batch, reruns the
-configured check (earlier results in the summary are not reused) and records
-the round in `.claude/final-review-feedback.md`. It then clears saved progress
-and closes the review. While the check runs you can **Cancel completion**, and
-nothing is written. Choose **Complete and hand off to …** to give an actionable
-round's "address the feedback" prompt to the feature's first agent session. It
-is submitted when the TUI's `final_review_submit_prompt` setting is on and the
-session is running. Otherwise it is added to that session's composer as an
-unsent draft. **Complete without handoff** only saves the feedback. Unsaved or
-generated drafts, failed saves, changed patches or saved progress, a changed
-check command or agent session, and deleted or moved features are refused
-before anything is written. The completion is delivered once. Choosing another
-destination (a dedicated session, another feature or a companion feature)
-remains in the TUI.
-
-The summary, batch and completion controls have automated command/component
-coverage; native desktop and macOS interaction validation remain open.
-
-Question-to-comment drafting has command/component coverage and eight asserted
-native WSLg frames from `gui-review-question-drafts.txt`, including edited drafts,
-confirmation/cancellation, inline and overall transfer, unsaved protection and
-pause/reopen persistence. The capture uses offline Codex and real Rust IPC;
-paid-harness execution, other native interactions and macOS validation remain open. Automated
-command and component tests cover the new AI controls. Eight asserted native WSLg
-frames from `gui-review-ai.txt` also verify prompt preview, walkthrough/overview
-output, co-review drafts, local multiline questions and answers, accepted-finding
-persistence and changed-patch refusal through real Rust IPC. The isolated scenario
-uses offline CLI fixtures; paid-harness runs remain unvalidated. Native WSLg captures verify
-opening on a stopped feature, notes and saved line threads, verdict/comment persistence, split layout, unsaved-draft protection,
-pause/reopen, changed-patch rejection and approval invalidation after refresh.
-The isolated `gui-review-line-comments.txt` scenario also verifies range
-selection, line/range comment and replacement editing, split display,
-unsaved-suggestion protection, resolution/reopening and restored thread anchors.
-The `gui-review-local-suggestions.txt` scenario verifies confirmed local application
-and cancellation, source writes and approval invalidation, stale/read-only source
-refusals, progress-save retry and restored application history through real Rust IPC.
-Remaining native interactions and macOS validation are open.
 
 ### Supervised edits
 
@@ -595,7 +476,7 @@ using private Git/SQLite/tmux fixtures and an offline terminal stand-in.
 
 ### Syntax highlighting
 
-Diffs, Final Review and the Learning reader colour source code with the TUI's
+Diffs colour source code with the TUI's
 own tree-sitter parsers, so both interfaces agree on each file's language
 (extension, special file name or shebang) and share one parser install under
 `~/.config/ai_workstation/tree-sitter`. Each diff line is coloured with its whole file as

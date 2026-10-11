@@ -169,19 +169,8 @@ rules; the module signals no process itself. Terminal attachment records
 | | `pr_review/reply.rs` | Reply drafting, provenance and posting |
 | | `pr_review/investigation.rs` | Read-only investigation requests, results and follow-ups |
 | | `pr_review/integration.rs` | Fix target/harness selection, injection and linked session navigation |
-| | `pr_review/review_tab.rs` | "Review a PR" tab: open-PR list, tab switching, opening a PR into the viewer and leaving it |
-| | `pr_review/revisions.rs` | Object-only PR fetch into `refs/aiw/review/N/*`, head check, merge-base, ref cleanup |
 | | `pr_review/github_access.rs` | `TriageGithub` read/write boundary (`gh` in production, fixtures in tests) and the investigation runner seam |
 | | `pr_review/state.rs`, `runtime.rs` | Dialog types and background work ownership |
-| Final Review | `review/preparation.rs` | Diff snapshots, persisted progression/history and review notes |
-| | `review/progression.rs` | Navigation, selection, approvals, filters and review summary |
-| | `review/history.rs` | Read-only round browsing, lazy archive loading and shared current-review projection |
-| | `review/comments.rs` | Anchors, comments, suggestions and editor operations |
-| | `review/headless.rs` | Walkthrough/co-review workers, completion and feedback dispatch |
-| | `review/checks.rs` | Shared build/test check execution, bounded output and process ownership |
-| | `review/pr_drafts.rs` | PR review drafts in SQLite: save, resume, PR-update flags and outdated comments |
-| | `review/pr_submit.rs` | PR review submit dialog, GitHub payload and posting |
-| | `review/state.rs` | Viewer/comment/undo/history state and mode-owned child handles |
 
 Feature roots expose consumed entrypoints and compatibility re-exports. Free
 helpers are imported from their owning sibling module; new private helper access
@@ -191,8 +180,8 @@ State/domain code does not import handlers or renderers. Orchestration may use
 existing cross-feature APIs for TODO/plan/session handoffs.
 
 The neighboring `triage_feature.rs` retains its existing responsibilities.
-Extraction does not absorb it just to shrink a file. Shared DiffScope/layout concepts remain
-available to ordinary diff browsing rather than becoming private to Final Review.
+Extraction does not absorb it just to shrink a file. Shared DiffScope/layout concepts belong
+to ordinary diff browsing (`app/diff.rs`, `app/diff_state.rs`).
 
 ## Runtime ownership and stale results
 
@@ -202,13 +191,9 @@ boundaries with private fields and shared production/test defaults:
 
 - `PrReviewWork`: independent fetch/investigation receivers; begin, poll and
   cancel methods. Cancel drops the receiver without killing the spawned worker.
-  AppMode still determines whether a result has a live target. The "Review a
-  PR" list, open, and post slots tag each result with a request id so a retry
-  or a closed tab drops a stale one; their blocking loaders are plain `fn`s,
-  swapped in tests. A finished post is recorded even with no live target.
+  AppMode still determines whether a result has a live target.
 
-Final Review already owns its children in mode state; it keeps that boundary.
-No second authoritative copy was added. Shared routing/store/configuration,
+Shared routing/store/configuration,
 manager injection, IPC/watcher/observer guards, pane/sidebar queues and debug/perf
 remain on App. Refresh caches and cross-feature notification state remain
 available for later incremental ownership work.
@@ -219,8 +204,7 @@ available for later incremental ownership work.
 SQLite connection and open/seed entrypoints; `migrations.rs` owns schema changes;
 `store.rs` persists projects. Other DB modules persist session status, tokens,
 debug logs, editors, prompt templates/overrides, TODOs,
-PR triage/investigations/terminal state, PR review caches and manual PR review
-drafts (`pr_review_drafts.rs`, keyed by repository and PR number). DB code knows
+PR triage/investigations/terminal state and PR review caches. DB code knows
 project/domain types and uses WorktreeManager to resolve legacy stores.
 
 `src/traits.rs` provides mockable TmuxOps and WorktreeOps, implemented by
@@ -229,8 +213,8 @@ project/domain types and uses WorktreeManager to resolve legacy stores.
 with `GhCli` as the production adapter. PR Triage keeps its existing CLI
 behavior while issue workflows can reuse authentication, repository-context,
 and list transport. Compact companion-feature setup state and row rendering
-live in `app/feature_setup.rs` and `ui/dialogs/feature_setup.rs`, shared by PR
-Triage and Final Review. Headless execution is in `headless.rs`; harness
+live in `app/feature_setup.rs` and `ui/dialogs/feature_setup.rs` for PR
+Triage. Headless execution is in `headless.rs`; harness
 integration supports Claude Code, Codex, Pi, Gemini CLI and Cursor agent. IPC, filesystem
 watching, tmux observation, editors and resource inspection have dedicated
 modules. Injection is partial: App workflows still call concrete managers and

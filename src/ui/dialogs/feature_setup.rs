@@ -11,7 +11,7 @@ use ratatui::{
 use crate::app::{FeatureSetupRow, FeatureSetupState};
 use crate::theme::Theme;
 
-/// Render the common settings rows used by PR Triage and Final Review. The
+/// Render the common settings rows used by PR Triage. The
 /// owning dialog supplies its own title, explanation, error, and key hints.
 pub(super) fn draw_rows(frame: &mut Frame, area: Rect, setup: &FeatureSetupState, theme: &Theme) {
     let value_for = |row: FeatureSetupRow| -> String {
@@ -27,7 +27,6 @@ pub(super) fn draw_rows(frame: &mut Frame, area: Rect, setup: &FeatureSetupState
                         .unwrap_or(setup.mode.description())
                 )
             }
-            FeatureSetupRow::Review => if setup.review { "on" } else { "off" }.to_string(),
             FeatureSetupRow::Chrome => if setup.enable_chrome { "on" } else { "off" }.to_string(),
             FeatureSetupRow::Branch => setup.branch.clone(),
         }

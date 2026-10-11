@@ -20,8 +20,7 @@ non-git directories without it.
 Optional tools:
 
 - An authenticated [GitHub CLI](https://cli.github.com/) (`gh`) enables PR
-  triage, posting final-review feedback, and the dashboard's
-  open/merged/closed PR badge.
+  triage and the dashboard's open/merged/closed PR badge.
 - A [Nerd Font](https://www.nerdfonts.com/) provides the best icon rendering.
 - The `code` command enables VS Code sessions.
 

@@ -29,8 +29,7 @@ Sources (October 2026):
 
 - **Starting work:** features from presets, batch create `B`, fork `F`, handoff (leader `F`).
 - **Lists and inputs:** TODOs `I`, needs-you queue `i`, dormant list `z`, prompt library `L`.
-- **Review and PRs:** diff viewer and final review (leader `d` / `f`), supervised edits (Claude), PR triage and AI
-  review `G` / `W`.
+- **Review and PRs:** diff viewer (leader `d`), supervised edits (Claude), PR triage `G`.
 - **Running things:** resource gate, `v` tiles via `aiw grid` in the cockpit's agent pane (DESIGN.md §18), ports, worktree prep, lifecycle hooks, custom
   run sessions.
 
@@ -200,12 +199,11 @@ Sources (October 2026):
     agent is busy.
   - `R` reverts the selected hunk.
 - **How:**
-  - Reuse the final-review comment model (`src/app/review/comments.rs`).
   - Hunk revert: `git apply -R` on that hunk.
 - **Effort:** M.
 
 ### P12 Run checks before an agent says "done" (per project, opt-in)
-- **What:** when an agent stops, run the project's `final_review_check_command`. If it fails, the failures go back to
+- **What:** when an agent stops, run a per-project check command. If it fails, the failures go back to
   the agent automatically, at most 2 times. Then it's marked finished with ✓ or ✗ on its row.
 - **How:**
   - Claude and Codex: a Stop hook that blocks with the failure text.

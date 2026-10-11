@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
-use super::setup::{ensure_notification_hooks, ensure_review_claude_md};
+use super::setup::ensure_notification_hooks;
 use super::*;
 use crate::automation::CreateBatchFeaturesRequest;
 use crate::extension::load_global_extension_config;
@@ -253,7 +253,6 @@ impl App {
         let branch = state.branch.clone();
         let worktree_name = worktree_name(&project_name, &branch);
         let mode = state.mode.clone();
-        let review = state.review;
         let create_terminal = state.create_terminal;
         let session_name = state.session_name.trim().to_string();
         let use_worktree = state.use_worktree;
@@ -379,7 +378,6 @@ impl App {
                             feature_name: feature_name.clone(),
                             branch,
                             mode,
-                            review,
                             agent: agent.clone(),
                             create_terminal,
                             enable_chrome,
@@ -397,7 +395,6 @@ impl App {
                         feature_name.clone(),
                         branch,
                         mode,
-                        review,
                         agent.clone(),
                         create_terminal,
                         session_name,
@@ -423,7 +420,6 @@ impl App {
             workdir,
             is_worktree,
             mode,
-            review,
             agent: agent.clone(),
             create_terminal,
             session_name,
@@ -481,7 +477,6 @@ impl App {
             feature.workdir = prepared.workdir.clone();
             feature.is_worktree = prepared.is_worktree;
             feature.mode = prepared.mode.clone();
-            feature.review = prepared.review;
             feature.agent = prepared.agent.clone();
             feature.enable_chrome = prepared.enable_chrome;
             feature.issue_source = prepared.issue_source.clone();
@@ -509,7 +504,6 @@ impl App {
                 prepared.workdir.clone(),
                 prepared.is_worktree,
                 prepared.mode.clone(),
-                prepared.review,
                 prepared.agent.clone(),
                 prepared.enable_chrome,
             );
@@ -963,7 +957,6 @@ impl App {
             &feature.agent,
             feature.is_worktree,
         );
-        ensure_review_claude_md(&feature.workdir, feature.review);
 
         Self::initialize_feature_sessions(feature, false, None);
 
@@ -2026,7 +2019,6 @@ impl App {
             agent,
             agent_index,
             mode: feature.mode.clone(),
-            review: feature.review,
             enable_chrome: feature.enable_chrome,
             include_context: true,
         };
@@ -2046,7 +2038,6 @@ impl App {
         let source_branch = state.source_branch.clone();
         let new_branch = state.new_branch.clone();
         let mode = state.mode.clone();
-        let review = state.review;
         let agent = state.agent.clone();
         let enable_chrome = state.enable_chrome;
         let include_context = state.include_context;
@@ -2133,7 +2124,6 @@ impl App {
                         feature_name: None,
                         branch: new_branch,
                         mode,
-                        review,
                         agent: agent.clone(),
                         create_terminal: false,
                         session_name: Self::default_session_name_for_agent(&agent),
@@ -2154,7 +2144,6 @@ impl App {
                 None,
                 new_branch.clone(),
                 mode.clone(),
-                review,
                 agent.clone(),
                 false,
                 Self::default_session_name_for_agent(&agent),
@@ -2175,7 +2164,6 @@ impl App {
             workdir,
             true,
             mode,
-            review,
             agent,
             enable_chrome,
         );
@@ -2285,7 +2273,6 @@ impl App {
             feature_prefix: state.feature_prefix.clone(),
             agent: state.agent.clone(),
             mode: state.mode.clone(),
-            review: state.review,
             enable_chrome: state.enable_chrome,
             dry_run: false,
         };

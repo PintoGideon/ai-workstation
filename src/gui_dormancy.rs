@@ -390,7 +390,6 @@ mod tests {
             PathBuf::from("/tmp").join(id),
             true,
             VibeMode::default(),
-            false,
             AgentKind::default(),
             false,
         );

@@ -1,8 +1,5 @@
 use super::support::*;
-use crate::app::setup::{
-    cleanup_agent_injected_files, ensure_notification_hooks, ensure_review_claude_md,
-    strip_between_markers,
-};
+use crate::app::setup::{cleanup_agent_injected_files, ensure_notification_hooks};
 use crate::app::*;
 use crate::project::{AgentKind, Feature, Project, SessionKind};
 use crate::traits::{MockTmuxOps, MockWorktreeOps};
@@ -10,120 +7,6 @@ use chrono::Utc;
 use std::collections::HashMap;
 use tempfile::NamedTempFile;
 use tempfile::TempDir;
-
-// ── strip_between_markers ─────────────────────────────────
-
-#[test]
-fn strip_between_markers_basic_removal() {
-    let result = strip_between_markers(
-        "hello <!-- BEGIN -->REMOVED<!-- END --> world",
-        "<!-- BEGIN -->",
-        "<!-- END -->",
-    );
-    assert_eq!(result, "hello  world");
-}
-
-#[test]
-fn strip_between_markers_eats_trailing_newline() {
-    let result = strip_between_markers(
-        "before <!-- BEGIN -->X<!-- END -->\nafter",
-        "<!-- BEGIN -->",
-        "<!-- END -->",
-    );
-    assert_eq!(result, "before after");
-}
-
-#[test]
-fn strip_between_markers_eats_leading_blank_line() {
-    let result = strip_between_markers(
-        "before\n\n<!-- BEGIN -->X<!-- END -->\nafter",
-        "<!-- BEGIN -->",
-        "<!-- END -->",
-    );
-    assert_eq!(result, "before\nafter");
-}
-
-#[test]
-fn strip_between_markers_absent_returns_unchanged() {
-    let s = "no markers here";
-    let result = strip_between_markers(s, "<!-- BEGIN -->", "<!-- END -->");
-    assert_eq!(result, "no markers here");
-}
-
-#[test]
-fn strip_between_markers_adjacent_markers() {
-    let result = strip_between_markers(
-        "<!-- BEGIN --><!-- END -->",
-        "<!-- BEGIN -->",
-        "<!-- END -->",
-    );
-    assert_eq!(result, "");
-}
-
-#[test]
-fn strip_between_markers_handles_unicode_before_marker() {
-    let result = strip_between_markers(
-        "café\n\n<!-- BEGIN -->\nmanaged\n<!-- END -->\n",
-        "<!-- BEGIN -->",
-        "<!-- END -->",
-    );
-    assert_eq!(result, "café\n");
-}
-
-#[test]
-fn review_mode_instructions_refresh_managed_block_and_ignore_archives() {
-    let workdir = tempfile::TempDir::new().unwrap();
-    std::fs::write(
-        workdir.path().join("CLAUDE.local.md"),
-        "# Existing\n\n\
-         <!-- AIW:review-instructions:begin -->\n\n\
-         stale managed text\n\n\
-         <!-- AIW:review-instructions:end -->\n",
-    )
-    .unwrap();
-
-    ensure_review_claude_md(workdir.path(), true);
-    ensure_review_claude_md(workdir.path(), true);
-
-    let instructions = std::fs::read_to_string(workdir.path().join("CLAUDE.local.md")).unwrap();
-    assert!(instructions.starts_with("# Existing\n"));
-    assert!(!instructions.contains("stale managed text"));
-    assert!(instructions.contains("review-notes-archive.md"));
-    assert!(
-        instructions.contains("Do not read `.claude/review-notes.md`"),
-        "Review Mode must tell the agent to blind-append, not read the notes file back"
-    );
-    assert_eq!(
-        instructions
-            .matches("<!-- AIW:review-instructions:begin -->")
-            .count(),
-        1,
-        "managed instruction replacement should be idempotent"
-    );
-
-    let ignore =
-        std::fs::read_to_string(workdir.path().join(".claude").join(".gitignore")).unwrap();
-    assert!(ignore.lines().any(|line| line == "review-notes.md"));
-    assert!(ignore.lines().any(|line| line == "review-notes-archive.md"));
-}
-
-/// FORK: a checkout set up by upstream AMF carries its own marker blocks;
-/// AIW replaces them instead of adding a second Review Mode section.
-#[test]
-fn upstream_instruction_blocks_are_replaced_not_duplicated() {
-    let workdir = tempfile::TempDir::new().unwrap();
-    std::fs::write(
-        workdir.path().join("CLAUDE.local.md"),
-        "<!-- AMF:review-instructions:begin -->\n\n## Review Mode\n\nold\n\n<!-- AMF:review-instructions:end -->\n",
-    )
-    .unwrap();
-
-    ensure_review_claude_md(workdir.path(), true);
-
-    let review = std::fs::read_to_string(workdir.path().join("CLAUDE.local.md")).unwrap();
-    assert_eq!(review.matches("## Review Mode").count(), 1, "{review}");
-    assert!(!review.contains("AMF:review-instructions"), "{review}");
-}
 
 #[test]
 fn start_worktree_hook_adds_pending_feature_immediately() {
@@ -160,7 +43,6 @@ fn start_worktree_hook_adds_pending_feature_immediately() {
         None,
         "new-feature".to_string(),
         VibeMode::default(),
-        false,
         AgentKind::Claude,
         false,
         "Claude 1".to_string(),
@@ -203,7 +85,6 @@ fn start_worktree_hook_clears_sidebar_state_for_reused_feature() {
         None,
         "my-feat".to_string(),
         VibeMode::default(),
-        false,
         AgentKind::Claude,
         false,
         "Claude 1".to_string(),
@@ -259,7 +140,6 @@ fn complete_running_hook_clears_pending_state_and_starts_feature() {
         workdir.path().to_path_buf(),
         true,
         VibeMode::default(),
-        false,
         AgentKind::Claude,
         false,
     );
@@ -339,7 +219,6 @@ fn complete_running_hook_clears_pending_state_and_starts_feature() {
         feature_name: None,
         branch: "new-feature".to_string(),
         mode: VibeMode::default(),
-        review: false,
         agent: AgentKind::Claude,
         create_terminal: false,
         session_name: "Claude 1".to_string(),
@@ -973,7 +852,6 @@ fn repair_unquoted_claude_hooks_refreshes_stale_stored_features() {
         workdir.path().to_path_buf(),
         true,
         VibeMode::Vibe,
-        false,
         AgentKind::Claude,
         false,
     );
@@ -1038,7 +916,6 @@ fn repair_unquoted_claude_hooks_refreshes_legacy_settings_json() {
         workdir.path().to_path_buf(),
         true,
         VibeMode::Vibe,
-        false,
         AgentKind::Codex,
         false,
     );

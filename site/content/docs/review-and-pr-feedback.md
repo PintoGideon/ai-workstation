@@ -1,26 +1,8 @@
 +++
-title = "Reviewing Changes and PR Feedback"
-description = "Final diff review and working through pull-request comments."
+title = "Pull-Request Feedback"
+description = "Working through pull-request comments with PR Triage."
 weight = 50
 +++
-
-## Review changes before shipping
-
-From an embedded session, press `Ctrl+Space`, then `f`. AIW presents the
-feature's diff file by file and lets you attach line comments or suggested
-changes. When you finish, AIW writes the feedback and hands it to an agent.
-With an authenticated `gh` CLI, AIW can also post the feedback to the
-branch's pull request.
-
-The optional AI co-reviewer that drafts line comments for the current file
-reviews an oversized file hunk group by hunk group rather than sending one
-truncated prompt; the status line reports if any group could not be
-reviewed.
-
-<figure>
-  <img src="/images/docs/final-review-file-tree.png" alt="Final Review's hierarchical file tree, with directory headers and per-file status, +/- counts, and risk flags">
-  <figcaption>Final Review's file tree, with per-file status and risk flags at a glance.</figcaption>
-</figure>
 
 ## Work through pull-request feedback
 

@@ -32,7 +32,6 @@ pub struct LiveTarget {
     pub session_id: String,
     pub kind: SessionKind,
     pub vibe_mode: VibeMode,
-    pub review: bool,
 }
 
 impl LiveTarget {
@@ -54,7 +53,6 @@ impl LiveTarget {
             self.label.clone(),
             self.kind.clone(),
             self.vibe_mode.clone(),
-            self.review,
         )
     }
 }
@@ -119,7 +117,6 @@ impl App {
             session_id: session.id.clone(),
             kind: session.kind.clone(),
             vibe_mode: feature.mode.clone(),
-            review: feature.review,
         })
     }
 
@@ -294,7 +291,6 @@ mod tests {
             PathBuf::from("/tmp"),
             false,
             VibeMode::Vibeless,
-            false,
             AgentKind::Claude,
             false,
         );

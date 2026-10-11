@@ -614,7 +614,6 @@ mod tests {
             PathBuf::from("/tmp"),
             false,
             VibeMode::Vibeless,
-            false,
             AgentKind::Claude,
             false,
         );

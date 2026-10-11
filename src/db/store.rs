@@ -255,7 +255,6 @@ type FeatureRow = (
     bool,
     String,
     String,
-    bool,
     String,
     bool,
     String,
@@ -278,7 +277,7 @@ fn load_features(
 ) -> Result<Vec<Feature>> {
     let mut stmt = conn.prepare(
         "SELECT id, name, branch, workdir, is_worktree, tmux_session,
-                mode, review, agent, enable_chrome, status,
+                mode, agent, enable_chrome, status,
                 summary, summary_updated_at, nickname, collapsed,
                 created_at, last_accessed, ready, triage_source,
                 review_source, issue_source
@@ -309,7 +308,6 @@ fn load_features(
                 row.get(17)?,
                 row.get(18)?,
                 row.get(19)?,
-                row.get(20)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -323,7 +321,6 @@ fn load_features(
         is_worktree,
         tmux_session,
         mode_str,
-        review,
         agent_str,
         enable_chrome,
         status_str,
@@ -350,7 +347,6 @@ fn load_features(
             sessions,
             collapsed: feat_collapsed,
             mode: mode_from_str(&mode_str),
-            review,
             // FORK: a feature whose agent was the removed OpenCode harness
             // falls back to its project's preferred agent (itself already
             // mapped off OpenCode by `agent_from_str`).
@@ -600,12 +596,12 @@ fn do_save(conn: &Connection, store: &ProjectStore) -> Result<()> {
             conn.execute(
                 "INSERT INTO features (
                     id, project_id, name, branch, workdir, is_worktree,
-                    tmux_session, mode, review, agent, enable_chrome,
+                    tmux_session, mode, agent, enable_chrome,
                     status, summary, summary_updated_at, nickname, collapsed,
                     created_at, last_accessed, ready, sort_order, triage_source,
                     review_source, issue_source
                 ) VALUES (
-                    ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23
+                    ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22
                 )",
                 params![
                     feature.id,
@@ -616,7 +612,6 @@ fn do_save(conn: &Connection, store: &ProjectStore) -> Result<()> {
                     feature.is_worktree as i32,
                     feature.tmux_session,
                     mode_to_str(&feature.mode),
-                    feature.review as i32,
                     agent_to_str(&feature.agent),
                     feature.enable_chrome as i32,
                     status_to_str(&feature.status),
@@ -782,7 +777,6 @@ mod tests {
             sessions: vec![session],
             collapsed: false,
             mode: VibeMode::Vibe,
-            review: true,
             agent: crate::project::AgentKind::Claude,
             enable_chrome: false,
             pending_worktree_script: false,
@@ -844,7 +838,6 @@ mod tests {
         let lf = &lp.features[0];
         assert_eq!(lf.name, "my-feature");
         assert_eq!(lf.mode, VibeMode::Vibe);
-        assert!(lf.review);
         assert!(lf.ready);
         assert_eq!(lf.summary, Some("did some stuff".to_string()));
         assert_eq!(lf.nickname, Some("myf".to_string()));
@@ -979,7 +972,6 @@ mod tests {
                     sessions: Vec::new(),
                     collapsed: true,
                     mode: VibeMode::default(),
-                    review: false,
                     agent: crate::project::AgentKind::Claude,
                     enable_chrome: false,
                     pending_worktree_script: false,
@@ -1004,7 +996,6 @@ mod tests {
                     sessions: Vec::new(),
                     collapsed: true,
                     mode: VibeMode::default(),
-                    review: false,
                     agent: crate::project::AgentKind::Claude,
                     enable_chrome: false,
                     pending_worktree_script: true, // should be excluded
@@ -1168,7 +1159,6 @@ mod tests {
             "/tmp/legacy-repo".into(),
             false,
             VibeMode::Vibe,
-            false,
             AgentKind::Claude,
             false,
         );

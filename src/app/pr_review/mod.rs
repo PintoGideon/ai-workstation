@@ -12,8 +12,6 @@ pub(crate) mod github_access;
 mod integration;
 mod investigation;
 mod reply;
-mod review_tab;
-pub(crate) mod revisions;
 pub(crate) mod state;
 
 #[cfg(test)]
@@ -25,7 +23,6 @@ pub(crate) use domain::AI_ATTRIBUTION_FOOTER;
 pub(crate) use domain::AI_REVIEW_ATTRIBUTION_FOOTER;
 pub(crate) use domain::AIW_ATTRIBUTION_FOOTER;
 pub(crate) use domain::TRIAGE_SESSION_LABEL;
-pub(crate) use domain::fix_session_index;
 pub(crate) use domain::pr_triage_session_index;
 #[cfg(test)]
 pub(crate) use domain::pr_triage_session_index_named;

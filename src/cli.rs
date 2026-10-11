@@ -328,7 +328,6 @@ Request JSON (all fields optional unless marked required):
     \"branch\":          string  (required) branch / feature name
     \"agent\":           \"claude\" | \"codex\" | \"pi\" | \"gemini\" | \"cursor\"   default \"claude\"
     \"mode\":            \"vibeless\" | \"vibe\" | \"supervibe\"       default \"vibeless\"
-    \"review\":          bool    default false
     \"create_terminal\": bool    default false
     \"use_worktree\":    bool | null   null = project default
     \"enable_chrome\":   bool    default false
@@ -351,7 +350,6 @@ Request JSON (all fields optional unless marked required):
     \"feature_prefix\":  string  default \"feature\"
     \"agent\":           \"claude\" | \"codex\" | \"pi\" | \"gemini\" | \"cursor\"   default \"claude\"
     \"mode\":            \"vibeless\" | \"vibe\" | \"supervibe\"       default \"vibeless\"
-    \"review\":          bool    default false
     \"enable_chrome\":   bool    default false
     \"dry_run\":         bool    default false; validate only
   }
@@ -1380,92 +1378,6 @@ impl LoopDeadlines {
     }
 }
 
-/// Hand the terminal to `$VISUAL`/`$EDITOR` for one file, then take it back.
-///
-/// The teardown/restore pair mirrors `run()`'s setup exactly, so the editor
-/// runs on a terminal in the state it would have had if AIW were never
-/// started. Failures are reported through `app.message` rather than bubbling
-/// up: a missing editor should not end the session — but the screen is always
-/// restored first, since returning to a half-torn-down terminal is worse than
-/// any editor error.
-fn run_pending_editor<B: Backend<Error = io::Error> + io::Write>(
-    terminal: &mut Terminal<B>,
-    app: &mut App,
-    request: app::PendingEditorOpen,
-) -> Result<()> {
-    let display_path = request.path.display().to_string();
-    let invocation = match app::review::resolve_editor_command(&display_path, request.line) {
-        Ok(invocation) => invocation,
-        Err(reason) => {
-            app.message = Some(reason);
-            return Ok(());
-        }
-    };
-
-    // Fingerprint before handing over so an edit can trigger a diff reload —
-    // the reviewer went in to look, but may well come out having changed
-    // something, and a stale diff underneath the comments is a trap.
-    let before = std::fs::metadata(&request.path)
-        .ok()
-        .and_then(|meta| meta.modified().ok().map(|time| (meta.len(), time)));
-
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        DisableBracketedPaste,
-        DisableMouseCapture,
-        SetCursorStyle::DefaultUserShape,
-        LeaveAlternateScreen
-    )?;
-    terminal.show_cursor()?;
-
-    let (program, args) = invocation;
-    app.log_info(
-        "review",
-        format!("Opening {display_path} in {program} {}", args.join(" ")),
-    );
-    let status = std::process::Command::new(&program)
-        .args(&args)
-        .current_dir(&request.workdir)
-        .status();
-
-    enable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        EnterAlternateScreen,
-        EnableBracketedPaste,
-        EnableMouseCapture,
-        SetCursorStyle::SteadyBlock
-    )?;
-    terminal.hide_cursor()?;
-    terminal.clear()?;
-
-    match status {
-        Err(err) => {
-            app.log_error("review", format!("Could not run {program}: {err}"));
-            app.message = Some(format!("Could not run {program}: {err}"));
-        }
-        Ok(status) if !status.success() => {
-            app.message = Some(format!("{program} exited with {status}"));
-        }
-        Ok(_) => {
-            let after = std::fs::metadata(&request.path)
-                .ok()
-                .and_then(|meta| meta.modified().ok().map(|time| (meta.len(), time)));
-            if before != after {
-                app.message = Some(format!("{} changed — reloading diff", request.display));
-                app.refresh_diff_viewer();
-            } else {
-                app.message = Some(format!("Closed {}", request.display));
-            }
-        }
-    }
-
-    Ok(())
-}
-
-// The `io::Write` bound is what lets `run_pending_editor` drive the terminal's
-// alternate screen / raw mode through the backend, the same way `run` does.
 fn run_loop<B: Backend<Error = io::Error> + io::Write>(
     terminal: &mut Terminal<B>,
     app: &mut App,
@@ -1561,36 +1473,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             app.show_error(e);
         }
 
-        if matches!(app.mode, app::AppMode::DiffReviewPrompt(_))
-            && let Err(e) = app.poll_diff_review_explanation()
-        {
-            app.show_error(e);
-        }
-
-        if matches!(app.mode, app::AppMode::DiffViewer(_))
-            && let Err(e) = app.poll_review_walkthrough()
-        {
-            app.show_error(e);
-        }
-
-        if matches!(app.mode, app::AppMode::DiffViewer(_))
-            && let Err(e) = app.poll_co_review()
-        {
-            app.show_error(e);
-        }
-
-        if matches!(app.mode, app::AppMode::DiffViewer(_))
-            && let Err(e) = app.poll_changeset_overview()
-        {
-            app.show_error(e);
-        }
-
-        if matches!(app.mode, app::AppMode::DiffViewer(_))
-            && let Err(e) = app.poll_final_review_check()
-        {
-            app.show_error(e);
-        }
-
         if matches!(app.mode, app::AppMode::SyntaxLanguagePicker(_))
             && let Err(e) = app.poll_syntax_language_picker()
         {
@@ -1633,18 +1515,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         force_redraw |= app.poll_session_info_bg();
 
         if app.pr_review_work.fetch_pending() && app.poll_pr_review_bg() {
-            force_redraw = true;
-        }
-
-        if app.pr_review_work.review_list_pending() && app.poll_pr_review_list_bg() {
-            force_redraw = true;
-        }
-
-        if app.pr_review_work.review_open_pending() && app.poll_pr_review_open_bg() {
-            force_redraw = true;
-        }
-
-        if app.pr_review_work.review_post_pending() && app.poll_pr_review_post_bg() {
             force_redraw = true;
         }
 
@@ -1881,14 +1751,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         if app.should_quit {
             app.flush_pending_debug_log_entries();
             return Ok(());
-        }
-
-        // The reviewer asked for `$EDITOR`. Only the main loop can do this: it
-        // owns raw mode and the alternate screen, which have to come down
-        // before the editor gets the terminal and go back up afterwards.
-        if let Some(request) = app.pending_editor.take() {
-            run_pending_editor(terminal, app, request)?;
-            force_redraw = true;
         }
 
         // Feature-status reconciliation is event-driven via the tmux

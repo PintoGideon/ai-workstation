@@ -4,10 +4,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import DiffPanel, { Hunk } from "../src/DiffPanel";
-import LearningPanel from "../src/LearningPanel";
-import ReviewPanel from "../src/ReviewPanel";
 import { SyntaxBadge } from "../src/SyntaxCode";
-import type { DiffFile, DiffHunk, DiffView, LearningView, ReviewView } from "../src/api";
+import type { DiffFile, DiffHunk, DiffView } from "../src/api";
 import type { SyntaxInfo, SyntaxInstallView } from "../src/syntaxApi";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -155,47 +153,4 @@ it("refetches the diff after an install so the file gains colours", async () => 
   fireEvent.click(screen.getByRole("button", { name: /src\/lib.rs modified/ }));
   expect(screen.getByText("Rust").className).toContain("syntax-chip-on");
   expect(codeCell("-   still a comment */").querySelector(".syn-comment")).toBeTruthy();
-});
-
-const reviewView: ReviewView = {
-  workflow_id: "review", revision: 2, target: { project_id: "p", feature_id: "f" },
-  feature_name: "Feature", branch: "feature", base_ref: "main", selected_path: "src/lib.rs",
-  general_feedback: "", has_prior_review: false, error: null, save_error: null, applied_suggestions: [], history: null, summary: null, check_command: null, check: null, finish: null,
-  ai: { precall: null, running: false, walkthrough_path: null, co_review_path: null, overview_running: false, overview: null, harnesses: ["claude"], message: null },
-  files: [{ diff: file, verdict: "undecided", feedback: "", severity: "suggestion", changed_since_last: false, notes: null, walkthrough: null, comment: null, line_comments: [] }],
-};
-
-it("comments on a highlighted review line through the existing span anchors", async () => {
-  const onAct = vi.fn(async () => true);
-  render(<ReviewPanel view={reviewView} busy={false} error={null} onAct={onAct} />);
-  expect(screen.getByText("Rust").className).toContain("syntax-chip-on");
-  expect(codeCell("+let s = \"multi").querySelector(".syn-string")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Select line 5", exact: true }));
-  fireEvent.click(screen.getByRole("button", { name: "Comment on selection" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Line comment" }), { target: { value: "Unterminated string" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save comment" }));
-  await waitFor(() => expect(onAct).toHaveBeenCalledWith({ kind: "line_comment", path: "src/lib.rs",
-    start: { old_line: null, new_line: 5 }, end: { old_line: null, new_line: 5 }, text: "Unterminated string", severity: "suggestion" }));
-});
-
-const learning: LearningView = {
-  workflow_id: "reader", revision: 0, target: { project_id: "p", feature_id: "f" }, feature_name: "Feature", scope: "repo_tree", is_git: true,
-  entries: [{ key: "file:src/lib.rs", label: "src/lib.rs", kind: "file", depth: 0, expanded: false }],
-  content_path: "src/lib.rs", content: ["/* opens", "   closes */", "", "fn main() {}"], content_line_labels: ["1", "2", "3", "4"],
-  content_syntax: [[["comment", "/* opens"]], [["comment", "   closes */"]], null, [["keyword", "fn"], ["", " "], ["function", "main"], ["punctuation-bracket", "() {}"]]],
-  syntax: rust, content_error: null, anchor: "all of src/lib.rs", selection: [2, 2], hunks: [], starters: [], can_keep_todo: true,
-  harness: "claude", harnesses: ["claude"], level: "newcomer", history_saved: true, error: null, notice: null, qa: [],
-};
-
-it("colours the Learning reader and keeps its line selection", () => {
-  const onAct = vi.fn(async () => true);
-  render(<LearningPanel view={learning} busy={false} onAct={onAct} onClose={vi.fn()} onLaunch={vi.fn()} />);
-  expect(screen.getByText("Rust").className).toContain("syntax-chip-on");
-  const second = screen.getByRole("button", { name: "Select line 2" });
-  expect(second.className).toContain("learning-line-selected");
-  expect(second.querySelector(".syn-comment")?.textContent).toBe("   closes */");
-  expect(screen.getByRole("button", { name: "Select line 3" }).querySelector("code")?.textContent).toBe(" ");
-  expect(screen.getByRole("button", { name: "Select line 4" }).querySelector(".syn-function")?.textContent).toBe("main");
-  fireEvent.click(screen.getByRole("button", { name: "Select line 4" }));
-  expect(onAct).toHaveBeenLastCalledWith({ kind: "lines_anchor", start: 4, end: 4 });
 });

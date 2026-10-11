@@ -497,53 +497,8 @@ impl App {
         }
     }
 
-    /// Bound Review Mode's live developer-note file when an agent finishes a
-    /// turn. Harness integrations with end-of-turn notifications emit either
-    /// `thinking-stop`, `stop`, or `input-request` at that boundary. Resolve
-    /// the configured feature first instead of trusting an arbitrary IPC cwd
-    /// as a write target.
-    fn archive_review_notes_after_agent_turn(&mut self, msg: &IpcMsg, msg_type: &str) {
-        let notification_type = msg.notification_type.as_deref().unwrap_or_default();
-        let ended = matches!(msg_type, "thinking-stop" | "stop" | "input-request")
-            || notification_type == "input-request";
-        if !ended {
-            return;
-        }
-
-        let cwd_path = PathBuf::from(msg.cwd.as_deref().unwrap_or_default());
-        let aiw_session = msg
-            .aiw_session
-            .as_deref()
-            .or(msg.aiw_tmux_session.as_deref())
-            .or(msg.session_id.as_deref());
-        let Some((pi, fi)) = self.project_feature_for_message(aiw_session, &cwd_path).3 else {
-            return;
-        };
-        let feature = &self.store.projects[pi].features[fi];
-        if !feature.review {
-            return;
-        }
-        let workdir = feature.workdir.clone();
-
-        match super::review::archive_review_notes(&workdir) {
-            Ok(0) => {}
-            Ok(count) => self.log_info(
-                "review",
-                format!(
-                    "archived {count} older review-note section(s) for {}",
-                    workdir.display()
-                ),
-            ),
-            Err(err) => self.log_warn(
-                "review",
-                format!(
-                    "failed to cap review notes for {}: {err}",
-                    workdir.display()
-                ),
-            ),
-        }
-    }
-
+    /// The feature an end-of-turn IPC message belongs to. Resolve the
+    /// configured feature first instead of trusting an arbitrary IPC cwd.
     fn codex_feature_for_message(
         &self,
         session_id: Option<&str>,
@@ -593,7 +548,6 @@ impl App {
         let (diff_file, diff_error) = super::supervised_edits::load_edit_review_diff(input);
         self.mode = AppMode::DiffReviewPrompt(DiffReviewState {
             session_id: input.session_id.clone(),
-            workdir: PathBuf::from(&input.cwd),
             relative_path: input.relative_path.clone().unwrap_or_default(),
             tool: input.tool.clone().unwrap_or_default(),
             old_snippet: input.old_snippet.clone().unwrap_or_default(),
@@ -604,8 +558,6 @@ impl App {
             reason: input.reason.clone().unwrap_or_default(),
             editing_feedback: false,
             layout: self.preferred_diff_viewer_layout(),
-            explanation: None,
-            explanation_child: None,
             response_file: PathBuf::from(response_file),
             proceed_signal: PathBuf::from(proceed_signal),
             request_id: input.request_id.clone(),
@@ -1053,7 +1005,6 @@ impl App {
         self.bind_exact_token_usage_source_from_ipc(&msg);
 
         let msg_type = msg.msg_type.as_deref().unwrap_or("stop").to_string();
-        self.archive_review_notes_after_agent_turn(&msg, &msg_type);
 
         // "clear" removes any pending notification for this
         // session, sent by clear-notify.sh on PreToolUse.
@@ -1815,10 +1766,6 @@ impl App {
                         self.pending_inputs.remove(idx);
                     }
                     self.enter_view()?;
-                    if input.notification_type == "review-ready" {
-                        self.trigger_final_review()?;
-                        return Ok(());
-                    }
                     if is_structured_diff_review {
                         if !self.pending_inputs.iter().any(|pending| {
                             pending.session_id == input.session_id

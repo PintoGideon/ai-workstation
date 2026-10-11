@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Assert native GUI syntax highlighting through WebKit IPC and capture its X11 window.
 
-Covers unified/split diffs and Final Review with a line comment in light and
+Covers unified/split diffs in light and
 dark. Parsers are installed through the GUI's own
 `syntax_install` command (the TUI picker's installer: `git clone` from GitHub,
 `cc`) into the private XDG config. No agent or AI harness runs.
@@ -236,7 +236,6 @@ claude = repo / ".claude"
 claude.mkdir()
 with (repo / ".git/info/exclude").open("a") as exclusions:
     exclusions.write("\n.claude/\n")
-progress_path = claude / "final-review-progress.json"
 source_before = {p: p.read_bytes() for p in repo.rglob("*") if p.is_file() and ".git" not in p.parts and ".claude" not in p.parts}
 
 try:
@@ -324,29 +323,6 @@ try:
     click("Close")
     wait('!document.querySelector(".diff-reader")')
 
-    # Final Review: a line comment on a highlighted line.
-    click("Final Review")
-    wait('!!document.querySelector(".diff-file")', timeout=20)
-    choose_file("src/lib.rs")
-    line = line_of("src/lib.rs", "credit notes carry a negative total")
-    label = f"Select line {line}"
-    evaluate(f"document.querySelector('button[aria-label={json.dumps(label)}]').click()")
-    wait(f"document.querySelector('button[aria-label={json.dumps(label)}]')?.getAttribute('aria-pressed')==='true'")
-    click("Comment on selection")
-    fill("Line comment", "total_cents clamps at zero, so this rule is not enforced yet.")
-    click("Save comment")
-    wait('!document.querySelector(".review-editor")')
-    evaluate('Array.from(document.querySelectorAll("details")).forEach(d=>d.open=true)')
-    capture(
-        "007-review-line-comment.png",
-        "Final Review keeps highlighting with a saved line comment anchored to the selected line, which stays a comment although the block comment opened above the hunk.",
-        ["Rust", f"line {line} [", "total_cents clamps at zero"],
-        row_has("credit notes carry a negative total", "comment", ".diff-lines .review-line-selected"),
-    )
-    saved = json.loads(progress_path.read_text())["line_comments"]["src/lib.rs"]
-    assert saved[0]["location"] == {"old_line": None, "new_line": line}, saved
-    click("Pause review")
-    wait('!document.querySelector(".diff-reader")')
 
     # Dark mode: the same views through the dark syntax tokens.
     set_dark(True)
@@ -370,18 +346,6 @@ try:
         row_has("Credit notes appear as negative totals.", "string"),
     )
     click("Close")
-    wait('!document.querySelector(".diff-reader")')
-    click("Final Review")
-    wait('!!document.querySelector(".diff-file")', timeout=20)
-    choose_file("src/lib.rs")
-    evaluate('Array.from(document.querySelectorAll("details")).forEach(d=>d.open=true)')
-    capture(
-        "012-review-line-comment-dark.png",
-        "The resumed review restores the saved line comment above the dark-mode highlighted diff.",
-        ["Rust", f"line {line} [", "total_cents clamps at zero"],
-        row_has("credit notes carry a negative total", "comment"),
-    )
-    click("Pause review")
     wait('!document.querySelector(".diff-reader")')
 
     source_after = {p: p.read_bytes() for p in repo.rglob("*") if p.is_file() and ".git" not in p.parts and ".claude" not in p.parts}

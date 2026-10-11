@@ -173,12 +173,6 @@ impl App {
                 return;
             }
         };
-        // Opened from a pre-call notice's `e`? Return to the notice so the
-        // user can continue the run with the override they just saved.
-        if let Some(pending) = self.precall_return.take() {
-            self.mode = AppMode::PromptPrecall(pending);
-            return;
-        }
         if let Some(view) = from_view {
             self.return_to_dashboard(&view);
         }

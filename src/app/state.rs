@@ -1,5 +1,5 @@
+pub use crate::app::diff_state::*;
 pub use crate::app::pr_review::state::*;
-pub use crate::app::review::state::*;
 use ratatui_explorer::FileExplorer;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -29,7 +29,6 @@ pub struct ForkFeatureState {
     pub agent: AgentKind,
     pub agent_index: usize,
     pub mode: VibeMode,
-    pub review: bool,
     pub enable_chrome: bool,
     pub include_context: bool,
 }
@@ -50,7 +49,6 @@ pub struct ViewState {
     pub session_label: String,
     pub session_kind: SessionKind,
     pub vibe_mode: VibeMode,
-    pub review: bool,
 }
 
 impl ViewState {
@@ -64,7 +62,6 @@ impl ViewState {
         session_label: String,
         session_kind: SessionKind,
         vibe_mode: VibeMode,
-        review: bool,
     ) -> Self {
         Self {
             project_name,
@@ -74,7 +71,6 @@ impl ViewState {
             session_label,
             session_kind,
             vibe_mode,
-            review,
         }
     }
 }
@@ -142,22 +138,6 @@ impl PendingInput {
 }
 
 /// A request to suspend the TUI and hand the terminal to `$VISUAL`/`$EDITOR`.
-/// Raised by the review viewer (`E`) and drained by the main loop, which owns
-/// the terminal's raw-mode/alternate-screen state — the app layer can resolve
-/// *what* to open but must not tear the screen down underneath itself.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PendingEditorOpen {
-    /// Absolute path to the file, already validated as a regular file inside
-    /// the worktree.
-    pub path: PathBuf,
-    /// Directory the editor is spawned in.
-    pub workdir: PathBuf,
-    /// 1-based line to place the cursor on, when the editor understands one.
-    pub line: Option<usize>,
-    /// Worktree-relative path, for the message shown after the editor exits.
-    pub display: String,
-}
-
 pub enum RenameReturnTo {
     Dashboard,
 }
@@ -331,23 +311,6 @@ pub enum DiffScope {
     CurrentChanges,
     /// Exactly one commit, compared with its first parent.
     Commit(crate::diff::DiffCommit),
-    /// A pull request at pinned revisions: `merge_base..head`, both sides read
-    /// from git objects. Never the working tree, the checked-out branch, or
-    /// `HEAD`, so the feature the viewer was opened from cannot leak in.
-    PullRequest(Box<PrDiffTarget>),
-}
-
-/// The pull request a [`DiffScope::PullRequest`] viewer is reviewing.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PrDiffTarget {
-    /// The base repository as `host/owner/name` (`GithubRepository::canonical`),
-    /// or the raw fetch URL when that can't be parsed. Host-qualified so two
-    /// GitHub hosts' `owner/name` never collide as a draft key.
-    pub repo: String,
-    /// The PR at the revisions that were fetched and verified: `base_oid` and
-    /// `head_oid` are exactly what the private review refs point at.
-    pub pr: crate::github::ReviewablePr,
-    pub merge_base_oid: String,
 }
 
 pub struct DiffPickerState {
@@ -358,9 +321,6 @@ pub struct DiffPickerState {
     pub selected: usize,
     pub error: Option<String>,
 }
-
-// Not `Clone`: holds a `std::process::Child` for the in-flight walkthrough
-// generation (matching `DiffReviewState`). Nothing clones this state wholesale.
 
 #[derive(Debug, Clone)]
 pub struct ComposeCommandEntry {
@@ -851,7 +811,7 @@ pub struct TodoViewState {
     /// Whether inline edits open with the vim keymap. Remembered on the state
     /// (not the editor, which is rebuilt for each edit) for the life of the
     /// overlay; a fresh overlay starts with vim off, matching the other opt-in
-    /// editor surfaces (compose, final review). Toggled with `Ctrl+T`.
+    /// editor surfaces (compose). Toggled with `Ctrl+T`.
     pub todo_vim_enabled: bool,
     /// Set when a delete is awaiting y/n confirmation.
     pub pending_delete: bool,
@@ -1294,6 +1254,8 @@ impl TodoLaunchStep {
     }
 }
 
+// `PrReview` is the outsized variant; it goes with PR Triage.
+#[allow(clippy::large_enum_variant)]
 pub enum AppMode {
     Normal,
     Todos(TodoViewState),
@@ -1352,8 +1314,6 @@ pub enum AppMode {
     PrNumberPrompt(PrNumberPromptState),
     /// Choosing a PR from a list (or falling through to the number prompt).
     PrPicker(PrPickerState),
-    /// The PR picker's Review tab (see [`PrReviewListState`]).
-    PrReviewList(Box<PrReviewListState>),
     /// Browse open issues for the selected project's canonical GitHub repo.
     IssueBrowser(crate::app::issue_fixer::IssueBrowserState),
     /// Configure the feature and editable prompt for the selected issue.
@@ -1390,7 +1350,6 @@ pub enum AppMode {
     /// run: announces the prompt ID + harness, with view / edit / continue /
     /// cancel. Automated runs (session summaries) show
     /// a toast instead and never reach this.
-    PromptPrecall(Box<crate::app::precall::PendingPrecall>),
     SkillPicker(SkillPickerState),
     ForkingFeature(ForkFeatureState),
     ThemePicker(ThemePickerState),
@@ -1406,7 +1365,6 @@ pub enum AppMode {
     /// review's fixes (only shown when the dedicated fix target is selected and
     /// no review session exists yet). The feedback file is already written; this
     /// only governs where the "address the feedback" prompt is dispatched.
-    ReviewHarnessPick(ReviewHarnessPickState),
     /// Soft warning shown before starting an agent when the machine is already
     /// at the concurrency cap and/or low on memory. Confirming starts anyway.
     ConfirmResourceStart(Box<ResourceConfirmState>),
@@ -1421,21 +1379,6 @@ pub enum AppMode {
 pub struct TodoReferenceCompletionState {
     pub view: ViewState,
     pub todo_id: String,
-}
-
-/// Pending dispatch of a finished review's feedback to a freshly-spun-up
-/// dedicated agent session, paused on the harness choice.
-pub struct ReviewHarnessPickState {
-    /// Project / feature indices the dedicated session is created under.
-    pub pi: usize,
-    pub fi: usize,
-    /// The finish summary shown after the prompt is dispatched.
-    pub summary: String,
-    /// The feature view to return to once dispatch completes or is cancelled.
-    pub from_view: ViewState,
-    /// Harnesses offered to the reviewer (the project's enabled harnesses).
-    pub harnesses: Vec<crate::project::AgentKind>,
-    pub selected: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -1795,7 +1738,6 @@ pub enum HookNext {
         feature_name: Option<String>,
         branch: String,
         mode: VibeMode,
-        review: bool,
         agent: AgentKind,
         create_terminal: bool,
         session_name: String,
@@ -1838,7 +1780,6 @@ pub struct RunningHookState {
     pub issue_source: Option<crate::project::IssueSource>,
     pub branch: String,
     pub mode: VibeMode,
-    pub review: bool,
     pub agent: AgentKind,
     pub create_terminal: bool,
     pub session_name: String,
@@ -1932,7 +1873,6 @@ pub struct BackgroundHook {
     pub issue_source: Option<crate::project::IssueSource>,
     pub branch: String,
     pub mode: VibeMode,
-    pub review: bool,
     pub agent: AgentKind,
     pub create_terminal: bool,
     pub session_name: String,
@@ -1955,7 +1895,6 @@ impl BackgroundHook {
             issue_source: state.issue_source,
             branch: state.branch,
             mode: state.mode,
-            review: state.review,
             agent: state.agent,
             create_terminal: state.create_terminal,
             session_name: state.session_name,
@@ -2059,7 +1998,6 @@ pub struct CreateFeatureState {
     pub mode: VibeMode,
     pub mode_index: usize,
     pub mode_focus: usize,
-    pub review: bool,
     pub create_terminal: bool,
     pub session_name: String,
     pub source_index: usize,
@@ -2106,7 +2044,6 @@ impl CreateFeatureState {
             mode: VibeMode::default(),
             mode_index: 0,
             mode_focus: 0,
-            review: false,
             create_terminal: false,
             session_name: "Claude 1".to_string(),
             source_index: 0,
@@ -2124,10 +2061,7 @@ impl CreateFeatureState {
     pub fn focused_mode_description(&self) -> Option<&'static str> {
         match self.mode_focus {
             0 | 1 => None,
-            2 => Some(
-                "High token usage: writes developer notes with every code change for a detailed code review.",
-            ),
-            3 if self.agent == AgentKind::Claude => {
+            2 if self.agent == AgentKind::Claude => {
                 Some("Enable browser automation for features that need Chrome.")
             }
             _ => None,
@@ -2170,7 +2104,6 @@ pub struct PreparedFeatureLaunch {
     pub workdir: PathBuf,
     pub is_worktree: bool,
     pub mode: VibeMode,
-    pub review: bool,
     pub agent: AgentKind,
     pub create_terminal: bool,
     pub session_name: String,
@@ -2195,7 +2128,6 @@ pub struct CreateBatchFeaturesState {
     pub mode: VibeMode,
     pub mode_index: usize,
     pub mode_focus: usize,
-    pub review: bool,
     pub enable_chrome: bool,
     pub step: CreateBatchFeaturesStep,
 }
@@ -2227,7 +2159,6 @@ impl CreateBatchFeaturesState {
             mode: VibeMode::default(),
             mode_index: 0,
             mode_focus: 0,
-            review: false,
             enable_chrome: false,
             step: CreateBatchFeaturesStep::WorkspacePath,
         }

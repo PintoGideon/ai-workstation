@@ -1,6 +1,6 @@
 //! Shared state and pure transitions for compact feature setup dialogs.
 //!
-//! PR Triage and Final Review both open a small settings dialog before making
+//! PR Triage opens a small settings dialog before making
 //! an isolated companion feature.  Keep the state transitions here so another
 //! GitHub-backed workflow (such as issue fixing) can use the same dialog
 //! contract without copying the PR-specific orchestration.
@@ -17,8 +17,6 @@ pub enum FeatureSetupRow {
     Harness,
     /// The feature's permission/vibe mode.
     Mode,
-    /// Review mode (developer notes on every change).
-    Review,
     /// Chrome/browser automation.
     Chrome,
     /// The branch name. Pre-filled and editable.
@@ -26,11 +24,10 @@ pub enum FeatureSetupRow {
 }
 
 impl FeatureSetupRow {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 5] = [
         Self::Preset,
         Self::Harness,
         Self::Mode,
-        Self::Review,
         Self::Chrome,
         Self::Branch,
     ];
@@ -40,7 +37,6 @@ impl FeatureSetupRow {
             Self::Preset => "Preset",
             Self::Harness => "Harness",
             Self::Mode => "Vibe mode",
-            Self::Review => "Review mode",
             Self::Chrome => "Chrome",
             Self::Branch => "Branch",
         }
@@ -59,7 +55,6 @@ pub struct FeatureSetupState {
     pub agents: Vec<AgentKind>,
     pub agent_index: usize,
     pub mode: VibeMode,
-    pub review: bool,
     pub enable_chrome: bool,
     /// The isolated companion branch, pre-filled by the owning workflow.
     pub branch: String,
@@ -130,10 +125,6 @@ impl FeatureSetupState {
                     all[(current as isize + delta).rem_euclid(all.len() as isize) as usize].clone();
                 None
             }
-            FeatureSetupRow::Review => {
-                self.review = !self.review;
-                None
-            }
             FeatureSetupRow::Chrome => {
                 self.enable_chrome = !self.enable_chrome;
                 None
@@ -152,7 +143,6 @@ impl FeatureSetupState {
             self.agent_index = index;
         }
         self.mode = preset.mode.clone();
-        self.review = preset.review;
         self.enable_chrome = preset.enable_chrome;
         if let Some(prefix) = &preset.branch_prefix {
             let base = self
@@ -195,7 +185,6 @@ mod tests {
             agents: vec![AgentKind::Claude],
             agent_index: 0,
             mode: VibeMode::Vibeless,
-            review: false,
             enable_chrome: false,
             branch: "feature".to_string(),
             row: 0,
