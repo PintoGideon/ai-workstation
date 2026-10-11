@@ -317,12 +317,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("Esc", key_style()),
             Span::raw(" cancel"),
         ]),
-        AppMode::FreshContextPrompt(_) => Line::from(vec![
-            Span::styled("Enter", key_style()),
-            Span::raw(" start session  "),
-            Span::styled("Esc", key_style()),
-            Span::raw(" cancel"),
-        ]),
         AppMode::TodoImplementChoice(_) => Line::from(vec![
             Span::styled("j/k", key_style()),
             Span::raw(" choose  "),
@@ -537,34 +531,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("Esc", key_style()),
             Span::raw(" close"),
         ]),
-        AppMode::PromptOverrides(state) => {
-            if state.help_open {
-                Line::from(vec![
-                    Span::styled(" Esc", key_style()),
-                    Span::raw(" close help"),
-                ])
-            } else if state.edit.is_some() {
-                Line::from(vec![
-                    Span::styled(" Ctrl+S", key_style()),
-                    Span::raw(" continue  "),
-                    Span::styled("Ctrl+T", key_style()),
-                    Span::raw(" vim  "),
-                    Span::styled("Ctrl+Q", key_style()),
-                    Span::raw(" cancel"),
-                ])
-            } else {
-                Line::from(vec![
-                    Span::styled(" Enter/e", key_style()),
-                    Span::raw(" edit  "),
-                    Span::styled("d", key_style()),
-                    Span::raw(" clear override  "),
-                    Span::styled("?", key_style()),
-                    Span::raw(" help  "),
-                    Span::styled("Esc", key_style()),
-                    Span::raw(" close"),
-                ])
-            }
-        }
         AppMode::PromptEditor(_) => Line::from(vec![
             Span::styled(" Tab", key_style()),
             Span::raw(" switch field  "),

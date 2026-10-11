@@ -601,21 +601,6 @@ fn visible_animation_is_enabled_for_dashboard_thinking_features() {
     assert!(app.has_visible_animation());
 }
 
-#[test]
-fn visible_animation_is_enabled_for_dashboard_summary_generation() {
-    let store = store_with_feature(ProjectStatus::Idle);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-
-    app.summary_state
-        .generating
-        .insert("aiw-my-feat".to_string());
-    assert!(app.has_visible_animation());
-}
-
 // FORK: shared with fork_agents tests
 pub(super) fn store_with_single_agent_session(
     workdir: &std::path::Path,

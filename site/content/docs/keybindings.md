@@ -32,9 +32,7 @@ for the complete, current keybinding reference built into that version of AIW.
 | `i` | Show agents needing attention: questions first, then finished work |
 | `I` | On a TODOs session row: start an agent on the next TODO in priority order, across the lists currently showing |
 | `z` | Show dormant features: idle and unattended |
-| `Z` | Generate a short AI summary of the selected feature's recent activity |
 | `L` | Open the prompt library |
-| `E` | Edit headless AI prompt templates (overrides) |
 | `T` | Choose a theme |
 | `A` | Manage installed agent harnesses |
 | `?` | Show all keybindings |
@@ -60,9 +58,7 @@ Most keys go directly to the active session. These controls belong to AIW:
 | `Ctrl+Space`, then `i` | Jump to an agent needing attention |
 | `Ctrl+Space`, then `f` | Start final diff review |
 | `Ctrl+Space`, then `p` | Open the prompt library |
-| `Ctrl+Space`, then `E` | Edit headless AI prompt templates (overrides) |
 | `Ctrl+Space`, then `N` | Add a TODO to this worktree's list |
-| `Ctrl+Space`, then `g` | Generate a short AI summary of this feature's recent activity |
 | `Ctrl+Space`, then `?` | Show all leader commands |
 
 ## Split view
@@ -103,5 +99,5 @@ windows and leaves nothing behind when it closes.
 
 - [Prompts and TODOs](@/docs/prompts-and-todos.md) — the TODO list's own
   scope-toggle, move/copy, and work-the-queue keys.
-- [More Session Tools](@/docs/session-tools.md) — bookmark slots, resuming
-  a harness's saved transcripts and the fresh-context handoff keys.
+- [More Session Tools](@/docs/session-tools.md) — bookmark slots and resuming
+  a harness's saved transcripts.

@@ -13,12 +13,9 @@ use crate::project::VibeMode;
 // embedded view's leader menu moved here when the view went.
 const DASHBOARD_LEADER_COMMANDS: &[(&str, &str)] = &[
     ("d", "Diff viewer"),
-    ("n", "Current plan"),
     ("m", "Markdown files"),
     ("l", "Past / unsent prompts (paste again)"),
     ("N", "Quick-capture a TODO"),
-    ("F", "Fresh-context session"),
-    ("B", "Model advice for the selected session"),
     ("z", "Complete the TODO this session came from"),
     ("/", "Command picker"),
     ("a", "Local commands"),
@@ -100,12 +97,10 @@ fn mode_view_context(mode: &AppMode) -> Option<&crate::app::ViewState> {
         AppMode::DiffPicker(state) => Some(&state.from_view),
         AppMode::DiffViewerLoading(state) | AppMode::DiffViewer(state) => Some(&state.from_view),
         AppMode::TodoQuickCapture(state) => Some(&state.view),
-        AppMode::FreshContextPrompt(state) => Some(&state.view),
         AppMode::SessionPicker(state) => state.from_view.as_ref(),
         AppMode::DiffReviewPrompt(state) => state.return_to_view.as_ref(),
         AppMode::LatestPrompt(state) => Some(&state.view),
         AppMode::PromptLibrary(state) => state.from_view.as_ref(),
-        AppMode::PromptOverrides(state) => state.from_view.as_ref(),
         AppMode::PromptEditor(state) => mode_view_context(state.return_to.as_ref()),
         AppMode::PlaceholderFill(state) => state.from_view.as_ref(),
         AppMode::SkillPicker(state) => mode_view_context(state.return_to.as_ref()),
@@ -220,7 +215,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             | AppMode::MarkdownLoading(_)
             | AppMode::MarkdownViewer(_)
             | AppMode::TodoQuickCapture(_)
-            | AppMode::FreshContextPrompt(_)
     );
     if over_dashboard {
         draw_dashboard_chrome(frame, app);
@@ -264,12 +258,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     if let AppMode::TodoQuickCapture(state) = &app.mode {
         super::dialogs::draw_todo_quick_capture_dialog(frame, state, &app.theme);
-        draw_mode_context_bar(frame, &app.mode, &app.theme);
-        return;
-    }
-
-    if let AppMode::FreshContextPrompt(state) = &app.mode {
-        super::dialogs::draw_fresh_context_prompt_dialog(frame, state, &app.theme);
         draw_mode_context_bar(frame, &app.mode, &app.theme);
         return;
     }
@@ -538,10 +526,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     if let AppMode::PromptEditor(state) = &app.mode {
         super::dialogs::draw_prompt_editor(frame, state, &app.theme);
-    }
-
-    if let AppMode::PromptOverrides(state) = &app.mode {
-        super::dialogs::draw_prompt_overrides(frame, state, &app.theme);
     }
 
     if let AppMode::PlaceholderFill(state) = &app.mode {

@@ -56,17 +56,6 @@ first, uncached load. `SyntaxInfo` explains plain-text fallbacks, and
 frontend's `SyntaxCode.tsx` renders spans as `syn-*` classes coloured by the
 `--syn-*` tokens in `syntax.css`.
 
-`src/gui_prompt_overrides.rs` adapts the headless-prompt override manager
-without touching `App::mode`, so it can sit above an open interview or review
-and its pre-call notice. Rows come from the shared registry and
-`resolve_template_layered` over the same DB and `aiw.json` layers the call sites
-read. Each row carries a revision fingerprint of that prompt's stored overrides
-and context paths; saves and clears re-resolve the stable context and refuse a
-mismatch. Project writes go through `prompts::project::update_in_repo`, which
-the TUI manager also uses. It changes only the `prompt_overrides` key and
-refuses a malformed config. `precall_target` maps a pending
-`AppMode::PromptPrecall` to its prompt, harness and feature/project context.
-
 `gui_review/complete.rs` completes a review through the TUI finish engine. The
 TUI's `complete_final_review` is now `record_final_review_round` (write the
 round, clear progress, record the snapshot, optional PR post) followed by
@@ -154,7 +143,7 @@ project/domain types and uses WorktreeManager to resolve legacy stores.
 `GithubTransport` trait is the shared boundary for GitHub-backed workflows,
 with `GhCli` as the production adapter for the issue browser and the PR badge
 sweep. The compact feature setup state the issue browser uses lives in
-`app/feature_setup.rs`. Headless execution is in `headless.rs`; harness
+`app/feature_setup.rs`. Harness
 integration supports Claude Code, Codex, Pi, Gemini CLI and Cursor agent. IPC, filesystem
 watching, tmux observation, editors and resource inspection have dedicated
 modules. Injection is partial: App workflows still call concrete managers and

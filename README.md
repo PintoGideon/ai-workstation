@@ -263,11 +263,10 @@ receive AIW permission-mode flags.
 | `I` | On a TODOs session row: start an agent on the next TODO in priority order, across the lists currently showing |
 | `z` | Show dormant features: idle and unattended |
 | `L` | Open the prompt library |
-| `E` | Edit headless AI prompt templates (overrides) |
 | `T` | Choose a theme |
 | `A` | Manage installed agent harnesses |
 | `?` | Show all keybindings |
-| `Ctrl+Space` | Commands on the selected session (a menu lists them): `d` diff viewer · `m` Markdown files · `l` past and unsent prompts, pasted again · `N` capture a TODO · `F` fresh-context session · `z` complete the TODO this session came from · `h` `H` `M` `1-9` bookmarks · `/` command picker · `a` local actions · `c` config wizard · `r` refresh |
+| `Ctrl+Space` | Commands on the selected session (a menu lists them): `d` diff viewer · `m` Markdown files · `l` past and unsent prompts, pasted again · `N` capture a TODO · `z` complete the TODO this session came from · `h` `H` `M` `1-9` bookmarks · `/` command picker · `a` local actions · `c` config wizard · `r` refresh |
 | `q` | Quit the dashboard; the agents keep running (`Esc` does nothing on the dashboard) |
 
 Search accepts every letter, including `j` and `k`. Use arrow keys or
@@ -450,56 +449,6 @@ that list still has unfinished items AIW asks first: move them to the project
 list, move them to the global list, delete them with the worktree, or cancel
 the deletion. Nothing is killed or removed until you answer.
 
-### Override the AI prompts AIW sends
-
-Behind session summaries, AIW makes one-shot
-("headless") AI calls with prompts it builds for you. Press `E` on the
-dashboard — or `Ctrl+Space`, then `E` from a session — to open the
-**prompt-override manager**. It lists every template with its effective source
-(`built-in`, `feature`, `project`, or `global`) and `[F][P][G]` flags for which
-scopes already carry an override.
-
-`Enter` or `e` opens an editor on the effective template. `Ctrl+S` moves to a
-scope picker, then a harness picker, then saves:
-
-| Scope | Where it lives | Applies to |
-| --- | --- | --- |
-| **This feature** | `aiw.db` | just this checkout |
-| **This project** | `aiw.json` `prompt_overrides` key | the repo — committed, shared with everyone |
-| **Global** | `aiw.db` | every project on this machine |
-
-The nearest scope wins — feature → project → global → built-in — and within the
-winning scope a per-harness template beats the shared one. `d`, `d` clears the
-effective override. Templates carry visible `{{token}}` placeholders that AIW
-re-fills with live context (the diff, the question, the interview answers) each
-time the prompt runs. **There is no validation**: if you delete a required
-token or add one AIW does not supply, it is saved and rendered exactly as
-written.
-
-Project-scope overrides sit in `aiw.json` under `prompt_overrides`, keyed by
-the stable prompt id (shown in the manager):
-
-```json
-{
-  "prompt_overrides": {
-    "session.summary": {
-      "template": "shared text with {{recent_lines}}",
-      "harnesses": { "codex": "codex-specific text with {{recent_lines}}" }
-    }
-  }
-}
-```
-
-`.aiw/` is generated and gitignored, so these overrides live in `aiw.json`
-(the tracked repo config) rather than a file under `.aiw/`.
-
-Before each user-initiated headless call, a **pre-call notice** names the
-prompt and target harness: `v` shows the exact rendered prompt, `e` jumps to
-the manager for that prompt (continue afterwards and the override applies to
-this run), `Enter` makes the call, `Esc` cancels it. There is no "don't ask
-again". Calls that run without you watching — session summaries — announce
-with a toast instead of the modal.
-
 ### See which agents need you
 
 A stopped agent has stopped for a reason, and "waiting for input" does not say
@@ -531,8 +480,7 @@ Agents and the editors they sit alongside are the bulk of what AIW puts on your
 machine, and nothing warns you before the last gigabyte goes.
 
 Before starting an agent, AIW checks how many are already running — across every
-project, plus any headless review or plan run in flight — and how much memory is
-left. If either is past its threshold, one dialog says which, and `y` starts it
+project — and how much memory is left. If either is past its threshold, one dialog says which, and `y` starts it
 anyway. It never refuses. Terminals, editors, and TODO sessions are not counted
 and never raise it.
 

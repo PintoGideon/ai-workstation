@@ -425,10 +425,6 @@ fn build_extension_config(state: &ConfigWizardState) -> ExtensionConfig {
             .as_ref()
             .map(|config| config.prompt_templates.clone())
             .unwrap_or_default(),
-        // The wizard doesn't edit prompt overrides; carry them through.
-        prompt_overrides: loaded
-            .map(|config| config.prompt_overrides)
-            .unwrap_or_default(),
     }
 }
 

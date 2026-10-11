@@ -11,7 +11,6 @@ mod fork;
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7)
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6)
 pub(crate) mod fork_workspace; // FORK: workspace layout
-mod handoff;
 mod harness;
 mod hooks;
 mod input;
@@ -20,7 +19,6 @@ mod mouse;
 mod normal;
 mod picker;
 mod prompt_library;
-mod prompt_overrides;
 mod search;
 mod skill_picker;
 mod todos;
@@ -46,7 +44,6 @@ pub use diff_review::handle_diff_review_key;
 pub use dormant::handle_dormant_key;
 pub use feature_creation::handle_create_feature_key;
 pub use fork::handle_fork_feature_key;
-pub use handoff::handle_fresh_context_prompt_key;
 pub use harness::handle_harness_setup_key;
 pub use hooks::{handle_deleting_feature_key, handle_hook_prompt_key, handle_running_hook_key};
 pub use input::handle_paste;
@@ -68,7 +65,6 @@ pub use picker::{
 pub use prompt_library::{
     handle_placeholder_fill_key, handle_prompt_editor_key, handle_prompt_library_key,
 };
-pub use prompt_overrides::handle_prompt_overrides_key;
 pub use search::handle_search_key;
 pub use skill_picker::handle_skill_picker_key;
 pub use todos::{
@@ -77,14 +73,13 @@ pub use todos::{
     handle_todo_spawn_target_key, handle_todos_host_reassign_key, handle_todos_key,
 };
 
-pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()> {
+pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<()> {
     use crate::app::AppMode;
 
     match &app.mode {
         AppMode::Normal => handle_normal_key(app, key),
         AppMode::Todos(_) => handle_todos_key(app, key),
         AppMode::TodoQuickCapture(_) => handle_todo_quick_capture_key(app, key),
-        AppMode::FreshContextPrompt(_) => handle_fresh_context_prompt_key(app, key),
         AppMode::TodosHostReassign(_) => handle_todos_host_reassign_key(app, key.code),
         AppMode::TodoImplementChoice(_) => handle_todo_implement_choice_key(app, key.code),
         AppMode::TodoSpawnTarget(_) => handle_todo_spawn_target_key(app, key.code),
@@ -135,7 +130,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::FollowupQueue(_) => fork_followups::handle_dialog_key(app, key),
         AppMode::LatestPrompt(_) => handle_latest_prompt_key(app, key.code),
         AppMode::PromptLibrary(_) => handle_prompt_library_key(app, key.code),
-        AppMode::PromptOverrides(_) => handle_prompt_overrides_key(app, key, visible_rows),
         AppMode::PromptEditor(_) => handle_prompt_editor_key(app, key),
         AppMode::PlaceholderFill(_) => handle_placeholder_fill_key(app, key),
         AppMode::SkillPicker(_) => handle_skill_picker_key(app, key),

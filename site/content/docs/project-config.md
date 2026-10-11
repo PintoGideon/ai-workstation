@@ -18,7 +18,6 @@ is the field reference for what it can hold.
 | `keybindings` | Remap a dashboard action to a different key | Config wizard | Project overrides global per action |
 | `allowed_agents` | Restrict which harnesses this project offers | Config wizard | Project replaces the whole list when set |
 | `prompt_templates` | Reusable [prompt-library](@/docs/prompts-and-todos.md#reuse-prompts) templates | Prompt library (`L`) export | Merged by name: project wins on collision |
-| `prompt_overrides` | Project-scope [headless AI prompt overrides](@/docs/custom-prompts.md) | Prompt-override manager (`E`) | Project-only — never inherited from global |
 
 The config wizard (`Ctrl+Space`, then `c`) covers everything marked
 "Config wizard" above — see

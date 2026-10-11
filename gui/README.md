@@ -200,32 +200,20 @@ The agent shortcut applies only while an agent tab is displayed. Native offline
 proof: `scripts/dev/screenshot/scenarios/gui-sidebar-visibility.txt`.
 
 The GUI runs its own shared collectors: token/cost and context reads, account
-usage, transcript/storage prompt/model/todos, plan files, persisted summaries,
+usage, transcript/storage prompt/model/todos, persisted summaries,
 issue and PR data, notification files and thinking markers. It does not require
 a running TUI. TUI attention reasons, tool-call IPC and Codex live reasoning
-are omitted, with an explanatory note. TUI-owned summary/AI-review workers and
-IPC-only review activity are not reported as current. The per-field source
+are omitted, with an explanatory note. The per-field source
 matrix is in `src/gui_contract/session_sidebar.rs`. Native offline proof:
 `scripts/dev/screenshot/scenarios/gui-session-sidebar.txt`.
 
-**Fresh context** in the Context section opens an editable continuation from
-that feature's plan, changed files, summary and known prompt, using the same
-builder as TUI leader F. **Start fresh context** uses the feature's configured
-harness and opens a new tab with the continuation as an unsent composer draft;
-your original session stays open. Resource warnings require **Start anyway**.
-If the source changes while editing, reload context and review the retained
-draft before retrying. Cancel creates no session and asks before discarding an
-edited continuation. Native offline proof:
-`scripts/dev/screenshot/scenarios/gui-fresh-context.txt`.
-
 The sidebar is the TUI dashboard tree. Each project shows its shortened path,
-an add-feature hint when it is empty, and any minimized creation-time plan.
+an add-feature hint when it is empty.
 Each feature row shows the TUI's status glyph (worktree script, deletion in
 this window, waiting for input, agent working, ready, then running/idle/
 stopped), its nickname and branch, then badges: `repo`, issue source, PR state
-and open threads, token usage, mode, `review`, `plan`, `plan paused · Resume`,
-`remote`, age, session count, stopped sessions, the `?` request marker and the
-AI summary. The mode badge appears only on expanded feature rows; the mode
+and open threads, token usage, mode, age, session count, stopped sessions, the
+`?` request marker and the persisted summary. The mode badge appears only on expanded feature rows; the mode
 remains in the feature tooltip when collapsed. The workdir and full text are
 in tooltips. Expanding a feature lists its sessions with kind icon, running
 state, the agent context indicator and
@@ -235,8 +223,7 @@ derives context, usage, status text and open PRs with the TUI's own background
 collectors (the PR sweep reads GitHub through `gh` every five minutes), and reads
 merged/closed PRs, the hooks' thinking markers and waiting notification files
 from their shared on-disk forms. The attention reason, a TUI background hook,
-TUI deletion, summary generation and AI-review progress exist only inside a
-TUI process and are not shown. While a TUI is running, hooks report to it
+and TUI deletion exist only inside a TUI process and are not shown. While a TUI is running, hooks report to it
 instead of the shared files, so the GUI can under-report thinking and waiting.
 
 Agent tabs include **Compose prompt** below the terminal. Type or paste locally;
@@ -244,8 +231,8 @@ Agent tabs include **Compose prompt** below the terminal. Type or paste locally;
 message through tmux's bracketed-paste path. Each session keeps its own unsent
 draft while this GUI window stays open, including when you switch tabs or leave
 the feature page. Failed sends keep the draft for retry. **Clear** clears only
-the current session's draft. TODO, planning and Learning handoffs fill this same
-composer, appending to any existing draft. Click the terminal whenever you need
+the current session's draft. TODO handoffs fill this same composer, appending to
+any existing draft. Click the terminal whenever you need
 to interact directly with the harness; shell and editor tabs use direct input.
 Stopped agent tabs also show their editable draft, with sending disabled until
 that session starts and its terminal connects.
@@ -272,25 +259,9 @@ it does not start an agent or send a message. Templates and target permissions
 are rechecked on insertion. The list refreshes while you browse, and a
 selected template edited or deleted elsewhere is deselected with a notice so
 you never fill an outdated copy. The preview renders as you type. Cancel
-leaves existing composer drafts intact. Create/edit/delete/export templates and
-editable prompt overrides have their own manager (below). Native desktop
+leaves existing composer drafts intact. Create/edit/delete/export templates
+have their own manager. Native desktop
 interaction and macOS runtime validation for this library increment remain open.
-
-Open **Prompt overrides** in workspace navigation to change the prompts AIW
-sends for headless AI calls (session summaries). It is separate from the prompt library: library templates are text
-you insert into an agent draft, while overrides replace AIW's own built-in
-prompts. Choose a context (global, a project, or a feature) and the harness to
-preview. Each prompt shows the layer in effect, its placeholders, effective
-template, built-in default and every stored override. **New override…** or
-**Edit** opens a local editor; choose **This feature** (stored in AIW's
-database for that checkout), **This project (aiw.json)** (committed with the
-repo) or **Global**, and a shared or harness-specific template, then **Save
-override**. **Clear…** removes exactly one stored override after confirmation.
-Escape, switching prompts or contexts ask before discarding unsaved text. The
-list refreshes while open. If the TUI, another window or a hand edit changes
-that prompt's overrides, saving is blocked until you choose **Reload current
-version**, which keeps your text. A malformed `aiw.json` is reported and never
-overwritten. Native macOS validation remains open.
 
 Use **New session** on a feature page to start another agent, terminal, or
 Neovim session. You can name it or use the next default name; the new tab opens
@@ -325,27 +296,8 @@ drops a project list hosted by it, matching the TUI.
 When a project's worktree setup asks for an option, **New feature** and the
 TODO's new-feature form show that choice before creation. Choose an option to
 continue; a failed lookup offers **Retry**. The configured script receives the
-choice through `AIW_HOOK_CHOICE`. This works with direct starts, Full and Quick
-Plan, and TODO planning. Setup runs before the interview opens; cancelling the
-interview keeps the worktree and its setup changes, without saving a plan or
-launching an agent. A failed setup still allows planning to continue and shows
-a notice.
-
-Use **Learning** on a feature page to browse its files or branch changes and
-ask about the project, a file, or a selected range (click, then Shift-click).
-Choose an answering harness and reading level; answers and follow-ups share
-the TUI's Learning history. **Deep dive** lets the answering agent read the
-repository. Codex always uses its read-only repository sandbox. Reading and
-asking questions do not open an editing session. **Open editing agent** starts
-an agent only when explicitly selected, asks for resource approval when needed,
-and opens an editable prompt that you can review before sending. Closing
-Learning leaves pending answers running while AIW stays open. Unsent questions
-are preserved across refreshes and require explicit discard on close.
-
-Learning also offers starter questions, hunk selection, keeping an answer as an
-editable TODO, intent relabelling and restarting a stopped linked editing session.
-Learning command and component tests use mocked harness execution; native desktop
-Learning interactions and paid-harness runs have not been validated yet.
+choice through `AIW_HOOK_CHOICE`. This works with direct starts and TODO
+launches. A failed setup still lets the feature be created and shows a notice.
 
 Use **Changes** on a Git feature to browse all current changes (committed,
 staged, unstaged and untracked) or one commit from the feature's history.

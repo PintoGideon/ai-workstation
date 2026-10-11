@@ -1,6 +1,6 @@
 +++
 title = "More Session Tools"
-description = "Bookmarks, resuming a harness's saved transcripts, and fresh-context sessions."
+description = "Bookmarks and resuming a harness's saved transcripts."
 weight = 37
 +++
 
@@ -28,27 +28,6 @@ feature, and even for a stopped feature (the picker starts it for you). Pi
 has no saved-session storage AIW can read, so `S` isn't offered there. See
 [Choosing a Harness](@/docs/harnesses.md) for the rest of what varies by
 harness.
-
-## Start a session with a fresh context
-
-A long-running session's history counts against the model's context budget
-even once most of it is no longer relevant. Press `Ctrl+Space`, then
-`Shift+F` from any agent session to open an editable prompt: type what the
-new session should do, and AIW starts a brand-new session in the same
-feature, seeded with the feature's plan file (if any), a sample of the
-branch's changed files, and your instruction — left unsent in the compose
-box for review.
-`Ctrl+Space`, then `Shift+X` dismisses the sidebar's context-usage hint
-without starting a session. See
-[Track context and usage in the sidebar](@/docs/attention-and-limits.md#track-context-and-usage-in-the-sidebar)
-for when AIW surfaces that hint on its own — pressing `Shift+F` there
-pre-fills the prompt with a generated continuation instruction instead of
-starting from a blank one.
-
-<figure>
-  <img src="/images/docs/fresh-context-composer.png" alt="Fresh context prompt dialog with a generated continuation instruction loaded, ready to edit before starting the new session">
-  <figcaption>The fresh-context prompt: a generated continuation, editable before it starts a new session.</figcaption>
-</figure>
 
 ## Icons for custom sessions
 

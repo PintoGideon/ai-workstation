@@ -119,11 +119,7 @@ fn over_limit_lines<'a>(over: &OverLimit, theme: &Theme) -> Vec<Line<'a>> {
             Style::default().fg(theme.text.to_color()),
         )),
         Line::from(Span::styled(
-            " Counts harness sessions across all projects, plus".to_string(),
-            Style::default().fg(theme.text_muted.to_color()),
-        )),
-        Line::from(Span::styled(
-            " any headless review or plan run in flight.".to_string(),
+            " Counts harness sessions across all projects.".to_string(),
             Style::default().fg(theme.text_muted.to_color()),
         )),
     ]

@@ -2126,7 +2126,10 @@ impl TmuxManager {
         }
     }
 
-    /// Capture the current pane content of a session's window
+    /// Capture the current pane content of a session's window. Test
+    /// fixtures read real panes through this; production reads go through
+    /// the ANSI variants below.
+    #[cfg(test)]
     pub fn capture_pane(session: &str, window: &str) -> Result<String> {
         let target = format!("{}:{}", session, window);
         let output = Self::command()

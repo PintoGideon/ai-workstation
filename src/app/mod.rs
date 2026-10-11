@@ -29,14 +29,12 @@ pub(crate) mod fork_subagents; // FORK: subagent counts per session (P5, DESIGN.
 pub(crate) mod fork_telemetry; // FORK: per-session context and cost (P4, DESIGN.md §16)
 pub(crate) mod fork_workspace; // FORK: workspace layout (DESIGN.md §15)
 pub(crate) mod github_workflow;
-mod handoff;
 mod hooks;
 pub(crate) mod issue_fixer;
 mod navigation;
 mod notifications;
 mod project_ops;
 mod prompt_library;
-pub(crate) mod prompt_overrides;
 mod rename;
 pub(crate) mod resource_gate;
 mod search;
@@ -700,8 +698,6 @@ pub struct App {
     /// Feature-session IDs currently running a tool, kept separate from
     /// thinking so either signal can independently keep a session working.
     pub ipc_tool_feature_sessions: std::collections::HashSet<String>,
-    pub summary_state: SummaryState,
-    pub summary_rx: Option<std::sync::mpsc::Receiver<(String, Result<String, anyhow::Error>)>>,
     pub tmux: Box<dyn TmuxOps>,
     pub worktree: Box<dyn WorktreeOps>,
     pub debug_log: DebugLog,
@@ -839,7 +835,6 @@ impl App {
         !self.thinking_features.is_empty()
             || !self.background_hooks.is_empty()
             || !self.background_deletions.is_empty()
-            || !self.summary_state.generating.is_empty()
     }
 
     pub(crate) fn has_visible_animation(&self) -> bool {
@@ -1128,8 +1123,6 @@ impl App {
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
             ipc_tool_feature_sessions: std::collections::HashSet::new(),
-            summary_state: SummaryState::new(),
-            summary_rx: None,
             tmux: Box::new(TmuxManager),
             worktree: Box::new(WorktreeManager),
             debug_log: DebugLog::default(),
@@ -1344,8 +1337,6 @@ impl App {
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
             ipc_tool_feature_sessions: std::collections::HashSet::new(),
-            summary_state: SummaryState::new(),
-            summary_rx: None,
             tmux,
             worktree,
             debug_log: DebugLog::default(),
@@ -1704,44 +1695,6 @@ impl App {
             shown = true;
         }
         shown
-    }
-
-    /// The effective template for a headless prompt on the feature at
-    /// `repo` / `workdir`, plus where it came from. Consults, nearest-first:
-    /// the feature-scope `prompt_overrides` row (keyed by `workdir`), the
-    /// repo's `aiw.json` `prompt_overrides`, the global-scope row, then the
-    /// built-in default. Read fresh each call so a hand-edit to `aiw.json` or
-    /// an override saved from the manager takes effect on the next run.
-    ///
-    /// Returned without interpolation so a caller that renders on a worker
-    /// thread can resolve here (on the UI thread, where `self` lives) and
-    /// [`crate::prompts::render_template`] there.
-    pub(crate) fn resolve_headless_template(
-        &self,
-        id: crate::prompts::PromptId,
-        harness: &AgentKind,
-        repo: &Path,
-        workdir: &Path,
-    ) -> (String, crate::prompts::PromptSource) {
-        let db_view = self
-            .db
-            .as_ref()
-            .and_then(|db| db.load_prompt_overrides().ok());
-        let project = crate::prompts::project::load_from_repo(repo);
-        let layers = crate::prompts::PromptLayers {
-            feature_workdir: workdir.to_str(),
-            db: db_view.as_ref(),
-            project: Some(&project),
-        };
-        let (text, source) = crate::prompts::resolve_template_layered(id, harness, &layers);
-        if source.is_override() {
-            crate::debug::log_to_file(
-                crate::debug::LogLevel::Debug,
-                "prompts",
-                &format!("{} resolved from {}", id.as_str(), source.label()),
-            );
-        }
-        (text.into_owned(), source)
     }
 
     pub(crate) fn allowed_agents_for_repo(&self, repo: &Path) -> Vec<AgentKind> {

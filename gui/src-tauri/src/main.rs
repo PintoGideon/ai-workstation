@@ -18,9 +18,6 @@ use ai_workstation::automation::{
     AutomationHookPrompt, CreateFeatureRequest, CreateFeatureResponse, CreateProjectRequest,
     CreateProjectResponse,
 };
-use ai_workstation::gui_contract::fresh_context::{
-    FreshContextPreview, FreshContextRequest, FreshContextResponse,
-};
 use ai_workstation::gui_contract::session_sidebar::{CompleteSidebarTodo, SessionSidebarView};
 use ai_workstation::gui_contract::sidebar::{CollapseTarget, SidebarClock};
 use ai_workstation::gui_contract::{
@@ -32,9 +29,6 @@ use ai_workstation::gui_contract::{
 use ai_workstation::gui_debug_log::{self, DebugLogView};
 use ai_workstation::gui_diff::{self, DiffOptions, DiffView};
 use ai_workstation::gui_dormancy::{self, DormancyStopResult, DormancyView, DormantObservation};
-use ai_workstation::gui_prompt_overrides::{
-    self, ClearOverride, OverrideContext, OverridesView, SaveOverride,
-};
 use ai_workstation::gui_prompts::{self, LibraryScope, LibraryView, ResolvePrompt};
 use ai_workstation::gui_sessions::{
     self, AddCustomSessionRequest, AddCustomSessionResponse, CloseEditorsResponse,
@@ -78,41 +72,6 @@ fn prompt_library_resolve(
     request: ResolvePrompt,
 ) -> Result<String, GuiError> {
     gui_prompts::resolve(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        request,
-    )
-}
-
-#[tauri::command]
-fn prompt_overrides_load(
-    state: State<AppState>,
-    context: OverrideContext,
-    harness: Option<AgentKind>,
-) -> Result<OverridesView, GuiError> {
-    gui_prompt_overrides::load(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &context,
-        harness,
-    )
-}
-
-#[tauri::command]
-fn prompt_overrides_save(
-    state: State<AppState>,
-    request: SaveOverride,
-) -> Result<OverridesView, GuiError> {
-    gui_prompt_overrides::save(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        request,
-    )
-}
-
-#[tauri::command]
-fn prompt_overrides_clear(
-    state: State<AppState>,
-    request: ClearOverride,
-) -> Result<OverridesView, GuiError> {
-    gui_prompt_overrides::clear(
         &mut state.0.lock().expect("gui handle mutex poisoned"),
         request,
     )
@@ -919,31 +878,6 @@ fn session_sidebar(
 }
 
 #[tauri::command]
-fn fresh_context_preview(
-    state: State<AppState>,
-    target: SessionTarget,
-) -> Result<FreshContextPreview, GuiError> {
-    state
-        .0
-        .lock()
-        .expect("gui handle mutex poisoned")
-        .fresh_context_preview(&target)
-}
-
-#[tauri::command]
-fn fresh_context_start(
-    app: tauri::AppHandle,
-    state: State<AppState>,
-    target: SessionTarget,
-    request: FreshContextRequest,
-) -> Result<FreshContextResponse, GuiError> {
-    let mut gui = state.0.lock().expect("gui handle mutex poisoned");
-    let response = gui.fresh_context_start(&target, request)?;
-    emit_workspace_changed(&app, &gui.broadcast_snapshot());
-    Ok(response)
-}
-
-#[tauri::command]
 fn session_sidebar_complete_todo(
     state: State<AppState>,
     target: SessionTarget,
@@ -982,9 +916,6 @@ fn main() {
             theme_catalog,
             prompt_library_load,
             prompt_library_resolve,
-            prompt_overrides_load,
-            prompt_overrides_save,
-            prompt_overrides_clear,
             load_diff,
             supported_harnesses,
             supported_modes,
@@ -1031,8 +962,6 @@ fn main() {
             syntax_install_status,
             syntax_install,
             session_sidebar,
-            fresh_context_preview,
-            fresh_context_start,
             session_sidebar_complete_todo,
             add_custom_session,
             open_vscode,

@@ -1009,9 +1009,10 @@ CREATE INDEX IF NOT EXISTS idx_pr_investigations_pr
     ON pr_investigations(project_id, pr_number);
 ";
 
-/// Feature- and global-scope overrides of AIW's built-in headless prompt
-/// templates (see `src/db/prompt_overrides.rs` and `src/prompts/`). Project
-/// scope is an `aiw.json` `prompt_overrides` map, not a row here.
+/// Feature- and global-scope overrides of AIW's former built-in headless
+/// prompt templates. Nothing reads or writes this table any more (the
+/// headless prompts went with the harness-native duplicates); it stays so
+/// existing databases keep loading.
 ///
 /// One row per `(prompt_id, scope, scope_key, harness)`: `scope` is
 /// `feature` or `global`, `scope_key` is the feature's workdir path (`NULL`

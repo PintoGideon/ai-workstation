@@ -2,8 +2,6 @@ use std::collections::HashMap;
 
 use crate::context_tracking::{ContextBand, SessionContextState};
 
-use super::{App, ViewState};
-
 /// Per-session lifecycle state for the context-usage sidebar hint.
 ///
 /// This is deliberately separate from SessionContextState: it tracks which
@@ -68,41 +66,6 @@ impl ContextHintStates {
     #[cfg(test)]
     fn get(&self, session_id: &str) -> Option<&ContextHintState> {
         self.by_session.get(session_id)
-    }
-}
-
-impl App {
-    pub(crate) fn context_hint_is_visible_in_current_view(&self) -> bool {
-        // FORK(cockpit): the selected session.
-        let session_id = self
-            .selection_view_state()
-            .and_then(|view| self.context_session_id_for_view(&view));
-        let Some(session_id) = session_id else {
-            return false;
-        };
-        self.context_hint_states
-            .is_eligible(&session_id, self.context_states.get(&session_id))
-    }
-
-    fn context_session_id_for_view(&self, view: &ViewState) -> Option<String> {
-        self.store
-            .projects
-            .iter()
-            .flat_map(|project| project.features.iter())
-            .find(|feature| feature.tmux_session == view.session)
-            .and_then(|feature| {
-                feature
-                    .sessions
-                    .iter()
-                    .find(|session| session.tmux_window == view.window)
-                    .or_else(|| {
-                        feature
-                            .sessions
-                            .iter()
-                            .find(|session| session.kind == view.session_kind)
-                    })
-            })
-            .map(|session| session.id.clone())
     }
 }
 

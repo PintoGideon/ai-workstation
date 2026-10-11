@@ -788,7 +788,7 @@ fn unified_line_count(file: &crate::diff::DiffFile) -> usize {
     // The unified renderer emits the prologue verbatim, then one row per hunk
     // header and hunk line — identical to the raw patch's line count until
     // context expansion rewrites the hunks, which `file.patch` deliberately
-    // doesn't track (it feeds the review fingerprint and the headless prompts).
+    // doesn't track.
     let prologue = file
         .patch
         .lines()

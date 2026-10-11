@@ -51,8 +51,6 @@ import PromptComposer from "./PromptComposer";
 import SessionSidebar from "./SessionSidebar";
 import ProjectsSidebar from "./ProjectsSidebar";
 import PromptLibraryPanel from "./PromptLibraryPanel";
-import PromptOverridesPanel from "./PromptOverridesPanel";
-import { OverrideContext } from "./promptOverridesApi";
 import DormancyPanel from "./DormancyPanel";
 import DebugLogPanel from "./DebugLogPanel";
 import DiffPanel from "./DiffPanel";
@@ -139,10 +137,6 @@ export default function App() {
   const [tabByFeature, setTabByFeature] = useState<Record<string, string>>({});
   const [pendingSessionByFeature, setPendingSessionByFeature] = useState<Record<string, string>>({});
   const [promptLibrary, setPromptLibrary] = useState<{ scope: LibraryScope; target: SessionTarget | null } | null>(null);
-  const [promptOverrides, setPromptOverrides] = useState<{
-    context: OverrideContext; promptId: string | null; harness: AgentSlug | null;
-    contextNote?: string | null;
-  } | null>(null);
   const [showDormancy, setShowDormancy] = useState(false);
   const [showDebugLog, setShowDebugLog] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -422,13 +416,6 @@ export default function App() {
         ? { kind: "feature", project_id: selectedProject.id, feature_id: selectedFeature.id }
         : selectedProject ? { kind: "project", project_id: selectedProject.id } : { kind: "global" };
     setPromptLibrary({ scope, target });
-  }
-
-  function openPromptOverrides() {
-    const context: OverrideContext = selectedFeature && selectedProject
-      ? { kind: "feature", project_id: selectedProject.id, feature_id: selectedFeature.id }
-      : selectedProject ? { kind: "project", project_id: selectedProject.id } : { kind: "global" };
-    setPromptOverrides({ context, promptId: null, harness: null });
   }
 
 
@@ -842,10 +829,6 @@ export default function App() {
 
           <button className="nav-item" onClick={() => openPromptLibrary()}>
             <Icon name="file" /><span className="nav-label">Prompt library</span>
-          </button>
-
-          <button className="nav-item" onClick={openPromptOverrides}>
-            <Icon name="sparkles" /><span className="nav-label">Prompt overrides</span>
           </button>
 
           <button className="nav-item" onClick={() => setShowDormancy(true)}>
@@ -1268,12 +1251,6 @@ export default function App() {
       {promptLibrary && <PromptLibraryPanel
         initialScope={promptLibrary.scope} initialTarget={promptLibrary.target} projects={projects}
         onClose={() => setPromptLibrary(null)} onInsert={insertLibraryPrompt}
-      />}
-
-      {promptOverrides && <PromptOverridesPanel
-        initialContext={promptOverrides.context} initialPromptId={promptOverrides.promptId}
-        initialHarness={promptOverrides.harness}
-        contextNote={promptOverrides.contextNote ?? null} projects={projects} onClose={() => setPromptOverrides(null)}
       />}
 
       <Toasts toasts={toasts} onDismiss={dismissToast} />
@@ -1743,7 +1720,6 @@ function FeatureView({
                 key={sessionKey(target)}
                 target={target}
                 onReusePrompt={(prompt) => onReusePrompt(target, prompt)}
-                onFreshSession={onReusePrompt}
                 onSupervisedEdits={onSupervisedEdits}
               />
             )}

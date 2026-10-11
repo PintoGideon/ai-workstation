@@ -35,8 +35,7 @@ the status line is not made to echo it.
 ## 4. `c` — now it asks, because a person is asking
 
 The gate names what tripped and by how much, and says what it counts: harness
-sessions across **all** projects, plus any headless review or plan-interview run
-in flight. Terminals, editors, and TODOs sessions are not counted and never
+sessions across **all** projects. Terminals, editors, and TODOs sessions are not counted and never
 raise it. If memory were also low, both would appear here — one dialog, not two
 prompts in a row.
 

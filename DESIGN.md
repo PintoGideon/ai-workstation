@@ -23,7 +23,7 @@ Status legend: ✅ done · 🔨 in progress · ⏳ planned.
 
 Projects → Features (branch/worktree) → Sessions · Claude, Codex, Pi · permission modes (Vibeless / Vibe /
 SuperVibe) · needs-you list `i` · dormant `z` · resource guards ·
-prompt library · prompt overrides · TODO lists · usage/cost panels · themes · config wizard ·
+prompt library · TODO lists · usage/cost panels · themes · config wizard ·
 `doctor` / `automation` commands.
 
 ## 3. Gaps and what we add
@@ -534,8 +534,7 @@ the Unix socket `aiw.sock`. Shell scripts never parse JSON; the Rust side does. 
 capabilities that need an *answer* to go back to the agent, and the ones that only need the agent to say more.
 
 **No cloud.** Everything here is local: the scripts, the socket, the status line Claude pipes to AIW, the
-files read for Codex and Gemini. The only AIW code that talks to a provider is still the existing headless
-review path; nothing new was added. The status line restores the Claude 5-hour / 7-day meters from the
+files read for Codex and Gemini. No AIW code talks to a provider; nothing new was added. The status line restores the Claude 5-hour / 7-day meters from the
 numbers Claude itself hands the command — the OAuth usage call stays removed (NO_CLOUD.md).
 
 ### 16.1 Requests that wait for an answer (`src/fork/ipc_reply.rs`)
@@ -738,15 +737,15 @@ mode `Normal` and the sidebar on that session's row (the feature's row when the 
 **Keys.** Sidebar: `j/k`, `Enter` (focus the agent), `h/l`, `/`, `i`, `a`/`X`, `e`, `c`, `x`, `r`, `d`, `N`/`n`,
 `s`, `z`, `L`, `E`, `T`, `A`, `?`, `q`, `v`. Gone: `b`, `o`, `Tab`, the pane's own leader.
 `Ctrl+Q` is tmux's. The old view's leader commands that still matter moved to the dashboard's
-`Ctrl+Space` menu, for the selected session (`App::selection_view_state`, `src/app/session_tools.rs`): `d` diff viewer, `m` Markdown, `l` past/unsent prompts, `N` TODO capture, `F`
-fresh-context session, `z` complete the referenced TODO; the bookmark,
+`Ctrl+Space` menu, for the selected session (`App::selection_view_state`, `src/app/session_tools.rs`): `d` diff viewer, `m` Markdown, `l` past/unsent prompts, `N` TODO capture,
+`z` complete the referenced TODO; the bookmark,
 picker, wizard and refresh entries stayed; `i`, `?`, `A` left the menu (they are plain keys). The session
 switcher (`w`), remote-control URL copy, scroll mode and text selection went with the view: the sidebar *is*
 the switcher, and tmux has copy mode.
 
 **Prompts, unsent (`src/app/fork_prompt_paste.rs`).** Every path that opened the composer seeded with text —
 TODO spawn (both kinds), prompt-library
-delivery, a feature's `startup_prompt`, the fresh-context handoff, `Ctrl+Space l` —
+delivery, a feature's `startup_prompt`, `Ctrl+Space l` —
 calls `App::paste_prompt_unsent(pi, fi, si, text)`: it writes `.claude/latest-prompt.txt`, pastes with
 `tmux.paste_text` (bracketed paste, **no Enter**), selects the row, closes whatever dialog asked, and focuses
 the agent pane. The task prompt is never sent on its own. A failed paste is an error the callers stash as

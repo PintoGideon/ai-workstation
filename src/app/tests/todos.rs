@@ -1753,13 +1753,11 @@ fn active_todo_completion_keybind_updates_db_and_retains_reference() {
     crate::handlers::handle_key(
         &mut app,
         KeyEvent::new(KeyCode::Char(' '), KeyModifiers::CONTROL),
-        24,
     )
     .unwrap();
     crate::handlers::handle_key(
         &mut app,
         KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE),
-        24,
     )
     .unwrap();
     assert!(matches!(
@@ -1769,7 +1767,6 @@ fn active_todo_completion_keybind_updates_db_and_retains_reference() {
     crate::handlers::handle_key(
         &mut app,
         KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE),
-        24,
     )
     .unwrap();
 

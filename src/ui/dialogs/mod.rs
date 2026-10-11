@@ -8,7 +8,6 @@ mod dormant;
 mod editor_view;
 mod feature;
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7)
-mod handoff;
 mod harness;
 mod help;
 mod hooks;
@@ -16,7 +15,6 @@ mod issue_fixer;
 mod markdown;
 mod project;
 mod prompt_library;
-mod prompt_overrides;
 mod resource_gate;
 mod search;
 mod session;
@@ -34,7 +32,6 @@ pub use feature::{
     draw_confirm_supervibe_dialog, draw_create_feature_dialog, draw_delete_feature_confirm,
     draw_deleting_feature_dialog, draw_fork_feature_dialog,
 };
-pub use handoff::draw_fresh_context_prompt_dialog;
 pub use harness::draw_harness_setup_dialog;
 pub use help::draw_help;
 pub use hooks::{
@@ -47,7 +44,6 @@ pub use project::{draw_create_project_dialog, draw_delete_project_confirm};
 pub use prompt_library::{
     draw_placeholder_fill, draw_prompt_editor, draw_prompt_library, draw_skill_picker,
 };
-pub use prompt_overrides::draw_prompt_overrides;
 pub use resource_gate::draw_resource_confirm_dialog;
 pub use search::draw_search_dialog;
 pub use session::{

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { asGuiError, type SessionTarget } from "./api";
-import FreshContextDialog from "./FreshContextDialog";
 import {
   sessionSidebar, sessionSidebarCompleteTodo,
   type SessionSidebarSection, type SidebarAction, type SidebarContextMeter,
@@ -32,13 +31,11 @@ export default function SessionSidebar({
   target,
   onReusePrompt,
   onSupervisedEdits,
-  onFreshSession,
 }: {
   target: SessionTarget;
   /** Append a prompt to this session's composer draft. */
   onReusePrompt: (prompt: string) => void;
   onSupervisedEdits: () => void;
-  onFreshSession: (target: SessionTarget, draft: string) => void;
 }) {
   const [collapsed, setCollapsed] = useSidebarCollapsed("sessionSidebar");
   useSidebarShortcut("sessionSidebar", () => setCollapsed(!collapsed));
@@ -48,7 +45,6 @@ export default function SessionSidebar({
     enabled: !collapsed,
     refetchInterval: collapsed ? false : POLL_MS,
   });
-  const [freshContext, setFreshContext] = useState(false);
 
   if (collapsed) {
     return (
@@ -94,15 +90,12 @@ export default function SessionSidebar({
             key={section.kind}
             target={target}
             section={section}
-            onFreshContext={() => setFreshContext(true)}
             onReusePrompt={onReusePrompt}
             onSupervisedEdits={onSupervisedEdits}
           />
         ))}
         {view?.notes.map((note) => <p key={note} className="agent-sidebar-note">{note}</p>)}
       </div>
-      {freshContext && <FreshContextDialog target={target} onClose={() => setFreshContext(false)}
-        onCreated={onFreshSession} />}
     </aside>
   );
 }
@@ -110,13 +103,11 @@ export default function SessionSidebar({
 function Section({
   target,
   section,
-  onFreshContext,
   onReusePrompt,
   onSupervisedEdits,
 }: {
   target: SessionTarget;
   section: SessionSidebarSection;
-  onFreshContext: () => void;
   onReusePrompt: (prompt: string) => void;
   onSupervisedEdits: () => void;
 }) {
@@ -175,7 +166,7 @@ function Section({
         <h3>{section.title}</h3>
         {section.actions.length > 0 && <div className="sb-actions">{section.actions.map(button)}</div>}
       </header>
-      {section.context && <ContextMeter meter={section.context} onFreshContext={onFreshContext} />}
+      {section.context && <ContextMeter meter={section.context} />}
       <div className="sb-lines">
         {section.lines.map((line, index) => <Line key={index} line={line} />)}
       </div>
@@ -202,7 +193,7 @@ function Section({
   );
 }
 
-function ContextMeter({ meter, onFreshContext }: { meter: SidebarContextMeter; onFreshContext: () => void }) {
+function ContextMeter({ meter }: { meter: SidebarContextMeter }) {
   const percent = Math.max(0, Math.min(100, meter.percent));
   return (
     <div className="sb-context-meter">
@@ -221,7 +212,6 @@ function ContextMeter({ meter, onFreshContext }: { meter: SidebarContextMeter; o
         {meter.estimated && <span className="sb-chip">estimated</span>}
         {meter.stale && <span className="sb-chip sb-chip-stale">stale</span>}
       </p>
-      <button className="sb-action" onClick={onFreshContext}>Fresh context</button>
       {meter.fresh_context_hint && (
         <p className="sb-hint">Context is filling up.</p>
       )}

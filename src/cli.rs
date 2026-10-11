@@ -1636,7 +1636,7 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                         app.perf.increment_counter("event.key");
                         app.perf.note_input_for_next_draw();
                         let started_at = Instant::now();
-                        if let Err(e) = handlers::handle_key(app, key, visible_rows) {
+                        if let Err(e) = handlers::handle_key(app, key) {
                             app.show_error(e);
                         }
                         app.perf
@@ -1808,15 +1808,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
                 .record_duration("sync.thinking_status", started_at.elapsed());
             last_thinking_sync = std::time::Instant::now();
             force_redraw |= thinking_changed;
-        }
-
-        if app.summary_rx.is_some() {
-            let summary_poll_started_at = Instant::now();
-            if let Err(e) = app.poll_summary_result() {
-                app.show_error(e);
-            }
-            app.perf
-                .record_duration("summary.poll_result", summary_poll_started_at.elapsed());
         }
 
         force_redraw |= app.poll_sidebar_load_results();

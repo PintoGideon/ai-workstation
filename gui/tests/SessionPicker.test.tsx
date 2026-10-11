@@ -183,7 +183,6 @@ function mountApp(handle: (command: string, args: Record<string, unknown>) => un
       case "get_snapshot": return current;
       case "supported_harnesses": return [{ slug: "claude", display_name: "Claude" }];
       case "supported_modes": return [{ slug: "vibe", display_name: "Vibe", description: "" }];
-      case "plan_snapshot": return { active: null, precall: null };
       case "supervised_edit_counts": return [];
       case "new_session_options": return pickerOptions({
         builtin: [{ kind: "claude", label: "Claude", disabled: null }, { kind: "vscode", label: "VS Code", disabled: null }],

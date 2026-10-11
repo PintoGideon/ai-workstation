@@ -4,7 +4,6 @@ mod followups; // FORK: queued follow-ups (src/app/fork_followups.rs)
 mod hook_approvals; // FORK: repo lifecycle hook approvals (src/fork/hook_approval.rs)
 mod migrations;
 mod pr_terminal_state;
-pub mod prompt_overrides;
 pub mod prompt_templates;
 mod session_status;
 pub mod store;
@@ -503,38 +502,6 @@ impl AiwDb {
 
     pub fn reorder_todos(&self, ordered_ids: &[String]) -> Result<()> {
         todos::reorder_todos(&self.conn, ordered_ids)
-    }
-}
-
-/// Feature- and global-scope headless prompt overrides (see
-/// `db/prompt_overrides.rs`). Project scope is an `aiw.json` `prompt_overrides`
-/// map, resolved in `src/prompts/`, not here.
-#[allow(dead_code)]
-impl AiwDb {
-    /// Load the persisted overrides into an editable in-memory view.
-    pub fn load_prompt_overrides(&self) -> Result<prompt_overrides::PromptOverrides> {
-        prompt_overrides::PromptOverrides::load(Some(&self.conn))
-    }
-
-    /// Insert or replace one override; the template is stored verbatim.
-    pub fn upsert_prompt_override(
-        &self,
-        prompt_id: &str,
-        scope: &prompt_overrides::OverrideScope,
-        harness: Option<&crate::project::AgentKind>,
-        template: &str,
-    ) -> Result<()> {
-        prompt_overrides::upsert(&self.conn, prompt_id, scope, harness, template)
-    }
-
-    /// Delete one override; `true` if a row was removed.
-    pub fn delete_prompt_override(
-        &self,
-        prompt_id: &str,
-        scope: &prompt_overrides::OverrideScope,
-        harness: Option<&crate::project::AgentKind>,
-    ) -> Result<bool> {
-        prompt_overrides::delete(&self.conn, prompt_id, scope, harness)
     }
 }
 

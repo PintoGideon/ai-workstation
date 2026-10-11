@@ -6,7 +6,6 @@ use crate::context_collectors::{
 use crate::context_tracking::{ContextThresholds, SessionContextState};
 use crate::github::{GhCli, GhGraphqlError};
 use crate::project::{AgentKind, SessionKind, TokenUsageSourceMatch};
-use crate::summary::SummaryManager;
 use crate::token_tracking::{
     SessionTokenTracker, SessionTokenUsage, TokenPricingConfig, TokenUsageProvider,
     TokenUsageSource, format_token_usage, provider_for_session_kind,
@@ -1478,97 +1477,6 @@ impl App {
             .any(|input| input.feature_name.as_deref() == Some(feature_name))
     }
 
-    pub fn trigger_summary_for_selected(&mut self) -> Result<()> {
-        let selected = match &self.selection {
-            Selection::Feature(pi, fi) | Selection::Session(pi, fi, _) => {
-                let project = &self.store.projects[*pi];
-                let feature = &project.features[*fi];
-                Some((
-                    feature.tmux_session.clone(),
-                    feature.workdir.clone(),
-                    feature.agent.clone(),
-                    project.repo.clone(),
-                ))
-            }
-            _ => None,
-        };
-
-        if let Some((tmux_session, workdir, agent, repo)) = selected {
-            if self.summary_state.generating.contains(&tmux_session) {
-                self.message = Some("Summary already generating...".into());
-                return Ok(());
-            }
-
-            let window = self.get_window_for_session(&tmux_session, &agent);
-            if let Some(w) = window {
-                self.summary_state.generating.insert(tmux_session.clone());
-                self.message = Some("Generating summary...".into());
-
-                let (tx, rx) = std::sync::mpsc::channel();
-                self.summary_rx = Some(rx);
-
-                let (template, _) = self.resolve_headless_template(
-                    crate::prompts::PromptId::SessionSummary,
-                    &agent,
-                    &repo,
-                    &workdir,
-                );
-                let tmux_session_clone = tmux_session.clone();
-                std::thread::spawn(move || {
-                    let result = SummaryManager::generate_summary(
-                        &tmux_session_clone,
-                        &w,
-                        &workdir,
-                        agent,
-                        &template,
-                    );
-                    let _ = tx.send((tmux_session_clone, result));
-                });
-            } else {
-                self.message = Some("No agent window found".into());
-            }
-        } else {
-            self.message = Some("Select a feature to summarize".into());
-        }
-
-        Ok(())
-    }
-
-    pub fn poll_summary_result(&mut self) -> Result<()> {
-        if let Some(ref rx) = self.summary_rx {
-            match rx.try_recv() {
-                Ok((tmux_session, result)) => {
-                    self.summary_rx = None;
-                    self.summary_state.generating.remove(&tmux_session);
-
-                    match result {
-                        Ok(summary) => {
-                            for project in &mut self.store.projects {
-                                for feature in &mut project.features {
-                                    if feature.tmux_session == tmux_session {
-                                        feature.summary = Some(summary.clone());
-                                        feature.summary_updated_at = Some(Utc::now());
-                                        break;
-                                    }
-                                }
-                            }
-                            self.save()?;
-                            self.message = Some(format!("Summary: {}", summary));
-                        }
-                        Err(e) => {
-                            self.message = Some(format!("Failed to generate summary: {}", e));
-                        }
-                    }
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => {}
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    self.summary_rx = None;
-                }
-            }
-        }
-        Ok(())
-    }
-
     pub fn poll_codex_sidebar_metadata(&mut self) -> bool {
         let mut changed = false;
         while let Ok(result) = self.codex_sidebar_metadata_rx.try_recv() {
@@ -1583,31 +1491,5 @@ impl App {
                 .insert(result.cache_key, result.model_text);
         }
         changed
-    }
-
-    fn get_window_for_session(&self, tmux_session: &str, _agent: &AgentKind) -> Option<String> {
-        for project in &self.store.projects {
-            for feature in &project.features {
-                if feature.tmux_session == tmux_session {
-                    return Self::get_agent_window(feature);
-                }
-            }
-        }
-        None
-    }
-
-    fn get_agent_window(feature: &Feature) -> Option<String> {
-        let target_kind = match feature.agent {
-            AgentKind::Claude => SessionKind::Claude,
-            AgentKind::Codex => SessionKind::Codex,
-            AgentKind::Pi => SessionKind::Pi,
-            AgentKind::Gemini => SessionKind::Gemini, // FORK
-            AgentKind::Cursor => SessionKind::Cursor, // FORK
-        };
-        feature
-            .sessions
-            .iter()
-            .find(|s| s.kind == target_kind)
-            .map(|s| s.tmux_window.clone())
     }
 }

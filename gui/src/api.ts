@@ -492,13 +492,6 @@ export function terminalSubmitPrompt(target: SessionTarget, text: string): Promi
   });
 }
 
-export interface PrecallView {
-  title: string;
-  harness: string;
-  preview: string;
-  viewing: boolean;
-}
-
 export interface DiffOptions {
   commit: string | null;
   base_ref: string | null;

@@ -150,19 +150,6 @@ pub struct ExtensionConfig {
     /// The library view can export user templates here. Phase 3 surfaces
     /// these in the picker with a `Global` / `Project` source badge.
     pub prompt_templates: Vec<PromptTemplate>,
-    /// Project-scope overrides of AIW's built-in headless prompt templates
-    /// (the "Editable Headless Prompts" feature), keyed by stable prompt id
-    /// (e.g. `"session.summary"`). Lives here — the tracked repo config —
-    /// rather than in a `.aiw/prompts/` directory because `.aiw/` is
-    /// gitignored dir-wide, so a file there would never be committed.
-    /// Feature- and global-scope overrides are per-user and live in `aiw.db`.
-    /// See `crate::prompts::project`.
-    ///
-    /// Unlike the other fields here, this one is **not** merged from the
-    /// global `extension` block: project scope is defined by what the repo's
-    /// `aiw.json` carries, and nothing else.
-    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub prompt_overrides: crate::prompts::project::ProjectPromptOverrides,
 }
 
 impl ExtensionConfig {
@@ -485,9 +472,6 @@ pub fn merge_project_extension_config_checked(
             .clone()
             .or_else(|| base.allowed_agents.clone()),
         prompt_templates,
-        // Project scope only — never inherited from the global `extension`
-        // block (see the field's doc comment).
-        prompt_overrides: project.prompt_overrides,
     };
     merged.normalize_legacy_review_modes();
     (merged, error)

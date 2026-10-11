@@ -149,7 +149,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("D", "View debug log"),
         ("p", "Open syntax parser picker"),
         ("L", "Open prompt library"),
-        ("E", "Edit headless AI prompt templates (overrides)"),
         ("T", "Theme picker"),
         ("c", "Start feature / stopped session"),
         // FORK: tiles in the agent pane (DESIGN.md §18).
@@ -173,7 +172,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "e",
             "Queue a follow-up for the selected agent (delivered when its turn ends)",
         ),
-        ("Z", "Generate session summary"),
         ("z", "Dormant features (idle + unattended)"),
         ("w", "Context window / warning settings"),
         ("i", "Needs attention: questions and finished work"),
@@ -240,10 +238,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("m", "Markdown file picker/viewer"),
         ("l", "Past and unsent prompts: paste one again (unsent)"),
         ("N", "Quick-capture a TODO for this worktree"),
-        (
-            "F",
-            "Start a fresh-context session (asks for your prompt first)",
-        ),
         ("z", "Complete the TODO this session came from"),
         ("h / H / M / 1-9", "Bookmarks: picker / add / remove / jump"),
         ("/", "Command picker (slash + AIW actions)"),

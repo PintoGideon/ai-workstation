@@ -1394,25 +1394,6 @@ impl App {
         Ok(())
     }
 
-    /// Create an agent-harness session in `(pi, fi)` with a caller-provided
-    /// `label`, running `harness` (or the project's preferred agent when
-    /// `None`) with the feature's mode/flags — the same launch path a
-    /// picker-launched agent session uses. Unlike the picker path this leaves
-    /// `self.selection` and `self.message` untouched, so callers can route the
-    /// new session wherever they need. Returns the new session's index in
-    /// `feature.sessions`.
-    pub(crate) fn create_agent_session_labeled(
-        &mut self,
-        pi: usize,
-        fi: usize,
-        label: &str,
-        harness: Option<AgentKind>,
-        intent: StartIntent,
-    ) -> Result<usize> {
-        self.create_agent_session_labeled_identified(pi, fi, label, harness, intent)
-            .map(|(index, _, _)| index)
-    }
-
     /// The same launch as `create_agent_session_labeled`, with stable session
     /// and window identities for adapters that must associate the result with
     /// another persisted record (such as a GUI TODO launch). A save conflict

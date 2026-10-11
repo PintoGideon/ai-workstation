@@ -9,89 +9,10 @@
 //! that the pane exists — see [`LiveHarnesses`].
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::project::{ProjectStatus, ProjectStore, SessionKind};
 use crate::resources::procs::{self, ProcInfo};
 use crate::traits::TmuxOps;
-
-/// In-flight headless harness runs (summaries).
-/// They are invisible to tmux but cost the same memory as an interactive
-/// harness, so they count toward the limit while they run.
-static IN_FLIGHT_HEADLESS: AtomicUsize = AtomicUsize::new(0);
-
-/// Counts one headless run for as long as it is alive.
-///
-/// The count is released in `Drop`, so an early `?`, a cancelled run, or a
-/// panic inside the run cannot leak a slot — which is the whole reason the
-/// accounting is a guard rather than a matched pair of calls.
-#[derive(Debug)]
-pub struct HeadlessLease {
-    counter: &'static AtomicUsize,
-}
-
-impl HeadlessLease {
-    pub fn acquire() -> Self {
-        Self::acquire_on(&IN_FLIGHT_HEADLESS)
-    }
-
-    /// Count against a specific counter. Only the process-wide
-    /// [`IN_FLIGHT_HEADLESS`] matters in production; tests use their own so
-    /// their assertions cannot be disturbed by a real headless run finishing
-    /// on some other test's background thread.
-    fn acquire_on(counter: &'static AtomicUsize) -> Self {
-        counter.fetch_add(1, Ordering::SeqCst);
-        Self { counter }
-    }
-}
-
-impl Drop for HeadlessLease {
-    fn drop(&mut self) {
-        // `try_update` rather than `fetch_sub` so a hypothetical unbalanced
-        // release can never wrap the counter around to usize::MAX and lock the
-        // gate on forever.
-        let _ = self
-            .counter
-            .try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
-                Some(current.saturating_sub(1))
-            });
-    }
-}
-
-/// How many headless harness runs are in flight right now.
-pub fn in_flight_headless_runs() -> usize {
-    IN_FLIGHT_HEADLESS.load(Ordering::SeqCst)
-}
-
-/// Serializes tests that assert on the process-global headless count. Without
-/// it, two lease tests running in parallel see each other's leases and read a
-/// moving baseline.
-#[cfg(test)]
-pub(crate) fn lock_lease_tests() -> std::sync::MutexGuard<'static, ()> {
-    static LEASE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    // A test that panics on purpose (the cancellation case) poisons the lock;
-    // the guarded data is a unit, so recovering is safe.
-    LEASE_TEST_LOCK
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
-}
-
-/// Wait for the global count to come back to `target`.
-///
-/// The lock above keeps lease *tests* from colliding, but any test that runs a
-/// real headless pass holds a lease of its own for as long as it runs. Polling
-/// lets those settle instead of racing them.
-#[cfg(test)]
-pub(crate) fn wait_for_in_flight(target: usize) -> usize {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    loop {
-        let current = in_flight_headless_runs();
-        if current == target || std::time::Instant::now() >= deadline {
-            return current;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(20));
-    }
-}
 
 /// The tmux windows that have something running in them right now, grouped by
 /// session.
@@ -235,10 +156,54 @@ pub fn max_possible_harness_sessions(store: &ProjectStore) -> usize {
         .count()
 }
 
-/// Everything the concurrency limit is measured against: interactive harness
-/// sessions plus the headless runs currently executing.
+/// Everything the concurrency limit is measured against: the interactive
+/// harness sessions that are running.
 pub fn total_active_agents(store: &ProjectStore, live: &LiveHarnesses) -> usize {
-    count_active_harness_sessions(store, live) + in_flight_headless_runs()
+    count_active_harness_sessions(store, live)
+}
+
+/// A pane that really has a process in it, for census tests: a `sh` that
+/// stays alive as the parent of a `sleep`, so `ps` reports a child of the
+/// returned pid. Killed on drop.
+#[cfg(test)]
+pub(crate) struct BusyPane(std::process::Child);
+
+#[cfg(test)]
+impl BusyPane {
+    #[must_use]
+    pub(crate) fn spawn() -> Self {
+        // `& wait` keeps the shell itself alive as the parent instead of
+        // exec'ing away, so the pane pid really does have a child.
+        let child = std::process::Command::new("sh")
+            .args(["-c", "sleep 60 & wait"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("sh should be available");
+        let pid = child.id() as i64;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::time::Instant::now() < deadline {
+            let procs = procs::list_processes();
+            if procs::process_tree(&procs, pid).len() > 1 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        Self(child)
+    }
+
+    /// The pid tmux would report for the pane.
+    pub(crate) fn pid(&self) -> i64 {
+        self.0.id() as i64
+    }
+}
+
+#[cfg(test)]
+impl Drop for BusyPane {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
 }
 
 #[cfg(test)]
@@ -515,79 +480,6 @@ mod tests {
         assert_eq!(active[0].project_name, "workstation");
         assert_eq!(active[0].feature_name, "alpha");
         assert_eq!(active[0].kind, SessionKind::Claude);
-    }
-
-    // The headless counter is process-global, so these assert on deltas from
-    // whatever baseline the rest of the suite happens to be at rather than on
-    // absolute values.
-    // These three assert the guard's semantics, so they use their own counter:
-    // a real headless run finishing on another test's thread must not be able
-    // to shift what they observe.
-    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    #[test]
-    fn lease_counts_a_run_while_it_is_alive() {
-        let _guard = lock_lease_tests();
-        TEST_COUNTER.store(0, Ordering::SeqCst);
-        {
-            let _lease = HeadlessLease::acquire_on(&TEST_COUNTER);
-            assert_eq!(TEST_COUNTER.load(Ordering::SeqCst), 1);
-            let _second = HeadlessLease::acquire_on(&TEST_COUNTER);
-            assert_eq!(TEST_COUNTER.load(Ordering::SeqCst), 2);
-        }
-        assert_eq!(TEST_COUNTER.load(Ordering::SeqCst), 0);
-    }
-
-    #[test]
-    fn lease_is_released_on_an_early_error_return() {
-        let _guard = lock_lease_tests();
-        fn failing_run() -> Result<(), &'static str> {
-            let _lease = HeadlessLease::acquire_on(&TEST_COUNTER);
-            Err("harness not installed")?;
-            unreachable!()
-        }
-        TEST_COUNTER.store(0, Ordering::SeqCst);
-        assert!(failing_run().is_err());
-        assert_eq!(TEST_COUNTER.load(Ordering::SeqCst), 0);
-    }
-
-    #[test]
-    fn lease_is_released_when_a_run_panics() {
-        let _guard = lock_lease_tests();
-        TEST_COUNTER.store(0, Ordering::SeqCst);
-        let result = std::panic::catch_unwind(|| {
-            let _lease = HeadlessLease::acquire_on(&TEST_COUNTER);
-            panic!("cancelled mid-run");
-        });
-        assert!(result.is_err());
-        assert_eq!(TEST_COUNTER.load(Ordering::SeqCst), 0);
-    }
-
-    #[test]
-    fn total_active_agents_includes_headless_runs() {
-        let _guard = lock_lease_tests();
-        let store = store(vec![project(
-            "p",
-            vec![feature(
-                "alpha",
-                ProjectStatus::Active,
-                vec![session("s1", SessionKind::Claude, "claude")],
-            )],
-        )]);
-        let live = LiveHarnesses::from_pairs([("aiw-alpha", "claude")]);
-
-        // Wait for any lease leaked by an earlier test to drain before reading
-        // the baseline. A run abandoned elsewhere in the suite (closing the
-        // changeset-overview modal, say) keeps its lease for
-        // `ABANDONED_RUN_GRACE` past the end of that test, so capturing the
-        // count directly can record a baseline that then falls away underneath
-        // the assertion below.
-        let base = wait_for_in_flight(0);
-        let _lease = HeadlessLease::acquire();
-        // One live harness session in the store, plus the lease just taken.
-        assert_eq!(total_active_agents(&store, &live), 1 + base + 1);
-        drop(_lease);
-        assert_eq!(wait_for_in_flight(base), base);
     }
 
     #[test]

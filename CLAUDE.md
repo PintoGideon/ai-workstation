@@ -48,23 +48,6 @@ Lineup checked 2026-10-09. Prices are per million input/output tokens, Anthropic
 - This section covers Claude Code's own model use; AIW's manual model
   pickers are separate.
 
-**HeadlessRunner** (headless.rs):
-
-- Harness-neutral one-shot runs for Claude, Codex, and Pi
-- Restricted no-tools mode for context-complete prompts
-
-**Prompt registry** (`src/prompts/`): the single home for every headless
-prompt AIW sends (see "Editable Headless Prompts" below). `mod.rs` holds
-`PromptId` (15 stable ids), `PromptSpec` (title/summary/placeholders/
-`default_template`/`harness_variants`), and `resolve_template_layered` /
-`resolve_prompt_layered`. `defaults.rs` is the built-in template text moved
-out of the call sites. `resolve.rs` has `PromptContext` +
-`render_template` (unvalidated `{{token}}` substitution — missing/unknown
-tokens render literally). `project.rs` reads project-scope overrides from
-`aiw.json`. Call sites resolve via `App::resolve_headless_prompt` /
-`resolve_headless_template` (`app/mod.rs`), which assemble the feature (DB) →
-project (`aiw.json`) → global (DB) → built-in layers.
-
 ### Feature TODOs
 
 Scoped to-do lists surfaced as a session kind and a native (non-tmux)
@@ -241,73 +224,6 @@ overlay:
   re-homing onto the first surviving feature. Worktree lists have no host to
   reassign: they were already settled by the disposition prompt.
 
-### Editable Headless Prompts
-
-Every one-shot ("headless") AI call AIW makes runs a template from a central
-registry that the user can view and override. See
-`docs/backlog/editable-prompts-call-site-inventory.md` for the call-site map
-and `AIW_PLAN.md` for the design decisions.
-
-- **Registry (`src/prompts/`).** `PromptId::ALL` is the stable id list
-  (`session.summary`). `defaults.rs` holds the built-in text; every
-  template uses granular tokens.
-- **Interpolation is unvalidated.** `render_template` substitutes `{{name}}`
-  from a `PromptContext`; a token with no value — declared or not — is left
-  literally, and substituted values are never re-scanned. An override may drop
-  or add tokens freely.
-- **Three override scopes.** Feature (keyed by workdir path) and global
-  overrides live in `aiw.db`'s `prompt_overrides` table (`MIGRATION_034`,
-  `src/db/prompt_overrides.rs`: `OverrideScope::{Feature,Global}`, CRUD +
-  `PromptOverrides` in-memory view with a no-DB fallback). Project overrides
-  live in `aiw.json` under `ExtensionConfig::prompt_overrides`
-  (`HashMap<prompt_id, PromptOverrideEntry{ template?, harnesses }>`,
-  `src/prompts/project.rs`) — **not** `.aiw/prompts/`, because `.aiw/` is
-  gitignored dir-wide, and **not** merged from the global `extension` block.
-  Harnesses are keyed by `AgentKind::slug()` (`claude`/`codex`/`pi`/
-  `gemini`/`cursor`).
-- **Precedence.** `resolve_template_layered` (`src/prompts/resolve.rs`):
-  feature → project → global → built-in, nearest wins; within the winning
-  layer a per-harness template beats the shared one, so a nearer *shared*
-  override beats a farther *per-harness* one. Once any layer supplies an
-  override the built-in default is never read (silent "default drift"). Call
-  sites go through `App::resolve_headless_prompt` / `resolve_headless_template`
-  (`app/mod.rs`), read fresh each call.
-- **Manager overlay.** `AppMode::PromptOverrides(Box<PromptOverridesState>)`,
-  `app/prompt_overrides.rs` / `handlers/prompt_overrides.rs` /
-  `ui/dialogs/prompt_overrides.rs`. Dashboard `E` / leader `E`. List → edit
-  the effective template → `Ctrl+S` → scope picker (Feature only with a
-  feature + DB, Project only with a repo, always Global) → harness picker
-  (shared / one) → save. `d`,`d` clears the effective override (every
-  per-harness row at that scope).
-- **Pre-call notice.** `AppMode::PromptPrecall(Box<PendingPrecall>)`,
-  `app/precall.rs`. `precall_gate(action, harness, rendered)` is called by
-  each **user-initiated** gated call site right before it spawns; it stashes
-  the originating mode and returns `false` (caller returns without spawning).
-  `precall_confirm` restores the mode, sets `precall_cleared`, and
-  re-invokes the same `start_*` via `dispatch_precall` — the re-run
-  re-resolves the prompt so an override saved from `e` applies. `precall_edit`
-  opens the manager focused on the prompt (`App::precall_return` brings the
-  notice back on close). `precall_cleared` is wiped after every
-  `dispatch_precall` so a fall-through (e.g. a round with no harness →
-  synthesis) can't leave a stale clearance. **Automated** runs
-  (`session.summary`) call `announce_headless_run` — a
-  toast, never the modal — so a queued batch can't deadlock.
-
-### Reasoning level (headless runs)
-
-Wherever AIW lets you pick a headless model, it also lets you pick how hard
-the model thinks.
-
-- **One vocabulary, per-harness flags.** `headless::ReasoningLevel`
-  (`minimal`..`max`) maps through `reasoning_args`: Claude `--effort`, Codex
-  `-c model_reasoning_effort="…"`. Pi has no verified flag,
-  so it offers none. `ReasoningLevel::supported_for(harness)` is the verified
-  set; a level the harness cannot express is **dropped, never passed through**
-  (Codex has no `max`; Claude has no `minimal`).
-- **`ModelSel`** (`model` + `reasoning`) is what every `HeadlessRunner` entry
-  accepts via `impl Into<ModelSel>`, so a caller with only a model
-  (`Option<&str>`) is unchanged.
-
 ### Agent Limits & Resource Health (resources/)
 
 Guards against AIW quietly exhausting host memory. Everything here
@@ -319,8 +235,7 @@ resources/
 ├── mem.rs      # probe() -> Option<MemorySnapshot>: /proc/meminfo
 │               # narrowed by cgroup v2 limits on Linux, sysctl +
 │               # vm_stat on macOS, None everywhere else
-├── limits.rs   # LiveHarnesses census + active_harness_sessions();
-│               # HeadlessLease counts in-flight headless runs
+├── limits.rs   # LiveHarnesses census + active_harness_sessions()
 ├── procs.rs    # ps-backed process list/tree, pid liveness,
 │               # SIGTERM-then-SIGKILL tree termination, VS Code
 │               # window attribution
@@ -330,11 +245,10 @@ resources/
 ```
 
 - **Pre-start gate** (`app/resource_gate.rs`): `check_start_preconditions()`
-  combines the agent count (harness sessions across all projects +
-  headless leases, tripping at `active >= limit`) and available
-  memory into one result. The gate lives in the **launch primitives**
+  combines the agent count (harness sessions across all projects,
+  tripping at `active >= limit`) and available memory into one result. The gate lives in the **launch primitives**
   (`ensure_feature_running`, `ensure_feature_running_for_new_session`,
-  `create_agent_session_labeled`, and the three
+  `create_agent_session_labeled_identified`, and the three
   `ensure_feature_running_with_*_session` pickers), not on entry points:
   each takes a `StartIntent` so a new caller must pick a policy.
    - `Approved` — an upstream gate already cleared this start.
@@ -348,13 +262,6 @@ resources/
   The gate only fires when the call will actually launch, so re-entering a
   running feature never asks. Creation paths call `autostart_allowed()`
   instead, which warns and skips rather than prompting.
-- **Headless accounting**: `HeadlessLease` is acquired inside
-  `run_command` / `run_jsonl_command` (`headless.rs`), so every
-  `HeadlessRunner` caller is counted; poll-driven runs hold a
-  `LeasedChild` instead. Dropping one **kills** the run: it terminates the
-  process tree and reaps it on a background thread, holding the lease until
-  the process is really gone (`std::process::Child` only detaches on drop,
-  which would leave an abandoned harness running but uncounted).
 - **Editor tracking**: `launched_editors` (`MIGRATION_017`, plus
   `proc_started_at` in `MIGRATION_018`; `db/editors.rs`). VS Code launches
   with `--new-window` and is recorded **not-owned**; a background thread

@@ -424,15 +424,26 @@ fn a_stale_feature_is_not_found() {
 
 #[test]
 fn a_custom_session_that_starts_the_feature_waits_for_approval() {
-    let _lease_lock = crate::resources::limits::lock_lease_tests();
-    assert_eq!(crate::resources::limits::wait_for_in_flight(0), 0);
-    let _lease = crate::resources::limits::HeadlessLease::acquire();
+    // Another feature already has a live harness, so one is the limit.
+    let busy = crate::resources::limits::BusyPane::spawn();
     let root = tempfile::tempdir().unwrap();
     let _seams = Seams::new(None, None);
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists().return_const(false);
-    tmux.expect_list_panes().returning(Vec::new);
+    let pane_pid = busy.pid();
+    tmux.expect_list_panes()
+        .returning(move || vec![("aiw-busy-feat".to_string(), "claude".to_string(), pane_pid)]);
     let mut gui = handle(root.path(), ProjectStatus::Stopped, tmux);
+    {
+        let app = gui.app_for_workflow();
+        let mut running = app.store.projects[0].features[0].clone();
+        running.id = "busy-feat".to_string();
+        running.name = "busy-feat".to_string();
+        running.branch = "busy-feat".to_string();
+        running.tmux_session = "aiw-busy-feat".to_string();
+        running.status = ProjectStatus::Active;
+        app.store.projects[0].features.push(running);
+    }
     gui.app_for_workflow().config.max_concurrent_agents = 1;
     gui.app_for_workflow().config.low_memory_warn_mb = 0;
     let request = request(&mut gui, "Dev server");

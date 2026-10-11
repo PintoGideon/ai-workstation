@@ -28,10 +28,7 @@
 //!
 //! Never shown, because only the TUI process that owns the IPC socket knows
 //! them (see [`TUI_ONLY_NOTE`]): the attention reason, an in-flight tool
-//! call, Codex app-server live events (work item and reasoning), the IPC
-//! thinking state of a Claude/Codex PR-review session, and a TUI's own
-//! summary generation. The GUI's own summary generation is this process's
-//! state and is reported.
+//! call, and Codex app-server live events (work item and reasoning).
 
 use serde::{Deserialize, Serialize};
 
@@ -210,7 +207,6 @@ impl GuiHandle {
                 && crate::app::session_ops::agent_for_session_kind(&session.kind).is_some_and(
                     |agent| app.thinking_from_shared_sources(&feature.tmux_session, &agent),
                 ),
-            summary_generating: app.summary_state.generating.contains(&feature.tmux_session),
         };
         let assembly = app
             .assemble_agent_sidebar(feature, Some(session), &session.kind, &runtime)

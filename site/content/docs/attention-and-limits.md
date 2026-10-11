@@ -37,11 +37,8 @@ reports the data:
   read directly from the harness). Approaching the limit appends `WARNING`
   or `CRITICAL`; a reading AIW couldn't refresh appends `STALE` but keeps
   showing the last real value rather than going blank. In the warning or
-  critical band the section grows two lines: `Action: Fresh context:
-  <leader F>` — opens a new session seeded with the current diff, so you
-  can keep going without the old conversation's history counting against
-  the new session's budget — and `Dismiss: <leader X>` to clear the hint
-  for that reading.
+  critical band the section adds a hint that the context is filling up, so
+  you can compact or start a new session in the harness before it runs out.
 - **Usage** shows Claude's and Codex's rolling rate-limit windows as small
   bars, one per line, drawn like the dashboard status bar's usage bar, e.g.
   `5h ┃┃┃┃░░░░░░ 38% · 3h` (percentage used, changing colour at 50% and
@@ -53,28 +50,8 @@ Claude- and Codex-only. See [Choosing a Harness](@/docs/harnesses.md) for
 the full breakdown.
 
 <figure>
-  <img src="/images/docs/context-sidebar-warning.png" alt="Session sidebar showing Ctx ~88% CRITICAL usage with a Fresh context: <leader F> action offered">
-  <figcaption>The sidebar's Fresh Context hint once a session's context usage reaches the critical band.</figcaption>
-</figure>
-
-<figure>
   <img src="/images/docs/sidebar-usage-box.png" alt="Session sidebar's Usage box showing 5h 41% left · 1h and 7d 70% left · 3d">
   <figcaption>The Usage box, mirroring the dashboard's own 5h/7d rate-limit windows.</figcaption>
-</figure>
-
-## Let AIW summarize a session for you
-
-Press `Z` on the dashboard, or `Ctrl+Space`, then `g` from inside a
-session, to have AIW write a short (60-character) summary of the selected
-feature's recent terminal activity, shown on that feature's dashboard row.
-It's a one-off, on-demand call rather than something that runs
-automatically — press it again any time the row goes stale. It runs in
-AIW's restricted, no-tools headless mode,
-so it costs one small call regardless of which harness the feature uses.
-
-<figure>
-  <img src="/images/docs/session-summary.png" alt="Dashboard row for a Codex feature showing the generated summary 'Handled by Codex, not Claude'">
-  <figcaption>A generated summary on a feature's dashboard row.</figcaption>
 </figure>
 
 ## Keep the machine from filling up
@@ -83,8 +60,7 @@ Agents and the editors they sit alongside are the bulk of what AIW puts on
 your machine, and nothing warns you before the last gigabyte goes.
 
 Before starting an agent, AIW checks how many are already running — across
-every project, plus any headless review or plan run in flight — and how
-much memory is left. If either is past its threshold, one dialog says
+every project — and how much memory is left. If either is past its threshold, one dialog says
 which, and `y` starts it anyway. **It never refuses.** Terminals, editors,
 and TODO sessions are not counted and never raise it.
 

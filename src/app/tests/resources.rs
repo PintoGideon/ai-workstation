@@ -415,8 +415,8 @@ fn a_start_that_cannot_be_parked_warns_and_goes_ahead() {
     app.config.max_concurrent_agents = 1;
     app.config.low_memory_warn_mb = 0;
 
-    let si = app
-        .create_agent_session_labeled(
+    let (si, _, _) = app
+        .create_agent_session_labeled_identified(
             0,
             0,
             "TODO: rename things",

@@ -319,15 +319,9 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char('L') => {
             app.open_prompt_library(None);
         }
-        KeyCode::Char('E') => {
-            app.open_prompt_overrides(None);
-        }
         KeyCode::Char('f') if crate::app::DASHBOARD_SESSION_FILTER_ENABLED => {
             app.session_filter = app.session_filter.next();
             app.push_toast_info(format!("Filter: {}", app.session_filter.display_name()));
-        }
-        KeyCode::Char('Z') => {
-            app.trigger_summary_for_selected()?;
         }
         // `z` for zzz: features nobody is watching.
         KeyCode::Char('z') => {
@@ -393,9 +387,6 @@ fn handle_normal_leader_key(app: &mut App, key: KeyEvent) -> Result<()> {
         }
         KeyCode::Char('N') => {
             app.open_todo_quick_capture();
-        }
-        KeyCode::Char('F') => {
-            app.open_fresh_context_prompt_for_selection();
         }
         KeyCode::Char('z') => {
             app.request_todo_reference_completion();

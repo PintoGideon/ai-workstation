@@ -279,7 +279,6 @@ pub(crate) struct SidebarRuntime<'a> {
     /// A tool call is in flight (IPC `tool-start`).
     pub running_tool: bool,
     pub thinking: bool,
-    pub summary_generating: bool,
     /// Live Codex app-server events (IPC).
     pub codex_live: Option<&'a CodexLiveThreadState>,
 }
@@ -369,11 +368,7 @@ impl App {
             .map(format_sidebar_usage);
         let prompt_full = self.latest_prompt_for_session(&feature.tmux_session);
         let prompt_text = sidebar_prompt_text(None, prompt_full);
-        let summary_text = if runtime.summary_generating {
-            Some("Generating summary...".to_string())
-        } else {
-            feature.summary.clone()
-        };
+        let summary_text = feature.summary.clone();
         let diff_review = pending_diff_review_work_text(&runtime.pending_inputs);
         let pending_diff_review = diff_review.is_some();
         let work_text = diff_review.or_else(|| fallback_sidebar_work_text(runtime));
@@ -426,11 +421,7 @@ impl App {
         let fallback_prompt = self.latest_prompt_for_session(&feature.tmux_session);
         let prompt_text = sidebar_prompt_text(session_prompt, fallback_prompt);
         let prompt_full = select_sidebar_prompt(session_prompt, fallback_prompt);
-        let summary_text = if runtime.summary_generating {
-            Some("Generating summary...".to_string())
-        } else {
-            feature.summary.clone()
-        };
+        let summary_text = feature.summary.clone();
         let codex_live = runtime.codex_live;
         let diff_review = pending_diff_review_work_text(&runtime.pending_inputs);
         let pending_diff_review = diff_review.is_some();

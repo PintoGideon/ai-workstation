@@ -16,7 +16,6 @@ row links back to the page that documents the feature in full.
 | [Context-window tracking](@/docs/attention-and-limits.md#track-context-and-usage-in-the-sidebar) | Yes | Yes | Yes |
 | [Usage/quota sidebar](@/docs/attention-and-limits.md#track-context-and-usage-in-the-sidebar) (5h / 7-day windows) | Yes | Yes | No usage API is currently known for this harness |
 | Saved-session resume | Yes | Yes | Not available |
-| [Prompt overrides](@/docs/custom-prompts.md) | Yes | Yes | Yes |
 
 A few notes worth expanding on:
 

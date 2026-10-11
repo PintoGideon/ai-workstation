@@ -2100,12 +2100,7 @@ fn cancelling_the_on_start_prompt_keeps_a_session_row_stopped() {
 
     app.start_feature().unwrap();
     assert!(matches!(app.mode, AppMode::HookPrompt(_)));
-    crate::handlers::handle_key(
-        &mut app,
-        KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
-        20,
-    )
-    .unwrap();
+    crate::handlers::handle_key(&mut app, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)).unwrap();
     assert!(matches!(app.mode, AppMode::Normal));
 
     assert_eq!(stopped_flags(&app), vec![false, true]);

@@ -17,7 +17,7 @@ use crate::resources::mem::{self, MemorySnapshot};
 /// against the configured cap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OverLimit {
-    /// Harness sessions plus in-flight headless runs.
+    /// Running harness sessions across every project.
     pub active: usize,
     pub limit: usize,
 }
@@ -161,8 +161,7 @@ impl App {
         // quiet machine. The store gives a free upper bound on running
         // harnesses — if even that is under the limit, and memory is fine,
         // there is nothing to ask about.
-        let ceiling =
-            limits::max_possible_harness_sessions(&self.store) + limits::in_flight_headless_runs();
+        let ceiling = limits::max_possible_harness_sessions(&self.store);
         let certainly_under_limit = self
             .config
             .agent_concurrency_limit()
