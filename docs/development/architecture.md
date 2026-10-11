@@ -56,52 +56,6 @@ first, uncached load. `SyntaxInfo` explains plain-text fallbacks, and
 frontend's `SyntaxCode.tsx` renders spans as `syn-*` classes coloured by the
 `--syn-*` tokens in `syntax.css`.
 
-`gui_review/complete.rs` completes a review through the TUI finish engine. The
-TUI's `complete_final_review` is now `record_final_review_round` (write the
-round, clear progress, record the snapshot, optional PR post) followed by
-`dispatch_review_feedback`; the GUI calls the recording half itself, after
-rechecking the confirmed check command, suggestion opt-in batch and handoff
-session. Like the TUI it applies the saved opt-in batch and reruns the
-configured check rather than trusting a transient GUI result. An actionable
-round's prompt goes to the reviewed feature's first agent session only when
-the reviewer chose handoff: submitted through `deliver_review_prompt` when the
-TUI setting submits and the session runs, otherwise returned once (via
-`take_completion`) as an unsent prompt hand-off (the TUI pastes it into the
-agent's pane unsent; the GUI shows it in its own composer).
-
-`app/supervised_edits.rs` owns Vibeless per-edit approval shared by both
-interfaces: the hook reply format, its IPC-or-file delivery and the captured
-diff loader. `App::read_notification_files` is the one reader of hook
-notification files; the TUI scan and `gui_supervised_edits.rs` both use it.
-The GUI binds no IPC socket, so it answers only file-fallback requests, by a
-stable edit ID and a revision hashed over the request and both captured
-copies. It refuses changed, already-answered and abandoned edits and never
-recreates a departed hook's files.
-Responders hold a shared file lock through validation and delivery and publish
-responses without overwriting an existing decision. A failed signal can retry
-only that original decision; TUI delivery failures keep the review and feedback
-open. The GUI leaves `change-reason` requests (Codex's watcher) to the TUI,
-because no hook proves a live owner for them.
-
-`gui_sessions.rs` gives the GUI the rest of the TUI's session picker. VS Code
-goes through `App::launch_vscode_window`, the picker's tracked launch (the
-`code` CLI is a test seam, `session_ops::vscode_cli`). The feature's
-`launched_editors` rows are projected into the sidebar snapshot, and closing
-them calls `App::kill_tracked_editors` after checking the rows the user
-confirmed. Custom sessions are re-read from the effective `aiw.json` and
-matched by a config revision. Their `pre_check` runs between two holds of the
-GUI lock, and they are created by `App::add_custom_session_identified`, which
-shares its window launch with the TUI's add. `with_feature_started_for_add`
-stops a feature that an add started, if the add then fails, for terminals,
-editors and custom sessions alike.
-
-`gui_dormancy.rs` lists the shared `app::dormant` scan with the readings
-each row was decided on. Its confirmed stop re-checks every selected feature
-against those readings and the current scan, then calls the TUI's stop
-(`App::stop_feature_reporting`), whose editor cleanup keeps its ownership
-rules; the module signals no process itself. Terminal attachment records
-`last_accessed`, as focusing a session's pane in the TUI cockpit does.
-
 ## Feature modules
 
 The harness-duplicating feature directories (PR Triage, Final Review,
@@ -113,18 +67,16 @@ helpers are imported from their owning sibling module; new private helper access
 is bounded to the original feature. Extracted modules import explicit App types.
 Pure transformations take data rather than an all-purpose App/context object.
 State/domain code does not import handlers or renderers. Orchestration may use
-existing cross-feature APIs for TODO/plan/session handoffs.
+existing cross-feature APIs for TODO/session handoffs.
 
 Shared DiffScope/layout concepts belong to ordinary diff browsing
 (`app/diff.rs`, `app/diff_state.rs`).
 
 ## Runtime ownership and stale results
 
-App now has 125 fields, down from the 130 recorded in
-[app-fields.tsv](baseline/app-fields.tsv). Three groups establish concrete
-boundaries with private fields and shared production/test defaults:
-
-Shared routing/store/configuration,
+The background-work ownership groups (`PrReviewWork`, `AiReviewRun`,
+`LearningRuns`) went with their features on 2026-10-11; the
+[app-fields.tsv](baseline/app-fields.tsv) baseline predates that. Shared routing/store/configuration,
 manager injection, IPC/watcher/observer guards, pane/sidebar queues and debug/perf
 remain on App. Refresh caches and cross-feature notification state remain
 available for later incremental ownership work.

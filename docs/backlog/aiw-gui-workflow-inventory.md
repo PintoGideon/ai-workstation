@@ -1,5 +1,9 @@
 # AIW GUI — workflow inventory and first-slice gate
 
+> **Historical (2026-10-11).** The planning, Learning, Final Review, AI review, PR Triage / PR Review,
+> screenshot, summary, fresh-context and prompt-override rows below describe features removed from both
+> interfaces (DESIGN.md §18.1). The remaining rows still apply.
+
 Scopes Task 1 ("Define coverage and release gates") of `AIW_PLAN.md`. Maps
 every TUI workflow to its shared Rust operations, its TUI entry point, and
 its proposed GUI destination from the plan's UI section, and states the

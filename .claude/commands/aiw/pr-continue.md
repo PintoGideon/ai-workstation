@@ -40,6 +40,4 @@ equivalent) rather than assuming `HEAD` addressed every open
 comment. A comment about a file you didn't touch, or a fix
 that hasn't been pushed yet, should not get a "done" reply. When
 unsure, say so or leave it unreplied rather than posting an
-inaccurate confirmation. Prefer AIW's own PR Triage pane (`G`)
-for reply posting when it's available — it derives and caveats
-the commit for you.
+inaccurate confirmation.

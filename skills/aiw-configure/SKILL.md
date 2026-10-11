@@ -51,7 +51,7 @@ Use `/aiw:add-hook` to add one.
 
 ### Feature presets — `feature_presets`
 
-Named templates that pre-fill agent, mode, branch prefix, review,
+Named templates that pre-fill agent, mode, branch prefix
 and Chrome settings when creating a new feature.
 
 Use `/aiw:add-preset` to add one.

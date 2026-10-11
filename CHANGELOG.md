@@ -23,6 +23,19 @@ are tagged.
 
 ### Removed
 
+- **Harness-native duplicates.** Remote Control, the steering prompt,
+  Learning mode, the model/reasoning analyzer, the plan interview and Quick
+  Plan, AI Review with review memory/destination/questions, Final Review and
+  Review mode, PR Triage and PR Review with the screenshot-evidence flow,
+  session summaries, the fresh-context handoff, prompt overrides and the
+  headless runner are gone (2026-10-11). Claude Code and Codex do these in
+  the agent's own session (`/code-review`, `/review`, plan mode, `/model`,
+  `/compact`, `--resume`, `gh`). The dashboard keys `K`, `m`, `P`, `Q`, `W`,
+  `C`, `G`, `Z`, `E`, `F` (fresh context) and `V`'s Final Review entry no
+  longer exist; the New Feature dialog is Name, Worktree, Harness, Mode and
+  Chrome. No migration: the old tables and feature columns stay in `aiw.db`
+  unread. See DESIGN.md §18.1.
+
 - **OpenCode support.** Claude Code, Codex, Gemini CLI, Cursor agent and Pi
   remain. Stored OpenCode sessions are dropped on load; features and
   preferences that named OpenCode fall back to the default agent. See

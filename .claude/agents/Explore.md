@@ -11,8 +11,8 @@ Never modify files.
 
 - Start from `docs/development/architecture.md` when you need the module map.
   Main areas: `src/cli.rs` (startup/polling), `src/handlers/` (input),
-  `src/ui/` (rendering), `src/app/` (workflows), `src/db/` (persistence),
-  `src/prompts/` (headless prompt registry). Feature tests are in
+  `src/ui/` (rendering), `src/app/` (workflows), `src/db/` (persistence).
+  Feature tests are in
   `src/app/tests/`.
 - Use absolute paths in shell commands. `cd` does not work reliably in this
   shell.

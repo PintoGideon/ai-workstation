@@ -11,7 +11,7 @@ Rust toolchain (edition 2024), with a C compiler for bundled SQLite/tree-sitter.
 cargo build --locked
 cargo run --locked
 cargo test --locked app::tests::feature_sessions
-cargo test --locked app::pr_review
+cargo test --locked app::tests::todos
 cargo test --workspace --locked
 cargo fmt --check
 cargo clippy --workspace --all-targets --locked -- -D warnings

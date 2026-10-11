@@ -3,7 +3,7 @@ name: aiw:add-preset
 description: >
   Add a feature preset to this AIW workspace. Use when the user
   wants a named template that pre-configures agent harness, mode,
-  branch prefix, review, and Chrome settings for new
+  branch prefix and Chrome settings for new
   features — so they can create a feature with a single selection
   instead of filling out every field each time.
 allowed-tools: Bash(cat *) Bash(mkdir *) Edit(aiw.json) Bash(test *) Bash(rm .aiw/config.json)

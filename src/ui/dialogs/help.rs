@@ -233,7 +233,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         theme,
     ));
     let leader_keybinds: Vec<(&str, &str)> = vec![
-        ("f", "Final diff review of the selected feature"),
         ("d", "Diff viewer (all changes / commit)"),
         ("m", "Markdown file picker/viewer"),
         ("l", "Past and unsent prompts: paste one again (unsent)"),

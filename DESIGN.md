@@ -774,23 +774,39 @@ prompt (`latest-prompt.txt`) → the feature name. Tests use fixtures under a te
 `tmux_control_mode` stays: the desktop GUI's terminal still uses the control-mode client. `sidebar_width` is
 new.
 
-**Also removed as bloat (2026-10-11).** The session switcher (redundant with the sidebar), the Remote Control URL
-detection (`src/app/remote_control.rs`), the compose-only
+**Also removed as bloat (2026-10-11).** The session switcher (redundant with the sidebar), the compose-only
 clipboard helpers, the TUI's agent-sidebar runtime, the dead `DASHBOARD_SESSION_FILTER_ENABLED` paths in view
 code. The GUI contract, `aiw-gui`, automation, hooks and IPC are unchanged.
 
-**Removed: harness-native duplicates (2026-10-11).** Final Review (the verdict/comment viewer, review notes,
-walkthrough / co-review / changeset-overview passes, batched review of oversized diffs, PR submission from the
-viewer), Review mode (the `review` feature flag and its CLAUDE.md block), the PR picker's "Review a PR" tab and
-its drafts, and the headless pre-call notice. Claude Code's `/code-review` and Codex's `/review` do this inside
-the agent. The plain diff viewer (`d`: current changes or one commit, file tree, context ladder, whitespace
-toggle, base-ref override) and the Vibeless per-edit approval popup stay. `features.review`, `pr_review_drafts`
-and `review_source` remain in the schema, unread. PR Triage (`G`: the comment reader, fix-prompt injection,
-AI reply drafts, read-only investigations, companion triage features, `aiw reply-draft`) and the agent
-screenshot-evidence flow went the same day: reading a PR's comments and fixing them is something the agent does
-in its own session with `gh`. The PR badge (open / merged / closed, refreshed on `R` or the GUI's **Refresh
-PRs**), the issue browser (`g`) and `pr_terminal_state` stay; `pr_comment_triage`, `pr_investigations`,
-`pr_review_cache`, `screenshot_scopes` and `features.triage_source` remain in the schema, unread.
+### 18.1 Removed: harness-native duplicates (2026-10-11)
+
+AIW is a workstation, not a second agent. Everything that re-implemented a feature Claude Code and Codex ship
+themselves was deleted the same day, in nine commits on `lean-harness`, each with the full suite green:
+
+| Removed | What the harness does instead |
+|---|---|
+| Remote Control (`--remote-control` flag, dialog row, URL detection) | Claude's own `claude remote-control`; already on the no-cloud remove list (§6) |
+| Steering prompt ("prompt coach" box after launch) | Type into the agent's pane; prompts paste unsent |
+| Learning mode (read-only repo browser + Q&A, `K`) | Ask the agent in its session |
+| Model / reasoning analyzer (`m`, Codex settings socket) | `/model` and `/effort` in the harness |
+| Plan interview and Quick Plan (`P`, `Q`, `AIW_PLAN.md`, question banks, expert picker) | Claude's plan mode, Codex's plan mode |
+| AI Review of a PR (`W`), review memory (`C`), review destination and review questions | `/code-review`, `/review` |
+| Final Review (verdict/comment viewer, walkthroughs, co-review, batched review, PR submit) and Review mode (the `review` flag and its CLAUDE.md note block) | `/code-review`, `/review` inside the agent |
+| PR Triage and PR Review (`G`, comment reader, fix-prompt injection, reply drafts, investigations, companion features, `aiw reply-draft`) and the agent screenshot-evidence flow | `gh pr view --comments` and a fix in the agent's own session |
+| Session summary (`Z`), fresh-context handoff (`F`), prompt overrides (`E`), the headless prompt registry and the headless runner | `/compact`, `--resume`, the harness's own prompts |
+
+What stays: projects → features (branch / worktree) → sessions, the cockpit and `aiw grid`, badges and the
+needs-you list, queued follow-ups, dashboard permission answers and the Vibeless per-edit approval popup, hooks
+and the status line, context / cost telemetry, usage windows, dormancy, TODOs, bookmarks, the prompt library
+(user templates pasted into a session), the plain diff viewer (`d`), the Markdown viewer, the issue browser
+(`g`), the PR badge refresh (`R` / **Refresh PRs**), config wizard, harness setup, themes, `doctor`, `fonts`,
+`automation` and IPC. No HTTP client or server is linked (`scripts/check-no-network.sh`).
+
+Persistence is untouched: no `DROP TABLE` migrations were added. `learning_*`, `model_research`,
+`plan_interviews`, `ai_review_cache`, `pr_review_drafts`, `pr_comment_triage`, `pr_investigations`,
+`pr_review_cache`, `screenshot_scopes`, `prompt_overrides` and the `remote_*` tables, and the
+`features.review` / `plan_mode` / `selected_plan_path` / `triage_source` / `review_source` columns remain in
+the schema, unread. An older `aiw.db` opens as before.
 
 **Measured** (`cargo +1.99.0 test --locked --release fork_bench -- --ignored --nocapture`, 36×60 sidebar with
 the info block, 3 projects × 10 sessions, the selection alternating between a `⛔` row and a `●` row, 2,000

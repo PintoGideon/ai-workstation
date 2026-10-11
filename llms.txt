@@ -10,7 +10,7 @@ Key features:
 
 - Multi-agent workspace manager for Claude Code, Codex, Gemini CLI, Cursor agent and Pi
 - Project/feature tree with per-feature git worktrees and tmux sessions
-- Embedded tmux view with live ANSI rendering inside the TUI
+- Cockpit: the sidebar runs in a tmux pane beside the agent's real pane; typing is native
 - Vibe modes (Vibeless diff-review, Vibe, SuperVibe) for permission control
 - Local-only hooks and notifications; global settings are never modified
 - Machine-friendly automation commands with JSON request/response

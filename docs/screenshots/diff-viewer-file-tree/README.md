@@ -1,5 +1,8 @@
 # Hierarchical file tree in the diff viewers
 
+> Historical capture: Final Review was removed on 2026-10-11 (DESIGN.md §18.1). Frames 1–5 show the old
+> review viewer; the file tree they document lives on in the plain diff viewer (`d`).
+
 Captured from an isolated, throwaway AIW instance
 (`scripts/dev/screenshot/aiw-capture.sh`, 160x44) against a scratch demo repo
 whose changeset deliberately spans a repo-root file, `docs/backlog/`,

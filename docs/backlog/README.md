@@ -81,7 +81,10 @@ doc always says exactly what remains.
   fixed a separate, pre-existing bug that had the whole site failing to
   build (see [bug backlog](bug-backlog-plan.md)). One follow-up open
   question: nothing was checked against a live `aiw` session across all
-  four harnesses, only against source.
+  four harnesses, only against source. _Several of the features those
+  pages covered (review, PR feedback, custom prompts, Learning, Remote
+  Control, Fresh Context, prompt coaching) were removed on 2026-10-11
+  and their pages deleted._
 - [Crate package size](crate-package-size-plan.md) — _Shipped._ The
   published crate was 20MB/703 files (11.1MiB compressed) — over
   crates.io's 10MB compressed cap, which is what turned every publish
@@ -92,12 +95,10 @@ doc always says exactly what remains.
 - [Premium-model efficiency options](premium-model-efficiency-options-plan.md) —
   _Backlog._ Planning reference for eight ways AIW could make Astra/Fable more
   affordable, with worked savings calculations, implementation boundaries,
-  evaluation criteria, and dependencies for later feature plans. OPT-07 records
-  the implemented Claude Code/Codex advice for new, on-demand and TODO Plan
-  review, the Expert reviewer picker and existing agent sessions, including
-  in-place model/effort changes for exactly identified Codex daemon conversations.
-  Persistent stage profiles, other harnesses' live controls, explicit restart/resume
-  and outcome evaluation remain open.
+  evaluation criteria, and dependencies for later feature plans. OPT-07's
+  model/reasoning analyzer shipped and was removed again on 2026-10-11
+  (the harnesses' own `/model` and `/effort` replace it); the rest remains
+  open.
 
 - [Project config location](project-config-location-plan.md) — _Shipped._
   Moved hand-authored project config out of the generated
@@ -177,7 +178,7 @@ doc always says exactly what remains.
   features for the in-house editor (`src/editor.rs`). Tier 1 core editing
   largely shipped; change operators and Tiers 2-3 remain.
 - [Remote Control — companion app](remote-control-companion-app-plan.md) —
-  _In progress._ Epic 1 (on-demand tokio/axum server skeleton, toggled
+  _Dropped (no-cloud build, DESIGN.md §6; the last `--remote-control` launch flag went 2026-10-11)._ Epic 1 (on-demand tokio/axum server skeleton, toggled
   from the dashboard leader menu) has shipped. Monitor and, eventually,
   fully control AIW agent sessions
   (any harness, any feature) from a phone: read-only status/notifications
@@ -192,31 +193,19 @@ doc always says exactly what remains.
   Distinct from the shipped per-Claude-session Remote Control below,
   which mirrors to claude.ai/mobile via Anthropic's own infrastructure.
 - [Remote Control — server mode](remote-control-server-mode-plan.md) —
-  _Backlog._ Spawn new Claude sessions on demand from web/mobile, each
+  _Dropped (no-cloud build)._ Spawn new Claude sessions on demand from web/mobile, each
   in its own worktree. Deferred; AIW's role would shift from
   drive-the-agent to provision-and-review.
 - [Remote Control — QR code overlay](remote-control-qr-overlay-plan.md) —
-  _Backlog._ Render the Remote Control session URL as a scannable QR in
+  _Dropped (no-cloud build)._ Render the Remote Control session URL as a scannable QR in
   a TUI overlay. Pays off most with server mode, which prints a stable
   URL.
 - [Expanded keybindings](expanded-keybindings-plan.md) — _Backlog._
   Grow config wizard keybinding support beyond dashboard actions to
   leader commands and other scoped command surfaces.
-- [Final review enhancements](final-review-enhancements-plan.md) —
-  _Rounds 1–2 shipped; Round 3 partly implemented._ Round 1 follow-ups all landed:
-  line-level and multi-line comments, multi-line/markdown feedback and
-  notes, on-demand walkthroughs, finish gating, resumable state,
-  base-ref selection, file-list filters, review history, re-review
-  loop, PR integration, and dispatch-to-a-fresh-harness. A captured
-  Round 2 deepens the reviewer workflow: AI co-reviewer first pass,
-  suggested-change blocks, severity tags driving the GitHub review
-  event, agent-writes-responses-back, resolve/unresolve threads,
-  comment re-anchoring, a manual changeset overview, a per-project
-  build/test gate, file-level PR comments, and jump-by-hunk / in-diff
-  search. Review questions (`Q`) now support read-only repository discovery
-  and temporary follow-ups in Final Review and both PR review modes, with
-  optional editable inline/general comment conversion. The remaining Round 3
-  co-review and workflow enhancements stay in backlog.
+- Final Review and its enhancements — _Removed 2026-10-11._ The review
+  viewer, walkthroughs, co-review, review questions and PR submission
+  duplicated `/code-review` and `/review`; the plan was deleted with the code.
 - PR Triage and its Investigate follow-ups — _Removed 2026-10-11._ The
   comment reader, fix-prompt injection, AI reply drafts, read-only
   investigations and companion triage features duplicated what the agents

@@ -26,10 +26,8 @@ reviewed.
 - Embeds agent terminals, shells, Neovim, VS Code, and custom sessions.
 - Surfaces which agents need attention, session status, token usage, and
   estimated cost.
-- Supports supervised edits, final diff review, and GitHub PR review
-  workflows.
-- Explains code you didn't write: browse a repository read-only and ask an
-  agent about any file, hunk, or line range, with the answers kept per project.
+- Answers Vibeless per-edit approvals from the dashboard and shows each
+  feature's pull-request badge.
 - Provides reusable prompts, scoped TODO lists, themes, lifecycle hooks, and
   workspace presets.
 - Supports ordinary directories as well as git repositories.

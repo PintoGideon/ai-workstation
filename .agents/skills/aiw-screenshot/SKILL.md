@@ -16,7 +16,6 @@ Keep these constraints:
 - Leave `HOME` unchanged so agent authentication and git identity remain available.
 - Use the default `120x40` geometry unless the UI needs another size.
 - Use `--keep` only while debugging; use an explicit persistent `--out-dir` for deliverables.
-- Treat GitHub reads from PR Triage as real read-only operations. Do not confirm actions that reply, resolve, or otherwise write to GitHub unless the user explicitly requested that write.
 
 ## Author the scenario
 
@@ -62,11 +61,6 @@ can skip it.) Prefer a scratch scenario file unless it is broadly
 reusable.
 
 When the scenario needs existing data, pass `--seed` and optionally `--seed-feature`. Use the payload shapes in `scripts/dev/screenshot/scenarios/seed-project.json`, `seed-feature.json`, and `docs/automation/`.
-
-For a screenshot of an already-completed AI Review, use
-`scenarios/ai-review-completed-fixture.txt`. It uses AIW's deterministic
-`seed-ai-review` fixture; CI must never start a live `A` review or depend on a
-logged-in Claude/Codex harness for visual proof.
 
 ## Capture and render
 

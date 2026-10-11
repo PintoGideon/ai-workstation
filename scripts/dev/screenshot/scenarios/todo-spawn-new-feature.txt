@@ -10,7 +10,7 @@
 # This scenario proves the new middle option, "Start an agent in a new
 # feature": it is present, it carries its own description, and it routes
 # straight to the ordinary create-feature wizard with plan mode OFF --
-# no plan interview.
+# straight into the create-feature wizard.
 #
 #   ./aiw-capture.sh --scenario scenarios/todo-spawn-new-feature.txt \
 #       --out-dir <output-dir>
@@ -57,7 +57,7 @@ shot:todo-added
 # Enter on the unlinked TODO opens the launch chooser.
 key:Enter
 wait:1000
-note:The launch chooser now shows THREE options; the new middle one, "Start an agent in a new feature", creates a fresh branch and worktree with no plan interview, and its detail line spells that out.
+note:The launch chooser now shows THREE options; the new middle one, "Start an agent in a new feature", creates a fresh branch and worktree, and its detail line spells that out.
 shot:chooser-three-options
 
 # Down onto the new option.
@@ -71,7 +71,7 @@ shot:new-feature-option-selected
 # and plan mode left off.
 key:Enter
 wait:1500
-note:Confirming opens the standard create-feature wizard on its branch step, pre-seeded with a branch name from the TODO title. Plan mode is off; no plan interview runs.
+note:Confirming opens the standard create-feature wizard on its branch step, pre-seeded with a branch name from the TODO title.
 shot:create-feature-wizard-opens
 
 # Escape out without creating anything, and clean up the throwaway repo.
