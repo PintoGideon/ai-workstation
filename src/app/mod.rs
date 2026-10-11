@@ -2312,10 +2312,11 @@ impl App {
             if let AppMode::HarnessSetup(state) = &mut self.mode
                 && let Some(harness) = state.harnesses.iter_mut().find(|h| h.kind == result.kind)
             {
+                let tick_when_found = std::mem::take(&mut harness.tick_when_found);
                 match result.result {
                     Ok(()) => {
                         harness.status = HarnessCheckStatus::Installed;
-                        if result.enable_on_success {
+                        if result.enable_on_success || tick_when_found {
                             harness.enabled = true;
                         }
                     }

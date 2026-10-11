@@ -75,15 +75,20 @@ fn check_and_toggle(app: &mut App) -> Result<()> {
         return Ok(());
     }
 
-    // A row already known to be installed ticks at once; anything else
-    // (never checked, not found, or the opening sweep still running) is
-    // checked again with "tick when found", so an Enter during the sweep
-    // is not lost.
-    if harness.status == HarnessCheckStatus::Installed {
-        harness.enabled = true;
-        return Ok(());
+    // A row already known to be installed ticks at once. A row the opening
+    // sweep is still probing is marked to tick when that probe finds the
+    // CLI (one probe, one result: no race between two answers). Anything
+    // else (never checked, not found) is probed with "tick when found".
+    let status = harness.status.clone();
+    match status {
+        HarnessCheckStatus::Installed => {
+            harness.enabled = true;
+        }
+        HarnessCheckStatus::Checking => {
+            harness.tick_when_found = true;
+        }
+        _ => app.spawn_harness_check(kind, true),
     }
-    app.spawn_harness_check(kind, true);
     Ok(())
 }
 

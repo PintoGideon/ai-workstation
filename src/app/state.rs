@@ -1599,6 +1599,10 @@ pub struct HarnessOption {
     pub kind: AgentKind,
     pub status: HarnessCheckStatus,
     pub enabled: bool,
+    /// FORK: the user pressed Enter while the opening sweep was still
+    /// probing this row; tick it when that probe finds the CLI, instead of
+    /// probing a second time.
+    pub tick_when_found: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1630,6 +1634,7 @@ impl HarnessSetupState {
                         HarnessCheckStatus::Unchecked
                     },
                     enabled: already_enabled,
+                    tick_when_found: false,
                 }
             })
             .collect();
