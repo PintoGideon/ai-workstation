@@ -31,7 +31,6 @@ pub fn draw_plan_interview_dialog(
     message: Option<&str>,
     theme: &Theme,
     throbber_state: &throbber_widgets_tui::ThrobberState,
-    model_advice: bool,
 ) {
     // The whole review gate shares one frame size so moving between the plan,
     // its editor, and an agent review does not resize the dialog underfoot.
@@ -136,9 +135,9 @@ pub fn draw_plan_interview_dialog(
     }
 
     if state.phase == PlanInterviewPhase::Review {
-        draw_plan_review(frame, inner, state, message, theme, model_advice);
+        draw_plan_review(frame, inner, state, message, theme);
         if state.expert_model_pick.is_some() {
-            draw_expert_model_picker(frame, state, theme, model_advice);
+            draw_expert_model_picker(frame, state, theme);
         }
         return;
     }
@@ -242,12 +241,7 @@ pub fn draw_plan_interview_dialog(
     frame.render_widget(Paragraph::new(footer).wrap(Wrap { trim: false }), chunks[3]);
 }
 
-fn draw_expert_model_picker(
-    frame: &mut Frame,
-    state: &PlanInterviewState,
-    theme: &Theme,
-    model_advice: bool,
-) {
+fn draw_expert_model_picker(frame: &mut Frame, state: &PlanInterviewState, theme: &Theme) {
     let Some(pick) = state.expert_model_pick.as_ref() else {
         return;
     };
@@ -330,12 +324,7 @@ fn draw_expert_model_picker(
         } else {
             "h/l effort  "
         };
-        let advice = if model_advice {
-            "m model advice for this review"
-        } else {
-            ""
-        };
-        format!("j/k choose  Enter {action}  Esc cancel\n{effort}{advice}")
+        format!("j/k choose  Enter {action}  Esc cancel\n{effort}")
     };
     frame.render_widget(
         Paragraph::new(hint).style(Style::default().fg(theme.primary.to_color())),
@@ -993,7 +982,6 @@ fn draw_plan_review(
     state: &mut PlanInterviewState,
     message: Option<&str>,
     theme: &Theme,
-    model_advice: bool,
 ) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -1012,19 +1000,7 @@ fn draw_plan_review(
         theme,
     );
 
-    let selected_model = state
-        .pending_launch
-        .as_ref()
-        .and_then(|p| p.model_selection.as_ref())
-        .map(|s| {
-            format!(
-                "Initial implementation: {} / {} / {}",
-                s.choice.harness().display_name(),
-                s.choice.model(),
-                s.choice.reasoning().unwrap_or("default")
-            )
-        });
-    let context = if let Some(message) = message.or(selected_model.as_deref()) {
+    let context = if let Some(message) = message {
         let color = if message.starts_with("Error:") {
             theme.danger.to_color()
         } else {
@@ -1062,9 +1038,6 @@ fn draw_plan_review(
         hint("r", theme),
         Span::raw(" regenerate  "),
     ];
-    if model_advice {
-        hints.extend([hint("m", theme), Span::raw(" model advice  ")]);
-    }
     hints.extend([
         hint("Enter", theme),
         Span::raw(" accept  "),
@@ -1644,7 +1617,7 @@ mod tests {
     use crate::traits::{MockTmuxOps, MockWorktreeOps};
 
     #[test]
-    fn expert_picker_keeps_advice_and_cancel_visible() {
+    fn expert_picker_keeps_effort_and_cancel_visible() {
         use crate::{app::AiModelPickState, headless::ReasoningLevel};
         for (width, height) in [(80, 24), (120, 40)] {
             let mut state =
@@ -1663,7 +1636,7 @@ mod tests {
             ));
             let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
             terminal
-                .draw(|frame| draw_expert_model_picker(frame, &state, &Theme::default(), true))
+                .draw(|frame| draw_expert_model_picker(frame, &state, &Theme::default()))
                 .unwrap();
             let text = terminal
                 .backend()
@@ -1673,7 +1646,7 @@ mod tests {
                 .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
                 .collect::<Vec<_>>()
                 .join("\n");
-            for expected in ["m model advice", "Esc cancel", "h/l effort", "test-model"] {
+            for expected in ["Esc cancel", "h/l effort", "test-model"] {
                 assert!(
                     text.contains(expected),
                     "missing {expected} at {width}x{height}"

@@ -527,25 +527,6 @@ impl HeadlessRunner {
         run_jsonl_command(harness, &spec, workdir, prompt, model.into(), on_progress)
     }
 
-    /// Pick the engine for a plan interview.
-    ///
-    /// Prefer the feature's harness when the interview-specific availability
-    /// check passes — i.e. its CLI is installed and responds, with required
-    /// command and safety flags verified for Codex and Pi — then fall back in
-    /// a stable order. This does not exercise a real headless run, so a
-    /// harness that is installed but misconfigured (e.g. not authenticated)
-    /// can still be picked ahead of a working fallback. Pi is selected only
-    /// when its CLI advertises the complete restricted/read-only flag set;
-    /// older Pi releases retain the stable fallback behavior.
-    pub(crate) fn select_configured(
-        preferred: &AgentKind,
-        allowed: &[AgentKind],
-    ) -> Option<AgentKind> {
-        select_configured_harness_with(preferred, allowed, |harness| {
-            check_interview_available(harness).is_ok()
-        })
-    }
-
     pub fn select_for_interview(preferred: &AgentKind) -> Option<AgentKind> {
         select_interview_harness_with(preferred, |harness| {
             check_interview_available(harness).is_ok()
@@ -700,20 +681,6 @@ fn interview_candidates(preferred: &AgentKind) -> Vec<AgentKind> {
         }
     }
     candidates
-}
-
-fn select_configured_harness_with(
-    preferred: &AgentKind,
-    allowed: &[AgentKind],
-    mut available: impl FnMut(&AgentKind) -> bool,
-) -> Option<AgentKind> {
-    let mut candidates = interview_candidates(preferred);
-    if !candidates.contains(&AgentKind::Pi) {
-        candidates.push(AgentKind::Pi);
-    }
-    candidates
-        .into_iter()
-        .find(|harness| allowed.contains(harness) && available(harness))
 }
 
 fn select_interview_harness_with(
@@ -2801,23 +2768,6 @@ mod tests {
         assert_eq!(
             interview_candidates(&AgentKind::Pi),
             [AgentKind::Pi, AgentKind::Claude, AgentKind::Codex]
-        );
-    }
-
-    #[test]
-    fn analyzer_fallback_never_probes_unconfigured_harnesses() {
-        let selected = select_configured_harness_with(
-            &AgentKind::Claude,
-            &[AgentKind::Codex, AgentKind::Pi],
-            |harness| {
-                assert!(matches!(harness, AgentKind::Codex | AgentKind::Pi));
-                *harness == AgentKind::Pi
-            },
-        );
-        assert_eq!(selected, Some(AgentKind::Pi));
-        assert!(
-            select_configured_harness_with(&AgentKind::Codex, &[], |_| panic!("must not probe"))
-                .is_none()
         );
     }
 

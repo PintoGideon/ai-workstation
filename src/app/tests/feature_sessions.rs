@@ -960,7 +960,6 @@ fn finish_feature_launch_vibeless_injects_custom_diff_review_hook_on_worktree_cr
     app.config.diff_review_viewer = DiffReviewViewer::Aiw;
 
     app.finish_feature_launch(PreparedFeatureLaunch {
-        model_selection: None,
         project_name: "my-project".to_string(),
         feature_name: None,
         branch: "diffy".to_string(),

@@ -45,17 +45,16 @@ Inventory of every network-capable path found in `src/` and
 | Dashboard/session leader keys `C` ("Remote server on / off") and `Q` ("Pair a phone"), their help and legend entries, the doctor `remote-access` finding | UI for the above. | **Removed.** Doctor has a `network` finding instead. |
 | `src/screenshot_sources.rs` | PR screenshot viewer's remote sources: GitHub Actions artifacts (zip download + `scraper` HTML parsing), PR-body/comment images over HTTPS (`ureq`, redirects, `std::net::IpAddr` checks), image-access checker. | **Removed.** Local agent-validation screenshots (`src/screenshot_evidence.rs`) still work. |
 | `src/gui_screenshots.rs` remote half; Tauri commands `screenshots_remote_list`, `screenshots_remote_image`, `screenshots_remote_close`, `screenshots_inline_image`, `screenshots_check_access`; `gui/src/PrMarkdown.tsx` inline image fetch | GUI bridge for the above. | **Removed.** PR Markdown images are placeholders with an "Open in browser" button. |
-| `tungstenite` in `src/app/model_analysis/session_control.rs` | WebSocket framing for the Codex settings control socket — tunnelled over the local `codex app-server proxy` stdio pipe (no network), but it is a WebSocket library. | **Replaced** by a small local client, `src/app/model_analysis/local_ws.rs`. `tungstenite` is now a dev-dependency only, as the reference server in tests. |
+| `tungstenite` in `src/app/model_analysis/session_control.rs` | WebSocket framing for the Codex settings control socket of the model analyzer. | **Removed** with the model analyzer (2026-10-11); no WebSocket library is linked at all, not even in tests. |
 | Background PR badge sweep (`ACTIVE_PR_SYNC_INTERVAL`, `src/cli.rs` main loop + startup, `src/gui_contract/sidebar.rs` GUI timer) | `gh` GraphQL queries for every project's open/merged PRs every 5 minutes and once at startup. | **Off.** Runs only on explicit refresh (`R`, leader `r` on the dashboard or in a session, `r` on a project row, the `refresh-statuses` command) or when PR Triage opens (TUI `G`, GUI PR Triage). Otherwise the last-known badge state is shown (merged/closed state is cached in SQLite). |
 | Startup retry of pending issue comments (`App::new` → `queue_recoverable_issue_comments`) | Posted an "I'm working on this" comment via `gh` at every start if an earlier post hadn't completed. | **Moved** to the explicit refresh (`R`). |
 | Tree-sitter startup validation (`src/highlight/tree_sitter.rs`) | A parser that failed validation at startup was automatically re-downloaded (`git clone` from GitHub) and rebuilt. | **No auto-download.** Startup only logs "parser needs repair: open the syntax picker (p) and press i to re-download it". |
 
 Dependencies removed from the root package: `ureq`, `tokio`, `axum`, `qrcode`,
-`web-push-native`, `p256`, `zip`, `scraper` (and `tungstenite` moved to
-dev-dependencies). Their transitive network stack (hyper, hyper-util, h2,
+`web-push-native`, `p256`, `zip`, `scraper`, `tungstenite`, `sha1`. Their transitive network stack (hyper, hyper-util, h2,
 rustls, rustls-webpki, rustls-platform-verifier, tokio-tungstenite,
 openssl-probe, …) is gone with them: the root package went from 312 to 189
-linked packages. Added: `sha1` (pure hash, for the local WebSocket handshake).
+linked packages.
 
 ### Kept (and why)
 
@@ -67,7 +66,6 @@ linked packages. Added: `sha1` (pure hash, for the local WebSocket handshake).
 | `gui_screenshots::PrDocumentRead` | PR description for the GUI (`gh pr view` via `GhCli::pr_meta`). | Runs when the user opens a PR in PR Triage. |
 | `open_gallery_browser` (`xdg-open`/`open`) | Hands an `http(s)` link to the user's browser. | AIW fetches nothing; the browser does, on a click. |
 | Claude `--remote-control` launch flag (`src/project.rs`) | Claude Code's own Remote Control bridge to claude.ai. | The agent's own network feature, opt-in per feature; AIW only passes the flag. The URL copy/open and pane parsing (`src/app/remote_control.rs`) were removed with the embedded view (2026-10-11, DESIGN.md §18). |
-| `src/app/model_analysis/session_control.rs` + `local_ws.rs` | Codex settings over `codex app-server proxy` stdin/stdout. | Local pipe to a child process. |
 | `src/ipc.rs`, tmux sockets | Unix-domain sockets. | Local IPC, not network. |
 | Harness hooks and Claude's status line (`scripts/*.sh` → `aiw permission-request`, `status-line`, `stop-hook`, `subagent`, `session-context`; DESIGN.md §16) | The agent CLIs run AIW's scripts on their own events; the scripts talk to AIW's Unix socket and print a line or a JSON decision back to the agent. The status line restores the Claude 5h/7d meters from the numbers Claude itself passes to the command. | Local processes and the local socket; nothing of AIW's opens a network connection. |
 | Agents' own traffic | Claude, Codex, Gemini, Cursor, Pi, … | Outside AIW. |

@@ -65,15 +65,8 @@ notify = "8.2.0"
 # server library. See NO_CLOUD.md and scripts/check-no-network.sh.
 # Data-URL encoding for local screenshot evidence (`src/screenshot_evidence.rs`).
 base64ct = { version = "1", features = ["alloc"] }
-# Sec-WebSocket-Accept check for the local Codex control-socket handshake
-# (`src/app/model_analysis/local_ws.rs`, which speaks WebSocket framing itself
-# over the `codex app-server proxy` stdio pipe — no network).
-sha1 = "0.10"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 url = "2"
 
 [dev-dependencies]
-# FORK(no-cloud): test-only reference WebSocket server for the hand-rolled
-# Codex control-socket client. Not linked into the binaries.
-tungstenite = "0.29"
 mockall = "0.13"

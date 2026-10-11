@@ -1604,7 +1604,6 @@ mod tests {
         // A directory cannot be replaced by ProjectStore::save's file write.
         app.store_path = repo.path().to_path_buf();
         let prepared = crate::app::PreparedFeatureLaunch {
-            model_selection: None,
             project_name: "widget".to_string(),
             feature_name: Some("fix-issue-42".to_string()),
             branch: "issue/42".to_string(),
@@ -1714,7 +1713,6 @@ mod tests {
         app.store.projects[0].features.push(other);
 
         let prepared = crate::app::PreparedFeatureLaunch {
-            model_selection: None,
             project_name: "widget".to_string(),
             feature_name: Some("fix-issue-42".to_string()),
             branch: "issue/42".to_string(),

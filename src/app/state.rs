@@ -1381,7 +1381,6 @@ pub enum AppMode {
     CreatingProject(CreateProjectState),
     CreatingFeature(CreateFeatureState),
     PlanInterview(PlanInterviewState),
-    ModelAnalysis(Box<super::model_analysis::State>),
     DeletingProject(String),
     DeletingFeature(String, String),
     DeletingFeatureInProgress(DeletingFeatureState),
@@ -2342,7 +2341,6 @@ impl CreateFeatureState {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PreparedFeatureLaunch {
-    pub(crate) model_selection: Option<super::model_analysis::Selection>,
     pub project_name: String,
     /// Separate display/persisted feature name for workflows whose branch is
     /// user-editable. Ordinary creation leaves this `None` and uses `branch`.
@@ -4810,7 +4808,6 @@ mod tests {
 
     fn prepared_launch(project_name: &str, branch: &str) -> PreparedFeatureLaunch {
         PreparedFeatureLaunch {
-            model_selection: None,
             project_name: project_name.into(),
             feature_name: None,
             branch: branch.into(),

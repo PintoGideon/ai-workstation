@@ -740,7 +740,7 @@ mode `Normal` and the sidebar on that session's row (the feature's row when the 
 `Ctrl+Q` is tmux's. The old view's leader commands that still matter moved to the dashboard's
 `Ctrl+Space` menu, for the selected session (`App::selection_view_state`, `src/app/session_tools.rs`): `f`
 final review, `d` diff viewer, `n` current plan, `m` Markdown, `l` past/unsent prompts, `N` TODO capture, `F`
-fresh-context session, `B` model advice, `P` back to PR Triage, `z` complete the referenced TODO; the bookmark,
+fresh-context session, `P` back to PR Triage, `z` complete the referenced TODO; the bookmark,
 picker, wizard and refresh entries stayed; `i`, `?`, `A` left the menu (they are plain keys). The session
 switcher (`w`), remote-control URL copy, scroll mode and text selection went with the view: the sidebar *is*
 the switcher, and tmux has copy mode.

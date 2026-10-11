@@ -432,22 +432,14 @@ construction. Cross-cutting changes can eliminate most reuse.
 
 ## OPT-07: Reasoning effort by task stage
 
-### Implemented foundation
+### Status
 
-Model and reasoning advice is implemented for new Full/Quick Plan review and
-existing Claude Code/Codex agent sessions. It also covers on-demand feature
-plans and TODO Plan review. New-feature plan selections apply to the initial
-implementation launch (including TODO plans); on-demand and host-feature TODO
-plans offer advice only for their destination harness. Exactly identified, loaded
-Codex conversations on an existing shared daemon can apply model/effort in place
-for subsequent turns; other sessions use the harness's model picker. Choices
-require verified account access, supported effort levels and fresh, attributable
-provider research. Task-specific quality, time and token totals remain unknown.
-See the
-[capability and evidence contract](../development/model-reasoning-analyzer.md).
+The model/reasoning analyzer (on-demand advice at plan review and in agent
+sessions, with its evidence contract) was removed on 2026-10-11: the
+harnesses' own model pickers (`/model` in Claude Code and Codex) cover it.
 
-- [x] Offer on-demand advice at plan review and in existing agent sessions.
-- [x] Validate available model/effort combinations and research provenance.
+- [ ] ~~Offer on-demand advice at plan review and in existing agent sessions.~~ Removed.
+- [ ] ~~Validate available model/effort combinations and research provenance.~~ Removed.
 - [x] Apply a selected setting to the initial implementation launch.
 - [x] Extend implementation advice to on-demand Full/Quick Plan and TODO Plan
   review, preserving destination scope, live TODO identity and existing handoffs.

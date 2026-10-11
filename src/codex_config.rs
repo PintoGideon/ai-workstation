@@ -89,16 +89,20 @@ fn known_models_from_cli() -> Option<Vec<String>> {
 }
 
 fn known_models_from_catalog_value(value: &serde_json::Value) -> Option<Vec<String>> {
-    // The legacy picker needs names only. Reading a catalog does not prove
-    // account access, so its entries remain unverified for analyzer use.
-    let mut models: Vec<String> = crate::model_options::codex_catalog_models(
-        value,
-        crate::model_options::Availability::Unknown,
-    )
-    .ok()?
-    .into_iter()
-    .map(|model| model.model)
-    .collect();
+    // The picker needs names only; a catalog entry does not prove account access.
+    let mut models: Vec<String> = value
+        .get("models")?
+        .as_array()?
+        .iter()
+        .filter(|model| model.get("visibility").and_then(|v| v.as_str()) == Some("list"))
+        .filter_map(|model| model.get("slug")?.as_str())
+        .filter(|slug| {
+            !slug.is_empty()
+                && !slug.starts_with('-')
+                && !slug.chars().any(|c| c.is_whitespace() || c.is_control())
+        })
+        .map(str::to_string)
+        .collect();
     models.sort();
     models.dedup();
     Some(models)

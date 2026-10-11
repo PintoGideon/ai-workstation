@@ -1021,7 +1021,6 @@ mod tests {
     fn creation_interview(project_name: &str, workdir: PathBuf) -> AppMode {
         AppMode::PlanInterview(crate::app::PlanInterviewState::for_feature_creation(
             crate::app::PreparedFeatureLaunch {
-                model_selection: None,
                 project_name: project_name.into(),
                 feature_name: None,
                 branch: "planned".into(),

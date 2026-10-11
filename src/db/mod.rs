@@ -4,7 +4,6 @@ pub mod editors;
 mod followups; // FORK: queued follow-ups (src/app/fork_followups.rs)
 mod hook_approvals; // FORK: repo lifecycle hook approvals (src/fork/hook_approval.rs)
 mod migrations;
-pub(crate) mod model_evidence;
 pub mod plan_interviews;
 pub mod pr_comment_triage;
 pub mod pr_investigations;

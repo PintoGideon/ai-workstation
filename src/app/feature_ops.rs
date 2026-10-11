@@ -432,7 +432,6 @@ impl App {
         };
 
         let prepared = PreparedFeatureLaunch {
-            model_selection: None,
             project_name: project_name.clone(),
             feature_name,
             branch: branch.clone(),
@@ -489,55 +488,6 @@ impl App {
         prepared: PreparedFeatureLaunch,
         resource_approved: bool,
     ) -> Result<()> {
-        if let Some(selection) = &prepared.model_selection {
-            self.ensure_agent_mode_supported(&prepared.agent, &prepared.mode)?;
-            anyhow::ensure!(
-                self.model_analysis_work
-                    .launch_args
-                    .as_ref()
-                    .is_some_and(|v| v.feature_id == selection.feature_id),
-                "selected model requires fresh launch validation"
-            );
-            anyhow::ensure!(
-                prepared.agent == *selection.choice.harness(),
-                "selected harness changed before launch"
-            );
-            let project = self
-                .store
-                .projects
-                .iter()
-                .find(|p| p.name == prepared.project_name)
-                .ok_or_else(|| anyhow::anyhow!("target project was deleted"))?;
-            if self
-                .model_analysis_work
-                .launch_args
-                .as_ref()
-                .is_some_and(|v| v.retry)
-            {
-                let expected_kind = match prepared.agent {
-                    AgentKind::Claude => SessionKind::Claude,
-                    AgentKind::Codex => SessionKind::Codex,
-                    AgentKind::Pi => SessionKind::Pi,
-                    AgentKind::Gemini => SessionKind::Gemini, // FORK
-                    AgentKind::Cursor => SessionKind::Cursor, // FORK
-                };
-                anyhow::ensure!(
-                    project.features.iter().any(|f| f.id == selection.feature_id
-                        && f.workdir == prepared.workdir
-                        && f.agent == prepared.agent
-                        && f.sessions.first().is_some_and(|s| s.kind == expected_kind)),
-                    "saved launch target was deleted or changed"
-                );
-            }
-            anyhow::ensure!(
-                project.id == selection.project_id
-                    && project.repo == selection.repo
-                    && self
-                        .allowed_agents_for_repo(&project.repo)
-                        .contains(&prepared.agent),
-                "selected project or harness configuration changed before launch"
-            );
-        }
         // The feature row and its issue association are one store write. Keep
         // a snapshot so a failed write cannot leave a phantom in-memory row
         // that a retry would mistake for a successful creation.
@@ -560,12 +510,7 @@ impl App {
                 self.store.projects[pi]
                     .features
                     .iter()
-                    .position(|f| {
-                        prepared.model_selection.as_ref().map_or(
-                            f.name == feature_name && f.pending_worktree_script,
-                            |selection| f.id == selection.feature_id,
-                        )
-                    })
+                    .position(|f| f.name == feature_name && f.pending_worktree_script)
                     .map(|fi| (pi, fi))
             });
 
@@ -614,9 +559,6 @@ impl App {
             );
 
             let mut feature = feature;
-            if let Some(selection) = &prepared.model_selection {
-                feature.id = selection.feature_id.clone();
-            }
             feature.issue_source = prepared.issue_source.clone();
             Self::initialize_feature_sessions(
                 &mut feature,
@@ -737,39 +679,9 @@ impl App {
             started = resource_approved || self.autostart_allowed(&feature_name);
             if started {
                 // `autostart_allowed` above is this path's gate.
-                let mut created = false;
-                let start = if prepared.model_selection.is_some() {
-                    if self
-                        .tmux
-                        .session_exists(&self.store.projects[pi].features[fi].tmux_session)
-                    {
-                        anyhow::bail!(
-                            "Selected settings require a fresh launch; stop the existing feature before retrying"
-                        );
-                    }
-                    self.ensure_feature_running_tracking_creation(
-                        pi,
-                        fi,
-                        &mut created,
-                        StartIntent::Approved,
-                    )
-                } else {
-                    self.ensure_feature_running(pi, fi, StartIntent::Approved)
-                };
-                if let Err(error) = start {
-                    if created && prepared.model_selection.is_some() {
-                        let session = self.store.projects[pi].features[fi].tmux_session.clone();
-                        // Best effort: a failed cleanup must not replace the
-                        // launch error the user needs to act on.
-                        let _ = self.tmux.kill_session(&session);
-                    }
-                    let retry = if prepared.model_selection.is_some() {
-                        "retry with r in model advice"
-                    } else {
-                        "retry with c"
-                    };
+                if let Err(error) = self.ensure_feature_running(pi, fi, StartIntent::Approved) {
                     anyhow::bail!(
-                        "feature '{}' was saved but its agent did not start; {retry}: {error}",
+                        "feature '{}' was saved but its agent did not start; retry with c: {error}",
                         feature_name
                     );
                 }
@@ -1011,19 +923,6 @@ impl App {
         created_session: Option<&mut bool>,
         intent: StartIntent,
     ) -> Result<Started> {
-        let analyzer_args = self
-            .model_analysis_work
-            .launch_args
-            .as_ref()
-            .filter(|launch| {
-                self.store
-                    .projects
-                    .get(pi)
-                    .and_then(|p| p.features.get(fi))
-                    .is_some_and(|f| f.id == launch.feature_id)
-            })
-            .map(|launch| launch.args.clone())
-            .unwrap_or_default();
         self.disambiguate_feature_tmux_session(pi, fi)?;
         // Ask before any of the setup below runs, and only when this call will
         // really start something: an already-running session means the harness
@@ -1200,12 +1099,6 @@ impl App {
         let unlimited_agent_autostart = max_agent_autostart_sessions == 0;
         let mut launched_agent_sessions = 0usize;
         for session in feature.sessions_to_start() {
-            if !analyzer_args.is_empty()
-                && session.kind.is_agent_harness()
-                && session.id != feature.sessions[0].id
-            {
-                continue;
-            }
             let launch_target = launch_override
                 .as_ref()
                 .filter(|target| target.session_id == session.id);
@@ -1263,8 +1156,7 @@ impl App {
                         &session.id,
                         resume_id,
                         {
-                            let mut args = extra_args.clone();
-                            args.extend(analyzer_args.clone());
+                            let args = extra_args.clone();
                             let args = if let Some(owner) = screenshot_owners.get(&session.id) {
                                 super::screenshots::launch_args(owner, true, args)?
                             } else {
@@ -1280,9 +1172,8 @@ impl App {
                 }
                 SessionKind::Codex => {
                     launched_agent_sessions += 1;
-                    let mut codex_args =
+                    let codex_args =
                         crate::codex_config::launch_override_args(&feature.workdir, &feature.mode);
-                    codex_args.extend(analyzer_args.clone());
                     // In vibeless mode, launch a diff-review watcher alongside
                     // Codex so each file change can be approved/rejected via
                     // the AIW popup.

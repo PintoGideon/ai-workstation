@@ -166,7 +166,6 @@ impl App {
                 .unwrap_or_default();
 
         let prepared = PreparedFeatureLaunch {
-            model_selection: None,
             project_name,
             feature_name,
             branch,

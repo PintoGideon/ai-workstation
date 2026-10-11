@@ -1365,7 +1365,6 @@ mod tests {
         let rendered = render_feature_row_configured(vec![], None, |app| {
             app.paused_plan_interview = Some(crate::app::PlanInterviewState::for_feature_creation(
                 crate::app::PreparedFeatureLaunch {
-                    model_selection: None,
                     project_name: "usage-project".into(),
                     feature_name: None,
                     branch: "planned-feature".into(),

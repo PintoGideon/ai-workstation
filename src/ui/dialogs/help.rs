@@ -138,7 +138,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "Keyboard sidebar ⇄ agent pane (tmux; works from either side)",
         ),
         ("s", "Add session (picker)"),
-        ("m", "Model / reasoning advice for selected agent session"),
         ("S", "Pick session to resume"),
         ("N", "Create new project"),
         ("n", "Create new feature"),
@@ -255,7 +254,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "F",
             "Start a fresh-context session (asks for your prompt first)",
         ),
-        ("B", "Model / reasoning advice for this agent session"),
         ("P", "Back to PR Triage (if one is stashed)"),
         ("z", "Complete the TODO this session came from"),
         ("h / H / M / 1-9", "Bookmarks: picker / add / remove / jump"),
@@ -318,10 +316,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     let plan_review_keybinds: Vec<(&str, &str)> = vec![
         ("j/k / PgUp/PgDn", "Scroll the rendered plan"),
         ("e", "Edit raw plan markdown"),
-        (
-            "m",
-            "Model / reasoning advice for implementing the reviewed plan",
-        ),
         (
             "a",
             "Expert review with an explicit frontier model, or re-open one already held (uses tokens for a new review)",

@@ -16,7 +16,6 @@ mod help;
 mod hooks;
 mod issue_fixer;
 mod markdown;
-mod model_analysis;
 mod plan_interview;
 mod plan_interview_attach;
 mod pr_review;
@@ -54,7 +53,6 @@ pub use hooks::{
 };
 pub use issue_fixer::{draw_issue_browser, draw_issue_duplicate_warning, draw_issue_setup};
 pub use markdown::{draw_markdown_loading, draw_markdown_viewer};
-pub use model_analysis::draw_model_analysis;
 pub use plan_interview::draw_plan_interview_dialog;
 pub use plan_interview_attach::draw_plan_interview_attach_doc_dialog;
 pub use pr_review::{

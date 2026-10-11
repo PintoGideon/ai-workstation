@@ -290,7 +290,7 @@ and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-inte
 | `T` | Choose a theme |
 | `A` | Manage installed agent harnesses |
 | `?` | Show all keybindings |
-| `Ctrl+Space` | Commands on the selected session (a menu lists them): `f` final diff review · `d` diff viewer · `n` current plan · `m` Markdown files · `l` past and unsent prompts, pasted again · `N` capture a TODO · `F` fresh-context session · `B` model advice · `P` back to PR Triage · `z` complete the TODO this session came from · `h` `H` `M` `1-9` bookmarks · `/` command picker · `a` local actions · `c` config wizard · `C` compact review memory · `r` refresh |
+| `Ctrl+Space` | Commands on the selected session (a menu lists them): `f` final diff review · `d` diff viewer · `n` current plan · `m` Markdown files · `l` past and unsent prompts, pasted again · `N` capture a TODO · `F` fresh-context session · `P` back to PR Triage · `z` complete the TODO this session came from · `h` `H` `M` `1-9` bookmarks · `/` command picker · `a` local actions · `c` config wizard · `C` compact review memory · `r` refresh |
 | `q` | Quit the dashboard; the agents keep running (`Esc` does nothing on the dashboard) |
 
 Search accepts every letter, including `j` and `k`. Use arrow keys or

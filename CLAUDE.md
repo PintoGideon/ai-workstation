@@ -45,8 +45,8 @@ Lineup checked 2026-10-09. Prices are per million input/output tokens, Anthropic
   `/build`, `/check`, `/lint`, `/aiw:pr-create` and `/aiw:pr-continue`
   deliberately inherit the session model, because they depend on context
   from the session.
-- This section covers Claude Code's own model use. AIW's product-side model
-  pickers and advice (`model_evidence.rs`, `model_analysis/`) are separate.
+- This section covers Claude Code's own model use; AIW's manual model
+  pickers are separate.
 
 **HeadlessRunner** (headless.rs):
 
