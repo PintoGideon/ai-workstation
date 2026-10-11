@@ -749,35 +749,6 @@ pub fn aggregate_token_usage<'a>(
     has_usage.then_some(aggregate)
 }
 
-/// Return the usage accumulated after `baseline`, saturating each counter so
-/// transcript rotation or a corrected provider total can never produce an
-/// underflow. A changed source has no comparable baseline and is therefore
-/// treated as entirely new usage.
-pub fn token_usage_delta(
-    current: &SessionTokenUsage,
-    baseline: &SessionTokenUsage,
-) -> SessionTokenUsage {
-    if current.source != baseline.source {
-        return current.clone();
-    }
-
-    SessionTokenUsage {
-        source: current.source.clone(),
-        input_tokens: current.input_tokens.saturating_sub(baseline.input_tokens),
-        output_tokens: current.output_tokens.saturating_sub(baseline.output_tokens),
-        cache_read_tokens: current
-            .cache_read_tokens
-            .saturating_sub(baseline.cache_read_tokens),
-        cache_write_tokens: current
-            .cache_write_tokens
-            .saturating_sub(baseline.cache_write_tokens),
-        reasoning_tokens: current
-            .reasoning_tokens
-            .saturating_sub(baseline.reasoning_tokens),
-        total_tokens: current.total_tokens.saturating_sub(baseline.total_tokens),
-    }
-}
-
 pub fn format_token_usage_summary(
     usage: &SessionTokenUsage,
     pricing: &TokenPricingConfig,
@@ -789,13 +760,6 @@ pub fn format_token_usage_summary(
     } else {
         base
     }
-}
-
-/// Format only the estimated dollar cost for a usage snapshot. This keeps
-/// non-dashboard disclosures (for example, an AI-authored PR reply) on the
-/// same configured rates and rounding rules as AIW's usage meters.
-pub fn format_token_cost(usage: &SessionTokenUsage, pricing: &TokenPricingConfig) -> String {
-    format_dollar_cost(pricing.cost_usd(usage))
 }
 
 pub fn format_feature_token_usage(
@@ -1446,40 +1410,6 @@ mod tests {
     fn aggregate_token_usage_omits_empty_sets() {
         let usages: [&SessionTokenUsage; 0] = [];
         assert!(aggregate_token_usage(usages).is_none());
-    }
-
-    #[test]
-    fn token_usage_delta_saturates_each_counter() {
-        let source = TokenUsageSource {
-            provider: TokenUsageProvider::Claude,
-            id: "session".to_string(),
-        };
-        let baseline = SessionTokenUsage {
-            source: source.clone(),
-            input_tokens: 100,
-            output_tokens: 50,
-            cache_read_tokens: 20,
-            cache_write_tokens: 10,
-            reasoning_tokens: 5,
-            total_tokens: 185,
-        };
-        let current = SessionTokenUsage {
-            source,
-            input_tokens: 140,
-            output_tokens: 40,
-            cache_read_tokens: 25,
-            cache_write_tokens: 10,
-            reasoning_tokens: 7,
-            total_tokens: 222,
-        };
-
-        let delta = token_usage_delta(&current, &baseline);
-        assert_eq!(delta.input_tokens, 40);
-        assert_eq!(delta.output_tokens, 0);
-        assert_eq!(delta.cache_read_tokens, 5);
-        assert_eq!(delta.cache_write_tokens, 0);
-        assert_eq!(delta.reasoning_tokens, 2);
-        assert_eq!(delta.total_tokens, 37);
     }
 
     #[test]

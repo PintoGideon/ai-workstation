@@ -29,7 +29,7 @@ Sources (October 2026):
 
 - **Starting work:** features from presets, batch create `B`, fork `F`, handoff (leader `F`).
 - **Lists and inputs:** TODOs `I`, needs-you queue `i`, dormant list `z`, prompt library `L`.
-- **Review and PRs:** diff viewer (leader `d`), supervised edits (Claude), PR triage `G`.
+- **Review and PRs:** diff viewer (leader `d`), supervised edits (Claude), PR badges `R`.
 - **Running things:** resource gate, `v` tiles via `aiw grid` in the cockpit's agent pane (DESIGN.md §18), ports, worktree prep, lifecycle hooks, custom
   run sessions.
 

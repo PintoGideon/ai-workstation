@@ -1,9 +1,8 @@
 //! Shared state and pure transitions for compact feature setup dialogs.
 //!
-//! PR Triage opens a small settings dialog before making
-//! an isolated companion feature.  Keep the state transitions here so another
-//! GitHub-backed workflow (such as issue fixing) can use the same dialog
-//! contract without copying the PR-specific orchestration.
+//! The issue browser opens a small settings dialog before making a feature
+//! for an issue. The state transitions live here so any GitHub-backed
+//! workflow can use the same dialog contract.
 
 use crate::extension::FeaturePreset;
 use crate::project::{AgentKind, VibeMode};
@@ -31,21 +30,9 @@ impl FeatureSetupRow {
         Self::Chrome,
         Self::Branch,
     ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Preset => "Preset",
-            Self::Harness => "Harness",
-            Self::Mode => "Vibe mode",
-            Self::Chrome => "Chrome",
-            Self::Branch => "Branch",
-        }
-    }
 }
 
-/// State shared by the compact setup dialogs used by PR Triage and Final
-/// Review. `pending_batch` is retained for PR Triage's batch continuation; a
-/// caller that has no batch operation leaves it false.
+/// State of the compact feature setup dialog.
 #[derive(Debug, Clone)]
 pub struct FeatureSetupState {
     /// Index 0 is the implicit "Manual" choice; preset `i` is at `i + 1`.
@@ -62,8 +49,6 @@ pub struct FeatureSetupState {
     pub row: usize,
     /// Inline validation/creation error.
     pub error: Option<String>,
-    /// PR Triage's combined-batch continuation flag.
-    pub pending_batch: bool,
 }
 
 impl FeatureSetupState {
@@ -94,12 +79,6 @@ impl FeatureSetupState {
             .get(self.agent_index)
             .cloned()
             .unwrap_or_default()
-    }
-
-    /// Move the focused row, wrapping at either end.
-    pub fn move_row(&mut self, delta: isize) {
-        let len = FeatureSetupRow::ALL.len() as isize;
-        self.row = ((self.row as isize + delta).rem_euclid(len)) as usize;
     }
 
     /// Adjust the focused setting. Returns the newly selected preset so the
@@ -154,24 +133,6 @@ impl FeatureSetupState {
             self.branch = format!("{prefix}{base}");
         }
     }
-
-    pub fn on_branch_row(&self) -> bool {
-        self.focused_row() == FeatureSetupRow::Branch
-    }
-
-    pub fn branch_push(&mut self, c: char) {
-        if self.on_branch_row() {
-            self.error = None;
-            self.branch.push(c);
-        }
-    }
-
-    pub fn branch_backspace(&mut self) {
-        if self.on_branch_row() {
-            self.error = None;
-            self.branch.pop();
-        }
-    }
 }
 
 #[cfg(test)]
@@ -189,20 +150,12 @@ mod tests {
             branch: "feature".to_string(),
             row: 0,
             error: Some("old error".to_string()),
-            pending_batch: false,
         }
     }
 
     #[test]
     fn shared_setup_transitions_match_the_compact_dialog_contract() {
         let mut state = setup();
-        state.move_row(-1);
-        assert_eq!(state.focused_row(), FeatureSetupRow::Branch);
-        state.branch_push('x');
-        assert_eq!(state.branch, "featurex");
-        state.branch_backspace();
-        assert_eq!(state.branch, "feature");
-
         state.row = 2;
         assert_eq!(state.focused_row(), FeatureSetupRow::Mode);
         state.adjust(1);

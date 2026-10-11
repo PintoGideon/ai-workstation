@@ -1,4 +1,4 @@
-import { ReactNode, Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -30,6 +30,7 @@ import {
   getSnapshot,
   newSessionOptions,
   recoverSession,
+  refreshPrBadges,
   savedAgentSessions,
   sessionRecoveryOption,
   setCollapsed,
@@ -56,8 +57,6 @@ import DormancyPanel from "./DormancyPanel";
 import DebugLogPanel from "./DebugLogPanel";
 import DiffPanel from "./DiffPanel";
 import SupervisedEditsPanel, { SupervisedEditsPanelHandle, usePendingEdits } from "./SupervisedEditsPanel";
-import ScreenshotsPanel from "./ScreenshotsPanel";
-import type { PrTriageTarget } from "./prTriageApi";
 import TodoPanel, { TodoAgentTarget, TodoDestination } from "./TodoPanel";
 import RecoveryDialog from "./RecoveryDialog";
 import NewSessionDialog, { PreCheckFailure } from "./NewSessionDialog";
@@ -89,7 +88,6 @@ import {
   Toasts,
 } from "./ui";
 
-const PrTriagePanel = lazy(() => import("./PrTriagePanel"));
 const SNAPSHOT_KEY = ["workspace-snapshot"];
 const TODOS_TAB = "todos";
 // The VS Code windows tab: no session row and no tmux pane (gui_sessions).
@@ -217,8 +215,6 @@ export default function App() {
     if (supervisedPanel.current) supervisedPanel.current.requestSwitch(proceed);
     else proceed();
   }
-  const [screenshotTarget, setScreenshotTarget] = useState<{ target: FeatureTarget | null; sessionId: string | null } | null>(null);
-  const [prTriageTarget, setPrTriageTarget] = useState<PrTriageTarget | null>(null);
   const [deleteFeatureDialog, setDeleteFeatureDialog] = useState<{
     target: FeatureTarget;
     projectName: string;
@@ -282,15 +278,6 @@ export default function App() {
       setView({ kind: "project", projectId: view.projectId });
     }
   }, [workspace.data, view, selectedProject, selectedFeature, projects]);
-
-  useEffect(() => {
-    if (!workspace.data) return;
-    const exists = (target: PrTriageTarget) => projects.some((project) =>
-      project.id === target.project_id &&
-      (target.feature_id == null || project.features.some((feature) => feature.id === target.feature_id)));
-    if (screenshotTarget?.target && !exists(screenshotTarget.target)) setScreenshotTarget(null);
-    if (prTriageTarget && !exists(prTriageTarget)) setPrTriageTarget(null);
-  }, [workspace.data, projects, screenshotTarget, prTriageTarget]);
 
   // A launched session that has reached the snapshot no longer needs the
   // grace period: from here on it is shown only while the snapshot has it.
@@ -861,8 +848,6 @@ export default function App() {
             <Icon name="sparkles" /><span className="nav-label">Prompt overrides</span>
           </button>
 
-          <button className="nav-item" onClick={() => setScreenshotTarget({ target: null, sessionId: null })}><Icon name="file" /><span className="nav-label">Validation screenshots</span></button>
-
           <button className="nav-item" onClick={() => setShowDormancy(true)}>
             <Icon name="zap" /><span className="nav-label">Dormant features</span>
           </button>
@@ -944,10 +929,6 @@ export default function App() {
           setView({ kind: "feature", projectId: target.project_id, featureId: target.feature_id });
         }} />}
       {showDebugLog && <DebugLogPanel onClose={() => setShowDebugLog(false)} />}
-      {screenshotTarget && <ScreenshotsPanel target={screenshotTarget.target} sessionId={screenshotTarget.sessionId} onClose={() => setScreenshotTarget(null)} />}
-      {prTriageTarget && <Suspense fallback={<Modal label="Loading PR reader" title="Loading PR reader" onClose={() => setPrTriageTarget(null)}><Spinner /></Modal>}>
-        <PrTriagePanel key={`${prTriageTarget.project_id}:${prTriageTarget.feature_id}`} target={prTriageTarget} onClose={() => setPrTriageTarget(null)} onHandoff={(handoff) => openSession(handoff.target, handoff.draft_prompt)} />
-      </Suspense>}
       {diffTarget && <DiffPanel key={`${diffTarget.project_id}:${diffTarget.feature_id}`} target={diffTarget} onClose={() => setDiffTarget(null)} />}
       <main className="main">
         {view?.kind === "todos" && (
@@ -980,7 +961,7 @@ export default function App() {
             onOpenFeature={(feature) =>
               setView({ kind: "feature", projectId: selectedProject.id, featureId: feature.id })}
             onNewFeature={() => setCreateFeatureFor(selectedProject.id)}
-            onPrTriage={() => setPrTriageTarget({ project_id: selectedProject.id })}
+            onRefreshPrs={() => void refreshPrBadges().catch(reportError)}
             todoPanel={
               <TodoPanel
                 scope={{ kind: "project", project_id: selectedProject.id }}
@@ -1009,8 +990,7 @@ export default function App() {
             onDiff={() => setDiffTarget({ project_id: selectedProject.id, feature_id: selectedFeature.id })}
             pendingEdits={pendingEdits[selectedFeature.id] ?? 0}
             onSupervisedEdits={() => openSupervisedEdits({ project_id: selectedProject.id, feature_id: selectedFeature.id })}
-            onScreenshots={(sessionId) => setScreenshotTarget({ target: { project_id: selectedProject.id, feature_id: selectedFeature.id }, sessionId })}
-            onPrTriage={() => setPrTriageTarget({ project_id: selectedProject.id, feature_id: selectedFeature.id })}
+            onRefreshPrs={() => void refreshPrBadges().catch(reportError)}
             onReusePrompt={(target, prompt) => openSession(target, prompt)}
             onNewSession={() => void openNewSession(selectedProject, selectedFeature)}
             newSessionLoading={newSessionLoading}
@@ -1366,7 +1346,7 @@ function ProjectView({
   lifecycle,
   onOpenFeature,
   onNewFeature,
-  onPrTriage,
+  onRefreshPrs,
   todoPanel,
 }: {
   project: Project;
@@ -1375,7 +1355,7 @@ function ProjectView({
   lifecycle: (feature: Feature) => Lifecycle;
   onOpenFeature: (feature: Feature) => void;
   onNewFeature: () => void;
-  onPrTriage: () => void;
+  onRefreshPrs: () => void;
   todoPanel: ReactNode;
 }) {
   const running = project.features.filter((feature) => feature.status !== "stopped").length;
@@ -1392,8 +1372,8 @@ function ProjectView({
         }
         actions={
           <>
-            {project.is_git && <button className="btn btn-secondary" onClick={onPrTriage}>
-              <Icon name="inbox" size={12} /> PR Triage
+            {project.is_git && <button className="btn btn-secondary" onClick={onRefreshPrs}>
+              <Icon name="inbox" size={12} /> Refresh PRs
             </button>}
             <button className="btn btn-primary" onClick={onNewFeature}>
               <Icon name="plus" /> New feature
@@ -1476,8 +1456,7 @@ function FeatureView({
   onDiff,
   pendingEdits,
   onSupervisedEdits,
-  onPrTriage,
-  onScreenshots,
+  onRefreshPrs,
   onReusePrompt,
   onNewSession,
   newSessionLoading,
@@ -1513,8 +1492,7 @@ function FeatureView({
   /** Supervised edits waiting for an answer in this feature. */
   pendingEdits: number;
   onSupervisedEdits: () => void;
-  onPrTriage: () => void;
-  onScreenshots: (sessionId: string | null) => void;
+  onRefreshPrs: () => void;
   /** The agent sidebar's prompt reuse: append to that session's draft. */
   onReusePrompt: (target: SessionTarget, prompt: string) => void;
   onNewSession: () => void;
@@ -1609,10 +1587,8 @@ function FeatureView({
               <Icon name="check" size={12} /> Supervised edits
               {pendingEdits > 0 && <span className="nav-count nav-count-attention">{pendingEdits}</span>}
             </button>}
-            <button className="btn btn-secondary" onClick={() => onScreenshots(null)}>Screenshots</button>
-            {activeSession && <button className="btn btn-secondary" onClick={() => onScreenshots(activeSession.id)}>Session screenshots</button>}
-            {project.is_git && <button className="btn btn-secondary" onClick={onPrTriage}>
-              <Icon name="inbox" size={12} /> PR Triage
+            {project.is_git && <button className="btn btn-secondary" onClick={onRefreshPrs}>
+              <Icon name="inbox" size={12} /> Refresh PRs
             </button>}
             {activeSession && !isStopped && (
               <SessionStartStopButton
@@ -1768,7 +1744,6 @@ function FeatureView({
                 target={target}
                 onReusePrompt={(prompt) => onReusePrompt(target, prompt)}
                 onFreshSession={onReusePrompt}
-                onPrTriage={onPrTriage}
                 onSupervisedEdits={onSupervisedEdits}
               />
             )}

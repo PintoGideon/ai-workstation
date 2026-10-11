@@ -19,7 +19,7 @@ impl App {
             .map(|project| (Some(project.repo.clone()), Some(project.name.clone())))
             .unwrap_or((None, None));
 
-        self.mode = AppMode::ConfigWizard(ConfigWizardState {
+        self.mode = AppMode::ConfigWizard(Box::new(ConfigWizardState {
             step: ConfigWizardStep::CategoryPicker,
             category: ConfigCategory::CustomSessions,
             scope: ConfigScope::Global,
@@ -47,7 +47,7 @@ impl App {
             project_repo,
             project_name,
             error: None,
-        });
+        }));
         self.message = None;
     }
 

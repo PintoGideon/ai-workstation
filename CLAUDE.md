@@ -52,7 +52,6 @@ Lineup checked 2026-10-09. Prices are per million input/output tokens, Anthropic
 
 - Harness-neutral one-shot runs for Claude, Codex, and Pi
 - Restricted no-tools mode for context-complete prompts
-- Read-only repository commands for PR investigations
 
 **Prompt registry** (`src/prompts/`): the single home for every headless
 prompt AIW sends (see "Editable Headless Prompts" below). `mod.rs` holds
@@ -343,7 +342,7 @@ resources/
      replayed by `confirm_pending_start()`. Used by the dashboard start,
      session adds, `enter_view`, and `switch_view_to_feature`.
    - `Warn(&str)` — toast and proceed, for flows whose resume state lives
-     in the `AppMode` the dialog would replace (TODO spawn, PR triage,
+     in the `AppMode` the dialog would replace (TODO spawn,
      saved-transcript pickers).
 
   The gate only fires when the call will actually launch, so re-entering a

@@ -352,8 +352,6 @@ fn sync_session_status_skips_non_custom_sessions() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {

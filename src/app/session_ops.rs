@@ -1345,11 +1345,6 @@ impl App {
 
         feature.collapsed = false;
         let si = feature.sessions.len() - 1;
-        let extra_args = if agent == AgentKind::Claude {
-            self.screenshot_launch_args(&session_id, true, extra_args)?
-        } else {
-            extra_args
-        };
         // FORK: --settings (status line, hooks) and the launch context (DESIGN.md §16).
         let extra_args = self.fork_launch_args(&agent, &tmux_session, &session_id, extra_args);
         self.tmux.create_window(&tmux_session, &window, &workdir)?;
@@ -1359,11 +1354,7 @@ impl App {
                     .launch_claude(&tmux_session, &window, &session_id, None, extra_args)?;
             }
             AgentKind::Codex => {
-                let codex_args = self.screenshot_launch_args(
-                    &session_id,
-                    false,
-                    crate::codex_config::launch_override_args(&workdir, &mode),
-                )?;
+                let codex_args = crate::codex_config::launch_override_args(&workdir, &mode);
                 let codex_args =
                     self.fork_launch_args(&agent, &tmux_session, &session_id, codex_args); // FORK
                 self.tmux
@@ -1401,24 +1392,6 @@ impl App {
         self.message = Some(format!("Added '{}'", label));
 
         Ok(())
-    }
-
-    /// Spin up the dedicated PR-triage agent session: one agent window, labeled
-    /// [`crate::app::pr_review::TRIAGE_SESSION_LABEL`], that the PR-triage pane
-    /// reuses for every fix in a PR. Runs `harness` (the harness the user picked
-    /// for the triage session) or falls back to the project's preferred agent,
-    /// with the feature's mode/flags — just like a picker-launched agent session,
-    /// but with a fixed label so it can be found-and-reused. Returns the new
-    /// session's index in `feature.sessions`.
-    pub(crate) fn create_dedicated_review_session(
-        &mut self,
-        pi: usize,
-        fi: usize,
-        label: &str,
-        harness: Option<AgentKind>,
-        intent: StartIntent,
-    ) -> Result<usize> {
-        self.create_agent_session_labeled(pi, fi, label, harness, intent)
     }
 
     /// Create an agent-harness session in `(pi, fi)` with a caller-provided
@@ -1625,18 +1598,13 @@ impl App {
         }
         match agent {
             AgentKind::Claude => {
-                let args = self.screenshot_launch_args(session_id, true, extra_args)?;
                 // FORK: --settings and the launch context (DESIGN.md §16).
-                let args = self.fork_launch_args(agent, tmux_session, session_id, args);
+                let args = self.fork_launch_args(agent, tmux_session, session_id, extra_args);
                 self.tmux
                     .launch_claude(tmux_session, window, session_id, resume_id, args)?;
             }
             AgentKind::Codex => {
-                let codex_args = self.screenshot_launch_args(
-                    session_id,
-                    false,
-                    crate::codex_config::launch_override_args(workdir, mode),
-                )?;
+                let codex_args = crate::codex_config::launch_override_args(workdir, mode);
                 let codex_args = self.fork_launch_args(agent, tmux_session, session_id, codex_args); // FORK
                 self.tmux
                     .launch_codex(tmux_session, window, session_id, resume_id, codex_args)?;

@@ -542,7 +542,7 @@ fn check_network() -> Finding {
         "AI Workstation (AIW) makes no network connections itself (no HTTP client or server is built in)",
     )
     .with_detail(vec![
-        "gh / git run only when you start a PR or Git action (PR badges refresh on R or when you open PR Triage)".to_string(),
+        "gh / git run only when you start a PR or Git action (PR badges refresh on R)".to_string(),
         "syntax parsers are downloaded (git clone) only when you choose to install one".to_string(),
         "agents (Claude, Codex, …) talk to their own providers; that is their business, not AIW's".to_string(),
     ])
@@ -645,8 +645,6 @@ mod tests {
             summary: None,
             summary_updated_at: None,
             nickname: None,
-            triage_source: None,
-            review_source: None,
             issue_source: None,
         }
     }

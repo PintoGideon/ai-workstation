@@ -112,8 +112,6 @@ pub(crate) fn realistic_store() -> ProjectStore {
                             .then(|| "Wire SSO callback into the session store".into()),
                         summary_updated_at: None,
                         nickname: None,
-                        triage_source: None,
-                        review_source: None,
                         issue_source: None,
                     }
                 })

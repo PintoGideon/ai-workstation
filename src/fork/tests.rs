@@ -371,9 +371,9 @@ fn port_block_is_reserved_for_the_session_and_released_on_delete() {
 // ── Worktree checkout that vanished on disk ─────────────────────────────
 
 /// Starting a worktree feature whose folder is gone must recreate the
-/// checkout before anything else looks inside the folder (the screenshot-owner
-/// check used to fail with ENOENT first, and a later start then launched the
-/// agent into a folder holding only AIW's helper files).
+/// checkout before anything else looks inside the folder (a pre-launch check
+/// used to fail with ENOENT first, and a later start then launched the agent
+/// into a folder holding only AIW's helper files).
 #[test]
 fn starting_a_feature_whose_worktree_vanished_recreates_it_first() {
     let repo = init_repo();
@@ -493,7 +493,7 @@ fn a_broken_aiw_json_read_by_any_action_is_announced_on_the_next_tick() {
         Box::new(MockWorktreeOps::new()),
     );
 
-    // Reads through `&self` (automation, plan interview, triage…) queue it.
+    // Reads through `&self` (automation, the GUI contract…) queue it.
     let _ = app.extension_for_repo(&repo);
     let _ = app.merge_extension(&app.config.extension.clone(), &repo);
     assert!(app.toasts.is_empty());

@@ -1,5 +1,4 @@
 pub use crate::app::diff_state::*;
-pub use crate::app::pr_review::state::*;
 use ratatui_explorer::FileExplorer;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -1254,8 +1253,6 @@ impl TodoLaunchStep {
     }
 }
 
-// `PrReview` is the outsized variant; it goes with PR Triage.
-#[allow(clippy::large_enum_variant)]
 pub enum AppMode {
     Normal,
     Todos(TodoViewState),
@@ -1310,10 +1307,6 @@ pub enum AppMode {
     DiffPicker(DiffPickerState),
     DiffViewerLoading(DiffViewerState),
     DiffViewer(DiffViewerState),
-    /// Prompting for a PR number when the branch has no auto-detectable PR.
-    PrNumberPrompt(PrNumberPromptState),
-    /// Choosing a PR from a list (or falling through to the number prompt).
-    PrPicker(PrPickerState),
     /// Browse open issues for the selected project's canonical GitHub repo.
     IssueBrowser(crate::app::issue_fixer::IssueBrowserState),
     /// Configure the feature and editable prompt for the selected issue.
@@ -1321,13 +1314,6 @@ pub enum AppMode {
     /// An existing feature already records the same canonical issue. The
     /// carried setup preserves all edits if the user cancels the override.
     IssueDuplicateWarning(crate::app::issue_fixer::IssueDuplicateWarningState),
-    /// Fetching a PR's comments off the UI thread; shows a loading frame.
-    PrReviewLoading(PrReviewLoadState),
-    /// Triaging a PR's comments in the full-screen PR Triage pane.
-    PrReview(PrReviewState),
-    /// Running a strictly read-only investigation of one review comment off the
-    /// UI thread; shows a modal loading frame over the stashed PR Triage pane.
-    PrInvestigationLoading(PrInvestigationLoadState),
     SessionPicker(SessionPickerState),
     DiffReviewPrompt(DiffReviewState),
     RunningHook(RunningHookState),
@@ -1360,7 +1346,8 @@ pub enum AppMode {
     MarkdownFilePicker(MarkdownFilePickerState),
     CreatingBatchFeatures(CreateBatchFeaturesState),
     HarnessSetup(HarnessSetupState),
-    ConfigWizard(ConfigWizardState),
+    // Boxed: the largest mode by a wide margin (`clippy::large_enum_variant`).
+    ConfigWizard(Box<ConfigWizardState>),
     /// Choosing which harness runs a fresh dedicated session for a finished
     /// review's fixes (only shown when the dedicated fix target is selected and
     /// no review session exists yet). The feedback file is already written; this

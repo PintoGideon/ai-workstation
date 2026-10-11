@@ -150,13 +150,7 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("p", "Open syntax parser picker"),
         ("L", "Open prompt library"),
         ("E", "Edit headless AI prompt templates (overrides)"),
-        ("G", "Open PR Triage (experimental)"),
-        ("", "(on a project row: Review a PR instead)"),
         ("T", "Theme picker"),
-        (
-            "t",
-            "Companion review feature: land its commits on the source branch",
-        ),
         ("c", "Start feature / stopped session"),
         // FORK: tiles in the agent pane (DESIGN.md §18).
         (
@@ -250,7 +244,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "F",
             "Start a fresh-context session (asks for your prompt first)",
         ),
-        ("P", "Back to PR Triage (if one is stashed)"),
         ("z", "Complete the TODO this session came from"),
         ("h / H / M / 1-9", "Bookmarks: picker / add / remove / jump"),
         ("/", "Command picker (slash + AIW actions)"),
@@ -291,96 +284,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
 
     lines.extend(
         todos_keybinds
-            .iter()
-            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
-    ); // FORK: G11
-
-    lines.extend(section_header("  In PR Triage:", columns, theme)); // FORK: G11
-
-    let pr_review_keybinds: Vec<(&str, &str)> = vec![
-        ("j/k", "Navigate comments"),
-        ("Ctrl+D/U", "Scroll detail down/up"),
-        ("h", "Hide/show resolved comments"),
-        (
-            "o",
-            "Cycle sort (fetch/file/author/humans-first/conversations-last)",
-        ),
-        ("f", "Inject scoped fix into agent session"),
-        ("", "(e edit · Tab inject · Ctrl+T vim)"),
-        ("", "(a finished investigation's findings are appended)"),
-        ("", "(first fix/batch picks the fix target: existing"),
-        ("", "live session, a named dedicated session + harness, or"),
-        ("", "New feature… — an isolated worktree with its own"),
-        ("", "harness + vibe mode, set up in one compact form)"),
-        ("v", "Investigate this comment — read-only headless pass"),
-        ("", "(pick a harness; the answer persists and shows in"),
-        ("", "the detail panel)"),
-        ("e", "Attach optional context for the next Investigate —"),
-        ("", "a hypothesis the run verifies, not a fact to assume"),
-        ("a", "Act on a finished investigation: post reply,"),
-        ("", "ask follow-up, dismiss, keep as TODO"),
-        ("Space", "Mark comment for batch fix"),
-        ("B", "Inject one combined prompt for all marked"),
-        ("P", "Jump to the linked fix session"),
-        ("", "(Ctrl+Space P there jumps back)"),
-        ("R", "Reply — pick Done / not-needed, then post"),
-        ("M", "Add finding to review-memory doc"),
-        ("", "(e edit · Tab category · g project/global)"),
-        (
-            "m",
-            "Mark — Done (local) / Skip (local) / Resolve on GitHub",
-        ),
-        ("i", "Download + install syntax parser for file (git clone)"),
-        ("r", "Refresh comments from GitHub"),
-        ("g", "Pick a different PR to triage"),
-        ("I", "Land the triage feature's commits on the PR"),
-        ("", "(push to the PR branch, or cherry-pick into the"),
-        ("", "source worktree — never while it's dirty)"),
-        ("q / Esc", "Close PR Triage"),
-    ];
-
-    lines.extend(
-        pr_review_keybinds
-            .iter()
-            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
-    ); // FORK: G11
-
-    lines.extend(section_header("  In the PR picker:", columns, theme)); // FORK: G11
-
-    let pr_picker_keybinds: Vec<(&str, &str)> = vec![
-        ("j/k", "Navigate PRs"),
-        ("Enter", "Open highlighted PR in PR Triage"),
-        ("a", "Include/hide closed & merged PRs"),
-        ("#", "Enter a PR number instead"),
-        ("Tab", "Switch to the Review tab (review a PR yourself)"),
-        ("q / Esc", "Close picker"),
-    ];
-
-    lines.extend(
-        pr_picker_keybinds
-            .iter()
-            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
-    ); // FORK: G11
-
-    lines.extend(section_header(
-        "  In the PR picker's Review tab:",
-        columns,
-        theme,
-    )); // FORK: G11
-
-    let review_tab_keybinds: Vec<(&str, &str)> = vec![
-        ("j/k", "Navigate open PRs (yours and drafts included)"),
-        ("Enter", "Review the highlighted PR in the diff viewer"),
-        ("", "(no agent, no feature; your checkout is untouched)"),
-        ("r", "Reload the list"),
-        ("Tab", "Back to the Triage tab"),
-        ("q / Esc", "Close (or stop a PR that is still opening)"),
-        ("", "In the review: q submits to GitHub, Esc pauses"),
-        ("", "(draft saved; ? lists every key there)"),
-    ];
-
-    lines.extend(
-        review_tab_keybinds
             .iter()
             .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11

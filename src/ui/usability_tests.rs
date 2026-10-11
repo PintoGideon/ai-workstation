@@ -90,7 +90,7 @@ fn usability_help_wraps_and_handles_tiny_terminals() {
         bottom = dialogs::draw_help(frame, usize::MAX, &Theme::default())
     });
     assert!(bottom > 0 && bottom < 1000);
-    assert!(screen.contains("Close picker"));
+    assert!(screen.contains("Exit TODOs view"));
     for (width, height) in [(1, 1), (2, 2), (10, 4)] {
         rendered(width, height, |frame| {
             dialogs::draw_help(frame, usize::MAX, &Theme::default());

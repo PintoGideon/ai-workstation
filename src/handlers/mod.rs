@@ -19,7 +19,6 @@ mod issue_fixer;
 mod mouse;
 mod normal;
 mod picker;
-mod pr_review;
 mod prompt_library;
 mod prompt_overrides;
 mod search;
@@ -65,10 +64,6 @@ pub use picker::{
     handle_codex_session_picker_key, handle_command_picker_key, handle_markdown_file_picker_key,
     handle_new_session_name_key, handle_notification_picker_key, handle_session_picker_key,
     handle_syntax_language_picker_key,
-};
-pub use pr_review::{
-    handle_pr_investigation_loading_key, handle_pr_number_prompt_key, handle_pr_picker_key,
-    handle_pr_review_key, handle_pr_review_loading_key,
 };
 pub use prompt_library::{
     handle_placeholder_fill_key, handle_prompt_editor_key, handle_prompt_library_key,
@@ -125,14 +120,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
         AppMode::DiffPicker(_) => handle_diff_picker_key(app, key),
         AppMode::DiffViewerLoading(_) => handle_diff_viewer_key(app, key),
         AppMode::DiffViewer(_) => handle_diff_viewer_key(app, key),
-        AppMode::PrNumberPrompt(_) => handle_pr_number_prompt_key(app, key),
-        AppMode::PrPicker(_) => handle_pr_picker_key(app, key),
         AppMode::IssueBrowser(_) => handle_issue_browser_key(app, key),
         AppMode::IssueSetup(_) => handle_issue_setup_key(app, key),
         AppMode::IssueDuplicateWarning(_) => handle_issue_duplicate_warning_key(app, key),
-        AppMode::PrReviewLoading(_) => handle_pr_review_loading_key(app, key),
-        AppMode::PrReview(_) => handle_pr_review_key(app, key),
-        AppMode::PrInvestigationLoading(_) => handle_pr_investigation_loading_key(app, key),
         AppMode::DiffReviewPrompt(_) => handle_diff_review_key(app, key),
         AppMode::RunningHook(_) => handle_running_hook_key(app, key.code),
         AppMode::DeletingFeatureInProgress(_) => handle_deleting_feature_key(app, key.code),

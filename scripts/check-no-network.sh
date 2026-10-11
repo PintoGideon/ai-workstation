@@ -69,7 +69,7 @@ std::net sockets or curl/wget in src/.
 
 Allowed (by design, see NO_CLOUD.md):
   - `gh` and `git` (fetch/push/clone) run only when the user starts a GitHub or
-    Git action: PR Triage/Review, posting comments, the explicit refresh key
+    Git action: posting an issue comment, the explicit PR badge refresh key
     (R / leader r), the issue fixer, and the syntax-parser download.
   - Agents (Claude, Codex, Gemini, Cursor, Pi, ...) reach their own providers; that
     is the agents' business, not AIW's.

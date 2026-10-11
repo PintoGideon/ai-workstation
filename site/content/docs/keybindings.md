@@ -5,7 +5,7 @@ weight = 35
 +++
 
 This covers the controls you need to get around AIW day to day. Feature-specific
-keys — PR Triage, TODOs — are documented on their own pages.
+keys — TODOs — are documented on their own pages.
 Press `?` at any time on the dashboard, or `Ctrl+Space` then `?` in a session,
 for the complete, current keybinding reference built into that version of AIW.
 
@@ -33,7 +33,6 @@ for the complete, current keybinding reference built into that version of AIW.
 | `I` | On a TODOs session row: start an agent on the next TODO in priority order, across the lists currently showing |
 | `z` | Show dormant features: idle and unattended |
 | `Z` | Generate a short AI summary of the selected feature's recent activity |
-| `G` | Open GitHub PR triage |
 | `L` | Open the prompt library |
 | `E` | Edit headless AI prompt templates (overrides) |
 | `T` | Choose a theme |
@@ -102,8 +101,6 @@ windows and leaves nothing behind when it closes.
 
 ## Where the rest live
 
-- [Reviewing Changes and PR Feedback](@/docs/review-and-pr-feedback.md) —
-  PR Triage's investigate/fix/reply keys.
 - [Prompts and TODOs](@/docs/prompts-and-todos.md) — the TODO list's own
   scope-toggle, move/copy, and work-the-queue keys.
 - [More Session Tools](@/docs/session-tools.md) — bookmark slots, resuming

@@ -271,8 +271,6 @@ fn visible_items_prioritizes_non_worktree_features() {
                 summary: None,
                 summary_updated_at: None,
                 nickname: None,
-                triage_source: None,
-                review_source: None,
                 issue_source: None,
             },
             Feature {
@@ -295,8 +293,6 @@ fn visible_items_prioritizes_non_worktree_features() {
                 summary: None,
                 summary_updated_at: None,
                 nickname: None,
-                triage_source: None,
-                review_source: None,
                 issue_source: None,
             },
         ],

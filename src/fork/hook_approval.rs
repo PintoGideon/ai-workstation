@@ -10,7 +10,7 @@
 //!
 //! Interactive flows (TUI create/start/stop/fork) show a confirm dialog and
 //! replay the action afterwards. Non-interactive flows (automation, GUI
-//! contract, PR triage, companion review) skip an unapproved hook with a
+//! contract) skip an unapproved hook with a
 //! warning instead.
 
 use std::collections::HashSet;

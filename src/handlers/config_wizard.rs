@@ -867,8 +867,8 @@ mod tests {
         category: ConfigCategory,
         field_focus: usize,
         field_values: Vec<String>,
-    ) -> ConfigWizardState {
-        ConfigWizardState {
+    ) -> Box<ConfigWizardState> {
+        Box::new(ConfigWizardState {
             step: ConfigWizardStep::EditItem,
             category,
             scope: ConfigScope::Global,
@@ -896,7 +896,7 @@ mod tests {
             project_repo: None,
             project_name: None,
             error: None,
-        }
+        })
     }
 
     #[test]

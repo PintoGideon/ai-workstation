@@ -17,8 +17,6 @@ Codex, Pi, Gemini CLI and Cursor agent you select.
 ```sh
 cargo build --locked
 cargo test --locked app::tests::feature_sessions
-cargo test --locked app::pr_review
-cargo test --locked app::review
 ```
 
 For a code milestone, run the normal parallel suite and both checks:
@@ -62,9 +60,8 @@ For this refactor's preservation check, capture `cargo test --workspace --locked
 -- --list`. Transform the original names in [baseline/tests.txt](baseline/tests.txt)
 through [the M2 mapping](baseline/app-tests.tsv) and
 [the state mapping](state-test-paths.tsv), then compare the full sets and counts.
-The sole M4 addition is
-`app::tests::pr_triage::closed_fetch_cannot_replace_a_reopened_pr_with_its_queued_result`.
-All 2,511 originals remain accounted for (2,512 total).
+All 2,511 originals were accounted for at the time of that refactor; the
+2026-10-11 removal of the harness-duplicating features deleted their suites.
 
 Never use `println!`/`eprintln!` in TUI code. Use App's `log_debug`, `log_info`,
 `log_warn`, or `log_error` with a short context such as `sync` or `worktree`.

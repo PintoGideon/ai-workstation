@@ -18,7 +18,6 @@ const DASHBOARD_LEADER_COMMANDS: &[(&str, &str)] = &[
     ("l", "Past / unsent prompts (paste again)"),
     ("N", "Quick-capture a TODO"),
     ("F", "Fresh-context session"),
-    ("P", "Back to PR Triage (after P there)"),
     ("B", "Model advice for the selected session"),
     ("z", "Complete the TODO this session came from"),
     ("/", "Command picker"),
@@ -196,58 +195,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         _ => {}
     }
 
-    // The PR-review family of full-screen modes (loading/picker/pane/running
-    // views) each `return` before reaching the shared `draw_toasts` call near
-    // the end of this function, so every one of them draws its own — a
-    // success/warning/error toast pushed while any of these is showing
-    // (e.g. a background result landing while the user is back in the pane)
-    // would otherwise never appear, silently
-    // swallowed until the mode changes.
-    if let AppMode::PrReviewLoading(state) = &app.mode {
-        super::dialogs::draw_pr_review_loading(frame, state, &app.throbber_state, &app.theme);
-        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
-        return;
-    }
-    if let AppMode::PrInvestigationLoading(state) = &app.mode {
-        super::dialogs::draw_pr_investigation_loading(
-            frame,
-            state,
-            &app.throbber_state,
-            &app.theme,
-        );
-        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
-        return;
-    }
-    if matches!(app.mode, AppMode::PrReview(_)) {
-        let fix_session_usage = app.pr_review_fix_session_usage();
-        let triage_session_usage = app.pr_review_triage_session_usage();
-        let dedicated_session_working = app.pr_review_dedicated_session_working();
-        // Resolved here, before the `&mut app.mode` borrow: the companion
-        // feature's name/harness/mode live on the store, not the pane state.
-        let triage_feature_summary = app.pr_review_triage_feature_summary();
-        if let AppMode::PrReview(state) = &mut app.mode {
-            super::dialogs::draw_pr_review(
-                frame,
-                state,
-                &app.theme,
-                super::dialogs::PrReviewUsage {
-                    cumulative: fix_session_usage.as_ref(),
-                    visit: triage_session_usage.as_ref(),
-                    pricing: &app.config.token_pricing,
-                },
-                dedicated_session_working,
-                triage_feature_summary.as_deref(),
-            );
-        }
-        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
-        return;
-    }
-    if let AppMode::PrPicker(state) = &app.mode {
-        super::dialogs::draw_pr_picker(frame, state, &app.theme);
-        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
-        return;
-    }
-
     if let AppMode::Todos(state) = &app.mode {
         super::dialogs::draw_todos_view_with_visibility(
             frame,
@@ -408,10 +355,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             super::dialogs::draw_browse_path_dialog(frame, state, &app.theme);
         }
         _ => {}
-    }
-
-    if let AppMode::PrNumberPrompt(state) = &app.mode {
-        super::dialogs::draw_pr_number_prompt(frame, state, &app.theme);
     }
 
     if let AppMode::TodosHostReassign(state) = &app.mode {
@@ -683,15 +626,12 @@ mod tests {
 
     use crate::app::App;
     use crate::project::FeatureSession;
-    use crate::project::{
-        AgentKind, Feature, Project, ProjectStatus, ProjectStore, SessionKind, VibeMode,
-    };
+    use crate::project::{ProjectStore, SessionKind};
     use crate::token_tracking::{TokenUsageProvider, TokenUsageSource};
     use crate::traits::{MockTmuxOps, MockWorktreeOps};
     use ratatui::layout::Rect;
     use ratatui::{Terminal, backend::TestBackend};
     use std::collections::HashMap;
-    use std::path::PathBuf;
 
     // ── centered_rect ─────────────────────────────────────────
 
@@ -927,151 +867,5 @@ mod tests {
             format_codex_usage_source_confidence(&SessionKind::Codex, Some(&session)),
             Some("Usage source: inferred workdir match".to_string())
         );
-    }
-
-    fn store_with_claude_feature() -> (ProjectStore, Feature) {
-        let now = chrono::Utc::now();
-        let mut feature = Feature {
-            id: "feat-1".into(),
-            name: "feature".into(),
-            branch: "feature".into(),
-            workdir: PathBuf::from("/tmp/demo"),
-            is_worktree: false,
-            tmux_session: "aiw-feature".into(),
-            sessions: vec![],
-            collapsed: false,
-            mode: VibeMode::Vibeless,
-            agent: AgentKind::Claude,
-            enable_chrome: false,
-            pending_worktree_script: false,
-            ready: false,
-            status: ProjectStatus::Active,
-            created_at: now,
-            last_accessed: now,
-            summary: None,
-            summary_updated_at: None,
-            nickname: None,
-            triage_source: None,
-            review_source: None,
-            issue_source: None,
-        };
-        feature.add_session_named(SessionKind::Claude, "Claude 1".to_string());
-        let project = Project {
-            id: "proj-1".into(),
-            name: "demo".into(),
-            repo: PathBuf::from("/tmp/demo"),
-            collapsed: false,
-            features: vec![feature.clone()],
-            created_at: now,
-            preferred_agent: AgentKind::Claude,
-            is_git: false,
-        };
-        (
-            ProjectStore {
-                version: 5,
-                projects: vec![project],
-                session_bookmarks: vec![],
-                available_harnesses: vec![],
-                prompt_templates: Vec::new(),
-                extra: HashMap::new(),
-            },
-            feature,
-        )
-    }
-
-    fn pr_review_state_with_branches(
-        pr_head_ref: &str,
-        checked_out: &str,
-    ) -> crate::app::PrReviewState {
-        let pr = crate::github::PrRef {
-            number: 321,
-            head_sha: "abc123".to_string(),
-            url: "https://github.com/o/r/pull/321".to_string(),
-            owner: "o".to_string(),
-            repo: "r".to_string(),
-            head_ref: pr_head_ref.to_string(),
-        };
-        let review = crate::app::pr_review::normalize(pr, vec![], vec![], vec![], vec![]);
-        crate::app::PrReviewState {
-            workdir: PathBuf::from("/tmp/demo"),
-            review,
-            selected: 0,
-            detail_scroll: 0,
-            detail_content_lines: 0,
-            hide_resolved: false,
-            sort_mode: crate::app::pr_review::PrSortMode::default(),
-            fix_target: crate::app::pr_review::FixTarget::default(),
-            fix_target_picked: false,
-            usage_baselines: HashMap::new(),
-            review_harness: None,
-            dedicated_session_label: crate::app::pr_review::TRIAGE_SESSION_LABEL.to_string(),
-            harness_pick: None,
-            new_feature_setup: None,
-            integrate: None,
-            fix_confirm: None,
-            fix_vim_enabled: false,
-            mark_pick: None,
-            reply_kind_pick: None,
-            reply: None,
-            marked: std::collections::HashSet::new(),
-            pending_batch: false,
-            checked_out_branch: Some(checked_out.to_string()),
-            investigations: Vec::new(),
-            investigation_harness_pick: None,
-            investigation_action_pick: None,
-            investigation_follow_up: None,
-            pending_follow_up: None,
-            investigation_context: Default::default(),
-        }
-    }
-
-    #[test]
-    fn pr_review_pane_shows_branch_mismatch_banner_when_workdir_branch_differs() {
-        let (store, _feature) = store_with_claude_feature();
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.mode =
-            crate::app::AppMode::PrReview(pr_review_state_with_branches("main", "other-branch"));
-
-        let backend = TestBackend::new(140, 30);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
-        let rendered: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect();
-
-        assert!(rendered.contains("reviewing PR for branch"));
-        assert!(rendered.contains("other-branch"));
-    }
-
-    #[test]
-    fn pr_review_pane_hides_branch_mismatch_banner_when_branches_match() {
-        let (store, _feature) = store_with_claude_feature();
-        let mut app = App::new_for_test(
-            store,
-            Box::new(MockTmuxOps::new()),
-            Box::new(MockWorktreeOps::new()),
-        );
-        app.mode = crate::app::AppMode::PrReview(pr_review_state_with_branches("main", "main"));
-
-        let backend = TestBackend::new(140, 30);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
-        let rendered: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect();
-
-        assert!(!rendered.contains("reviewing PR for branch"));
     }
 }

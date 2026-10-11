@@ -324,9 +324,6 @@ impl App {
                             "Could not remove worktree '{}': {err}. Project retained; some sessions or worktrees may already have been removed. Retry deletion after fixing the error.",
                             workdir.display()
                         ))?;
-                        self.screenshot_worktree_deleted(&workdir)?;
-                    } else if !workdir.exists() {
-                        self.screenshot_worktree_deleted(&workdir)?;
                     }
                 }
                 self.clear_pr_association_for_deleted_feature(&feature_id, &repo, &branch);
@@ -346,19 +343,6 @@ impl App {
             self.log_warn(
                 "todos",
                 format!("failed to delete todo lists for project {pid}: {e}"),
-            );
-        }
-
-        // PR comment investigations too: plain-TEXT `project_id`, no FK, so
-        // the rows would otherwise outlive the project they belong to.
-        let investigation_cleanup_err = match (&self.db, &project_id) {
-            (Some(db), Some(pid)) => db.delete_pr_investigations_for_project(pid).err(),
-            _ => None,
-        };
-        if let (Some(e), Some(pid)) = (investigation_cleanup_err, &project_id) {
-            self.log_warn(
-                "pr_review",
-                format!("failed to delete PR investigations for project {pid}: {e}"),
             );
         }
 

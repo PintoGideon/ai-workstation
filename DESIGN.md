@@ -22,7 +22,7 @@ Status legend: ✅ done · 🔨 in progress · ⏳ planned.
 ## 2. Kept from upstream (no work needed)
 
 Projects → Features (branch/worktree) → Sessions · Claude, Codex, Pi · permission modes (Vibeless / Vibe /
-SuperVibe) · needs-you list `i` · dormant `z` · resource guards · PR triage ·
+SuperVibe) · needs-you list `i` · dormant `z` · resource guards ·
 prompt library · prompt overrides · TODO lists · usage/cost panels · themes · config wizard ·
 `doctor` / `automation` commands.
 
@@ -110,9 +110,9 @@ AIW must be pure harness and tooling. Inventory of upstream's own network use an
 | self-upgrade command | GitHub releases API | **remove** (update by pulling our fork) |
 | Remote Control (phone app) | local web server, Tailscale, Web Push to push services | **remove** |
 | PR screenshot viewer | downloads images / CI artifacts from GitHub | **remove** |
-| Background PR badge sync | `gh` every 5 minutes for active PRs | **off**; refresh only when you open PR triage or press refresh |
+| Background PR badge sync | `gh` every 5 minutes for active PRs | **off**; refresh only when you press refresh |
 | Optional syntax-parser install | `git clone` of tree-sitter grammars | keep as an explicit, user-started action, clearly labelled |
-| PR triage / review / posting | `gh` | keep — only when you start it |
+| Issue browser, PR badges, issue comments | `gh` | keep — only when you start it |
 | Agents (Claude, Codex, …) | their own providers | outside AIW — the agents' business |
 
 Guarantee: no HTTP client or server library is linked into the binary (`ureq`, `axum`, `tokio` net, push/tailscale
@@ -603,7 +603,7 @@ The badge reason line shows `⏭ 2 queued`.
 answers `{"permission":"allow"}` itself) → `aiw subagent` → a count per feature session, cleared at
 `thinking-stop` and on session end: `working 6m · 2 subagents`. At launch every agent is told
 `AIW context: project …, feature …, branch …, worktree …, AIW session …. Mention the branch name in commit
-messages and PR titles.` — Claude in `--append-system-prompt` (joined after the screenshot-evidence text),
+messages and PR titles.` — Claude in `--append-system-prompt`,
 Codex in `developer_instructions`, Gemini and Cursor through their session-start hooks (`aiw session-context`
 rebuilds the paragraph from the store, read-only). `agent_context_prompt: false` turns it off.
 
@@ -736,17 +736,17 @@ the pane keeps the agent behind it. Every "return to the view" a dialog had is `
 mode `Normal` and the sidebar on that session's row (the feature's row when the window is gone).
 
 **Keys.** Sidebar: `j/k`, `Enter` (focus the agent), `h/l`, `/`, `i`, `a`/`X`, `e`, `c`, `x`, `r`, `d`, `N`/`n`,
-`s`, `z`, `G`, `W`, `K`, `L`, `E`, `T`, `A`, `?`, `q`, `v`. Gone: `b`, `o`, `Tab`, the pane's own leader.
+`s`, `z`, `L`, `E`, `T`, `A`, `?`, `q`, `v`. Gone: `b`, `o`, `Tab`, the pane's own leader.
 `Ctrl+Q` is tmux's. The old view's leader commands that still matter moved to the dashboard's
 `Ctrl+Space` menu, for the selected session (`App::selection_view_state`, `src/app/session_tools.rs`): `d` diff viewer, `m` Markdown, `l` past/unsent prompts, `N` TODO capture, `F`
-fresh-context session, `P` back to PR Triage, `z` complete the referenced TODO; the bookmark,
+fresh-context session, `z` complete the referenced TODO; the bookmark,
 picker, wizard and refresh entries stayed; `i`, `?`, `A` left the menu (they are plain keys). The session
 switcher (`w`), remote-control URL copy, scroll mode and text selection went with the view: the sidebar *is*
 the switcher, and tmux has copy mode.
 
 **Prompts, unsent (`src/app/fork_prompt_paste.rs`).** Every path that opened the composer seeded with text —
 TODO spawn (both kinds), prompt-library
-delivery, the PR-triage fix prompt, a feature's `startup_prompt`, the fresh-context handoff, `Ctrl+Space l` —
+delivery, a feature's `startup_prompt`, the fresh-context handoff, `Ctrl+Space l` —
 calls `App::paste_prompt_unsent(pi, fi, si, text)`: it writes `.claude/latest-prompt.txt`, pastes with
 `tmux.paste_text` (bracketed paste, **no Enter**), selects the row, closes whatever dialog asked, and focuses
 the agent pane. The task prompt is never sent on its own. A failed paste is an error the callers stash as
@@ -786,7 +786,12 @@ viewer), Review mode (the `review` feature flag and its CLAUDE.md block), the PR
 its drafts, and the headless pre-call notice. Claude Code's `/code-review` and Codex's `/review` do this inside
 the agent. The plain diff viewer (`d`: current changes or one commit, file tree, context ladder, whitespace
 toggle, base-ref override) and the Vibeless per-edit approval popup stay. `features.review`, `pr_review_drafts`
-and `review_source` remain in the schema, unread.
+and `review_source` remain in the schema, unread. PR Triage (`G`: the comment reader, fix-prompt injection,
+AI reply drafts, read-only investigations, companion triage features, `aiw reply-draft`) and the agent
+screenshot-evidence flow went the same day: reading a PR's comments and fixing them is something the agent does
+in its own session with `gh`. The PR badge (open / merged / closed, refreshed on `R` or the GUI's **Refresh
+PRs**), the issue browser (`g`) and `pr_terminal_state` stay; `pr_comment_triage`, `pr_investigations`,
+`pr_review_cache`, `screenshot_scopes` and `features.triage_source` remain in the schema, unread.
 
 **Measured** (`cargo +1.99.0 test --locked --release fork_bench -- --ignored --nocapture`, 36×60 sidebar with
 the info block, 3 projects × 10 sessions, the selection alternating between a `⛔` row and a `●` row, 2,000

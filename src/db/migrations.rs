@@ -2138,9 +2138,22 @@ mod tests {
              DELETE FROM schema_version WHERE version >= 46;",
         )
         .unwrap();
-        let triage = crate::app::pr_review::TriageState::Skipped;
+        // The upsert the (since removed) triage code used: keyed by
+        // `(pr_number, comment_id)`, which the drifted table cannot satisfy.
+        let upsert = |head_sha: &str| {
+            conn.execute(
+                "INSERT INTO pr_comment_triage
+                     (pr_number, comment_id, head_sha, state, note, updated_at)
+                 VALUES (7, 2, ?1, 'skipped', NULL, '2026-03-01 00:00:00')
+                 ON CONFLICT(pr_number, comment_id) DO UPDATE SET
+                     head_sha = excluded.head_sha,
+                     state = excluded.state,
+                     updated_at = excluded.updated_at",
+                params![head_sha],
+            )
+        };
         assert!(
-            crate::db::pr_comment_triage::upsert(&conn, 7, "x", 2, triage, None, None).is_err(),
+            upsert("x").is_err(),
             "the drifted key should reproduce the upsert failure"
         );
 
@@ -2168,8 +2181,8 @@ mod tests {
             )
             .unwrap();
         assert_eq!(stray_index, 0);
-        crate::db::pr_comment_triage::upsert(&conn, 7, "x", 2, triage, None, None).unwrap();
-        crate::db::pr_comment_triage::upsert(&conn, 7, "y", 2, triage, None, None).unwrap();
+        upsert("x").unwrap();
+        upsert("y").unwrap();
         let count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM pr_comment_triage WHERE comment_id = 2",

@@ -843,8 +843,6 @@ mod tests {
             summary: None,
             summary_updated_at: None,
             nickname: None,
-            triage_source: None,
-            review_source: None,
             issue_source: None,
         };
         let store = ProjectStore {
@@ -942,8 +940,6 @@ mod tests {
             summary: None,
             summary_updated_at: None,
             nickname: None,
-            triage_source: None,
-            review_source: None,
             issue_source: None,
         };
         let store = ProjectStore {

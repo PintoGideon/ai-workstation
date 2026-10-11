@@ -478,7 +478,7 @@ impl App {
         self.start_issue_page_load(repository, 1);
     }
 
-    /// Open the compact PR-Triage-style setup dialog for the highlighted
+    /// Open the compact feature setup dialog for the highlighted
     /// issue. The browser state stays attached to the dialog so cancellation
     /// returns without losing the page, selection, or loaded snapshot.
     pub(crate) fn issue_browser_open_setup(&mut self) {
@@ -536,7 +536,6 @@ impl App {
             branch,
             row: 0,
             error: None,
-            pending_batch: false,
         };
         let prompt_repository = browser.repository.clone();
         let prompt = issue_fix_prompt(&prompt_repository, &issue);
@@ -1021,18 +1020,6 @@ mod tests {
 
         fn check_auth(&self) -> Result<()> {
             Ok(())
-        }
-
-        fn current_user(&self, _workdir: &std::path::Path) -> Result<String> {
-            Ok("test-user".to_string())
-        }
-
-        fn list_prs(
-            &self,
-            _workdir: &std::path::Path,
-            _include_closed: bool,
-        ) -> Result<Vec<crate::github::PrListEntry>> {
-            Ok(Vec::new())
         }
 
         fn list_issues(

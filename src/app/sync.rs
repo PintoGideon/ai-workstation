@@ -588,7 +588,7 @@ impl App {
     ///
     /// Announced rather than silent: until this, a depleted budget showed up
     /// only as PR badges quietly going blank, and the first *visible* symptom
-    /// was PR Triage failing — which is the one path that did not cause it.
+    /// was a `gh` action failing — which is the one path that did not cause it.
     pub(crate) fn note_gh_graphql_rate_limited(&mut self) {
         let already_backing_off = self.gh_graphql_backoff_remaining().is_some();
         self.gh_graphql_limited_at = Some(Instant::now());
@@ -930,25 +930,6 @@ impl App {
                     // PR" answer is no longer settled — it must be re-checked
                     // once this PR itself reaches a terminal state.
                     self.confirmed_no_terminal_pr.remove(&update.feature_id);
-                    let previous_pr_number = self
-                        .active_prs
-                        .get(&update.feature_id)
-                        .map(|previous| previous.number);
-                    if let Some(previous_pr_number) =
-                        previous_pr_number.filter(|number| *number != status.number)
-                    {
-                        let workdir = self.store.projects.iter().find_map(|project| {
-                            project
-                                .features
-                                .iter()
-                                .find(|feature| feature.id == update.feature_id)
-                                .map(|feature| feature.workdir.clone())
-                        });
-                        if let Some(workdir) = workdir {
-                            changed |= self
-                                .invalidate_pr_context_for_transition(&workdir, previous_pr_number);
-                        }
-                    }
                     if self.active_prs.get(&update.feature_id) != Some(&status) {
                         self.active_prs.insert(update.feature_id, status);
                         changed = true;

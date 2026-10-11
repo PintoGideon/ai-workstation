@@ -37,8 +37,6 @@ fn store_with_agents(agents: &[AgentKind]) -> ProjectStore {
             summary: None,
             summary_updated_at: None,
             nickname: None,
-            triage_source: None,
-            review_source: None,
             issue_source: None,
         })
         .collect();

@@ -3,13 +3,9 @@ pub mod editors;
 mod followups; // FORK: queued follow-ups (src/app/fork_followups.rs)
 mod hook_approvals; // FORK: repo lifecycle hook approvals (src/fork/hook_approval.rs)
 mod migrations;
-pub mod pr_comment_triage;
-pub mod pr_investigations;
-mod pr_review_cache;
 mod pr_terminal_state;
 pub mod prompt_overrides;
 pub mod prompt_templates;
-pub(crate) mod screenshot_evidence;
 mod session_status;
 pub mod store;
 pub mod todos;
@@ -219,23 +215,6 @@ impl AiwDb {
         token_cache::evict_stale(&self.conn)
     }
 
-    /// Cached normalized PR review for `(pr_number, head_sha)`, or `None` on miss.
-    pub fn load_pr_review_cache(
-        &self,
-        pr_number: u32,
-        head_sha: &str,
-    ) -> Result<Option<crate::app::pr_review::PrReview>> {
-        pr_review_cache::load(&self.conn, pr_number, head_sha)
-    }
-
-    pub fn save_pr_review_cache(&self, review: &crate::app::pr_review::PrReview) -> Result<()> {
-        pr_review_cache::save(&self.conn, review)
-    }
-
-    pub fn evict_stale_pr_review_cache(&self) -> Result<()> {
-        pr_review_cache::evict_stale(&self.conn)
-    }
-
     /// Every cached terminal (merged/closed) PR, keyed by `(repo, branch)`.
     /// Loaded once at startup to seed the dashboard badge before the first
     /// sweep runs.
@@ -261,127 +240,6 @@ impl AiwDb {
     /// branch so a future feature can safely reuse the branch name.
     pub fn delete_pr_terminal_state(&self, repo: &str, branch: &str) -> Result<()> {
         pr_terminal_state::delete(&self.conn, repo, branch)
-    }
-
-    /// Local triage rows for `pr_number` as `comment_id -> TriageRow`,
-    /// across every head SHA (triage survives a push).
-    pub fn load_pr_comment_triage(
-        &self,
-        pr_number: u32,
-    ) -> Result<std::collections::HashMap<u64, pr_comment_triage::TriageRow>> {
-        pr_comment_triage::load(&self.conn, pr_number)
-    }
-
-    /// Upsert a comment's triage state/note. `batch_id` is sticky — `Some`
-    /// stamps combined-batch membership, `None` leaves any existing membership
-    /// in place (see [`pr_comment_triage::upsert`]).
-    pub fn save_pr_comment_triage(
-        &self,
-        pr_number: u32,
-        head_sha: &str,
-        comment_id: u64,
-        state: crate::app::pr_review::TriageState,
-        note: Option<&str>,
-        batch_id: Option<&str>,
-    ) -> Result<()> {
-        pr_comment_triage::upsert(
-            &self.conn, pr_number, head_sha, comment_id, state, note, batch_id,
-        )
-    }
-
-    /// Comment ids sharing `batch_id` in `pr_number` — the siblings of a
-    /// combined-batch fix.
-    pub fn pr_comment_triage_batch_siblings(
-        &self,
-        pr_number: u32,
-        batch_id: &str,
-    ) -> Result<Vec<u64>> {
-        pr_comment_triage::batch_sibling_ids(&self.conn, pr_number, batch_id)
-    }
-
-    /// Persist the shared fix cost across a batch's sibling rows (first writer
-    /// wins). Returns rows updated.
-    pub fn set_pr_comment_batch_fix_cost(
-        &self,
-        pr_number: u32,
-        batch_id: &str,
-        cost: &str,
-    ) -> Result<usize> {
-        pr_comment_triage::set_batch_fix_cost(&self.conn, pr_number, batch_id, cost)
-    }
-
-    pub fn begin_pr_comment_reply_draft(
-        &self,
-        pr_number: u32,
-        comment_id: u64,
-        request_id: &str,
-        base_head_sha: &str,
-        provenance: Option<&str>,
-    ) -> Result<()> {
-        pr_comment_triage::begin_reply_draft(
-            &self.conn,
-            pr_number,
-            comment_id,
-            request_id,
-            base_head_sha,
-            provenance,
-        )
-    }
-
-    pub fn snapshot_pr_comment_reply_draft(
-        &self,
-        pr_number: u32,
-        comment_id: u64,
-    ) -> Result<Option<pr_comment_triage::ReplyDraftSnapshot>> {
-        pr_comment_triage::snapshot_reply_draft(&self.conn, pr_number, comment_id)
-    }
-
-    pub fn restore_pr_comment_reply_draft(
-        &self,
-        pr_number: u32,
-        comment_id: u64,
-        request_id: &str,
-        prior: Option<&pr_comment_triage::ReplyDraftSnapshot>,
-    ) -> Result<()> {
-        pr_comment_triage::restore_reply_draft(&self.conn, pr_number, comment_id, request_id, prior)
-    }
-
-    pub fn capture_pr_comment_reply_draft(
-        &self,
-        pr_number: u32,
-        comment_id: u64,
-        request_id: &str,
-        body: &str,
-    ) -> Result<bool> {
-        pr_comment_triage::capture_reply_draft(&self.conn, pr_number, comment_id, request_id, body)
-    }
-
-    #[cfg(test)]
-    pub fn load_pr_comment_reply_draft(
-        &self,
-        pr_number: u32,
-        comment_id: u64,
-    ) -> Result<Option<String>> {
-        Ok(
-            pr_comment_triage::load_reply_draft(&self.conn, pr_number, comment_id)?
-                .map(|row| row.body),
-        )
-    }
-
-    pub fn load_pr_comment_reply_draft_row(
-        &self,
-        pr_number: u32,
-        comment_id: u64,
-    ) -> Result<Option<pr_comment_triage::ReplyDraftRow>> {
-        pr_comment_triage::load_reply_draft(&self.conn, pr_number, comment_id)
-    }
-
-    pub fn clear_pr_comment_reply_draft(&self, pr_number: u32, comment_id: u64) -> Result<()> {
-        pr_comment_triage::clear_reply_draft(&self.conn, pr_number, comment_id)
-    }
-
-    pub fn evict_stale_pr_comment_triage(&self) -> Result<()> {
-        pr_comment_triage::evict_stale(&self.conn)
     }
 
     pub fn append_log_entry(&self, entry: &crate::debug::LogEntry) -> Result<()> {
@@ -648,58 +506,6 @@ impl AiwDb {
     }
 }
 
-/// PR Triage "Investigate" findings: a read-only headless investigation of one
-/// review comment, persisted per `(project id, PR#, comment id)` and reloaded
-/// with the triage overlay (`src/app/pr_review/investigation.rs`).
-impl AiwDb {
-    /// Every persisted investigation for one PR in one project, oldest first.
-    pub fn load_pr_investigations(
-        &self,
-        project_id: &str,
-        pr_number: u32,
-    ) -> Result<Vec<pr_investigations::PrInvestigation>> {
-        pr_investigations::load_by_pr(&self.conn, project_id, pr_number)
-    }
-
-    /// Insert or update one investigation, keyed by `(project_id, PR#, comment id)`.
-    pub fn upsert_pr_investigation(&self, inv: &pr_investigations::PrInvestigation) -> Result<()> {
-        pr_investigations::upsert(&self.conn, inv)
-    }
-
-    /// Record a finished run against one investigation by key (for a run that
-    /// outlived the overlay). Returns whether a row matched.
-    pub fn finish_pr_investigation(
-        &self,
-        project_id: &str,
-        pr_number: u32,
-        comment_id: u64,
-        answer: Option<&str>,
-        status: pr_investigations::PrInvestigationStatus,
-        error: Option<&str>,
-    ) -> Result<bool> {
-        pr_investigations::finish(
-            &self.conn, project_id, pr_number, comment_id, answer, status, error,
-        )
-    }
-
-    /// Set just the status of one investigation (the `dismiss` action).
-    pub fn set_pr_investigation_status(
-        &self,
-        project_id: &str,
-        pr_number: u32,
-        comment_id: u64,
-        status: pr_investigations::PrInvestigationStatus,
-    ) -> Result<bool> {
-        pr_investigations::set_status(&self.conn, project_id, pr_number, comment_id, status)
-    }
-
-    /// Drop every investigation for a project (called on project deletion —
-    /// there is no FK cascade).
-    pub fn delete_pr_investigations_for_project(&self, project_id: &str) -> Result<()> {
-        pr_investigations::delete_for_project(&self.conn, project_id)
-    }
-}
-
 /// Feature- and global-scope headless prompt overrides (see
 /// `db/prompt_overrides.rs`). Project scope is an `aiw.json` `prompt_overrides`
 /// map, resolved in `src/prompts/`, not here.
@@ -790,13 +596,6 @@ fn load_legacy_worktree_store() -> Option<crate::project::ProjectStore> {
     }
 
     merged
-}
-
-/// Timestamp text for rows this module writes: UTC, millisecond precision.
-pub fn now_timestamp() -> String {
-    chrono::Utc::now()
-        .format("%Y-%m-%d %H:%M:%S%.3f")
-        .to_string()
 }
 
 #[cfg(test)]

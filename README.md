@@ -34,9 +34,6 @@ reviewed.
   workspace presets.
 - Supports ordinary directories as well as git repositories.
 
-The desktop GUI also [views PR and agent-validation screenshots](docs/gui-screenshots.md)
-with source and producing-session attribution.
-
 ## Requirements
 
 Install at least one supported agent CLI and sign in to it before using AIW:
@@ -52,8 +49,8 @@ non-git directories without it.
 
 Optional tools:
 
-- An authenticated [GitHub CLI](https://cli.github.com/) (`gh`) enables PR
-  triage and the dashboard's open/merged/closed PR badge.
+- An authenticated [GitHub CLI](https://cli.github.com/) (`gh`) enables the
+  issue browser and the dashboard's open/merged/closed PR badge.
 - A [Nerd Font](https://www.nerdfonts.com/) provides the best icon rendering.
 - The `code` command enables VS Code sessions.
 - A C compiler and git are required only for installing optional tree-sitter
@@ -265,13 +262,12 @@ receive AIW permission-mode flags.
 | `e` | Queue a follow-up for the selected agent: delivered only when its current turn ends |
 | `I` | On a TODOs session row: start an agent on the next TODO in priority order, across the lists currently showing |
 | `z` | Show dormant features: idle and unattended |
-| `G` | Open GitHub PR triage |
 | `L` | Open the prompt library |
 | `E` | Edit headless AI prompt templates (overrides) |
 | `T` | Choose a theme |
 | `A` | Manage installed agent harnesses |
 | `?` | Show all keybindings |
-| `Ctrl+Space` | Commands on the selected session (a menu lists them): `f` final diff review · `d` diff viewer · `m` Markdown files · `l` past and unsent prompts, pasted again · `N` capture a TODO · `F` fresh-context session · `P` back to PR Triage · `z` complete the TODO this session came from · `h` `H` `M` `1-9` bookmarks · `/` command picker · `a` local actions · `c` config wizard · `C` compact review memory · `r` refresh |
+| `Ctrl+Space` | Commands on the selected session (a menu lists them): `d` diff viewer · `m` Markdown files · `l` past and unsent prompts, pasted again · `N` capture a TODO · `F` fresh-context session · `z` complete the TODO this session came from · `h` `H` `M` `1-9` bookmarks · `/` command picker · `a` local actions · `c` config wizard · `r` refresh |
 | `q` | Quit the dashboard; the agents keep running (`Esc` does nothing on the dashboard) |
 
 Search accepts every letter, including `j` and `k`. Use arrow keys or
@@ -372,84 +368,18 @@ sidebar shows glyph and name only.
 
 ## User workflows
 
-### Review changes before shipping
-
-With the feature (or one of its sessions) selected, press `Ctrl+Space`, then
-`f`. AIW presents the feature's diff file by file and lets you attach line comments or suggested
-changes. When you finish, AIW writes the feedback and hands it to an agent.
-With an authenticated `gh` CLI, AIW can also post the feedback to the branch's
-pull request.
-
-### Work through pull-request feedback
+### Pull-request badges
 
 With an authenticated `gh` and a GitHub remote, a feature whose branch has a
-pull request shows a `[PR #N · M open]` badge on its dashboard row and in an
-embedded session's header. AIW never polls GitHub in the background: badges
-refresh when you press `R` (or leader `r`) or open PR Triage, and otherwise
-show the last-known state.
+pull request shows a `[PR #N · M open]` badge on its dashboard row. AIW never
+polls GitHub in the background: badges refresh when you press `R` (or leader
+`r`), and otherwise show the last-known state.
 Once that PR is merged or closed without merging, the badge switches to
 `[PR #N merged]` / `[PR #N closed]` instead of disappearing, so a finished
 feature stays visually distinct from one that never had a PR. A branch
 without `gh`, without a GitHub remote, or without any PR shows no badge at
-all.
-
-Select a feature and press `G` to open PR Triage. You can inspect review
-threads, send an individual or batched fix prompt to an agent, reply, and mark
-threads done. GitHub
-actions are presented for confirmation before AIW writes to the pull request.
-When `f` or `B` targets a dedicated session, AIW lets you name it so multiple
-PR Triage agents can run simultaneously; leave the name blank to reuse the
-default `PR Triage` session.
-
-A comment that asks a question rather than requesting a change can be
-investigated instead of fixed: press `v` to run a strictly read-only headless
-pass on the selected comment — it inspects the repo but changes nothing — and
-the overlay blocks until it returns. Its answer persists per PR and reopens in
-the detail panel. Before pressing `v`, press `e` to attach an optional note —
-a hypothesis the investigation verifies against the PR and repo (for example,
-"I think this is already handled in `foo.rs` — double-check"), not a fact it
-assumes. The note shows in a banner so you can confirm or clear it; leaving it
-empty runs the investigation exactly as before. `f` and `B` still fix and batch a comment normally whether or
-not it has an investigation — and when it does, the investigation's findings are
-appended to the fix prompt as a starting point. Press `a` on a finished
-investigation to act on it:
-post an editable reply, ask a follow-up (re-runs read-only with the prior answer
-as context), dismiss it, or keep it as a TODO.
-An unchanged AI-drafted reply discloses the harness, best-effort model,
-
-### Review a teammate's pull request
-
-To review a pull request yourself, rather than triage the comments on your own,
-press `G` on a project row, or press `G` on a feature and then `Tab`. The
-**Review** tab lists every open pull request in the repository, including your
-own and drafts, with its number, title, author, and branch (`owner:branch` for
-a fork). The list loads in the background; if `gh` isn't installed or signed
-in, the tab says so, and `r` retries.
-
-Press `Enter` to open a pull request in the same diff viewer as the final
-review. It shows exactly the pull request's changes, from where it branched to
-its latest commit. No agent is started and no feature is needed. AIW fetches
-the pull request into private `refs/aiw/review/` refs and reads every file from
-git objects: your checked-out branch, staged and unstaged changes, untracked
-files, and stash are never touched, and the refs are removed when you leave.
-
-Review as you would a feature: approve or reject files, and leave line
-comments, ranges, and suggested changes. `Esc` pauses and saves your draft;
-`Enter` on the same pull request resumes it, and the list marks it with
-`● N comments`. If the pull request has new commits by then, AIW flags only
-the files whose changes differ, clears your verdicts on those files, and keeps
-every comment. A comment whose code is gone is listed as outdated in the notes
-panel, and `↻ updated` marks the row.
-
-Press `q` to submit. Choose **Comment**, **Approve**, or **Request changes**
-(GitHub doesn't allow the last two on your own pull request), and write a
-summary with `e`. Inline comments are pinned to the commit you reviewed. If the
-pull request has moved on since you opened it, AIW won't post; press `o` to
-reopen it at its new commit with your draft intact. Comments that can't sit on
-the diff, such as outdated ones, are included in the summary instead of being
-dropped. The walkthrough, AI co-review, and changeset-overview passes, and the
-keys that need a local checkout (`E`, `b`, `t`, `X`), aren't available in this
-mode.
+all. Reviewing the pull request itself is the agent's job: Claude Code's
+`/code-review` and Codex's `/review` run inside the session.
 
 ### Reuse prompts and track TODOs
 

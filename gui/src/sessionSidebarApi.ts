@@ -5,12 +5,12 @@ import type { SessionTarget } from "./api";
 // draws beside an embedded agent pane, built by the same shared assembly.
 
 export type SidebarSectionKind =
-  | "status" | "usage" | "context" | "issue" | "pr_triage"
+  | "status" | "usage" | "context" | "issue" | "pr"
   | "work" | "summary" | "prompt" | "todos" | "active_todo";
 
 export type SidebarTone =
   | "plain" | "muted" | "state_active" | "state_idle" | "state_stopped"
-  | "waiting" | "busy" | "pr_working" | "ready" | "generating" | "hint" | "todo" | "detail";
+  | "waiting" | "busy" | "ready" | "generating" | "hint" | "todo" | "detail";
 
 export type UsageLevel = "low" | "medium" | "high";
 export type TodoItemState = "done" | "active" | "pending";
@@ -35,7 +35,6 @@ export interface SidebarContextMeter {
 
 export type SidebarAction =
   | { kind: "reuse_prompt"; prompt: string }
-  | { kind: "pr_triage" }
   | { kind: "complete_todo"; todo_id: string }
   | { kind: "supervised_edits" };
 

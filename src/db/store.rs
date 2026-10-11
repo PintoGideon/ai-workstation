@@ -245,8 +245,7 @@ pub fn load_versioned(conn: &Connection) -> Result<(ProjectStore, u64)> {
 /// One `features` row in SELECT column order (see `load_features`): id, name,
 /// branch, workdir, is_worktree, tmux_session, mode, review, agent,
 /// enable_chrome, status, summary, summary_updated_at, nickname, collapsed,
-/// created_at, last_accessed, ready, triage_source, review_source,
-/// issue_source.
+/// created_at, last_accessed, ready, issue_source.
 type FeatureRow = (
     String,
     String,
@@ -266,8 +265,6 @@ type FeatureRow = (
     String,
     bool,
     Option<String>,
-    Option<String>,
-    Option<String>,
 );
 
 fn load_features(
@@ -279,8 +276,7 @@ fn load_features(
         "SELECT id, name, branch, workdir, is_worktree, tmux_session,
                 mode, agent, enable_chrome, status,
                 summary, summary_updated_at, nickname, collapsed,
-                created_at, last_accessed, ready, triage_source,
-                review_source, issue_source
+                created_at, last_accessed, ready, issue_source
          FROM features WHERE project_id = ?1
          ORDER BY sort_order ASC, rowid ASC",
     )?;
@@ -306,8 +302,6 @@ fn load_features(
                 row.get(15)?,
                 row.get(16)?,
                 row.get(17)?,
-                row.get(18)?,
-                row.get(19)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -331,8 +325,6 @@ fn load_features(
         feat_created_at,
         last_accessed,
         ready,
-        triage_source_json,
-        review_source_json,
         issue_source_json,
     ) in rows
     {
@@ -365,16 +357,8 @@ fn load_features(
             summary_updated_at: summary_updated_at_str.as_deref().map(dt_from_str),
             nickname,
             // A malformed blob (hand-edited DB, or a row written by a future
-            // schema) degrades to "not a triage feature" rather than failing
-            // the whole store load.
-            triage_source: triage_source_json
-                .as_deref()
-                .and_then(|json| serde_json::from_str(json).ok()),
-            // Same degradation rule as `triage_source`: a malformed blob reads
-            // as "not a companion review feature" rather than failing the load.
-            review_source: review_source_json
-                .as_deref()
-                .and_then(|json| serde_json::from_str(json).ok()),
+            // schema) degrades to "no issue link" rather than failing the
+            // whole store load.
             issue_source: issue_source_json
                 .as_deref()
                 .and_then(|json| serde_json::from_str(json).ok()),
@@ -598,10 +582,9 @@ fn do_save(conn: &Connection, store: &ProjectStore) -> Result<()> {
                     id, project_id, name, branch, workdir, is_worktree,
                     tmux_session, mode, agent, enable_chrome,
                     status, summary, summary_updated_at, nickname, collapsed,
-                    created_at, last_accessed, ready, sort_order, triage_source,
-                    review_source, issue_source
+                    created_at, last_accessed, ready, sort_order, issue_source
                 ) VALUES (
-                    ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22
+                    ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20
                 )",
                 params![
                     feature.id,
@@ -623,14 +606,6 @@ fn do_save(conn: &Connection, store: &ProjectStore) -> Result<()> {
                     dt_to_str(&feature.last_accessed),
                     feature.ready as i32,
                     fi as i64,
-                    feature
-                        .triage_source
-                        .as_ref()
-                        .and_then(|link| serde_json::to_string(link).ok()),
-                    feature
-                        .review_source
-                        .as_ref()
-                        .and_then(|link| serde_json::to_string(link).ok()),
                     feature
                         .issue_source
                         .as_ref()
@@ -787,22 +762,6 @@ mod tests {
             summary: Some("did some stuff".to_string()),
             summary_updated_at: Some(Utc::now()),
             nickname: Some("myf".to_string()),
-            // A companion PR-triage feature: the link that survives a restart
-            // and lets PR Triage find and reuse this feature for the same PR.
-            triage_source: Some(crate::project::TriageSource {
-                pr_number: 42,
-                source_feature_id: "feat-source".to_string(),
-                pr_branch: "feature/my-feature".to_string(),
-                base_sha: "abc123".to_string(),
-            }),
-            // A companion review feature's link back to the feature its final
-            // review ran from — the parallel of `triage_source` for the "New
-            // feature…" review destination.
-            review_source: Some(crate::project::ReviewSource {
-                source_feature_id: "feat-source".to_string(),
-                target_branch: "feature/my-feature".to_string(),
-                base_sha: "def456".to_string(),
-            }),
             issue_source: Some(crate::project::IssueSource {
                 host: "github.com".to_string(),
                 owner: "acme".to_string(),
@@ -841,25 +800,6 @@ mod tests {
         assert!(lf.ready);
         assert_eq!(lf.summary, Some("did some stuff".to_string()));
         assert_eq!(lf.nickname, Some("myf".to_string()));
-        assert_eq!(
-            lf.triage_source,
-            Some(crate::project::TriageSource {
-                pr_number: 42,
-                source_feature_id: "feat-source".to_string(),
-                pr_branch: "feature/my-feature".to_string(),
-                base_sha: "abc123".to_string(),
-            }),
-            "the PR/source-feature link must survive a save/load round trip"
-        );
-        assert_eq!(
-            lf.review_source,
-            Some(crate::project::ReviewSource {
-                source_feature_id: "feat-source".to_string(),
-                target_branch: "feature/my-feature".to_string(),
-                base_sha: "def456".to_string(),
-            }),
-            "the companion review feature's source link must survive a save/load round trip"
-        );
         assert_eq!(
             lf.issue_source,
             Some(crate::project::IssueSource {
@@ -982,8 +922,6 @@ mod tests {
                     summary: None,
                     summary_updated_at: None,
                     nickname: None,
-                    triage_source: None,
-                    review_source: None,
                     issue_source: None,
                 },
                 Feature {
@@ -1006,8 +944,6 @@ mod tests {
                     summary: None,
                     summary_updated_at: None,
                     nickname: None,
-                    triage_source: None,
-                    review_source: None,
                     issue_source: None,
                 },
             ],

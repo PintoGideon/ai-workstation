@@ -610,5 +610,7 @@ export type DormancyStopResult = { target: FeatureTarget; feature_name: string }
   | { outcome: "refused"; reason: DormancyRefusal; message: string }
   | { outcome: "failed"; message: string });
 export const dormancyLoad = (): Promise<DormancyView> => invoke("dormancy_load");
+/** FORK(no-cloud): refresh the PR badges (`gh`) on an explicit user action. */
+export const refreshPrBadges = (): Promise<void> => invoke("refresh_pr_badges");
 export const dormancyStop = (selection: DormantObservation[]): Promise<DormancyStopResult[]> =>
   invoke("dormancy_stop", { selection });

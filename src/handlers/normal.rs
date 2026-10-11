@@ -319,9 +319,6 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char('L') => {
             app.open_prompt_library(None);
         }
-        KeyCode::Char('G') => {
-            app.open_pr_review();
-        }
         KeyCode::Char('E') => {
             app.open_prompt_overrides(None);
         }
@@ -360,7 +357,6 @@ pub(crate) const DASHBOARD_KEYBINDING_ACTIONS: &[(&str, char)] = &[
     ("search", '/'),
     ("refresh", 'r'),
     ("syntax_picker", 'p'),
-    ("pr_review", 'G'),
     ("session_config", 'u'),
     ("fork_feature", 'F'),
     ("mark_ready", 'y'),
@@ -400,9 +396,6 @@ fn handle_normal_leader_key(app: &mut App, key: KeyEvent) -> Result<()> {
         }
         KeyCode::Char('F') => {
             app.open_fresh_context_prompt_for_selection();
-        }
-        KeyCode::Char('P') => {
-            app.pr_review_return_to_pane();
         }
         KeyCode::Char('z') => {
             app.request_todo_reference_completion();

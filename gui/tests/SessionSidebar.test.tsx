@@ -33,7 +33,7 @@ function fullView(): SessionSidebarView {
         { kind: "text", text: "Ctx ~85% CRITICAL STALE · 170,000", tone: "plain", emphasised: false },
       ], context: { percent: 85, used_tokens: 170000, limit_tokens: 200000, band: "critical", estimated: true, stale: true, fresh_context_hint: true } },
       { kind: "issue", title: "Issue", actions: [], lines: [field("Repository", "github.com/acme/widget"), field("Issue", "#42")] },
-      { kind: "pr_triage", title: "PR Triage", actions: [{ kind: "pr_triage" }], lines: [field("PR", "#77 · 2 open"), field("Status", "Working", "pr_working", true)] },
+      { kind: "pr", title: "Pull request", actions: [], lines: [field("PR", "#77 · 2 open")] },
       { kind: "work", title: "Work", actions: [{ kind: "supervised_edits" }], lines: [field("State", "waiting for diff review", "waiting", true)] },
       { kind: "summary", title: "Summary", actions: [], lines: [{ kind: "text", text: "Builds the GUI agent sidebar", tone: "plain", emphasised: false }] },
       { kind: "prompt", title: "Prompt", actions: [{ kind: "reuse_prompt", prompt: FULL_PROMPT }], lines: [
@@ -82,11 +82,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function mount(handlers: Partial<Record<"onReusePrompt" | "onPrTriage" | "onSupervisedEdits" | "onFreshSession", ReturnType<typeof vi.fn>>> = {}) {
+function mount(handlers: Partial<Record<"onReusePrompt" | "onSupervisedEdits" | "onFreshSession", ReturnType<typeof vi.fn>>> = {}) {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const props = {
     onReusePrompt: handlers.onReusePrompt ?? vi.fn(),
-    onPrTriage: handlers.onPrTriage ?? vi.fn(),
     onSupervisedEdits: handlers.onSupervisedEdits ?? vi.fn(),
     onFreshSession: handlers.onFreshSession ?? vi.fn(),
   };
@@ -120,14 +119,14 @@ describe("session sidebar", () => {
     expect(await screen.findByRole("heading", { name: "Claude Sidebar" })).toBeTruthy();
     expect(sidebar().getAttribute("data-harness")).toBe("claude");
     expect(sectionTitles()).toEqual([
-      "Status", "Usage", "Context", "Issue", "PR Triage", "Work", "Summary", "Prompt", "Todos", "Active TODO",
+      "Status", "Usage", "Context", "Issue", "Pull request", "Work", "Summary", "Prompt", "Todos", "Active TODO",
     ]);
     expect(sidebarCalls()[0]).toEqual(["session_sidebar", { target }]);
     const status = section("Status");
     expect(within(status).getByText("Ready").className).toContain("tone-ready");
     expect(within(status).getByText("Ready").className).toContain("sb-strong");
     expect(within(status).getByText("claude-opus")).toBeTruthy();
-    expect(within(section("PR Triage")).getByText("Working").className).toContain("tone-pr_working");
+    expect(within(section("Pull request")).getByText("#77 · 2 open")).toBeTruthy();
     expect(screen.getByText(/reported only to a running TUI/)).toBeTruthy();
   });
 
@@ -185,11 +184,9 @@ describe("session sidebar", () => {
     expect(onReusePrompt).toHaveBeenCalledWith(FULL_PROMPT);
   });
 
-  it("opens PR Triage and supervised edits through the GUI's own panels", async () => {
-    const { onPrTriage, onSupervisedEdits } = mount();
-    fireEvent.click(await waitFor(() => within(section("PR Triage")).getByRole("button", { name: "Triage" })));
-    expect(onPrTriage).toHaveBeenCalledTimes(1);
-    fireEvent.click(within(section("Work")).getByRole("button", { name: "Review" }));
+  it("opens supervised edits through the GUI's own panel", async () => {
+    const { onSupervisedEdits } = mount();
+    fireEvent.click(await waitFor(() => within(section("Work")).getByRole("button", { name: "Review" })));
     expect(onSupervisedEdits).toHaveBeenCalledTimes(1);
   });
 

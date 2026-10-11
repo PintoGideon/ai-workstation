@@ -397,8 +397,7 @@ fn entering_a_running_feature_never_asks() {
 
 #[test]
 fn a_start_that_cannot_be_parked_warns_and_goes_ahead() {
-    // Spawning an agent from a TODO, the PR-triage hand-off, and the
-    // saved-transcript pickers all keep the state they need to resume in the
+    // Spawning an agent from a TODO and the saved-transcript pickers keep the state they need to resume in the
     // very mode the dialog would replace. They get a toast instead of a modal
     // — but never silence.
     let mut tmux = MockTmuxOps::new();

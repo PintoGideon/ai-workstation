@@ -137,9 +137,10 @@ fn launch_config_to_args(config: toml::map::Map<String, toml::Value>) -> Vec<Str
     args
 }
 
-/// Append launch-specific evidence guidance without writing shared configuration.
-/// Codex's CLI developer_instructions override has precedence over file layers.
-pub(crate) fn with_screenshot_guidance(
+/// Append launch-specific guidance to `developer_instructions` without writing
+/// shared configuration. Codex's CLI developer_instructions override has
+/// precedence over file layers.
+pub(crate) fn with_developer_instructions(
     workdir: &Path,
     guidance: &str,
     args: Vec<String>,
@@ -410,10 +411,10 @@ mod tests {
 }
 
 #[cfg(test)]
-mod screenshot_tests {
+mod developer_instructions_tests {
     use super::*;
     #[test]
-    fn screenshot_guidance_preserves_profiles_across_file_layers() {
+    fn guidance_preserves_profiles_across_file_layers() {
         let dir = tempfile::tempdir().unwrap();
         let global = dir.path().join("global.toml");
         let local = dir.path().join("local.toml");
@@ -435,7 +436,7 @@ mod screenshot_tests {
         );
     }
     #[test]
-    fn evidence_guidance_preserves_raw_cli_instruction_overrides() {
+    fn guidance_preserves_raw_cli_instruction_overrides() {
         for flag in ["-c", "--config"] {
             for value in [
                 "Follow our conventions",

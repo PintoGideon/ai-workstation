@@ -17,7 +17,6 @@ pub(crate) mod dormant;
 pub(crate) mod editor_ops;
 pub(crate) mod feature_ops;
 pub(crate) mod feature_setup;
-pub(crate) mod fix_cost;
 pub mod fork_cockpit; // FORK: the cockpit sidebar (DESIGN.md §18)
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7, DESIGN.md §16)
 pub(crate) mod fork_launch; // FORK: launch-time arguments from the store (DESIGN.md §16)
@@ -35,13 +34,11 @@ mod hooks;
 pub(crate) mod issue_fixer;
 mod navigation;
 mod notifications;
-pub(crate) mod pr_review;
 mod project_ops;
 mod prompt_library;
 pub(crate) mod prompt_overrides;
 mod rename;
 pub(crate) mod resource_gate;
-pub(crate) mod screenshots;
 mod search;
 mod session_config;
 pub(crate) mod session_ops;
@@ -55,7 +52,6 @@ mod sync;
 mod syntax;
 pub(crate) mod toast;
 mod todos;
-pub(crate) mod triage_feature;
 pub mod util;
 
 #[cfg(test)]
@@ -100,7 +96,6 @@ pub(crate) use diff::context_level_label;
 pub use feature_setup::{FeatureSetupRow, FeatureSetupState};
 pub use issue_fixer::{IssueBrowserState, IssueBrowserStatus};
 pub(crate) use resource_gate::{StartIntent, Started};
-pub(crate) use session_ops::session_kind_for_agent;
 pub use state::*;
 pub use toast::{Toast, ToastKind};
 pub(crate) use todos::ReferencedTodoDeleted;
@@ -656,7 +651,6 @@ pub struct App {
     /// that opens and later closes is re-checked rather than staying stuck on
     /// a stale negative answer.
     pub(crate) confirmed_no_terminal_pr: HashSet<String>,
-    pub(crate) pr_review_work: pr_review::runtime::PrReviewWork,
     /// Background GitHub issue-page request and its cancellation boundary.
     pub(crate) issue_work: issue_fixer::IssueWork,
     pub(crate) issue_comment_work: issue_fixer::IssueCommentWork,
@@ -665,15 +659,6 @@ pub struct App {
     /// for a session can be slow, so it runs off the UI thread; see
     /// `app::session_tools::open_latest_prompt_for_selection`.
     pub(crate) latest_prompt_menu_bg: Option<Receiver<session_tools::LatestPromptScanResult>>,
-    /// A PR Triage pane stashed by `pr_review_toggle_to_session` (`P`) while the
-    /// user watches the linked fix session; `leader+P` pops it back without a
-    /// re-fetch. See [`PrReviewReturn`].
-    pub pr_review_return: Option<PrReviewReturn>,
-    /// Memoized `GhCli::current_user` result for the session, so opening or
-    /// refreshing the PR picker doesn't repeat the `gh api user` call every
-    /// time. `None` = not yet resolved; `Some(None)` = resolution was
-    /// attempted and failed (e.g. `gh` unauthenticated).
-    pub gh_current_user: Option<Option<String>>,
     pub scroll_offset: usize,
     pub session_filter: SessionFilter,
     pub throbber_state: throbber_widgets_tui::ThrobberState,
@@ -729,7 +714,6 @@ pub struct App {
     /// Single inotify worker replacing periodic filesystem scans;
     /// None when the watcher could not start (timers remain fallbacks).
     pub fs_watcher: Option<crate::fswatch::FsWatcher>,
-    pub(crate) evidence_work: screenshots::EvidenceWork,
     /// Persistent tmux control-mode client observing session lifecycle;
     /// None in tests (status polling falls back to its interval).
     pub tmux_observer: Option<crate::tmux_observer::TmuxObserver>,
@@ -878,7 +862,6 @@ impl App {
             // stretch in between (the blocking `gh`/`claude` call) it just
             // sits frozen, reading as "nothing is happening" even though the
             // background thread is working.
-            AppMode::PrReviewLoading(_) | AppMode::PrInvestigationLoading(_) => true,
             _ => false,
         };
         base || self.has_active_toasts()
@@ -1127,12 +1110,9 @@ impl App {
             active_prs: HashMap::new(),
             terminal_prs: HashMap::new(),
             confirmed_no_terminal_pr: HashSet::new(),
-            pr_review_work: pr_review::runtime::PrReviewWork::default(),
             issue_work: issue_fixer::IssueWork::default(),
             issue_comment_work: issue_fixer::IssueCommentWork::default(),
             latest_prompt_menu_bg: None,
-            pr_review_return: None,
-            gh_current_user: None,
             scroll_offset: 0,
             session_filter: SessionFilter::default(),
             throbber_state: throbber_widgets_tui::ThrobberState::default(),
@@ -1160,7 +1140,6 @@ impl App {
             background_hooks: HashMap::new(),
             ipc: None,
             fs_watcher: None,
-            evidence_work: screenshots::EvidenceWork::default(),
             tmux_observer: None,
             ipc_chatty_log_count: 0,
             ipc_chatty_log_window_start: Instant::now(),
@@ -1204,8 +1183,6 @@ impl App {
         // Seed in-memory caches from DB so first use after restart is fast.
         if let Some(ref db) = app.db {
             let _ = db.evict_stale_token_cache();
-            let _ = db.evict_stale_pr_review_cache();
-            let _ = db.evict_stale_pr_comment_triage();
             if let Ok(entries) = db.load_token_cache() {
                 app.token_tracker.seed_from_db_cache(entries);
             }
@@ -1349,12 +1326,9 @@ impl App {
             active_prs: HashMap::new(),
             terminal_prs: HashMap::new(),
             confirmed_no_terminal_pr: HashSet::new(),
-            pr_review_work: pr_review::runtime::PrReviewWork::default(),
             issue_work: issue_fixer::IssueWork::default(),
             issue_comment_work: issue_fixer::IssueCommentWork::default(),
             latest_prompt_menu_bg: None,
-            pr_review_return: None,
-            gh_current_user: None,
             scroll_offset: 0,
             session_filter: SessionFilter::default(),
             throbber_state: throbber_widgets_tui::ThrobberState::default(),
@@ -1382,7 +1356,6 @@ impl App {
             background_hooks: HashMap::new(),
             ipc: None,
             fs_watcher: None,
-            evidence_work: screenshots::EvidenceWork::default(),
             tmux_observer: None,
             ipc_chatty_log_count: 0,
             ipc_chatty_log_window_start: Instant::now(),

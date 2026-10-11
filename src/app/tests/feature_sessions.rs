@@ -837,8 +837,6 @@ fn restore_claude_session_only_affects_the_targeted_session() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     feature
@@ -1141,8 +1139,6 @@ fn open_session_picker_selects_project_preferred_agent_by_default() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -1634,8 +1630,6 @@ fn reload_extension_config_uses_project_repo_for_worktree_feature() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -2589,48 +2583,6 @@ fn delete_project_deletes_unsent_prompts_for_every_features_workdir() {
     );
 }
 
-#[test]
-fn delete_project_deletes_its_pr_investigations() {
-    let repo = TempDir::new().unwrap();
-    let store_file = NamedTempFile::new().unwrap();
-    let db_file = NamedTempFile::new().unwrap();
-    let store = store_with_repo(repo.path().to_path_buf(), ProjectStatus::Stopped);
-
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_kill_session().returning(|_| Ok(()));
-    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.store_path = store_file.path().to_path_buf();
-    app.db = Some(crate::db::AiwDb::open(db_file.path()).unwrap());
-    let investigation = |project_id: &str| {
-        crate::db::pr_investigations::PrInvestigation::new_running(
-            project_id,
-            7,
-            100,
-            "headsha",
-            AgentKind::Codex,
-            "comment body + PR title/description + diff",
-        )
-    };
-    {
-        let db = app.db.as_ref().unwrap();
-        db.upsert_pr_investigation(&investigation("proj-1"))
-            .unwrap();
-        db.upsert_pr_investigation(&investigation("other-project"))
-            .unwrap();
-    }
-    app.mode = AppMode::DeletingProject("my-project".to_string());
-
-    app.delete_project().unwrap();
-
-    let db = app.db.as_ref().unwrap();
-    assert!(db.load_pr_investigations("proj-1", 7).unwrap().is_empty());
-    // Another project's rows survive: cleanup is scoped to the deleted one.
-    assert_eq!(
-        db.load_pr_investigations("other-project", 7).unwrap().len(),
-        1
-    );
-}
-
 fn store_with_single_claude_session() -> ProjectStore {
     let now = Utc::now();
     let session = FeatureSession {
@@ -2670,8 +2622,6 @@ fn store_with_single_claude_session() -> ProjectStore {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {

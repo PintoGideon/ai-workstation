@@ -1,6 +1,5 @@
 use crate::app::*;
 use crate::project::{AgentKind, Feature, FeatureSession, Project, SessionKind};
-use crate::traits::{MockTmuxOps, MockWorktreeOps};
 use chrono::Utc;
 use crossterm::event::KeyCode;
 use std::collections::HashMap;
@@ -33,8 +32,6 @@ pub(super) fn store_with_feature(status: ProjectStatus) -> ProjectStore {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -79,8 +76,6 @@ pub(super) fn store_with_repo(repo: PathBuf, status: ProjectStatus) -> ProjectSt
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -151,8 +146,6 @@ pub(super) fn store_with_worktree_agent(
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -219,8 +212,6 @@ pub(super) fn store_with_custom_session(
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -285,8 +276,6 @@ pub(super) fn store_with_codex_session(
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -329,122 +318,6 @@ pub(super) fn store_with_empty_project(repo: PathBuf, is_git: bool) -> ProjectSt
         prompt_templates: Vec::new(),
         extra: HashMap::new(),
     }
-}
-
-pub(super) fn pr_review_test_app() -> App {
-    let store = ProjectStore {
-        version: 5,
-        projects: vec![],
-        session_bookmarks: vec![],
-        available_harnesses: vec![],
-        prompt_templates: Vec::new(),
-        extra: HashMap::new(),
-    };
-    App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    )
-}
-
-pub(super) fn pr_review_with_comments(n: u64) -> crate::app::pr_review::PrReview {
-    let comments: Vec<crate::github::ReviewComment> = (1..=n)
-        .map(|id| crate::github::ReviewComment {
-            id,
-            path: Some(format!("src/file{id}.rs")),
-            line: Some(id as u32),
-            original_line: Some(id as u32),
-            side: Some("RIGHT".into()),
-            subject_type: None,
-            diff_hunk: Some("@@".to_string()),
-            body: format!("comment {id}"),
-            user: crate::github::GhUser {
-                login: "alice".to_string(),
-                kind: "User".to_string(),
-            },
-            in_reply_to_id: None,
-            pull_request_review_id: None,
-        })
-        .collect();
-    let pr = crate::github::PrRef {
-        number: 7,
-        head_sha: "sha".to_string(),
-        url: "https://github.com/o/r/pull/7".to_string(),
-        owner: "o".to_string(),
-        repo: "r".to_string(),
-        head_ref: "main".to_string(),
-    };
-    crate::app::pr_review::normalize(pr, comments, vec![], vec![], vec![])
-}
-
-pub(super) fn enter_pr_review(app: &mut App, n: u64) {
-    app.mode = AppMode::PrReview(PrReviewState {
-        workdir: std::path::PathBuf::from("/tmp/wd"),
-        review: pr_review_with_comments(n),
-        selected: 0,
-        detail_scroll: 0,
-        detail_content_lines: 0,
-        hide_resolved: false,
-        sort_mode: crate::app::pr_review::PrSortMode::default(),
-        fix_target: crate::app::pr_review::FixTarget::default(),
-        fix_target_picked: false,
-        usage_baselines: std::collections::HashMap::new(),
-        review_harness: None,
-        dedicated_session_label: crate::app::pr_review::TRIAGE_SESSION_LABEL.to_string(),
-        harness_pick: None,
-        new_feature_setup: None,
-        integrate: None,
-        fix_confirm: None,
-        fix_vim_enabled: false,
-        mark_pick: None,
-        reply_kind_pick: None,
-        reply: None,
-        marked: std::collections::HashSet::new(),
-        pending_batch: false,
-        checked_out_branch: Some("main".to_string()),
-        investigations: Vec::new(),
-        investigation_harness_pick: None,
-        investigation_action_pick: None,
-        investigation_follow_up: None,
-        pending_follow_up: None,
-        investigation_context: Default::default(),
-    });
-}
-
-/// Enter the review pane against the `store_with_feature` feature so the fix
-/// flow can resolve a real feature/workdir (`/tmp/test-workdir`).
-pub(super) fn enter_pr_review_for_feature(app: &mut App, n: u64) {
-    app.mode = AppMode::PrReview(PrReviewState {
-        workdir: std::path::PathBuf::from("/tmp/test-workdir"),
-        review: pr_review_with_comments(n),
-        selected: 0,
-        detail_scroll: 0,
-        detail_content_lines: 0,
-        hide_resolved: false,
-        sort_mode: crate::app::pr_review::PrSortMode::default(),
-        fix_target: crate::app::pr_review::FixTarget::default(),
-        fix_target_picked: false,
-        usage_baselines: std::collections::HashMap::new(),
-        review_harness: None,
-        dedicated_session_label: crate::app::pr_review::TRIAGE_SESSION_LABEL.to_string(),
-        harness_pick: None,
-        new_feature_setup: None,
-        integrate: None,
-        fix_confirm: None,
-        fix_vim_enabled: false,
-        mark_pick: None,
-        reply_kind_pick: None,
-        reply: None,
-        marked: std::collections::HashSet::new(),
-        pending_batch: false,
-        checked_out_branch: Some("main".to_string()),
-        investigations: Vec::new(),
-        investigation_harness_pick: None,
-        investigation_action_pick: None,
-        investigation_follow_up: None,
-        pending_follow_up: None,
-        investigation_context: Default::default(),
-    });
 }
 
 pub(super) fn view_state_for(project_name: &str, feature_name: &str) -> ViewState {

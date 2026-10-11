@@ -17,7 +17,6 @@ const ITEM_MARK = { done: "✓", active: "●", pending: "○" } as const;
 /** The TUI's leader key for each action, named in its tooltip. */
 const TUI_KEY: Record<SidebarAction["kind"], string> = {
   reuse_prompt: "leader l",
-  pr_triage: "leader G",
   complete_todo: "leader z",
   supervised_edits: "leader V",
 };
@@ -32,14 +31,12 @@ export const sessionSidebarKey = (target: SessionTarget) =>
 export default function SessionSidebar({
   target,
   onReusePrompt,
-  onPrTriage,
   onSupervisedEdits,
   onFreshSession,
 }: {
   target: SessionTarget;
   /** Append a prompt to this session's composer draft. */
   onReusePrompt: (prompt: string) => void;
-  onPrTriage: () => void;
   onSupervisedEdits: () => void;
   onFreshSession: (target: SessionTarget, draft: string) => void;
 }) {
@@ -99,7 +96,6 @@ export default function SessionSidebar({
             section={section}
             onFreshContext={() => setFreshContext(true)}
             onReusePrompt={onReusePrompt}
-            onPrTriage={onPrTriage}
             onSupervisedEdits={onSupervisedEdits}
           />
         ))}
@@ -116,14 +112,12 @@ function Section({
   section,
   onFreshContext,
   onReusePrompt,
-  onPrTriage,
   onSupervisedEdits,
 }: {
   target: SessionTarget;
   section: SessionSidebarSection;
   onFreshContext: () => void;
   onReusePrompt: (prompt: string) => void;
-  onPrTriage: () => void;
   onSupervisedEdits: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -159,8 +153,6 @@ function Section({
               onClick={() => onReusePrompt(action.prompt)}>Reuse</button>
           </span>
         );
-      case "pr_triage":
-        return <button key={action.kind} type="button" className="sb-action" title={title("Open PR Triage")} onClick={onPrTriage}>Triage</button>;
       case "supervised_edits":
         return <button key={action.kind} type="button" className="sb-action" title={title("Answer the pending review")} onClick={onSupervisedEdits}>Review</button>;
       case "complete_todo":

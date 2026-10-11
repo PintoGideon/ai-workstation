@@ -2,8 +2,8 @@
 //! §16): project, feature, branch, worktree and AIW session id, plus one
 //! line asking for the branch name in commits and PR titles.
 //!
-//! - **Claude**: appended to `--append-system-prompt` (after the screenshot
-//!   evidence text when there is one).
+//! - **Claude**: appended to `--append-system-prompt` (after any earlier
+//!   appended text when there is one).
 //! - **Codex**: appended to `developer_instructions` (passed with `-c`).
 //! - **Gemini**: the `SessionStart` hook prints
 //!   `hookSpecificOutput.additionalContext`.
@@ -60,7 +60,7 @@ pub fn claude_args(ctx: &LaunchContext, mut args: Vec<String>) -> Vec<String> {
 /// (merged with the user's config layers and any earlier `-c` value).
 pub fn codex_args(ctx: &LaunchContext, args: Vec<String>) -> Vec<String> {
     let paragraph = context_paragraph(ctx);
-    crate::codex_config::with_screenshot_guidance(&ctx.workdir, &paragraph, args.clone())
+    crate::codex_config::with_developer_instructions(&ctx.workdir, &paragraph, args.clone())
         .unwrap_or(args)
 }
 
@@ -133,7 +133,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_gets_one_append_flag_after_the_screenshot_text() {
+    fn claude_gets_one_append_flag_after_an_earlier_append() {
         let args = claude_args(&ctx(), vec!["--chrome".into()]);
         assert_eq!(args[1], "--append-system-prompt");
         assert!(args[2].starts_with(MARKER));
@@ -141,11 +141,11 @@ mod tests {
             &ctx(),
             vec![
                 "--append-system-prompt".into(),
-                "AIW screenshot evidence: …".into(),
+                "Earlier system prompt text.".into(),
             ],
         );
         assert_eq!(merged.len(), 2);
-        assert!(merged[1].starts_with("AIW screenshot evidence: …\n\nAIW context:"));
+        assert!(merged[1].starts_with("Earlier system prompt text.\n\nAIW context:"));
     }
 
     #[test]

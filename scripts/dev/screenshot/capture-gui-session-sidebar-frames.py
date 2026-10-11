@@ -180,13 +180,13 @@ try:
     wait("!!document.querySelector('.sb-prompt button') && !!document.querySelector('.sb-active_todo button')")
     wait("document.querySelector('.xterm-rows')?.innerText.includes('Waiting for the next instruction')")
     wait("!!document.querySelector('.sb-context') && document.querySelector('.sb-status').innerText.includes('Effective')")
-    wait("document.querySelector('.sb-pr_triage')?.innerText.includes('#321')")
+    wait("document.querySelector('.sb-pr')?.innerText.includes('#321')")
     sections = evaluate("Array.from(document.querySelectorAll('.sb-section')).map(s=>s.getAttribute('aria-label'))")
-    assert sections == ['Status','Context','Plan','Issue','PR Triage','Work','Summary','Prompt','Todos','Active TODO'], sections
+    assert sections == ['Status','Context','Issue','Pull request','Work','Summary','Prompt','Todos','Active TODO'], sections
     assert evaluate("document.querySelector('.sb-context').dataset.band") == 'warning'
     capture('001-claude-full-sidebar.png',
-        'Claude sidebar runs its own collectors without a TUI: input/output/effective tokens, cost/model, warning estimated context, current plan, issue/PR, thinking marker, summary, last prompt and agent TODOs. Unsupported quota is omitted.',
-        ['Claude Sidebar','Input','Output','Effective','Cost','Model','AIW_PLAN.md','PR#321','thinking'],
+        'Claude sidebar runs its own collectors without a TUI: input/output/effective tokens, cost/model, warning estimated context, issue/PR, thinking marker, summary, last prompt and agent TODOs. Unsupported quota is omitted.',
+        ['Claude Sidebar','Input','Output','Effective','Cost','Model','PR#321','thinking'],
         "!!document.querySelector('.sb-todos [role=progressbar]') && !document.querySelector('.sb-usage')")
 
     evaluate(f"{BODY}.scrollTop={BODY}.scrollHeight")
@@ -226,11 +226,6 @@ try:
         ['Claude Sidebar','Viewing earlier output'],
         "document.querySelector('.composer textarea').value===" + json.dumps(draft))
 
-    sidebar_button('plan','Open')
-    wait("document.querySelector('[role=dialog]')?.innerText.includes('Invoice rounding plan')")
-    capture('005-open-plan.png','Open reads the current plan file in a native GUI modal without editing it.',
-        ['Current plan','Invoice rounding plan','Round negative totals'])
-    aria('Close')
     evaluate(f"{BODY}.scrollTop={BODY}.scrollHeight")
     sidebar_button('active_todo','Complete')
     wait("!!document.querySelector('.sb-confirm')")
@@ -252,11 +247,11 @@ try:
 
     click_nav('release-prep')
     wait(f"{SB}?.innerText.includes('Pi Sidebar')")
-    wait(f"{SB}?.innerText.includes('No plan selected')")
-    assert evaluate("Array.from(document.querySelectorAll('.sb-section')).map(s=>s.getAttribute('aria-label'))") == ['Status','Plan','PR Triage']
+    wait(f"{SB}?.innerText.includes('#12 merged')")
+    assert evaluate("Array.from(document.querySelectorAll('.sb-section')).map(s=>s.getAttribute('aria-label'))") == ['Status','Pull request']
     capture('008-pi-sparse-sidebar.png',
-        'A sparse Pi tab omits unavailable tokens, usage, context, prompt, work, summary and TODOs. The same shared TUI plan placeholder and persisted merged-PR state remain.',
-        ['Pi Sidebar','No plan selected','#12 merged'],
+        'A sparse Pi tab omits unavailable tokens, usage, context, prompt, work, summary and TODOs. The persisted merged-PR state remains.',
+        ['Pi Sidebar','#12 merged'],
         "!document.querySelector('.sb-context') && !document.querySelector('.sb-prompt')")
     (out / 'native-notes.json').write_text(json.dumps(notes,indent=2))
 finally:

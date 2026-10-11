@@ -217,38 +217,10 @@ doc always says exactly what remains.
   and temporary follow-ups in Final Review and both PR review modes, with
   optional editable inline/general comment conversion. The remaining Round 3
   co-review and workflow enhancements stay in backlog.
-- [PR Triage](pr-comment-review-plan.md) — _Shipped._ Triage a
-  GitHub PR's comments (inline, review summaries, conversation, bots)
-  inside AIW and, per comment, inject a token-minimal fix into the live
-  agent session, post an AI-drafted reply, or skip. Token efficiency is
-  the core constraint: the TUI fetches/triages with zero agent tokens,
-  fix prompts carry only comment + diff hunk + `file:line`, threads are
-  cached by head SHA. Split into read-only MVP → fix injection →
-  replies/resolution → throughput epics, with a planned Epic E adding an
-  AI code review of the diff and a committed `review-memory.md` of common
-  findings (bootstrapped from the last N PRs, grown one comment at a time).
-  All epics and open questions have now closed — most recently a
-  `New feature…` fix target that runs a PR's triage in its own
-  worktree-backed feature, with its harness and vibe mode chosen
-  independently of the source feature, an explicit `I` step to land
-  those commits on the PR, and a cross-project review-memory layer
-  (`~/.config/ai_workstation/review-memory.md`) that AI review merges on top of each
-  repo's own doc, with `g` picking which doc `M` and the bootstrap write to.
-  One small backlog item remains: teaching the compact pass (`c`) to prune
-  the global doc as well as the project one. A later addition — investigating
-  a review comment read-only (`v`) instead of fixing it — shipped in PR #602;
-  its deferred polish is tracked in
-  [PR Triage — Investigate: follow-ups](pr-triage-investigate-followups-plan.md).
-  A follow-on lets the operator attach optional free-form context to the next
-  `v` run (`e`): a hypothesis the read-only pass verifies against the PR and
-  repo, reviewable in a banner and cleared once consumed (empty box = prior
-  behaviour).
-- [PR Triage — Investigate: follow-ups](pr-triage-investigate-followups-plan.md)
-  — _Backlog._ Ergonomic gaps on the shipped read-only investigation flow:
-  offer "Investigation findings" from the `R` reply-kind picker (today it's
-  only reachable via the `a` menu); auto-scroll the detail pane to the answer
-  when a run finishes; mouse-wheel / `j`-`k` scrolling for the right-side box;
-  and a follow-up-thread count on the section header.
+- PR Triage and its Investigate follow-ups — _Removed 2026-10-11._ The
+  comment reader, fix-prompt injection, AI reply drafts, read-only
+  investigations and companion triage features duplicated what the agents
+  do in their own session with `gh`; the plans were deleted with the code.
 - [Screenshot & video review harness](screenshot-review-plan.md) —
   _All epics shipped._ Lets an agent run AIW in an isolated scratch
   instance (private `XDG_CONFIG_HOME`/`XDG_STATE_HOME` + tmux session, no

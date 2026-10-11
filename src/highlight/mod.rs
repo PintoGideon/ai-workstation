@@ -7,9 +7,9 @@ mod tree_sitter;
 pub(crate) use detect::{HighlightInstallState, HighlightLanguage};
 pub use theme::style_for_class;
 
+pub(crate) use model::{HighlightRequest, HighlightedLine, HighlightedText};
 #[cfg(test)]
-pub(crate) use model::HighlightedSpan;
-pub(crate) use model::{HighlightRequest, HighlightedLine, HighlightedText, SyntaxClass};
+pub(crate) use model::{HighlightedSpan, SyntaxClass};
 pub(crate) use service::{cache_generation, highlight_source, parser_state_for};
 pub(crate) use tree_sitter::{StartupValidationLevel, StartupValidationMessage};
 

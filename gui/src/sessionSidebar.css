@@ -4,7 +4,7 @@
  * built on the shared palette, so the dark-theme and custom-theme work can
  * retune the panel by overriding tokens rather than rules. Section accents
  * follow the TUI's (`ui/pane.rs::sidebar_section_color`): Status
- * warn, Usage/Todos succeed, Work is primary, Summary/PR Triage inform, and
+ * warn, Usage/Todos succeed, Work is primary, Summary/Pull request inform, and
  * Context takes its band.
  */
 :root {
@@ -24,7 +24,6 @@
   --sb-tone-ready: var(--green);
   --sb-tone-waiting: var(--amber);
   --sb-tone-busy: var(--accent);
-  --sb-tone-pr-working: var(--amber);
   --sb-tone-muted: var(--text-faint);
   --sb-tone-detail: var(--text-muted);
   --sb-tone-todo: var(--green);
@@ -126,7 +125,7 @@
 .sb-status { --sb-section-accent: var(--sb-accent-status); }
 .sb-usage { --sb-section-accent: var(--sb-accent-usage); }
 .sb-issue { --sb-section-accent: var(--sb-accent-issue); }
-.sb-pr_triage { --sb-section-accent: var(--sb-accent-pr); }
+.sb-pr { --sb-section-accent: var(--sb-accent-pr); }
 .sb-work { --sb-section-accent: var(--sb-accent-work); }
 .sb-summary { --sb-section-accent: var(--sb-accent-summary); }
 .sb-prompt { --sb-section-accent: var(--sb-accent-prompt); }
@@ -166,7 +165,6 @@
 .tone-ready, .tone-state_active { color: var(--sb-tone-ready); }
 .tone-waiting, .tone-state_idle { color: var(--sb-tone-waiting); }
 .tone-busy, .tone-generating, .tone-hint { color: var(--sb-tone-busy); }
-.tone-pr_working { color: var(--sb-tone-pr-working); }
 .tone-muted { color: var(--sb-tone-muted); }
 .tone-detail { color: var(--sb-tone-detail); }
 .tone-todo { color: var(--sb-tone-todo); }

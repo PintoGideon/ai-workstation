@@ -339,7 +339,6 @@ pub struct GuiHandle {
     app: App,
     /// Configured-session launches whose pre-check is running outside the lock.
     pub(crate) custom_session_adds: std::collections::HashSet<(String, String)>,
-    pub(crate) pr_triage_context: Option<crate::gui_pr_triage::PrTriageContext>,
 }
 
 impl GuiHandle {
@@ -347,7 +346,6 @@ impl GuiHandle {
         Ok(Self {
             app: App::new(db_path)?,
             custom_session_adds: Default::default(),
-            pr_triage_context: None,
         })
     }
 
@@ -361,7 +359,6 @@ impl GuiHandle {
         Self {
             app,
             custom_session_adds: Default::default(),
-            pr_triage_context: None,
         }
     }
 
@@ -2066,7 +2063,6 @@ mod tests {
         GuiHandle {
             app: App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new())),
             custom_session_adds: Default::default(),
-            pr_triage_context: None,
         }
     }
 
@@ -2087,7 +2083,6 @@ mod tests {
         GuiHandle {
             app,
             custom_session_adds: Default::default(),
-            pr_triage_context: None,
         }
     }
 
@@ -4096,7 +4091,6 @@ mod tests {
         GuiHandle {
             app,
             custom_session_adds: Default::default(),
-            pr_triage_context: None,
         }
     }
 
@@ -4288,7 +4282,6 @@ mod tests {
             GuiHandle {
                 app,
                 custom_session_adds: Default::default(),
-                pr_triage_context: None,
             },
             CreateFeatureRequest {
                 project_name: "demo".into(),

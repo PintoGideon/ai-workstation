@@ -157,17 +157,6 @@ enum Commands {
         #[arg(required = true)]
         paths: Vec<String>,
     },
-    /// Return an agent-written PR review reply draft to the running AIW
-    /// instance. Reads the reply body from stdin.
-    #[command(name = "reply-draft", hide = true)]
-    ReplyDraft {
-        #[arg(long)]
-        pr_number: u32,
-        #[arg(long)]
-        comment_id: u64,
-        #[arg(long)]
-        request_id: String,
-    },
     // FORK: hook-driven productivity (DESIGN.md §16). Each reads the harness's
     // hook JSON from stdin and talks to the dashboard socket; see
     // `fork::hook_cli`.
@@ -469,23 +458,6 @@ fn run_notify_fallbacks(
     }
 }
 
-fn capture_reply_draft_in_store(
-    path: &std::path::Path,
-    number: u32,
-    comment: u64,
-    request: &str,
-    body: &str,
-) -> Result<()> {
-    if !path.is_file() {
-        anyhow::bail!("AIW reply-draft store is unavailable");
-    }
-    let db = db::AiwDb::open(path)?;
-    if !db.capture_pr_comment_reply_draft(number, comment, request, body)? {
-        anyhow::bail!("Reply draft refused: this fix request is stale or unknown");
-    }
-    Ok(())
-}
-
 /// FORK: run the first-run AMF migration (`crate::fork::migrate`). A failure
 /// stops AIW before it creates its own config folder, so the next start
 /// retries instead of starting empty.
@@ -617,48 +589,6 @@ pub fn run() -> Result<()> {
 
     if let Some(Commands::Automation { command }) = cli.command {
         return run_automation_command(command);
-    }
-
-    if let Some(Commands::ReplyDraft {
-        pr_number,
-        comment_id,
-        request_id,
-    }) = cli.command
-    {
-        use std::io::Read;
-        let mut body = String::new();
-        std::io::stdin().read_to_string(&mut body)?;
-        let body = body.trim();
-        if body.is_empty() {
-            anyhow::bail!("Reply draft is empty");
-        }
-        if request_id.trim().is_empty() {
-            anyhow::bail!("Reply draft request id is empty");
-        }
-        let payload = serde_json::json!({
-            "type": "pr-reply-draft",
-            "pr_number": pr_number,
-            "comment_id": comment_id,
-            "draft_request_id": request_id,
-            "body": body,
-        });
-        if let Err(ipc_err) = ipc::send(&ipc::socket_path(), &serde_json::to_string(&payload)?) {
-            // A standalone GUI does not bind the TUI socket. The same SQLite
-            // request-id guard accepts receipts without launching another AIW.
-            capture_reply_draft_in_store(
-                &project::db_path(),
-                pr_number,
-                comment_id,
-                &request_id,
-                body,
-            )
-            .map_err(|e| {
-                e.context(format!(
-                    "AIW socket delivery failed first ({ipc_err:#}), then the reply-draft store fallback failed"
-                ))
-            })?;
-        }
-        return Ok(());
     }
 
     if let Some(Commands::Notify {
@@ -1432,8 +1362,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
     let mut last_statuses_sync = std::time::Instant::now();
     // FORK(no-cloud): no background PR badge sweep. AIW re-ran `gh` for every
     // feature's PR every 5 minutes (and once at startup); AIW refreshes PR
-    // badges only on an explicit refresh (`R` / leader `r`) or when the user
-    // opens PR Triage, and shows the last-known badge state otherwise.
+    // badges only on an explicit refresh (`R` / leader `r`), and shows the
+    // last-known badge state otherwise.
     let mut last_redraw_signature = app.redraw_signature();
 
     loop {
@@ -1514,19 +1444,11 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         // FORK: the session info block's sweep results (DESIGN.md §18).
         force_redraw |= app.poll_session_info_bg();
 
-        if app.pr_review_work.fetch_pending() && app.poll_pr_review_bg() {
-            force_redraw = true;
-        }
-
         if app.issue_work.pending() && app.poll_issue_browser_bg() {
             force_redraw = true;
         }
 
         if app.issue_comment_work.pending() && app.poll_issue_comment_bg() {
-            force_redraw = true;
-        }
-
-        if app.pr_review_work.investigation_pending() && app.poll_pr_investigation_bg() {
             force_redraw = true;
         }
 
@@ -2050,10 +1972,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
 #[cfg(test)]
 mod tests {
     use super::{
-        Cli, Commands, cleanup_hooks_at, run_notify_fallbacks, startup_loading_pending,
-        startup_sidebar_can_warm,
+        cleanup_hooks_at, run_notify_fallbacks, startup_loading_pending, startup_sidebar_can_warm,
     };
-    use clap::Parser;
     use std::collections::BTreeSet;
     use std::fs;
     use tempfile::TempDir;
@@ -2142,53 +2062,6 @@ mod tests {
     fn read_settings(path: &std::path::Path) -> serde_json::Value {
         let s = fs::read_to_string(path).unwrap();
         serde_json::from_str(&s).unwrap()
-    }
-
-    #[test]
-    fn reply_draft_fallback_requires_existing_store_and_current_request() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("aiw.db");
-        assert!(super::capture_reply_draft_in_store(&path, 7, 101, "request", "Fixed").is_err());
-        assert!(!path.exists());
-        let db = crate::db::AiwDb::open(&path).unwrap();
-        db.begin_pr_comment_reply_draft(7, 101, "current", "head", None)
-            .unwrap();
-        assert!(super::capture_reply_draft_in_store(&path, 7, 101, "old", "Wrong").is_err());
-        super::capture_reply_draft_in_store(
-            &path,
-            7,
-            101,
-            "current",
-            "Fixed through standalone GUI",
-        )
-        .unwrap();
-        assert_eq!(
-            db.load_pr_comment_reply_draft(7, 101).unwrap().as_deref(),
-            Some("Fixed through standalone GUI")
-        );
-    }
-
-    #[test]
-    fn reply_draft_cli_parses_the_prompt_handoff_arguments() {
-        let cli = Cli::try_parse_from([
-            "aiw",
-            "reply-draft",
-            "--pr-number",
-            "42",
-            "--comment-id",
-            "9001",
-            "--request-id",
-            "request-123",
-        ])
-        .unwrap();
-        assert!(matches!(
-            cli.command,
-            Some(Commands::ReplyDraft {
-                pr_number: 42,
-                comment_id: 9001,
-                request_id,
-            }) if request_id == "request-123"
-        ));
     }
 
     #[test]

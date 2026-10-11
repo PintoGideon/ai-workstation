@@ -32,16 +32,10 @@ use ai_workstation::gui_contract::{
 use ai_workstation::gui_debug_log::{self, DebugLogView};
 use ai_workstation::gui_diff::{self, DiffOptions, DiffView};
 use ai_workstation::gui_dormancy::{self, DormancyStopResult, DormancyView, DormantObservation};
-use ai_workstation::gui_pr_triage::{
-    self, PrTriageAction, PrTriagePrefetch, PrTriageReads, PrTriageTarget, PrTriageView,
-};
 use ai_workstation::gui_prompt_overrides::{
     self, ClearOverride, OverrideContext, OverridesView, SaveOverride,
 };
 use ai_workstation::gui_prompts::{self, LibraryScope, LibraryView, ResolvePrompt};
-use ai_workstation::gui_screenshots::{
-    self, EvidenceListing, EvidenceOwner, EvidenceSelection, ImageData,
-};
 use ai_workstation::gui_sessions::{
     self, AddCustomSessionRequest, AddCustomSessionResponse, CloseEditorsResponse,
     NewSessionOptions, OpenVscodeResponse,
@@ -898,163 +892,14 @@ async fn dormancy_stop(
     Ok(results)
 }
 
-// PR Triage reads GitHub through `gh`, which can be slow or hang (network,
-// auth prompt, rate limit). Each step names its reads under the handle lock,
-// performs them on a blocking thread without it, then applies the results
-// under the lock again, so the other commands never queue behind `gh`.
-async fn pr_triage_read(reads: PrTriageReads) -> Result<PrTriagePrefetch, GuiError> {
-    tauri::async_runtime::spawn_blocking(move || reads.run())
-        .await
-        .map_err(|e| GuiError::from(anyhow::anyhow!("PR Triage's GitHub read stopped: {e}")))
-}
-
+/// FORK(no-cloud): refresh the PR badges (`gh`) on an explicit user action.
 #[tauri::command]
-async fn pr_triage_begin(
-    state: State<'_, AppState>,
-    target: PrTriageTarget,
-) -> Result<PrTriageView, GuiError> {
-    let reads = gui_pr_triage::plan_begin(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &target,
-    )?;
-    let prefetch = pr_triage_read(reads).await?;
-    let mut gui = state.0.lock().expect("gui handle mutex poisoned");
-    // FORK(no-cloud): opening PR Triage is what refreshes PR badges.
-    gui.refresh_pr_badges();
-    gui_pr_triage::begin_prefetched(&mut gui, target, prefetch)
-}
-
-#[tauri::command]
-async fn pr_triage_snapshot(
-    state: State<'_, AppState>,
-    workflow_id: String,
-) -> Result<PrTriageView, GuiError> {
-    let reads = gui_pr_triage::plan_poll(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-    )?;
-    let prefetch = pr_triage_read(reads).await?;
-    gui_pr_triage::poll_prefetched(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-        prefetch,
-    )
-}
-
-#[tauri::command]
-async fn pr_triage_act(
-    state: State<'_, AppState>,
-    workflow_id: String,
-    revision: u64,
-    action: PrTriageAction,
-) -> Result<Option<PrTriageView>, GuiError> {
-    let reads = gui_pr_triage::plan_act(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-        revision,
-        &action,
-    )?;
-    let prefetch = pr_triage_read(reads).await?;
-    gui_pr_triage::act_prefetched(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-        revision,
-        action,
-        prefetch,
-    )
-}
-
-#[tauri::command]
-async fn screenshots_list(
-    state: State<'_, AppState>,
-    selection: EvidenceSelection,
-) -> Result<EvidenceListing, GuiError> {
-    let read = gui_screenshots::plan(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        selection,
-    )?;
-    let listing = tauri::async_runtime::spawn_blocking(move || read.run())
-        .await
-        .map_err(|e| GuiError::from(anyhow::anyhow!("Evidence scan stopped: {e}")))?;
-    gui_screenshots::finish(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        listing,
-    )
-}
-
-#[tauri::command]
-async fn screenshots_image(
-    state: State<'_, AppState>,
-    scope_id: String,
-    image_id: String,
-    hash: String,
-    thumbnail: bool,
-) -> Result<ImageData, GuiError> {
-    let read = gui_screenshots::plan_image(
-        &state.0.lock().expect("gui handle mutex poisoned"),
-        scope_id,
-        image_id,
-        hash,
-        thumbnail,
-    )?;
-    let (read, result) = tauri::async_runtime::spawn_blocking(move || {
-        let result = read.run();
-        (read, result)
-    })
-    .await
-    .map_err(|e| GuiError::from(anyhow::anyhow!("Evidence decode stopped: {e}")))?;
-    gui_screenshots::finish_image(&state.0.lock().expect("gui handle mutex poisoned"), &read)?;
-    result
-}
-
-#[tauri::command]
-fn screenshots_changed(state: State<AppState>) -> bool {
-    gui_screenshots::changed(&mut state.0.lock().expect("gui handle mutex poisoned"))
-}
-
-#[tauri::command]
-fn screenshots_cleanup_scopes(
-    state: State<AppState>,
-) -> Result<Vec<(EvidenceOwner, bool)>, GuiError> {
-    gui_screenshots::cleanup_scopes(&state.0.lock().expect("gui handle mutex poisoned"))
-}
-
-#[tauri::command]
-async fn screenshots_cleanup(state: State<'_, AppState>, scope_id: String) -> Result<(), GuiError> {
-    let read = gui_screenshots::plan_cleanup(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &scope_id,
-    )?;
-    tauri::async_runtime::spawn_blocking(move || read.run())
-        .await
-        .map_err(|e| GuiError::from(anyhow::anyhow!("Evidence cleanup stopped: {e}")))?
-}
-
-#[tauri::command]
-fn screenshots_open_browser(url: String) -> Result<(), GuiError> {
-    gui_screenshots::open_gallery_browser(&url)
-}
-
-#[tauri::command]
-async fn screenshots_pr_document(
-    state: State<'_, AppState>,
-    workflow_id: String,
-) -> Result<String, GuiError> {
-    let read = gui_screenshots::plan_pr_document(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-    )?;
-    let (read, result) = tauri::async_runtime::spawn_blocking(move || {
-        let result = read.run();
-        (read, result)
-    })
-    .await
-    .map_err(|e| GuiError::from(anyhow::anyhow!("PR description read stopped: {e}")))?;
-    gui_screenshots::finish_pr_document(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &read,
-    )?;
-    result
+fn refresh_pr_badges(state: State<AppState>) {
+    state
+        .0
+        .lock()
+        .expect("gui handle mutex poisoned")
+        .refresh_pr_badges();
 }
 
 /// The agent sidebar for one agent tab. Drives the same background sources
@@ -1135,13 +980,6 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             theme_catalog,
-            screenshots_pr_document,
-            screenshots_open_browser,
-            screenshots_list,
-            screenshots_image,
-            screenshots_changed,
-            screenshots_cleanup_scopes,
-            screenshots_cleanup,
             prompt_library_load,
             prompt_library_resolve,
             prompt_overrides_load,
@@ -1189,9 +1027,7 @@ fn main() {
             dormancy_load,
             debug_log_load,
             dormancy_stop,
-            pr_triage_begin,
-            pr_triage_snapshot,
-            pr_triage_act,
+            refresh_pr_badges,
             syntax_install_status,
             syntax_install,
             session_sidebar,

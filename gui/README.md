@@ -165,12 +165,9 @@ The [workflow inventory](../docs/backlog/aiw-gui-workflow-inventory.md) labels
 each available, limited, and planned GUI workflow. The GUI currently supports
 project and feature creation, additional Claude, Codex, Pi, Gemini, Cursor, terminal,
 Neovim, VS Code, TODOs and configured custom sessions, session terminals, TODO
-lists and agent starts,
-Full and Quick Plan interviews, and Learning with persisted Q&A and an explicit
-editing-agent handoff, plus standalone Git diffs, supervised edits, saved prompt browsing,
-dormant-feature stops and a first PR Triage slice, with syntax highlighting in
-diffs, reviews and the Learning reader. Continue to use `aiw` for workflows
-marked Planned.
+lists and agent starts, plus standalone Git diffs, supervised edits, saved
+prompt browsing and dormant-feature stops, with syntax highlighting in diffs.
+Continue to use `aiw` for workflows marked Planned.
 
 Both interfaces read the existing `~/.config/ai_workstation/aiw.db`. The GUI checks for
 external workspace and TODO changes every two seconds. Each feature page has
@@ -180,13 +177,12 @@ starts that hit AIW's resource warning ask for explicit approval.
 
 Agent tabs also have a right-hand **Claude Sidebar**, **Codex Sidebar**,
 **Pi Sidebar**, **Gemini Sidebar** or **Cursor Sidebar**. Sections follow the TUI's order:
-Status, Usage, Context, Plan, Issue, PR Triage, Work, Summary, Prompt, Todos
+Status, Usage, Context, Issue, Pull request, Work, Summary, Prompt, Todos
 and Active TODO. Empty sections are omitted;
-usage windows exist only for supported accounts, and the plan placeholder
-matches the TUI. **Open** reads the current plan, **View** expands the last
+usage windows exist only for supported accounts. **View** expands the last
 prompt and **Reuse** appends it to the unsent composer draft. **Complete**
-confirms completion of the session's linked AIW TODO. **Triage** and **Review**
-open their existing workflows.
+confirms completion of the session's linked AIW TODO. **Review** opens the
+supervised-edits panel.
 
 The header's hide button leaves a **Sidebar** rail to restore the panel.
 This viewer's preference survives restarts, separately from shared TUI state.
@@ -294,10 +290,7 @@ Escape, switching prompts or contexts ask before discarding unsaved text. The
 list refreshes while open. If the TUI, another window or a hand edit changes
 that prompt's overrides, saving is blocked until you choose **Reload current
 version**, which keeps your text. A malformed `aiw.json` is reported and never
-overwritten. A pending PR Triage investigation offers **Edit prompt**,
-which opens the manager on that prompt. The call keeps waiting and uses your
-saved override when you continue, though its preview still shows the earlier
-text. Native macOS validation remains open.
+overwritten. Native macOS validation remains open.
 
 Use **New session** on a feature page to start another agent, terminal, or
 Neovim session. You can name it or use the next default name; the new tab opens
@@ -513,38 +506,6 @@ TUI. Closing only an editor and deleting from this list remain TUI actions.
 Four asserted native WSLg frames from `gui-dormancy.txt` verify the list,
 confirmation, a confirm-time refusal and editor ownership with stand-in
 processes on a private tmux server.
-
-### PR Triage
-
-**PR Triage** on a Git feature lists the repository's open pull requests (or all
-of them), marks the branch's own PR, and opens any PR from the list or by number.
-Comments load through the same `gh` fetch and normalization as the TUI's PR
-Triage: inline comments with their windowed diff context, review summaries,
-conversation and bot comments, review-thread resolution, and AIW's own follow-up
-replies collated under the comment they answer. Hide resolved threads, change the
-sort, and mark comments done or skipped locally. **Investigate…** runs the shared
-read-only investigation (with an optional hypothesis, then follow-ups) on an
-allowed harness: a pre-call notice shows the exact prompt and nothing runs until
-**Continue AI call**. If the PR changed after the preview, the call is refused and
-the updated prompt is shown instead. **Reply: fixed**, **Reply: not needed** and
-**Reply with findings** open a local draft; **Review reply…** shows the exact body
-(with AIW's attribution) and destination, and only **Post reply to GitHub** writes.
-**Resolve thread…**/**Reopen thread…** also ask first. Before writing, AIW re-reads
-the PR head and the thread on GitHub and refuses stale targets, keeping your
-draft. **Fix agent** selects an existing agent session on this feature (including
-stopped sessions). **Prepare fix…** builds the TUI's comment fix prompt, including
-completed investigation findings, and opens an editable preview. **Open in agent
-composer** rechecks the PR head and session identity, closes triage and appends
-the edited prompt to that agent's existing unsent draft. No agent is started or
-sent a message, and preparing a draft does not mark the comment Fixing. Edited
-text is protected on cancel/close and retained after failures. Dedicated or
-companion fix sessions, batch fixes, integration,
-keep-as-TODO and fixing-agent reply receipts remain in the TUI. Command and component tests cover
-these flows; seven asserted native WSLg frames from `gui-pr-triage.txt` use an
-offline `gh` that refuses every write and offline harness fixtures. The
-`gui-pr-fix-drafts.txt` native scenario also covers agent picking, the shared
-investigation seed, edited-draft protection, stale-head refusal and an unsent
-handoff preserving an existing composer draft.
 
 ### Debug log
 

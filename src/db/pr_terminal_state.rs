@@ -1,8 +1,8 @@
 //! SQLite cache of a branch's *terminal* PR state — merged or closed —
 //! keyed by `(repo, branch)`.
 //!
-//! Unlike `pr_review_cache` (keyed by head SHA, invalidated the moment the PR
-//! moves), this is durable on purpose: merged and closed are outcomes a PR
+//! Unlike the open-PR badge cache (session-lived), this is durable on
+//! purpose: merged and closed are outcomes a PR
 //! never leaves, so a stored hit is never stale and is loaded once at
 //! startup rather than re-derived from `gh` every launch.
 
@@ -30,8 +30,8 @@ pub fn load_all(conn: &Connection) -> Result<HashMap<(String, String), TerminalP
     for row in rows {
         let (repo, branch, number, state, at) = row?;
         // A row whose `state` column doesn't parse (hand-edited DB, a future
-        // downgrade) is dropped rather than surfaced as an error — the same
-        // "corrupt cache is a miss" contract `pr_review_cache::load` uses.
+        // downgrade) is dropped rather than surfaced as an error: a corrupt
+        // cache row is a miss.
         let Some(state) = TerminalPrState::from_gh(&state) else {
             continue;
         };

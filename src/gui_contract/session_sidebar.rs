@@ -19,7 +19,7 @@
 //! | Usage 5h/7d | The shared `UsageManager` (Claude OAuth usage endpoint, Codex rollout files), refreshed while a session sidebar is open |
 //! | Context | The shared context collectors, via the session-status collector |
 //! | Issue | The persisted feature |
-//! | PR Triage | The shared open-PR sweep and persisted merged/closed state; review-session activity only where shared sources report it |
+//! | Pull request | The shared open-PR sweep and persisted merged/closed state |
 //! | Work | Notification files (input, diff review), thinking markers |
 //! | Summary | The persisted feature summary |
 //! | Prompt | The background sidebar load and Codex rollout metadata |
@@ -159,8 +159,6 @@ pub struct SidebarContextMeter {
 pub enum SidebarAction {
     /// TUI `leader l`: put the last prompt in the composer draft.
     ReusePrompt { prompt: String },
-    /// TUI `leader G`.
-    PrTriage,
     /// TUI `leader z`: complete the TODO this session was launched for.
     CompleteTodo { todo_id: String },
     /// TUI `leader V`: answer the pending diff review.
@@ -213,9 +211,6 @@ impl GuiHandle {
                     |agent| app.thinking_from_shared_sources(&feature.tmux_session, &agent),
                 ),
             summary_generating: app.summary_state.generating.contains(&feature.tmux_session),
-            pr_review_working: app
-                .dedicated_review_session_working_for_workdir(&feature.workdir)
-                .unwrap_or(false),
         };
         let assembly = app
             .assemble_agent_sidebar(feature, Some(session), &session.kind, &runtime)
@@ -226,10 +221,7 @@ impl GuiHandle {
             .filter(|reference| reference.launched_from_todo_menu)
             .map(|reference| reference.todo_id.clone())
             .filter(|_| app.db.is_some());
-        let actions = ActionContext {
-            is_git: project.is_git,
-            todo_id,
-        };
+        let actions = ActionContext { todo_id };
         Ok(project_view(&session.id, &assembly, &actions))
     }
 
@@ -305,7 +297,6 @@ impl GuiHandle {
 }
 
 struct ActionContext {
-    is_git: bool,
     todo_id: Option<String>,
 }
 
@@ -390,23 +381,16 @@ fn project_view(
                 }
                 _ => lines.extend(body.lines().map(|line| field_line(title, line))),
             }
-            match kind {
-                SidebarSectionKind::Prompt => {
-                    if let Some(prompt) = assembly
-                        .prompt_full
-                        .as_deref()
-                        .map(str::trim)
-                        .filter(|prompt| !prompt.is_empty())
-                    {
-                        actions.push(SidebarAction::ReusePrompt {
-                            prompt: prompt.to_string(),
-                        });
-                    }
-                }
-                SidebarSectionKind::PrTriage if context.is_git => {
-                    actions.push(SidebarAction::PrTriage);
-                }
-                _ => {}
+            if kind == SidebarSectionKind::Prompt
+                && let Some(prompt) = assembly
+                    .prompt_full
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|prompt| !prompt.is_empty())
+            {
+                actions.push(SidebarAction::ReusePrompt {
+                    prompt: prompt.to_string(),
+                });
             }
             SessionSidebarSection {
                 kind,
@@ -687,7 +671,7 @@ mod tests {
                 SidebarSectionKind::Usage,
                 SidebarSectionKind::Context,
                 SidebarSectionKind::Issue,
-                SidebarSectionKind::PrTriage,
+                SidebarSectionKind::Pr,
                 SidebarSectionKind::Summary,
                 SidebarSectionKind::Prompt,
                 SidebarSectionKind::ActiveTodo,
@@ -727,9 +711,9 @@ mod tests {
             fields(section(&view, SidebarSectionKind::Issue))[1],
             field("Issue", "#42")
         );
-        let pr = section(&view, SidebarSectionKind::PrTriage);
+        let pr = section(&view, SidebarSectionKind::Pr);
         assert_eq!(fields(pr), vec![field("PR", "#77 · 2 open")]);
-        assert_eq!(pr.actions, vec![SidebarAction::PrTriage]);
+        assert!(pr.actions.is_empty());
         let prompt = section(&view, SidebarSectionKind::Prompt);
         assert!(matches!(&prompt.lines[0], SidebarLine::Text { text, .. } if text.ends_with('…')));
         assert_eq!(
@@ -758,7 +742,7 @@ mod tests {
         assert_eq!(json["sections"][0]["lines"][0]["tone"], "ready");
         assert_eq!(json["sections"][1]["lines"][0]["kind"], "bar");
         assert_eq!(json["sections"][2]["context"]["band"], "critical");
-        assert_eq!(json["sections"][4]["actions"][0]["kind"], "pr_triage");
+        assert_eq!(json["sections"][4]["kind"], "pr");
     }
 
     #[test]

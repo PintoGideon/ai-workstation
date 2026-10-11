@@ -50,7 +50,7 @@ pub(crate) struct AgentSidebarData {
     pub active_todo_affordance: bool,
     pub summary_text: String,
     pub issue_source_text: Option<String>,
-    pub pr_triage_text: Option<String>,
+    pub pr_text: Option<String>,
     pub context_snapshot: Option<SessionContextSnapshot>,
     pub context_hint_visible: bool,
 }
@@ -74,7 +74,7 @@ pub enum SidebarSectionKind {
     Usage,
     Context,
     Issue,
-    PrTriage,
+    Pr,
     Work,
     Summary,
     Prompt,
@@ -89,7 +89,7 @@ impl SidebarSectionKind {
             Self::Usage => "Usage",
             Self::Context => "Context",
             Self::Issue => "Issue",
-            Self::PrTriage => "PR Triage",
+            Self::Pr => "Pull request",
             Self::Work => "Work",
             Self::Summary => "Summary",
             Self::Prompt => "Prompt",
@@ -126,12 +126,8 @@ pub(crate) fn sidebar_section_bodies(data: &AgentSidebarData) -> Vec<(SidebarSec
     {
         sections.push((SidebarSectionKind::Issue, issue.to_string()));
     }
-    if let Some(pr) = data
-        .pr_triage_text
-        .as_deref()
-        .filter(|text| non_empty(text))
-    {
-        sections.push((SidebarSectionKind::PrTriage, pr.to_string()));
+    if let Some(pr) = data.pr_text.as_deref().filter(|text| non_empty(text)) {
+        sections.push((SidebarSectionKind::Pr, pr.to_string()));
     }
 
     if let Some(work) = data.work_text.as_deref() {
@@ -176,7 +172,6 @@ pub enum SidebarTone {
     StateStopped,
     Waiting,
     Busy,
-    PrWorking,
     Ready,
     Generating,
     Hint,
@@ -189,8 +184,6 @@ pub enum SidebarTone {
 /// interfaces.
 pub(crate) fn sidebar_value_tone(title: &str, label: &str, value: &str) -> (SidebarTone, bool) {
     let lower = value.to_lowercase();
-    let pr_working =
-        title == "PR Triage" && (lower.contains("working") || lower.contains("running"));
     let tone = if label == "State" {
         match lower.as_str() {
             "active" => SidebarTone::StateActive,
@@ -202,8 +195,6 @@ pub(crate) fn sidebar_value_tone(title: &str, label: &str, value: &str) -> (Side
         SidebarTone::Waiting
     } else if lower.contains("thinking") || lower.contains("running tool") {
         SidebarTone::Busy
-    } else if pr_working {
-        SidebarTone::PrWorking
     } else if lower.contains("ready") {
         SidebarTone::Ready
     } else if lower.contains("generating") {
@@ -227,8 +218,7 @@ pub(crate) fn sidebar_value_tone(title: &str, label: &str, value: &str) -> (Side
         || lower.contains("running tool")
         || lower.contains("ready")
         || lower.contains("generating")
-        || label == "Hint"
-        || pr_working;
+        || label == "Hint";
     (tone, emphasised)
 }
 
@@ -292,8 +282,6 @@ pub(crate) struct SidebarRuntime<'a> {
     pub summary_generating: bool,
     /// Live Codex app-server events (IPC).
     pub codex_live: Option<&'a CodexLiveThreadState>,
-    /// The dedicated PR-review session is mid-turn.
-    pub pr_review_working: bool,
 }
 
 impl App {
@@ -414,7 +402,7 @@ impl App {
                 active_todo_affordance: common.active_todo_affordance,
                 summary_text,
                 issue_source_text: issue_source_sidebar_text(feature),
-                pr_triage_text: pr_triage_sidebar_text(self, feature, runtime),
+                pr_text: pr_sidebar_text(self, feature),
                 context_snapshot: common.context_snapshot,
                 context_hint_visible: common.context_hint_visible,
             },
@@ -478,7 +466,7 @@ impl App {
                 active_todo_affordance: common.active_todo_affordance,
                 summary_text,
                 issue_source_text: issue_source_sidebar_text(feature),
-                pr_triage_text: pr_triage_sidebar_text(self, feature, runtime),
+                pr_text: pr_sidebar_text(self, feature),
                 context_snapshot: common.context_snapshot,
                 context_hint_visible: common.context_hint_visible,
             },
@@ -524,7 +512,7 @@ impl App {
                 active_todo_affordance: common.active_todo_affordance,
                 summary_text,
                 issue_source_text: issue_source_sidebar_text(feature),
-                pr_triage_text: pr_triage_sidebar_text(self, feature, runtime),
+                pr_text: pr_sidebar_text(self, feature),
                 context_snapshot: common.context_snapshot,
                 context_hint_visible: common.context_hint_visible,
             },
@@ -544,20 +532,12 @@ struct SidebarCommon {
 }
 
 /// Sidebar-box counterpart of the TUI's ambient Viewing-mode PR badge.
-pub(crate) fn pr_triage_sidebar_text(
-    app: &App,
-    feature: &Feature,
-    runtime: &SidebarRuntime<'_>,
-) -> Option<String> {
+pub(crate) fn pr_sidebar_text(app: &App, feature: &Feature) -> Option<String> {
     if let Some(pr) = app.active_pr_for_feature(&feature.id) {
-        let mut lines = vec![match pr.unresolved_threads {
+        return Some(match pr.unresolved_threads {
             Some(count) => format!("PR: #{} · {count} open", pr.number),
             None => format!("PR: #{}", pr.number),
-        }];
-        if runtime.pr_review_working {
-            lines.push("Status: Working".to_string());
-        }
-        return Some(lines.join("\n"));
+        });
     }
     let pr = app.terminal_pr_for_feature(&feature.id)?;
     Some(format!("PR: #{} {}", pr.number, pr.state.label()))

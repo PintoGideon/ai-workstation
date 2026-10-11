@@ -4,7 +4,7 @@ import { blocks, token, parse, over, contrast, type Rgb } from "./contrast";
 
 // Every syntax role must stay readable (WCAG AA body text, 4.5:1) on the
 // backgrounds code is drawn on: the code surface, the added/removed row
-// tints, the review selection and the Learning reader's selected line. Reads
+// tints and the selection highlight. Reads
 // the real stylesheets, so retuning a theme token re-runs this check.
 const read = (name: string) => readFileSync(new URL(`../src/${name}`, import.meta.url), "utf8");
 const syntaxCss = read("syntax.css");

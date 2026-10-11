@@ -895,7 +895,7 @@ impl App {
         self.ensure_agent_mode_supported(&agent, &mode)?;
         // FORK: a worktree whose checkout vanished on disk is recreated on its
         // branch (or the start refused) before anything reads or writes the
-        // folder (the screenshot-owner check below, the hook files) — see
+        // folder (the hook files) — see
         // fork::worktree_repair.
         if !already_running {
             use crate::fork::worktree_repair::{self, Checkout};
@@ -930,16 +930,6 @@ impl App {
             }
         }
 
-        let mut screenshot_owners = std::collections::HashMap::new();
-        if !already_running {
-            for session in &self.store.projects[pi].features[fi].sessions {
-                if matches!(session.kind, SessionKind::Claude | SessionKind::Codex)
-                    && let Some(owner) = self.screenshot_owner(pi, fi, &session.id)?
-                {
-                    screenshot_owners.insert(session.id.clone(), owner);
-                }
-            }
-        }
         let feature = match self
             .store
             .projects
@@ -1098,19 +1088,11 @@ impl App {
                         &session.tmux_window,
                         &session.id,
                         resume_id,
-                        {
-                            let args = extra_args.clone();
-                            let args = if let Some(owner) = screenshot_owners.get(&session.id) {
-                                super::screenshots::launch_args(owner, true, args)?
-                            } else {
-                                args
-                            };
-                            crate::fork::launch::claude_launch_args(
-                                &launch_ctx,
-                                &self.config.aiw,
-                                args,
-                            )
-                        },
+                        crate::fork::launch::claude_launch_args(
+                            &launch_ctx,
+                            &self.config.aiw,
+                            extra_args.clone(),
+                        ),
                     )?;
                 }
                 SessionKind::Codex => {
@@ -1156,19 +1138,11 @@ impl App {
                         &session.tmux_window,
                         &session.id,
                         resume_override.flatten(),
-                        {
-                            let codex_args = if let Some(owner) = screenshot_owners.get(&session.id)
-                            {
-                                super::screenshots::launch_args(owner, false, codex_args)?
-                            } else {
-                                codex_args
-                            };
-                            crate::fork::launch::codex_launch_args(
-                                &launch_ctx,
-                                &self.config.aiw,
-                                codex_args,
-                            )
-                        },
+                        crate::fork::launch::codex_launch_args(
+                            &launch_ctx,
+                            &self.config.aiw,
+                            codex_args,
+                        ),
                     )?;
                 }
                 SessionKind::Pi => {
@@ -1717,7 +1691,6 @@ impl App {
             tmux_session,
             repo,
             workdir,
-            is_worktree,
             feature_identity,
             had_error,
             error_msg,
@@ -1729,7 +1702,6 @@ impl App {
                     s.tmux_session.clone(),
                     s.repo.clone(),
                     s.workdir.clone(),
-                    s.is_worktree,
                     self.store
                         .find_project(&s.project_name)
                         .and_then(|project| {
@@ -1759,9 +1731,6 @@ impl App {
             return Ok(());
         }
 
-        if is_worktree {
-            self.screenshot_worktree_deleted(&workdir)?;
-        }
         let feature_id = feature_identity.as_ref().map(|(id, _)| id.clone());
         self.clear_sidebar_state_for_session(&tmux_session);
         if let Some(feature_id) = feature_id.as_deref() {
@@ -1936,9 +1905,6 @@ impl App {
                                 .find(|feature| feature.name == deletion.feature_name)
                                 .map(|feature| (feature.id.clone(), feature.branch.clone()))
                         });
-                    if deletion.is_worktree {
-                        self.screenshot_worktree_deleted(&deletion.workdir)?;
-                    }
                     let feature_id = feature_identity.as_ref().map(|(id, _)| id.clone());
                     if let Some((feature_id, branch)) = feature_identity.as_ref() {
                         self.clear_pr_association_for_deleted_feature(

@@ -67,52 +67,6 @@ the TUI manager also uses. It changes only the `prompt_overrides` key and
 refuses a malformed config. `precall_target` maps a pending
 `AppMode::PromptPrecall` to its prompt, harness and feature/project context.
 
-`gui_review/summary.rs` projects the shared TUI pre-finish summary rows and
-calls its suggestion-preparation step after checking the stable workflow,
-reviewed changeset and saved progress. The GUI confirms source writes and
-keeps review open for another look at changed code. Reading or closing the
-summary preserves unsaved editors and never saves progress.
-
-`gui_pr_triage.rs` drives the TUI's PR Triage modes (`PrPicker`,
-`PrReviewLoading`, `PrReview`, `PrInvestigationLoading`) by stable workflow id
-and revision. Reads and writes go through `pr_review/github_access.rs`'s
-`TriageGithub` boundary, which production backs with the unchanged `gh` calls
-and tests replace with an offline fixture. Each step's `gh` reads run without
-the GUI handle lock: `plan_begin`/`plan_poll`/`plan_act` name them under the
-lock, `PrTriageReads::run` performs them on a blocking thread, and the
-`*_prefetched` call applies the results (reading live only what the plan
-missed). A pull request list that must be re-read after a failed comment fetch
-is left `loading` for the next poll. Investigations and GitHub writes are
-two-step: the adapter records the exact prompt or posted body, and confirmation
-re-reads the PR (head, metadata or thread) before calling the shared engine.
-`try_pr_review_post_reply`/`try_pr_review_toggle_resolve` return failures instead
-of the TUI's dashboard reset, so the GUI keeps the pane and draft.
-Existing-agent fix submission uses the TUI's receipt-prompt builder and stored
-provenance, with an exact-prompt confirmation and fresh PR/session checks.
-`TmuxOps` delivers a bracketed paste only to an existing running window; sending
-never creates an agent. Successful Enter marks Fixing through the shared
-persistence path. A failed Enter retires the confirmation while keeping the fix
-editor because terminal delivery can be ambiguous. `aiw reply-draft` first sends
-to the TUI socket, then falls back to the same SQLite request-id capture guard
-when that socket is unavailable. The GUI's existing Done-reply engine reads the
-returned draft and its fixing-session attribution; no GUI IPC socket or schema
-is added.
-
-`gui_pr_review.rs` opens the project's repository directly on the shared Review
-PR list, without choosing a feature or resolving the checkout's branch PR.
-The GUI's PR Review panel reads the fetched PR revisions, saves file comments
-and a summary in the shared SQLite drafts, and previews the exact GitHub
-submission before confirming. List/open/post workers retain the TUI's request
-identity and head checks; workflow revisions and a saved-draft baseline reject
-stale edits and submissions. Project PR Triage uses the same repository scope
-and goes directly to its picker without a branch lookup.
-
-`app/review/checks.rs` owns the shared build/test runner: it drains both output
-streams while retaining bounded text and terminates/reaps owned processes on
-cancellation or close. `gui_review/checks.rs` previews the effective project
-command, rechecks confirmation and workflow freshness, and returns transient
-results without saving progress or completing the review.
-
 `gui_review/complete.rs` completes a review through the TUI finish engine. The
 TUI's `complete_final_review` is now `record_final_review_round` (write the
 round, clear progress, record the snapshot, optional PR post) followed by
@@ -161,16 +115,9 @@ rules; the module signals no process itself. Terminal attachment records
 
 ## Feature modules
 
-| Feature | Files under `src/app/` | Responsibility |
-| --- | --- | --- |
-| PR Triage | `pr_review/domain.rs` | Comment/review model, attribution, prompt/hunk transforms |
-| | `pr_review/fetch.rs` | GitHub normalization, fetch/cache and PR picker coordination |
-| | `pr_review/actions.rs` | Selection, marks and action orchestration |
-| | `pr_review/reply.rs` | Reply drafting, provenance and posting |
-| | `pr_review/investigation.rs` | Read-only investigation requests, results and follow-ups |
-| | `pr_review/integration.rs` | Fix target/harness selection, injection and linked session navigation |
-| | `pr_review/github_access.rs` | `TriageGithub` read/write boundary (`gh` in production, fixtures in tests) and the investigation runner seam |
-| | `pr_review/state.rs`, `runtime.rs` | Dialog types and background work ownership |
+The harness-duplicating feature directories (PR Triage, Final Review,
+Learning, the plan interview) were removed on 2026-10-11; the workstation
+workflows live in the flat `src/app/*.rs` modules.
 
 Feature roots expose consumed entrypoints and compatibility re-exports. Free
 helpers are imported from their owning sibling module; new private helper access
@@ -179,19 +126,14 @@ Pure transformations take data rather than an all-purpose App/context object.
 State/domain code does not import handlers or renderers. Orchestration may use
 existing cross-feature APIs for TODO/plan/session handoffs.
 
-The neighboring `triage_feature.rs` retains its existing responsibilities.
-Extraction does not absorb it just to shrink a file. Shared DiffScope/layout concepts belong
-to ordinary diff browsing (`app/diff.rs`, `app/diff_state.rs`).
+Shared DiffScope/layout concepts belong to ordinary diff browsing
+(`app/diff.rs`, `app/diff_state.rs`).
 
 ## Runtime ownership and stale results
 
 App now has 125 fields, down from the 130 recorded in
 [app-fields.tsv](baseline/app-fields.tsv). Three groups establish concrete
 boundaries with private fields and shared production/test defaults:
-
-- `PrReviewWork`: independent fetch/investigation receivers; begin, poll and
-  cancel methods. Cancel drops the receiver without killing the spawned worker.
-  AppMode still determines whether a result has a live target.
 
 Shared routing/store/configuration,
 manager injection, IPC/watcher/observer guards, pane/sidebar queues and debug/perf
@@ -204,17 +146,15 @@ available for later incremental ownership work.
 SQLite connection and open/seed entrypoints; `migrations.rs` owns schema changes;
 `store.rs` persists projects. Other DB modules persist session status, tokens,
 debug logs, editors, prompt templates/overrides, TODOs,
-PR triage/investigations/terminal state and PR review caches. DB code knows
+the merged/closed PR badge state. DB code knows
 project/domain types and uses WorktreeManager to resolve legacy stores.
 
 `src/traits.rs` provides mockable TmuxOps and WorktreeOps, implemented by
 `tmux.rs` and `worktree.rs`. GitHub calls live in `github.rs`; its
 `GithubTransport` trait is the shared boundary for GitHub-backed workflows,
-with `GhCli` as the production adapter. PR Triage keeps its existing CLI
-behavior while issue workflows can reuse authentication, repository-context,
-and list transport. Compact companion-feature setup state and row rendering
-live in `app/feature_setup.rs` and `ui/dialogs/feature_setup.rs` for PR
-Triage. Headless execution is in `headless.rs`; harness
+with `GhCli` as the production adapter for the issue browser and the PR badge
+sweep. The compact feature setup state the issue browser uses lives in
+`app/feature_setup.rs`. Headless execution is in `headless.rs`; harness
 integration supports Claude Code, Codex, Pi, Gemini CLI and Cursor agent. IPC, filesystem
 watching, tmux observation, editors and resource inspection have dedicated
 modules. Injection is partial: App workflows still call concrete managers and
@@ -231,11 +171,9 @@ adapter only where it establishes a concrete dependency boundary.
 | `status_sidebar`, `attention` | Sync, IPC status, sidebar caches, badges and attention reconciliation |
 | `feature_sessions`, `hooks_setup`, `automation` | Creation/recovery/start/stop, local hooks and automation entrypoints |
 | `prompts_configuration`, `todos` | Configuration/prompts and scoped TODO workflows |
-| `pr_triage`, `final_review` | PR/AI/investigation/memory/integration and diff review workflows |
 | `resources`, `editor_lifecycle` | Admission, process identity and editor stop races |
 
-Each extracted feature also retains its own `tests.rs`. Four branch-matching
-tests moved with PR state. Preserve the old/new path maps when auditing coverage.
+Preserve the old/new path maps when auditing coverage.
 Shared helpers belong in support only when multiple suites consume them. Temporary
 repositories, DBs and process guards remain per-test, with their original lifetimes.
 

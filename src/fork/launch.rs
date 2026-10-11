@@ -143,7 +143,7 @@ pub fn claude_launch_args(
         args.push(path.to_string_lossy().into_owned());
     }
     // Unless `agent_context_prompt` is off, the context paragraph goes into
-    // `--append-system-prompt` (after the screenshot evidence text).
+    // `--append-system-prompt` (after any earlier appended text).
     if config.agent_context_prompt {
         args = super::agent_context::claude_args(ctx, args);
     }

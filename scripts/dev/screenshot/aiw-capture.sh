@@ -281,7 +281,7 @@ trap cleanup EXIT
 
 # gh keeps its own auth under XDG_CONFIG_HOME/gh by default. Resolve the
 # *real* one before we override XDG_CONFIG_HOME below for AIW's isolation --
-# otherwise every `gh` call AIW shells out to (PR Triage, PR picker, etc.)
+# otherwise every `gh` call AIW shells out to (PR badges, the issue browser, etc.)
 # would see an empty, unauthenticated config under the scratch root instead
 # of the user's real credentials. Pinning GH_CONFIG_DIR explicitly keeps gh
 # on the real config while AIW's own config/state stay isolated, the same

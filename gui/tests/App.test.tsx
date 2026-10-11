@@ -296,7 +296,7 @@ it("opens current changes from a stopped Git feature without launching a session
 it("offers Changes only for Git projects", async () => {
   const client = await openFeature([], [], "stopped");
   expect(screen.queryByRole("button", { name: "Changes", exact: true })).toBeNull();
-  expect(screen.queryByRole("button", { name: "PR Triage", exact: true })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Refresh PRs", exact: true })).toBeNull();
   client.clear();
 });
 
@@ -448,30 +448,6 @@ it("opens dormant features from navigation and hands Open to the feature page wi
   client.clear();
 });
 
-it("opens PR Triage from a Git feature without starting it and closes through its workflow", async () => {
-  const client = await openFeature([], [], "stopped", true);
-  const original = vi.mocked(invoke).getMockImplementation()!;
-  vi.mocked(invoke).mockImplementation((command, args, options) => {
-    if (command === "pr_triage_begin") return Promise.resolve({
-      workflow_id: "triage-id", revision: 2, target: { project_id: "project", feature_id: "feature" },
-      feature_name: "my-feat", branch: "my-feat", stage: "pick", loading_pr: null, review: null, precall: null,
-      reply: null, write_confirm: null, harnesses: ["claude"], default_harness: "claude", error: null, notice: null,
-      picker: { entries: [], include_closed: false, error: null, branch_pr: null, loading: false },
-    });
-    if (command === "pr_triage_act") return Promise.resolve(null);
-    return original(command, args, options);
-  });
-  fireEvent.click(screen.getByRole("button", { name: "PR Triage", exact: true }));
-  // The PR reader loads its Markdown dependencies on first use.
-  await screen.findByText(/No open pull requests/, {}, { timeout: 5000 });
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith("pr_triage_begin", { target: { project_id: "project", feature_id: "feature" } });
-  fireEvent.click(within(screen.getByRole("dialog", { name: "PR Triage" })).getByRole("button", { name: "Close" }));
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "PR Triage" })).toBeNull());
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith("pr_triage_act", { workflowId: "triage-id", revision: 2, action: { kind: "close" } });
-  expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "start_feature" || command === "add_session")).toBe(false);
-  client.clear();
-});
-
 async function waitingPopup(client: QueryClient, entries = ["e1"]) {
   const original = vi.mocked(invoke).getMockImplementation()!;
   let waiting = entries;
@@ -603,39 +579,6 @@ it("keeps an automatic review open when its auto-open preference is disabled dur
 });
 
 
-it("hands a PR fix to the chosen agent composer once while preserving both sessions' drafts", async () => {
-  const client = await openFeature([session("Claude", "claude"), session("Codex", "codex")], [], "stopped", true);
-  fireEvent.change(draftInput(), { target: { value: "Claude reminder" } });
-  fireEvent.click(screen.getByRole("tab", { name: /Codex/ }));
-  fireEvent.change(draftInput(), { target: { value: "Codex reminder" } });
-  fireEvent.click(screen.getByRole("tab", { name: /Claude/ }));
-  const original = vi.mocked(invoke).getMockImplementation()!;
-  const target = { project_id: "project", feature_id: "feature", session_id: "Codex" };
-  const view = {
-    workflow_id: "triage-id", revision: 2, target, feature_name: "my-feat", branch: "my-feat", stage: "review",
-    picker: null, loading_pr: null, precall: null, reply: null, write_confirm: null, handoff: null,
-    fix_targets: [{ target, label: "Codex", harness: "codex", stopped: true }],
-    fix_draft: { comment_id: 1, target, prompt: "Fix rounding" },
-    harnesses: ["codex"], default_harness: "codex", error: null, notice: null,
-    review: { number: 12, head_ref: "my-feat", head_sha: "abc", open_count: 1, total: 1, fetched_at: "", sort: "fetch_order", hide_resolved: false, comments: [], investigating: null },
-  };
-  vi.mocked(invoke).mockImplementation((command, args, options) => {
-    if (command === "pr_triage_begin") return Promise.resolve(view);
-    if (command === "pr_triage_act") return Promise.resolve({ ...view, handoff: { target, draft_prompt: "Fix rounding" } });
-    return original(command, args, options);
-  });
-  fireEvent.click(screen.getByRole("button", { name: "PR Triage", exact: true }));
-  fireEvent.click(await screen.findByRole("button", { name: "Open in agent composer" }));
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "PR Triage" })).toBeNull());
-  expect(draftInput().value).toBe("Codex reminder\n\nFix rounding");
-  expect(document.activeElement).toBe(draftInput());
-  fireEvent.click(screen.getByRole("tab", { name: /Claude/ }));
-  expect(draftInput().value).toBe("Claude reminder");
-  expect(promptCalls()).toHaveLength(0);
-  expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "start_feature" || command === "start_session")).toBe(false);
-  client.clear();
-});
-
 it("opens debug history from workspace navigation and preserves the session draft on close", async () => {
   const client = await openFeature([session("Agent", "codex")]);
   const original = vi.mocked(invoke).getMockImplementation()!;
@@ -653,32 +596,9 @@ it("opens debug history from workspace navigation and preserves the session draf
   client.clear();
 });
 
-it("opens PR Triage from a project without choosing a feature", async () => {
-  const label = "PR Triage";
-  const client = await openFeature([], [], "stopped", true);
-  const original = vi.mocked(invoke).getMockImplementation()!;
-  vi.mocked(invoke).mockImplementation((command, args, options) => {
-    if (command === "pr_triage_begin") return Promise.resolve({
-      workflow_id: "triage-project", revision: 0, target: { project_id: "project", feature_id: null },
-      feature_name: "demo", stage: "pick", picker: { entries: [], loading: false, include_closed: false, error: null, branch_pr: null },
-      review: null, harnesses: [], fix_targets: [],
-    });
-    return original(command, args, options);
-  });
-  // A project with no features still offers the repository workflow.
-  const snapshot = client.getQueryData<WorkspaceSnapshot>(["workspace-snapshot"])!;
-  await act(async () => { client.setQueryData(["workspace-snapshot"], { ...snapshot, projects: [{ ...snapshot.projects[0], features: [] }] }); });
-  fireEvent.click(screen.getByRole("button", { name: "demo", exact: true }));
-  fireEvent.click(screen.getByRole("button", { name: label, exact: true }));
-  expect(await screen.findByRole("dialog", { name: label })).toBeTruthy();
-  expect(screen.getByRole("region", { name: "Choose a pull request" })).toBeTruthy();
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith("pr_triage_begin", { target: { project_id: "project" } });
-  client.clear();
-});
-
 it("hides project PR actions for ordinary directories", async () => {
   const client = await openFeature([]);
   fireEvent.click(screen.getByRole("button", { name: "demo", exact: true }));
-  expect(screen.queryByRole("button", { name: "PR Triage" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Refresh PRs" })).toBeNull();
   client.clear();
 });

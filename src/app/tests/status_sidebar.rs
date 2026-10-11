@@ -300,122 +300,6 @@ fn failed_active_pr_refresh_preserves_last_known_badge() {
     assert_eq!(app.active_pr_for_feature(&feature_id).unwrap().number, 321);
 }
 
-#[test]
-fn active_pr_successor_prevents_returning_to_stashed_predecessor() {
-    use crate::app::sync::{ActivePrLookup, ActivePrUpdate};
-
-    let store = store_with_feature(ProjectStatus::Idle);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    enter_pr_review_for_feature(&mut app, 1);
-    let old_state = match &mut app.mode {
-        AppMode::PrReview(state) => {
-            state.review.pr.number = 449;
-            state.clone()
-        }
-        _ => unreachable!(),
-    };
-    app.pr_review_return = Some(PrReviewReturn {
-        session: "aiw-my-feat".to_string(),
-        window: "pr-triage".to_string(),
-        state: old_state,
-    });
-    app.return_to_dashboard(&ViewState::new(
-        "my-project".to_string(),
-        "my-feat".to_string(),
-        "aiw-my-feat".to_string(),
-        "pr-triage".to_string(),
-        "PR Triage".to_string(),
-        SessionKind::Claude,
-        VibeMode::default(),
-    ));
-
-    let feature = &app.store.projects[0].features[0];
-    let feature_id = feature.id.clone();
-    let branch = feature.branch.clone();
-    app.active_prs.insert(
-        feature_id.clone(),
-        ActivePrStatus {
-            branch: branch.clone(),
-            head_sha: "old-head".to_string(),
-            number: 449,
-            unresolved_threads: Some(0),
-        },
-    );
-    app.apply_active_pr_updates(vec![ActivePrUpdate {
-        feature_id,
-        branch: branch.clone(),
-        lookup: ActivePrLookup::Found(ActivePrStatus {
-            branch,
-            head_sha: "new-head".to_string(),
-            number: 450,
-            unresolved_threads: Some(0),
-        }),
-    }]);
-    app.pr_review_return_to_pane();
-
-    assert!(matches!(&app.mode, AppMode::Normal));
-    assert!(app.pr_review_return.is_none());
-}
-
-#[test]
-fn unchanged_active_pr_badge_does_not_cancel_explicit_closed_pr_fetch() {
-    use crate::app::sync::{ActivePrLookup, ActivePrUpdate};
-
-    let store = store_with_feature(ProjectStatus::Idle);
-    let mut app = App::new_for_test(
-        store,
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    let feature = &app.store.projects[0].features[0];
-    let feature_id = feature.id.clone();
-    let branch = feature.branch.clone();
-    app.active_prs.insert(
-        feature_id.clone(),
-        ActivePrStatus {
-            branch: branch.clone(),
-            head_sha: "open-head".to_string(),
-            number: 450,
-            unresolved_threads: Some(0),
-        },
-    );
-    let (_tx, rx) = std::sync::mpsc::channel();
-    app.pr_review_work.begin_fetch(rx);
-    app.mode = AppMode::PrReviewLoading(crate::app::PrReviewLoadState {
-        workdir: feature.workdir.clone(),
-        pr: crate::github::PrRef {
-            number: 449,
-            head_sha: "closed-head".to_string(),
-            url: "https://github.com/o/r/pull/449".to_string(),
-            owner: "o".to_string(),
-            repo: "r".to_string(),
-            head_ref: "main".to_string(),
-        },
-        usage_baselines: std::collections::HashMap::new(),
-    });
-
-    assert!(!app.apply_active_pr_updates(vec![ActivePrUpdate {
-        feature_id,
-        branch: branch.clone(),
-        lookup: ActivePrLookup::Found(ActivePrStatus {
-            branch,
-            head_sha: "open-head".to_string(),
-            number: 450,
-            unresolved_threads: Some(0),
-        }),
-    }]));
-
-    assert!(matches!(
-        &app.mode,
-        AppMode::PrReviewLoading(state) if state.pr.number == 449
-    ));
-    assert!(app.pr_review_work.fetch_pending());
-}
-
 /// A `Found` terminal result is durable: it lands in the in-memory cache and,
 /// when a DB is attached, is persisted so a restart doesn't lose it.
 #[test]
@@ -778,8 +662,6 @@ pub(super) fn store_with_single_agent_session(
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -929,8 +811,6 @@ fn sync_session_status_shows_agent_token_usage() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -1225,8 +1105,6 @@ fn sync_session_status_marks_discovered_codex_usage_as_inferred() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -1353,8 +1231,6 @@ fn sync_session_status_does_not_infer_stale_codex_usage_for_new_session() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -1461,8 +1337,6 @@ fn sync_session_status_does_not_duplicate_inferred_sources_in_feature() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -1553,8 +1427,6 @@ fn sync_session_status_checks_sidebar_inputs_off_thread() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        triage_source: None,
-        review_source: None,
         issue_source: None,
     };
     let project = Project {
@@ -1682,7 +1554,7 @@ fn note_codex_prompt_submit_marks_codex_session_in_non_codex_feature_thinking() 
     let workdir = TempDir::new().unwrap();
     let mut store = store_with_codex_session(workdir.path(), false);
     store.projects[0].features[0].agent = AgentKind::Claude;
-    store.projects[0].features[0].sessions[0].label = "PR triage".to_string();
+    store.projects[0].features[0].sessions[0].label = "Codex helper".to_string();
     let mut app = App::new_for_test(
         store,
         Box::new(MockTmuxOps::new()),

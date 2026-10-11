@@ -16,7 +16,7 @@
 //! | Context window, session status text, token usage | The shared session-status collector (`App::sync_session_status_background`), run by this process |
 //! | Thinking | The hooks' `<state dir>/thinking` marker files (Claude/Codex/Pi), the TUI's own non-IPC sources |
 //! | Waiting for input / pending input | The hooks' notification files on disk, read without consuming them |
-//! | Open PR + unresolved threads | The shared dashboard PR sweep (`App::sync_active_prs_background`), run by this process when PR Triage opens (FORK(no-cloud): never on a timer) |
+//! | Open PR + unresolved threads | The shared dashboard PR sweep (`App::sync_active_prs_background`), run by this process on `refresh_pr_badges` (FORK(no-cloud): never on a timer) |
 //! | Merged/closed PR | `pr_terminal_state` in SQLite plus this process's own sweep |
 //!
 //! Deliberately absent (TUI-process state with no shared form): the attention
@@ -493,13 +493,13 @@ impl GuiHandle {
             clock.last_session_status = Some(Instant::now());
         }
         // FORK(no-cloud): no timed `gh` sweep for PR badges; the GUI refreshes
-        // them when PR Triage opens (`gui_pr_triage`), and otherwise shows the
+        // them on an explicit `refresh_pr_badges`, and otherwise shows the
         // last-known state.
     }
 
     /// FORK(no-cloud): start the PR badge sweep (`gh`) on an explicit user
-    /// action — the desktop shell calls this when PR Triage opens. There is no
-    /// timed sweep.
+    /// action — the desktop shell's "Refresh PRs" button. There is no timed
+    /// sweep.
     pub fn refresh_pr_badges(&mut self) {
         self.app.sync_active_prs_background();
     }
