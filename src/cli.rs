@@ -193,6 +193,19 @@ enum Commands {
         #[arg(long)]
         harness: String,
     },
+    /// Row-event hook: compaction, model switch, failed turn, tasks,
+    /// background work, idle nudge… (fire-and-forget, DESIGN.md §19.1).
+    #[command(name = "hook-event", hide = true)]
+    HookEvent {
+        /// notification, stop, stop-failure, post-compact, post-model-switch,
+        /// task-created, task-completed, cwd-changed, permission-denied,
+        /// session-end.
+        #[arg(long)]
+        kind: String,
+        /// claude, codex, gemini or cursor.
+        #[arg(long)]
+        harness: String,
+    },
     /// Session-start hook: print the session's launch context as the
     /// harness's additional-context JSON (Gemini, Cursor).
     #[command(name = "session-context", hide = true)]
@@ -533,6 +546,7 @@ pub fn run() -> Result<()> {
                 | Commands::StatusLine
                 | Commands::StopHook { .. }
                 | Commands::Subagent { .. }
+                | Commands::HookEvent { .. }
                 | Commands::SessionContext { .. }
         )
     ) {
@@ -554,6 +568,10 @@ pub fn run() -> Result<()> {
     }
     if let Some(Commands::Subagent { event, harness }) = &cli.command {
         crate::fork::hook_cli::run_subagent(event, harness);
+        return Ok(());
+    }
+    if let Some(Commands::HookEvent { kind, harness }) = &cli.command {
+        crate::fork::hook_cli::run_hook_event(kind, harness);
         return Ok(());
     }
     if let Some(Commands::SessionContext { harness }) = &cli.command {

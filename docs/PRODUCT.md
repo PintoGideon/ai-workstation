@@ -104,8 +104,8 @@ and the grid use the same ones.
 
 | Glyph | Meaning |
 | --- | --- |
-| ⛔ | needs you: a permission prompt, a question, or a stop nothing explained. The reason sits on the next line |
-| ● | working. The activity line shows the elapsed time, context use and subagent count when the harness reports them |
+| ⛔ | needs you: a permission prompt, a question, a turn that failed on an API error, or a stop nothing explained. The reason sits on the next line |
+| ● | working. The activity line shows the elapsed time, context use, subagent count, open tasks and background work when the harness reports them |
 | ✓ | finished a turn. Bright until you look at it, dim afterwards |
 | ○ | idle: running, nothing to report. A terminal shows "open" |
 | ■ | stopped. "exited" when the agent died at its shell; `c` relaunches it in the same window |
@@ -293,6 +293,29 @@ chat file gives tokens only. Cursor reports nothing usable. A session row
 shows its percentage at the right edge in the warning colour past 70 percent
 and the critical colour past 85 percent; both thresholds are settings. The
 working badge reads `working 6m · 42% ctx · 2 subagents`.
+
+**Row events.** Claude Code's newer hooks decorate the row's reason line, so
+you can tell what a session did without opening it:
+
+| On the row | What happened |
+| --- | --- |
+| `compacted` | the context was compacted |
+| `model → sonnet` | the session switched model |
+| `turn failed: overloaded_error` | the turn ended on an API error; shown with ⛔ until the next turn |
+| `idle` | Claude's idle nudge: it has been waiting for you for a minute |
+| `quota: paused`, `quota: resumed` | a usage-limit pause or auto-resume |
+| `denied: Bash` | auto mode's classifier refused a tool call |
+| `tasks 1/3` | the session's task list has open items (working rows and the info block) |
+| `1 bg · 1 loop` | background tasks and `/loop` schedules still alive at the last turn end |
+
+One-off events fade after ten minutes or when the next turn starts; a model
+switch stays. Claude's `agent_needs_input` and elicitation dialogs count as
+needing you. A feature whose session still has background work or a `/loop`
+schedule is never listed as dormant. The info block's last line repeats the
+tasks, background work, latest event, and `cd api` when the session moved to
+another directory. Codex rows show working as soon as a prompt is submitted and
+while a shell command runs, through Codex's own hooks; the turn still ends on
+Codex's notify call.
 
 **Cost.** Claude's status line carries the dollar figure. For harnesses that
 report tokens but not cost, aiw multiplies by the prices in the
@@ -531,7 +554,7 @@ Unix socket. The shell never parses JSON. A hook that needs an answer keeps
 its connection open until you decide or its timeout passes.
 
 One-time setup: Codex asks you to trust aiw's hooks once per worktree with its
-own hooks command. Cursor runs project hooks only in a trusted workspace.
+own hooks command, and again after an aiw update that changes them. Cursor runs project hooks only in a trusted workspace.
 Gemini cannot grant permissions from a hook, so add safe commands to its own
 allowed-tools setting to stop being asked.
 
@@ -563,7 +586,7 @@ script can answer on the real call. Request templates and examples are in
 
 The hook subcommands that scripts call are hidden from the help: `notify`,
 `notify-wait`, `hook-payload`, `hook-field`, `permission-request`,
-`status-line`, `stop-hook`, `subagent`, `session-context`, `set-status` and
+`status-line`, `stop-hook`, `subagent`, `hook-event`, `session-context`, `set-status` and
 `sidebar`, which is the dashboard process the cockpit runs.
 
 One dashboard per config directory: a second `aiw` attaches to the same

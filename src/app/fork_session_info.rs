@@ -108,6 +108,8 @@ pub struct SessionInfo {
     pub worktree: Option<String>,
     pub queued: usize,
     pub decision: Option<String>,
+    /// `tasks 1/3 · 1 bg · compacted · cd api` from the newer hooks (§19.1).
+    pub hooks: Option<String>,
 }
 
 /// The harness's name as the block says it.
@@ -347,6 +349,18 @@ impl App {
                 .decisions
                 .get(&session.id)
                 .map(PermissionDecision::label),
+            hooks: self.hook_state(&session.id).and_then(|state| {
+                let parts: Vec<String> = [
+                    state.tasks_text(),
+                    state.background_text(),
+                    state.event_text(now),
+                    state.cwd_text(&feature.workdir),
+                ]
+                .into_iter()
+                .flatten()
+                .collect();
+                (!parts.is_empty()).then(|| parts.join(" · "))
+            }),
         })
     }
 }

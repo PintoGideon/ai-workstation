@@ -819,3 +819,51 @@ tmux draws it.
 **Resumable.** Nothing here is lost when the terminal closes: the cockpit server, the sidebar process and the
 agents' tmux sessions all outlive the client, `aiw` re-attaches, and `S` resumes a saved Claude or Codex
 conversation after a reboot as before.
+
+## 19. Orchestration features (2026-10-11)
+
+Built from docs/research/orchestration-landscape-2026-10.md, Part C. Each subsection is one proposal.
+
+### 19.1 Richer row events from the newer hooks (proposal 5)
+
+**What.** Claude Code 2.1 reports more than a turn starting and ending. AIW now wires `StopFailure`, `PostCompact`,
+`PostModelSwitch`, `TaskCreated`, `TaskCompleted`, `CwdChanged`, `PermissionDenied` and `SessionEnd`, a second
+command on `Notification`, and a second command on `Stop` that reads `background_tasks` and `session_crons`. Each
+runs `scripts/hook-event.sh <kind> claude` → `aiw hook-event` (hidden), which forwards a whitelist of fields
+(`fork::hook_events::FORWARDED_KEYS`; arrays as `<key>_count`) as one `hook-event` IPC line. The app folds it into
+`App::hook_events[session id]` (`fork::hook_events::HookEventState`, pure, unit-tested) and the badge reads it.
+
+**Row.** `SessionBadge` gained `tasks`, `background` and `event`. Working: `working · 42% ctx · tasks 1/3 · 1 bg ·
+1 loop · compacted`. Finished: `done · 1 bg · compacted`. Idle: the event or `idle`. A `StopFailure` is ⛔ `turn
+failed: <error>` and clears the working, tool and subagent markers (the harness sends no `Stop` then); it
+outranks the previous turn's "done" because the failing turn is newer, and `thinking-start` retires it. One-off
+events expire after ten minutes or at the next turn; a model switch persists. Notifications: `agent_needs_input`
+and `elicitation_dialog` / `elicitation_url_dialog` are now questions (attention layer); `idle_prompt` and
+`quota_auto_resume_*` are row events; `agent_completed` and logins add nothing.
+
+**Dormancy and exits.** A feature with background tasks or `/loop` schedules at its last `Stop` is dropped from
+the dormant scan (`App::feature_has_background_work`). The exited sweep is unchanged: if the agent process left,
+the pane is a shell and `■ exited` is the truth (Claude hands live background work to its own supervisor on
+exit); the exited label carries `· 1 bg` so the handoff is visible.
+
+**Turn end clears tools.** `thinking-stop` now also clears the session's tool marker. An interrupted turn can
+skip `PostToolUse`, and Codex's new hooks made that visible (a Codex row stayed ● after notify ended the turn).
+
+**Codex.** Codex already had project-layer hooks in `<checkout>/.codex/hooks.json` (§16, git-excluded, trusted
+once with `/hooks`). That file is the clean per-launch path, so no `CODEX_HOME` overlay and no `~/.codex` write
+was needed: `UserPromptSubmit` → `thinking-start.sh` + `clear-notify.sh`, `PreToolUse` → `tool-start.sh`,
+`PostToolUse` → `tool-stop.sh`. Codex rows now show ● from the submitted prompt instead of only at the notify
+call; notify (`-c notify=[…]` per launch) still ends the turn and stays the fallback for a Codex that does not run
+the hooks. Changing the hook set changes its hash, so Codex asks to trust AIW's hooks once more after this update.
+
+**Not done.** `PreModelSwitch` (a veto hook; AIW has nothing to veto) and Codex's `SessionStart` (the launch
+context already travels in `developer_instructions`).
+
+**Tests.** `fork::hook_events` (parse, apply, TTL, task counting, notifications), `app::fork_hook_events`
+(row labels, failure precedence, tool clearing, dormancy, redraw), `fork::claude_settings` and
+`fork::codex_hooks` (wiring), `app::attention` (classifier). E2E: the fake claude gained `/compact`, `/model`,
+`/fail`, `/task`, `/taskdone`, `/bg`, `/idle`, `/needs`, `/denied`; the fake codex fires `UserPromptSubmit` /
+`PreToolUse` / `PostToolUse`; `run.sh` checks every row event, the settings wiring and Codex's live working
+state. `setup-sandbox.sh` now resolves the binary to an absolute path (a relative one silently ran the
+installed `aiw`).
+

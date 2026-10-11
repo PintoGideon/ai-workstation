@@ -117,6 +117,13 @@ pub struct SessionBadge {
     pub subagents: usize,
     /// Follow-ups queued for the session (P7).
     pub queued: usize,
+    /// `tasks 2/5` while the session's task list has open items (§19.1).
+    pub tasks: Option<String>,
+    /// `1 bg · 1 loop`: background tasks and schedules alive at the last
+    /// `Stop` (§19.1).
+    pub background: Option<String>,
+    /// A recent one-off event: `compacted`, `model → sonnet`, `idle` (§19.1).
+    pub event: Option<String>,
 }
 
 impl SessionBadge {
@@ -128,6 +135,9 @@ impl SessionBadge {
             context: None,
             subagents: 0,
             queued: 0,
+            tasks: None,
+            background: None,
+            event: None,
         }
     }
 
@@ -177,21 +187,39 @@ impl SessionBadge {
                 if let Some(pct) = self.context {
                     parts.push(format!("{pct}% ctx"));
                 }
+                parts.extend(self.tasks.clone());
+                parts.extend(self.background.clone());
+                parts.extend(self.event.clone());
                 if let Some(detail) = &self.detail {
                     parts.push(detail.clone());
                 }
                 parts.join(" · ")
             }
-            BadgeKind::FinishedUnread | BadgeKind::FinishedRead => match now {
-                Some(now) => format!("done · {}", self.age(now)),
-                None => "done".into(),
-            },
-            BadgeKind::Exited => "exited".into(),
+            BadgeKind::FinishedUnread | BadgeKind::FinishedRead => {
+                let mut parts = vec![match now {
+                    Some(now) => format!("done · {}", self.age(now)),
+                    None => "done".into(),
+                }];
+                parts.extend(self.background.clone());
+                parts.extend(self.event.clone());
+                parts.join(" · ")
+            }
+            BadgeKind::Exited => {
+                let mut parts = vec!["exited".to_string()];
+                parts.extend(self.background.clone());
+                parts.join(" · ")
+            }
             BadgeKind::Stopped => "stopped".into(),
-            BadgeKind::Idle => match &self.detail {
-                Some(detail) => detail.clone(),
-                None => "idle".into(),
-            },
+            BadgeKind::Idle => {
+                let mut parts: Vec<String> = Vec::new();
+                parts.extend(self.detail.clone());
+                parts.extend(self.event.clone());
+                if parts.is_empty() {
+                    parts.push("idle".into());
+                }
+                parts.extend(self.background.clone());
+                parts.join(" · ")
+            }
         };
         if self.queued > 0 && !matches!(self.kind, BadgeKind::Stopped | BadgeKind::Exited) {
             label.push_str(&format!(" · ⏭ {} queued", self.queued));
@@ -409,10 +437,17 @@ pub fn session_badge(
     };
     // What the session reported about itself (P4 context, P5 subagents) and
     // what the user queued for it (P7) decorate whatever state it is in.
+    let hooks = app.hook_state(&session.id);
     let decorate = |mut badge: SessionBadge| {
         badge.context = app.session_context_percent(&session.id).map(|(pct, _)| pct);
         badge.queued = app.queued_followup_count(&session.id);
         badge.subagents = app.subagent_count(&session.id);
+        // FORK: §19.1 — what the newer hooks reported.
+        if let Some(state) = hooks {
+            badge.tasks = state.tasks_text();
+            badge.background = state.background_text();
+            badge.event = state.event_text(now);
+        }
         badge
     };
 
@@ -435,6 +470,16 @@ pub fn session_badge(
         return badge(BadgeKind::Idle, Some("open".into()));
     }
 
+    // FORK: §19.1 — a turn that died on an API error waits for the user. It
+    // outranks the previous turn's "done": the failing turn is newer, and a
+    // new turn (`thinking-start`) retires it.
+    if let Some((reason, at)) = hooks.and_then(|state| state.turn_failed.clone()) {
+        return decorate(SessionBadge::new(
+            BadgeKind::NeedsYou,
+            at,
+            Some(format!("turn failed: {reason}")),
+        ));
+    }
     if let Some(record) = app.attention_for(&feature.tmux_session)
         && signal_applies(feature, Some(&record.agent), session)
     {

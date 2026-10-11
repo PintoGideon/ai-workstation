@@ -16,6 +16,10 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 [ -n "$AIW_BIN" ] || AIW_BIN="$ROOT/target/release/aiw"
 [ -x "$AIW_BIN" ] || { echo "aiw binary not found: $AIW_BIN (cargo +1.99.0 build --release --locked)" >&2; exit 1; }
+# The sandbox links and exports this path, and hooks run it from other
+# directories: a relative path would silently fall back to whatever `aiw` is on
+# the real PATH (e.g. ~/.cargo/bin/aiw).
+AIW_BIN="$(cd "$(dirname "$AIW_BIN")" && pwd)/$(basename "$AIW_BIN")"
 
 mkdir -p "$S"/{bin,log,repos,.config,.local/state,.local/share,captures,.codex/sessions,.claude/projects}
 S=$(cd "$S" && pwd -L)

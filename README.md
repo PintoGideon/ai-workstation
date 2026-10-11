@@ -33,7 +33,8 @@ on disk, and what was removed in favour of the harnesses' own features.
   dashboard, holds Vibeless file edits for approval, and queues follow-ups
   that are delivered when a turn ends.
 - Shows context use, cost and usage windows per session, read from the
-  harnesses' own files and status line.
+  harnesses' own files and status line, and what each session just did:
+  compacted, switched model, failed a turn, open tasks, background work.
 - Adds terminals, Neovim, VS Code, scoped TODO lists and custom commands to a
   feature; keeps a prompt library and past prompts; starts features from
   GitHub issues and shows pull-request badges.

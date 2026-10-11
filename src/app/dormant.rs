@@ -165,7 +165,7 @@ impl App {
                 .is_some_and(|editors| editors.iter().any(|editor| procs::pid_alive(editor.pid)))
         };
         let now = Utc::now();
-        let features = dormant_features(
+        let mut features = dormant_features(
             &self.store,
             &activity,
             now,
@@ -173,6 +173,9 @@ impl App {
             unattended_threshold,
             &editor_alive,
         );
+        // FORK: §19.1 — background tasks or a /loop schedule are work in
+        // progress, however quiet the pane looks.
+        features.retain(|feature| !self.feature_has_background_work(feature.pi, feature.fi));
         Some(DormancyScan {
             features,
             activity,

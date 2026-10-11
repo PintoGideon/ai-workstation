@@ -213,6 +213,47 @@ pub fn run_subagent(event: &str, harness: &str) {
     }
 }
 
+/// `aiw hook-event --kind <kind> --harness <harness>` (DESIGN.md §19.1):
+/// forward the few fields of a row-decorating hook event to the dashboard,
+/// fire-and-forget. Arrays (`background_tasks`, `session_crons`) go as counts.
+pub fn run_hook_event(kind: &str, harness: &str) {
+    use super::hook_events::{COUNTED_KEYS, FORWARDED_KEYS, HOOK_EVENT_TYPE, KINDS};
+    let kind = kind.trim();
+    if !KINDS.contains(&kind) {
+        return;
+    }
+    let payload = stdin_json();
+    let env = HookEnv::from_process_env();
+    let mut message = serde_json::Map::new();
+    message.insert("type".into(), Value::String(HOOK_EVENT_TYPE.into()));
+    message.insert("kind".into(), Value::String(kind.into()));
+    message.insert("harness".into(), Value::String(harness.trim().into()));
+    for key in FORWARDED_KEYS {
+        if let Some(value) = payload.get(*key) {
+            let value = match value {
+                // A long message or error is cut here, not in the app.
+                Value::String(text) => Value::String(text.chars().take(400).collect()),
+                other => other.clone(),
+            };
+            let key = if *key == "conversation_id" {
+                "session_id"
+            } else {
+                key
+            };
+            message.entry(key.to_string()).or_insert(value);
+        }
+    }
+    for key in COUNTED_KEYS {
+        if let Some(items) = payload.get(*key).and_then(Value::as_array) {
+            message.insert(format!("{key}_count"), Value::from(items.len()));
+        }
+    }
+    identity_fields(&env, &mut message);
+    if let Ok(line) = serde_json::to_string(&Value::Object(message)) {
+        let _ = crate::ipc::send(&crate::ipc::socket_path(), &line);
+    }
+}
+
 /// `aiw session-context --harness gemini|cursor`: the launch context for
 /// the session named by `AIW_FEATURE_SESSION_ID`, as the harness's
 /// additional-context JSON (item 6). Prints nothing when the setting is off

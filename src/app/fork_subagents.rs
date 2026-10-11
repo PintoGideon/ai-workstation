@@ -32,7 +32,7 @@ impl App {
     /// The feature session a hook message is about: its id when the hook
     /// ran with `AIW_FEATURE_SESSION_ID`, else the feature's window of the
     /// named harness.
-    fn subagent_session_id(&self, raw: &Value) -> Option<String> {
+    pub(crate) fn subagent_session_id(&self, raw: &Value) -> Option<String> {
         if let Some(id) = text(raw, "aiw_feature_session_id") {
             return Some(id);
         }

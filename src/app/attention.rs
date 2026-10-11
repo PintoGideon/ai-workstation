@@ -113,9 +113,16 @@ pub fn classify_notification(
 
     if !notification_type.is_empty() {
         // Blocked on the user: a permission prompt, or an elicitation.
+        // FORK: §19.1 — Claude 2.1 names `agent_needs_input` and the
+        // elicitation dialogs; `idle_prompt`, `agent_completed` and the quota
+        // notices decorate the row instead (`fork::hook_events`).
         let blocks = notification_type.contains("permission")
             || notification_type.contains("approval")
-            || notification_type.ends_with("_request");
+            || notification_type.ends_with("_request")
+            || matches!(
+                notification_type.as_str(),
+                "agent_needs_input" | "elicitation_dialog" | "elicitation_url_dialog"
+            );
         return blocks.then_some(AttentionState::Question);
     }
 
@@ -589,6 +596,9 @@ mod tests {
             "Permission",
             "elicitation_request",
             "permission_approval",
+            "agent_needs_input",
+            "elicitation_dialog",
+            "elicitation_url_dialog",
         ] {
             assert_eq!(
                 classify_notification(Some(typed), None),
@@ -606,6 +616,10 @@ mod tests {
             "idle_timeout",
             "auth_success",
             "elicitation_complete",
+            "elicitation_response",
+            "idle_prompt",
+            "agent_completed",
+            "quota_auto_resume_fired",
             "task_finished",
             "some_new_thing_we_have_never_seen",
         ] {

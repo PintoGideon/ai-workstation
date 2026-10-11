@@ -25,6 +25,13 @@ Commands typed into the REPL (deterministic, scriptable):
   /work    emit prompt-submit + tool-start and stay "working"
   /sub N   start N subagents (SubagentStart), keep them 4 s, stop them, end the turn
   /tool    emit tool-start then tool-stop
+  /compact      PostCompact (claude)                                   [§19.1]
+  /model M      PostModelSwitch to M (claude)
+  /fail         start a turn, then StopFailure instead of Stop (claude)
+  /task N       TaskCreated N times; /taskdone: one TaskCompleted (claude)
+  /bg           a turn whose Stop reports a background task and a /loop (claude)
+  /idle         Notification idle_prompt; /needs: Notification agent_needs_input
+  /denied T     PermissionDenied for tool T (claude)
   /crash   exit 1
   /spam    print 2000 lines as fast as possible
   /wide    print long unicode / emoji / RTL / control-sequence lines
@@ -389,8 +396,10 @@ EVENTS = {
                "tool_stop": "AfterTool", "ask": "Notification", "stop": "AfterAgent", "end": "SessionEnd"},
     "cursor-agent": {"start": "sessionStart", "prompt": "beforeSubmitPrompt", "tool_start": "preToolUse",
                      "tool_stop": "postToolUse", "ask": None, "stop": "stop", "end": "sessionEnd"},
-    "codex": {"start": None, "prompt": None, "tool_start": None, "tool_stop": None, "ask": None,
-              "stop": "turn-complete", "end": None},
+    # Codex's hooks.json carries UserPromptSubmit / PreToolUse / PostToolUse
+    # (§19.1); notify still ends the turn.
+    "codex": {"start": None, "prompt": "UserPromptSubmit", "tool_start": "PreToolUse",
+              "tool_stop": "PostToolUse", "ask": None, "stop": "turn-complete", "end": None},
     "pi": {},
 }
 EV = EVENTS.get(NAME, {})
@@ -440,7 +449,7 @@ def banner():
     out(f"│ args    {' '.join(shlex.quote(a) for a in ARGS) or '(none)'}")
     if resume_id:
         out(f"│ resumed conversation {resume_id}")
-    out("│ commands: /ask /perm /done /work /tool /crash /spam /wide /slow /exit")
+    out("│ commands: /ask /perm /done /work /tool /compact /model /fail /task /bg /idle /needs /crash /spam /wide /slow /exit")
     out("╰──────────────────────────────────────────────────────────────╯")
 
 
@@ -546,6 +555,53 @@ def main():
             out("⏺ Bash(cargo test)")
             ev("tool_stop", tool_extra("stop"))
             out("  ⎿  ok")
+        elif cmd == "/compact":
+            out("✻ Compacted the conversation")
+            fire_collect("PostCompact", {"trigger": "manual", "compact_summary": "summary"})
+        elif cmd == "/model":
+            model = rest or "fake-model-2"
+            out(f"⎿ Set model to {model}")
+            fire_collect("PostModelSwitch", {"from_model": "fake-model-1", "to_model": model})
+        elif cmd == "/fail":
+            ev("prompt", {"prompt": "will fail"})
+            out("⠋ thinking…")
+            ev("tool_start", tool_extra("start"))
+            time.sleep(0.3)
+            out("⎿ API Error: 529 overloaded_error")
+            fire_collect("StopFailure", {"error": "overloaded_error", "error_details": "Overloaded"})
+        elif cmd == "/task":
+            try:
+                n = int(rest or "1")
+            except ValueError:
+                n = 1
+            for i in range(n):
+                fire_collect("TaskCreated", {"task_id": f"t{i}", "task_subject": f"step {i + 1}"})
+            out(f"⏺ created {n} task(s)")
+        elif cmd == "/taskdone":
+            fire_collect("TaskCompleted", {"task_id": "t0", "task_subject": "step 1"})
+            out("⏺ completed a task")
+        elif cmd == "/bg":
+            ev("prompt", {"prompt": "start a watcher"})
+            out("⏺ Started a background watcher and a /loop")
+            answer = "Watching in the background."
+            outputs = fire_collect("Stop", {"stop_hook_active": False, "last_assistant_message": answer,
+                                            "background_tasks": [{"id": "bg1", "command": "npm run dev"}],
+                                            "session_crons": [{"id": "c1", "schedule": "every 10m"}]})
+            followup = continuation_from(outputs or [])
+            if followup:
+                out(f"followup: {followup}")
+                normal_turn(followup)
+        elif cmd == "/idle":
+            fire_collect("Notification", {"notification_type": "idle_prompt",
+                                          "message": "Claude is waiting for your input"})
+            out("(idle nudge sent)")
+        elif cmd == "/needs":
+            fire_collect("Notification", {"notification_type": "agent_needs_input",
+                                          "message": "Claude needs your input on the migration"})
+            out("? Which database should the migration target?")
+        elif cmd == "/denied":
+            fire_collect("PermissionDenied", {"tool_name": rest or "Bash", "reason": "auto mode"})
+            out(f"⎿ denied {rest or 'Bash'}")
         elif cmd == "/crash":
             sys.stderr.write("fatal: simulated crash\n")
             sys.stderr.flush()

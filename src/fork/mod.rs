@@ -45,6 +45,7 @@ pub mod followups; // P7: queued follow-ups, delivered by the Stop hook (DESIGN.
 pub mod git_exclude;
 pub(crate) mod hook_approval;
 pub(crate) mod hook_cli; // the `aiw` subcommands hook scripts call (DESIGN.md §16)
+pub(crate) mod hook_events; // richer row events from harness hooks (DESIGN.md §19.1)
 pub mod instance_lock; // one TUI per config dir (flock on aiw.lock)
 pub(crate) mod ipc_rebind; // re-bind the IPC socket if its file vanishes
 pub(crate) mod ipc_reply; // requests that wait for the app's answer (DESIGN.md §16)

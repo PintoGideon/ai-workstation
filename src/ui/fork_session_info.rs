@@ -108,6 +108,12 @@ pub fn lines(info: &SessionInfo, theme: &Theme, width: usize) -> Vec<Line<'stati
         }
         last.push(Span::styled(decision.clone(), dim));
     }
+    if let Some(hooks) = &info.hooks {
+        if !last.is_empty() {
+            last.push(Span::styled(" · ", dim));
+        }
+        last.push(Span::styled(hooks.clone(), dim));
+    }
     if last.is_empty() {
         last.push(Span::styled("no follow-ups queued", dim));
     }
@@ -161,6 +167,7 @@ mod tests {
             worktree: Some("…/RS/hx-12".into()),
             queued: 2,
             decision: Some("✓ allowed Bash".into()),
+            hooks: None,
         };
         let lines = super::lines(&info, &theme, 30);
         let text: Vec<String> = lines
@@ -214,5 +221,20 @@ mod tests {
         assert_eq!(text[2], "12m old");
         assert_eq!(text[4], "in the repo checkout");
         assert_eq!(text[5], "no follow-ups queued");
+        // FORK: §19.1 — the hook line joins the last row.
+        let hooked = SessionInfo {
+            hooks: Some("tasks 1/3 · compacted".into()),
+            ..bare
+        };
+        let text: Vec<String> = super::lines(&hooked, &theme, 60)
+            .iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect();
+        assert_eq!(text[5], "tasks 1/3 · compacted");
     }
 }

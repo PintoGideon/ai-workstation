@@ -83,6 +83,9 @@ pub fn hook_entries(inputs: &HookInputs<'_>) -> Vec<(&'static str, Value)> {
     let permission_request_path = hooks_dir.join("permission-request.sh");
     let stop_hook_path = hooks_dir.join("stop-hook.sh");
     let subagent_path = hooks_dir.join("subagent.sh");
+    let hook_event_path = hooks_dir.join(super::hook_events::SCRIPT_NAME);
+    let hook_event =
+        |kind: &str| claude_exec_hook_with_timeout(&hook_event_path, &[kind, "claude"], 10);
 
     let wants_diff_review = matches!(inputs.mode, VibeMode::Vibeless);
     let diff_review_cmd = if wants_diff_review {
@@ -104,6 +107,7 @@ pub fn hook_entries(inputs: &HookInputs<'_>) -> Vec<(&'static str, Value)> {
                 claude_exec_hook(&thinking_stop_path),
                 claude_exec_hook(&notify_path),
                 claude_exec_hook_with_args(&attention_path, &["completed"]),
+                hook_event("stop"),
                 claude_exec_hook_with_timeout(&stop_hook_path, &["claude"], 30)
             ]
         }),
@@ -116,7 +120,8 @@ pub fn hook_entries(inputs: &HookInputs<'_>) -> Vec<(&'static str, Value)> {
         json!({
             "matcher": "",
             "hooks": [
-                claude_exec_hook_with_args(&attention_path, &["notification"])
+                claude_exec_hook_with_args(&attention_path, &["notification"]),
+                hook_event("notification")
             ]
         }),
     ));
@@ -186,6 +191,26 @@ pub fn hook_entries(inputs: &HookInputs<'_>) -> Vec<(&'static str, Value)> {
         }),
     ));
 
+    // FORK: DESIGN.md §19.1 — the events that decorate the row.
+    for (event, kind) in [
+        ("StopFailure", "stop-failure"),
+        ("PostCompact", "post-compact"),
+        ("PostModelSwitch", "post-model-switch"),
+        ("TaskCreated", "task-created"),
+        ("TaskCompleted", "task-completed"),
+        ("CwdChanged", "cwd-changed"),
+        ("PermissionDenied", "permission-denied"),
+        ("SessionEnd", "session-end"),
+    ] {
+        entries.push((
+            event,
+            json!({
+                "matcher": "",
+                "hooks": [hook_event(kind)]
+            }),
+        ));
+    }
+
     entries
 }
 
@@ -230,11 +255,28 @@ mod tests {
                 "UserPromptSubmit",
                 "SubagentStart",
                 "SubagentStop",
-                "PermissionRequest"
+                "PermissionRequest",
+                "StopFailure",
+                "PostCompact",
+                "PostModelSwitch",
+                "TaskCreated",
+                "TaskCompleted",
+                "CwdChanged",
+                "PermissionDenied",
+                "SessionEnd"
             ]
         );
         let hooks = hooks_object(entries);
-        assert_eq!(hooks["Stop"][0]["hooks"].as_array().unwrap().len(), 4);
+        assert_eq!(hooks["Stop"][0]["hooks"].as_array().unwrap().len(), 5);
+        assert_eq!(
+            hooks["Notification"][0]["hooks"].as_array().unwrap().len(),
+            2
+        );
+        assert_eq!(
+            hooks["PostCompact"][0]["hooks"][0]["args"][0],
+            "post-compact"
+        );
+        assert_eq!(hooks["StopFailure"][0]["hooks"][0]["timeout"], 10);
         assert_eq!(hooks["PreToolUse"][0]["matcher"], "");
         assert_eq!(hooks["PermissionRequest"][0]["hooks"][0]["timeout"], 600);
         for entry in hooks.as_object().unwrap().values() {

@@ -53,7 +53,7 @@ const AIW_SKILLS: &[(&str, &str)] = &[
 const CLAUDE_SETTINGS_LOCAL_JSON: &str = "settings.local.json";
 const CLAUDE_SETTINGS_JSON: &str = "settings.json";
 const CLAUDE_STATE_JSON: &str = "aiw-hook-state.json";
-const HOOK_REFRESH_STAMP: &str = concat!(env!("CARGO_PKG_VERSION"), ":jqless-hooks-v9");
+const HOOK_REFRESH_STAMP: &str = concat!(env!("CARGO_PKG_VERSION"), ":jqless-hooks-v10");
 /// The Claude hook events AIW writes entries for (and cleans up again).
 const CLAUDE_MANAGED_EVENTS: &[&str] = &[
     "Stop",
@@ -67,6 +67,14 @@ const CLAUDE_MANAGED_EVENTS: &[&str] = &[
     "SessionEnd",
     "SubagentStart",
     "SubagentStop",
+    // FORK: DESIGN.md §19.1
+    "StopFailure",
+    "PostCompact",
+    "PostModelSwitch",
+    "TaskCreated",
+    "TaskCompleted",
+    "CwdChanged",
+    "PermissionDenied",
 ];
 const CLAUDE_MANAGED_SCRIPT_NAMES: &[&str] = &[
     "notify.sh",
@@ -81,6 +89,7 @@ const CLAUDE_MANAGED_SCRIPT_NAMES: &[&str] = &[
     "permission-request.sh",
     "stop-hook.sh",
     "subagent.sh",
+    "hook-event.sh", // FORK: DESIGN.md §19.1
 ];
 
 #[derive(Default)]
@@ -654,6 +663,10 @@ pub fn ensure_notify_scripts() {
     write_executable_if_changed(&claude_hooks_dir.join("status-line.sh"), STATUS_LINE_SH);
     write_executable_if_changed(&claude_hooks_dir.join("stop-hook.sh"), STOP_HOOK_SH);
     write_executable_if_changed(&claude_hooks_dir.join("subagent.sh"), SUBAGENT_SH);
+    write_executable_if_changed(
+        &claude_hooks_dir.join(crate::fork::hook_events::SCRIPT_NAME),
+        crate::fork::hook_events::SCRIPT,
+    );
     write_executable_if_changed(
         &claude_hooks_dir.join("session-context.sh"),
         SESSION_CONTEXT_SH,

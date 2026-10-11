@@ -41,6 +41,16 @@ pub const EVENTS: &[(&str, &[Step])] = &[
     // The badge's subagent count (P5).
     ("SubagentStart", &[("subagent.sh", &["start", "codex"])]),
     ("SubagentStop", &[("subagent.sh", &["stop", "codex"])]),
+    // Live working state between notify's turn ends (DESIGN.md §19.1): a
+    // submitted prompt starts the turn and retires the last "done"; a Bash
+    // call runs as a tool. Codex's notify still ends the turn
+    // (`thinking-stop`), so an older Codex without these hooks loses nothing.
+    (
+        "UserPromptSubmit",
+        &[("thinking-start.sh", &[]), ("clear-notify.sh", &[])],
+    ),
+    ("PreToolUse", &[("tool-start.sh", &[])]),
+    ("PostToolUse", &[("tool-stop.sh", &[])]),
 ];
 
 fn timeout_for(event: &str) -> u64 {
@@ -176,6 +186,24 @@ mod tests {
             "'/home/u/.config/ai_workstation/hooks/permission-request.sh' codex"
         );
         assert_eq!(permission["timeout"], 600);
+        // §19.1: a submitted prompt starts the turn and retires the last
+        // "done"; Bash calls run as tools.
+        let prompt = config["hooks"]["UserPromptSubmit"][0]["hooks"]
+            .as_array()
+            .unwrap();
+        assert_eq!(
+            prompt[0]["command"],
+            "'/home/u/.config/ai_workstation/hooks/thinking-start.sh'"
+        );
+        assert_eq!(
+            prompt[1]["command"],
+            "'/home/u/.config/ai_workstation/hooks/clear-notify.sh'"
+        );
+        assert_eq!(prompt[0]["timeout"], 10);
+        assert_eq!(
+            config["hooks"]["PreToolUse"][0]["hooks"][0]["command"],
+            "'/home/u/.config/ai_workstation/hooks/tool-start.sh'"
+        );
     }
 
     #[test]

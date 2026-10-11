@@ -394,6 +394,35 @@ for i in $(seq 1 80); do cap | grep '▎' | grep -q '2 subagents' && break; slee
 cap | grep '▎' | grep -q '2 subagents'; check "sub: two SubagentStart hooks → row says 2 subagents" $?
 for i in $(seq 1 120); do cap | grep '▎' | grep -q 'subagent' || break; sleep 0.1; done
 ! cap | grep '▎' | grep -q 'subagent'; check "sub: SubagentStop hooks and the turn's end clear the count" $?
+# §19.1: the newer hook events decorate the row and the info block
+sel_has() { local re=$1 secs=${2:-8} i; for i in $(seq 1 $((secs * 10))); do cap | grep '▎' | grep -Eq -- "$re" && return 0; sleep 0.1; done; return 1; }
+sel_lacks() { local re=$1 secs=${2:-8} i; for i in $(seq 1 $((secs * 10))); do cap | grep '▎' | grep -Eq -- "$re" || return 0; sleep 0.1; done; return 1; }
+agent_type '/compact' 1; sel_has 'compacted'; check "events: PostCompact → the row says compacted" $?
+agent_type '/model sonnet-fake' 1; sel_has 'model → sonnet-fake'; check "events: PostModelSwitch → the row says model → sonnet-fake" $?
+agent_type '/task 3' 1; agent_type '/taskdone' 1; wait_for 'tasks 1/3' 6; check "events: TaskCreated×3 + TaskCompleted → info block says tasks 1/3" $?
+agent_type '/fail' 1.5; sel_has 'turn failed: overloaded'; check "events: StopFailure → ⛔ turn failed: overloaded_error" $?
+wait_sel_glyph '⛔' 3; check "events: a failed turn shows ⛔, not ● working" $?
+agent_type 'recover after failure' 2; sel_lacks 'turn failed'; check "events: the next turn clears the failure" $?
+agent_type '/idle' 1; sel_has '(^|[^a-z])idle'; check "events: Notification idle_prompt → the row says idle" $?
+agent_type '/needs' 1; wait_sel_glyph '⛔' 6; check "events: Notification agent_needs_input → ⛔" $?
+agent_type 'answer the question' 2; sel_lacks 'question'; check "events: the next turn clears agent_needs_input" $?
+agent_type '/denied WebFetch' 1; sel_has 'denied: WebFetch'; check "events: PermissionDenied → the row says denied: WebFetch" $?
+agent_type '/bg' 2; sel_has '1 bg · 1 loop'; check "events: Stop with background_tasks + session_crons → the row says 1 bg · 1 loop" $?
+grep -q '"PostCompact"' "$XDG_STATE_HOME"/ai_workstation/claude-settings/*.json; check "events: the --settings file wires PostCompact" $?
+grep -q 'hook-event.sh' "$XDG_STATE_HOME"/ai_workstation/claude-settings/*.json && test -x "$XDG_CONFIG_HOME/ai_workstation/hooks/hook-event.sh"; check "events: hook-event.sh is installed and referenced" $?
+agent_type 'clear background' 2
+# Codex: UserPromptSubmit / PreToolUse in .codex/hooks.json show it working
+if select_row 'cx' >/dev/null; then
+    grep -q 'thinking-start.sh' "$S/repos/alpha/.codex/hooks.json" 2>/dev/null; check "codex: .codex/hooks.json wires UserPromptSubmit → thinking-start" $?
+    # cx exited earlier in the run; start it again first
+    if sel_glyph '■'; then keys c; sleep 3; hook_prompts; wait_sel_glyph '○' 10; fi
+    agent_type '/work' 1.5; wait_sel_glyph '●' 6; check "codex: a submitted prompt shows ● working before notify" $?
+    agent_type '/done' 2; for i in $(seq 1 60); do sel_glyph '●' || break; sleep 0.1; done
+    ! sel_glyph '●'; check "codex: notify still ends the turn" $?
+    select_row 'ws-1' >/dev/null; keys j; sleep 0.4
+else
+    check "codex: Codex row cx present for the hook check" 1
+fi
 # prompts handed to an agent are pasted unsent: Ctrl+Space l re-pastes a past
 # prompt into the pane and leaves Enter to the user
 handled_before=$(agent_cap | grep -c "handled 'hello ctx'")

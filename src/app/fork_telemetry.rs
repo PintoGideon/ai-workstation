@@ -237,6 +237,10 @@ impl App {
         let mut counts: Vec<(&String, &usize)> = self.subagent_counts.iter().collect();
         counts.sort();
         counts.hash(&mut hasher);
+        // FORK: §19.1 row events.
+        let mut hooks: Vec<_> = self.hook_events.iter().collect();
+        hooks.sort_by(|a, b| a.0.cmp(b.0));
+        hooks.hash(&mut hasher);
         let mut queues: Vec<(&String, usize)> =
             self.followups.iter().map(|(id, q)| (id, q.len())).collect();
         queues.sort();
