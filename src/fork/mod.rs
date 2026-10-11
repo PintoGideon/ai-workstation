@@ -29,6 +29,7 @@ pub(crate) mod theme_picker;
 pub(crate) mod themes;
 
 // G2 — Gemini CLI and Cursor agent (DESIGN.md §5).
+pub(crate) mod claude_settings; // Claude hooks + status line via --settings (DESIGN.md §16.6)
 pub mod codex_hooks; // Codex `.codex/hooks.json` (DESIGN.md §16)
 pub mod cursor;
 pub mod extra_agents;

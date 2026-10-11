@@ -2592,6 +2592,10 @@ impl App {
         // "Loading AIW..." stall proportional to feature count.
         let latest_prompt_cache = HashMap::new();
         let config = load_config();
+        // FORK: decide once where Claude's hooks go (DESIGN.md §16.6).
+        crate::fork::claude_settings::set_via_settings_flag(
+            config.aiw.claude_hooks_via_settings_flag,
+        );
         let zai_enabled = config.zai.is_some();
         let zai_monthly = config.zai.as_ref().and_then(|z| z.get_monthly_limit());
         let zai_weekly = config.zai.as_ref().and_then(|z| z.get_weekly_limit());

@@ -151,6 +151,7 @@ pub fn diagnose(inputs: &Inputs<'_>) -> Report {
     findings.push(check_stale_editors(inputs));
     findings.push(check_legacy_project_config(inputs));
     findings.push(check_network());
+    findings.push(check_harness_hooks(inputs)); // FORK: DESIGN.md §16
     Report { findings }
 }
 
@@ -540,6 +541,26 @@ fn check_network() -> Finding {
         "gh / git run only when you start a PR or Git action (PR badges refresh on R or when you open PR Triage)".to_string(),
         "syntax parsers are downloaded (git clone) only when you choose to install one".to_string(),
         "agents (Claude, Codex, …) talk to their own providers; that is their business, not AIW's".to_string(),
+    ])
+}
+
+/// FORK: where Claude's hooks go, and the one-time trust the other harnesses
+/// ask for (DESIGN.md §16).
+fn check_harness_hooks(inputs: &Inputs<'_>) -> Finding {
+    let via_settings = inputs.config.aiw.claude_hooks_via_settings_flag;
+    Finding::new(
+        "harness-hooks",
+        Severity::Ok,
+        if via_settings {
+            "Claude hooks and status line are passed at launch with --settings (claude_hooks_via_settings_flag: true); nothing of AIW's is written into .claude/settings.local.json"
+        } else {
+            "Claude hooks are written into each worktree's .claude/settings.local.json (claude_hooks_via_settings_flag: false)"
+        },
+    )
+    .with_detail(vec![
+        "Codex trusts a project's hooks once per worktree: run /hooks in Codex if it asks about AIW's .codex/hooks.json (AIW never bypasses hook trust)".to_string(),
+        "Gemini CLI hooks cannot answer permission prompts: allow safe commands with tools.allowed in .gemini/settings.json".to_string(),
+        "Cursor agent runs .cursor/hooks.json only in a trusted workspace".to_string(),
     ])
 }
 

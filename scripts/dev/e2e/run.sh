@@ -93,7 +93,7 @@ wait_for "Created project 'batch' with 2 features" 5; check "B: batch project wi
 
 select_row 'Claude 1' >/dev/null; keys Enter; sleep 1; keys -l 'hello from e2e'; keys Enter; sleep 1.5
 cap | grep -q "handled 'hello from e2e'"; check "typing goes straight to the agent" $?
-grep -q '"event": "Stop"' "$S/log/claude.args" "$S/log/claude.hooks" 2>/dev/null; check "Claude Stop hook fired through AIW's settings.local.json" $?
+grep -q '"event": "Stop"' "$S/log/claude.args" "$S/log/claude.hooks" 2>/dev/null; check "Claude Stop hook fired through AIW's hook settings (--settings)" $?
 keys C-q; sleep 0.8; cap | sed -n 2p | grep -q '✓ 1'; check "header pill shows 1 finished" $?
 keys Enter; sleep 0.6; keys -l '/ask'; keys Enter; sleep 1.2; keys C-q; sleep 0.8
 cap | sed -n 2p | grep -q '⛔ 1'; check "permission request → ⛔ 1 pill" $?
@@ -346,6 +346,16 @@ grep -q 'developer_instructions=.*AIW context: project' "$S/log/codex.args"; che
 grep '"event": "SessionStart"' "$S/log/gemini.hooks" | grep -q 'additionalContext.*AIW context: project gamma'; check "ctx-prompt: Gemini's SessionStart hook returns it as additionalContext" $?
 grep '"event": "sessionStart"' "$S/log/cursor-agent.hooks" | grep -q 'additional_context.*AIW context: project plain'; check "ctx-prompt: Cursor's sessionStart hook returns it as additional_context" $?
 grep -q 'Mention the branch name in commit messages and PR titles' "$S/log/claude.args"; check "ctx-prompt: the paragraph asks for the branch name in commits and PR titles" $?
+# item 7: Claude's hooks ride on --settings, not in the repo's settings.local.json
+ws_wt=$(ls -d "$XDG_DATA_HOME"/ai_workstation/worktrees/*/alpha-ws-1 | head -1)
+! grep -q 'ai_workstation/hooks' "$ws_wt/.claude/settings.local.json" 2>/dev/null; check "settings: no AIW hook entry in the worktree's .claude/settings.local.json" $?
+ls "$XDG_STATE_HOME"/ai_workstation/claude-settings/*.json >/dev/null 2>&1 && python3 - <<PY
+import glob, json, sys
+ok = all('Stop' in json.load(open(p)).get('hooks', {}) and 'statusLine' in json.load(open(p)) for p in glob.glob("$XDG_STATE_HOME/ai_workstation/claude-settings/*.json"))
+sys.exit(0 if ok else 1)
+PY
+check "settings: every per-session --settings file carries the hooks and the status line" $?
+AIW_TMUX_SOCKET=$AIW_SOCK aiw doctor 2>/dev/null | grep -q 'passed at launch with --settings'; check "doctor: reports the --settings mode and the Codex /hooks trust note" $?
 
 aiw_quit; doctor_clean; check "doctor clean after the adversarial run" $?
 

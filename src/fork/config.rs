@@ -35,6 +35,10 @@ pub struct AiwConfig {
     /// Tell each agent its project, feature, branch, worktree and AIW session
     /// in its system prompt (item 6). On by default.
     pub agent_context_prompt: bool,
+    /// Pass Claude's hooks and status line with `--settings <file>` (default)
+    /// instead of writing hook entries into the repo's
+    /// `.claude/settings.local.json` (item 7, DESIGN.md §16.6).
+    pub claude_hooks_via_settings_flag: bool,
 }
 
 impl Default for AiwConfig {
@@ -46,6 +50,7 @@ impl Default for AiwConfig {
             dashboard_layout: DashboardLayout::Workspace,
             permission_wait_seconds: crate::fork::permissions::DEFAULT_WAIT_SECONDS,
             agent_context_prompt: true,
+            claude_hooks_via_settings_flag: true,
         }
     }
 }

@@ -78,9 +78,25 @@ pub fn status_line_entry(hooks_dir: &Path) -> Value {
     })
 }
 
-/// The settings passed with `--settings`.
-pub fn claude_settings_json(hooks_dir: &Path) -> Value {
-    json!({ "statusLine": status_line_entry(hooks_dir) })
+/// The settings passed with `--settings`: the status line, and — with
+/// `claude_hooks_via_settings_flag` — AIW's hook entries (DESIGN.md §16.6).
+pub fn claude_settings_json(hooks_dir: &Path, ctx: &LaunchContext) -> Value {
+    let mut settings = json!({ "statusLine": status_line_entry(hooks_dir) });
+    if super::claude_settings::via_settings_flag() {
+        let diff_review_cmd = if matches!(ctx.mode, VibeMode::Vibeless) {
+            crate::app::setup::resolve_diff_review_command(&ctx.workdir, &ctx.repo)
+        } else {
+            None
+        };
+        let entries = super::claude_settings::hook_entries(&super::claude_settings::HookInputs {
+            hooks_dir,
+            workdir: &ctx.workdir,
+            mode: &ctx.mode,
+            diff_review_cmd: diff_review_cmd.as_deref(),
+        });
+        settings["hooks"] = super::claude_settings::hooks_object(entries);
+    }
+    settings
 }
 
 fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
@@ -109,7 +125,7 @@ fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
 /// Write the session's settings file and return the `--settings` argument.
 fn write_claude_settings(ctx: &LaunchContext) -> Option<PathBuf> {
     let hooks_dir = crate::project::aiw_claude_hooks_dir();
-    let settings = claude_settings_json(&hooks_dir);
+    let settings = claude_settings_json(&hooks_dir, ctx);
     let path = claude_settings_path(&ctx.feature_session_id);
     let rendered = serde_json::to_string_pretty(&settings).ok()? + "\n";
     write_atomic(&path, &rendered).ok()?;
@@ -216,6 +232,17 @@ mod tests {
                 .unwrap()
                 .ends_with("/hooks/status-line.sh")
         );
+        assert!(
+            written.get("hooks").is_none(),
+            "the legacy writer keeps the hooks in the repo file"
+        );
+        // With the flag on, the hooks ride along.
+        super::super::claude_settings::force_for_test(Some(true));
+        let with_hooks = claude_settings_json(Path::new("/h"), &ctx());
+        super::super::claude_settings::force_for_test(None);
+        assert!(with_hooks["hooks"]["Stop"].is_array());
+        assert!(with_hooks["hooks"]["PermissionRequest"].is_array());
+        assert_eq!(with_hooks["statusLine"]["type"], "command");
         // Rewritten at each launch, removed with the session.
         claude_launch_args(&ctx(), &AiwConfig::default(), Vec::new());
         assert!(path.exists());

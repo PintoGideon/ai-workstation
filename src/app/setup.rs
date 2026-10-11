@@ -991,7 +991,7 @@ pub fn cleanup_agent_injected_files(workdir: &Path, agent: &AgentKind) {
     }
 }
 
-fn resolve_diff_review_command(workdir: &Path, repo: &Path) -> Option<String> {
+pub(crate) fn resolve_diff_review_command(workdir: &Path, repo: &Path) -> Option<String> {
     let script_name = "custom-diff-review.sh";
     let script_suffix = ["plugins", "diff-review", "scripts", script_name];
     let aiw_root = std::env::current_exe()
@@ -1052,18 +1052,6 @@ pub fn ensure_notification_hooks(
     let hooks_dir = crate::project::aiw_claude_hooks_dir();
     let managed_commands = claude_managed_commands();
     repair_inherited_repo_claude_hooks(workdir, repo, is_worktree, &managed_commands);
-    let notify_path = hooks_dir.join("notify.sh");
-    let clear_path = hooks_dir.join("clear-notify.sh");
-    let save_prompt_path = hooks_dir.join("save-prompt.sh");
-    let thinking_start_path = hooks_dir.join("thinking-start.sh");
-    let thinking_stop_path = hooks_dir.join("thinking-stop.sh");
-    let tool_start_path = hooks_dir.join("tool-start.sh");
-    let tool_stop_path = hooks_dir.join("tool-stop.sh");
-    let attention_path = hooks_dir.join("attention.sh");
-    let permission_request_path = hooks_dir.join("permission-request.sh"); // FORK
-    let stop_hook_path = hooks_dir.join("stop-hook.sh"); // FORK
-    let subagent_path = hooks_dir.join("subagent.sh"); // FORK
-
     let wants_diff_review = matches!(mode, VibeMode::Vibeless);
     let diff_review_cmd = if wants_diff_review {
         resolve_diff_review_command(workdir, repo)
@@ -1074,117 +1062,22 @@ pub fn ensure_notification_hooks(
     let mut settings = read_json_object(&settings_path);
     remove_aiw_claude_hooks(&mut settings, &managed_commands);
 
-    // Stop: clear active thinking + write stop notification. The turn ending
-    // is what "completed, awaiting review" means for Claude.
-    push_claude_hook_entry(
-        &mut settings,
-        "Stop",
-        serde_json::json!({
-            "matcher": "",
-            "hooks": [
-                claude_exec_hook(&thinking_stop_path),
-                claude_exec_hook(&notify_path),
-                claude_exec_hook_with_args(&attention_path, &["completed"]),
-                // FORK: a queued follow-up becomes the next turn (P7).
-                claude_exec_hook_with_timeout(&stop_hook_path, &["claude"], 30)
-            ]
-        }),
-    );
-
-    // Notification: Claude raises this for anything it wants to tell the user,
-    // only some of which blocks the turn — a permission prompt does, while an
-    // idle nudge, an auth success, or a completed elicitation does not. The
-    // matcher cannot separate them, so `attention.sh notification` classifies
-    // the payload and reports a question only for the blocking ones; the rest
-    // report nothing rather than upgrading a standing completion.
-    // Attention-only: this deliberately does not run notify.sh, so wiring a
-    // previously-unused Claude event cannot change the pending-input flow.
-    push_claude_hook_entry(
-        &mut settings,
-        "Notification",
-        serde_json::json!({
-            "matcher": "",
-            "hooks": [
-                claude_exec_hook_with_args(&attention_path, &["notification"])
-            ]
-        }),
-    );
-
-    // PreToolUse: set thinking + tool-running + clear notification,
-    // plus diff-review for vibeless mode.
-    let mut pre_tool_hooks: Vec<serde_json::Value> = vec![
-        claude_exec_hook(&thinking_start_path),
-        claude_exec_hook(&tool_start_path),
-        claude_exec_hook(&clear_path),
-    ];
-    if wants_diff_review && let Some(ref dr_cmd) = diff_review_cmd {
-        pre_tool_hooks.push(serde_json::json!({
-            "type": "command",
-            "command": dr_cmd,
-            "args": [workdir.to_string_lossy()],
-            "timeout": 600
-        }));
+    // FORK: one builder for the hook entries (`fork::claude_settings`). With
+    // `claude_hooks_via_settings_flag` they go into the per-session
+    // `--settings` file at launch instead of this file, which then only
+    // carries the user's own entries (DESIGN.md §16.6).
+    if !crate::fork::claude_settings::via_settings_flag() {
+        let entries =
+            crate::fork::claude_settings::hook_entries(&crate::fork::claude_settings::HookInputs {
+                hooks_dir: &hooks_dir,
+                workdir,
+                mode,
+                diff_review_cmd: diff_review_cmd.as_deref(),
+            });
+        for (event, entry) in entries {
+            push_claude_hook_entry(&mut settings, event, entry);
+        }
     }
-    push_claude_hook_entry(
-        &mut settings,
-        "PreToolUse",
-        serde_json::json!({
-            "matcher": if wants_diff_review && diff_review_cmd.is_some() {
-                "Edit|Write"
-            } else {
-                ""
-            },
-            "hooks": pre_tool_hooks
-        }),
-    );
-
-    push_claude_hook_entry(
-        &mut settings,
-        "PostToolUse",
-        serde_json::json!({
-            "matcher": "",
-            "hooks": [
-                claude_exec_hook(&tool_stop_path)
-            ]
-        }),
-    );
-
-    // UserPromptSubmit: set thinking + persist latest prompt.
-    push_claude_hook_entry(
-        &mut settings,
-        "UserPromptSubmit",
-        serde_json::json!({
-            "matcher": "",
-            "hooks": [
-                claude_exec_hook(&thinking_start_path),
-                claude_exec_hook(&save_prompt_path)
-            ]
-        }),
-    );
-
-    // FORK: SubagentStart / SubagentStop — the badge's subagent count (P5).
-    for (event, arg) in [("SubagentStart", "start"), ("SubagentStop", "stop")] {
-        push_claude_hook_entry(
-            &mut settings,
-            event,
-            serde_json::json!({
-                "matcher": "",
-                "hooks": [claude_exec_hook_with_timeout(&subagent_path, &[arg, "claude"], 10)]
-            }),
-        );
-    }
-
-    // FORK: PermissionRequest — the dashboard answers the prompt (P6).
-    push_claude_hook_entry(
-        &mut settings,
-        "PermissionRequest",
-        serde_json::json!({
-            "matcher": "",
-            "hooks": [
-                claude_exec_hook_with_timeout(&permission_request_path, &["claude"], 600)
-            ]
-        }),
-    );
 
     update_claude_permissions(&mut settings, &state_path, wants_diff_review);
 
