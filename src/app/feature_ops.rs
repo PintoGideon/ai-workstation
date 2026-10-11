@@ -1253,6 +1253,14 @@ impl App {
         }
         // Running again: a later disappearance is no longer an expected stop.
         self.user_stopped_features.remove(&feature.id);
+        // FORK(cockpit): the feature's agents are launched again below, so
+        // none of them is "exited" any more. Cleared here rather than left to
+        // the sweep, which would only see the new harness in the pane later.
+        for session in feature.sessions.iter_mut() {
+            if self.exited_sessions.remove(&session.id) {
+                session.status_text = None;
+            }
+        }
         self.tmux
             .set_session_env(&feature.tmux_session, "AIW_SESSION", &feature.tmux_session)?;
 

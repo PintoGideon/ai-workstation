@@ -57,6 +57,9 @@ enum Fix {
     /// Already stopped (and its window still at the shell), but not known
     /// to be exited: AIW restarted since. Restore the marker.
     RestoreExited,
+    /// Marked exited, but the pane runs an agent again (relaunched by `c`
+    /// while a sweep still saw the shell, or started by hand): clear it.
+    ClearExited,
 }
 
 /// FORK: a window's agent pane: the pane the window was created with (the
@@ -188,6 +191,11 @@ impl App {
                     };
                     if session.kind.is_agent_harness() && window.agent_exited() {
                         fixes.push((pi, fi, si, Fix::MarkExited));
+                    } else if session.kind.is_agent_harness()
+                        && self.exited_sessions.contains(&session.id)
+                        && !is_plain_shell(&window.pane.command)
+                    {
+                        fixes.push((pi, fi, si, Fix::ClearExited));
                     }
                 }
             }
@@ -231,6 +239,14 @@ impl App {
                     let session = &mut self.store.projects[pi].features[fi].sessions[si];
                     session.status_text = Some(EXITED_STATUS.to_string());
                     self.exited_sessions.insert(session.id.clone());
+                }
+                Fix::ClearExited => {
+                    let session = &mut self.store.projects[pi].features[fi].sessions[si];
+                    if self.exited_sessions.remove(&session.id)
+                        && session.status_text.as_deref() == Some(EXITED_STATUS)
+                    {
+                        session.status_text = None;
+                    }
                 }
                 Fix::Remove => {
                     self.store.projects[pi].features[fi].sessions.remove(si);

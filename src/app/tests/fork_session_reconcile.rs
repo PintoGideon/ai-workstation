@@ -183,6 +183,31 @@ fn selection_shifts_past_a_removed_session() {
 
 // ── agent exited, shell alive ────────────────────────────────────────────────
 
+/// FORK(cockpit): `c` relaunches an exited agent into the same pane; a sweep
+/// that still saw the shell re-marked it, and nothing cleared the marker
+/// while the agent ran. A pane running an agent again clears it.
+#[test]
+fn an_exited_marker_is_cleared_once_the_pane_runs_an_agent_again() {
+    let mut app = app_with(
+        vec![session(SessionKind::Claude, "claude")],
+        &[(FEATURE, "claude", "claude")],
+    );
+    let id = app.store.projects[0].features[0].sessions[0].id.clone();
+    app.exited_sessions.insert(id.clone());
+    app.store.projects[0].features[0].sessions[0].status_text = Some(EXITED_STATUS.to_string());
+
+    assert!(app.reconcile_vanished_windows());
+
+    assert!(!app.session_is_exited(&id));
+    assert_eq!(
+        app.store.projects[0].features[0].sessions[0].status_text,
+        None
+    );
+    assert_eq!(listed(&app), vec![("claude".into(), false)]);
+    // Nothing to do on the next sweep.
+    assert!(!app.reconcile_vanished_windows());
+}
+
 #[test]
 fn an_agent_window_back_at_the_shell_is_marked_exited_not_finished() {
     let mut app = app_with(

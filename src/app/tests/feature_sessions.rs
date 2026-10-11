@@ -2387,6 +2387,40 @@ fn feature_start_leaves_individually_stopped_sessions_down() {
 }
 
 #[test]
+fn starting_a_stopped_feature_clears_its_agents_exited_markers() {
+    // FORK(cockpit): the agent exited at the shell, then the feature's whole
+    // tmux session went away; `c` brings the feature back and the row must
+    // not keep saying "exited" until a sweep notices the new harness.
+    let mut tmux = MockTmuxOps::new();
+    tmux.expect_session_exists().return_const(false);
+    tmux.expect_create_session_with_window()
+        .times(1)
+        .returning(|_, _, _| Ok(()));
+    tmux.expect_set_session_env().returning(|_, _, _| Ok(()));
+    tmux.expect_create_window().times(0);
+    tmux.expect_launch_claude()
+        .times(1)
+        .returning(|_, _, _, _, _| Ok(()));
+    tmux.expect_select_window().returning(|_, _| Ok(()));
+
+    let store = store_with_sessions(ProjectStatus::Stopped, &["Claude-1"], &[]);
+    let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
+    let id = app.store.projects[0].features[0].sessions[0].id.clone();
+    app.exited_sessions.insert(id.clone());
+    app.store.projects[0].features[0].sessions[0].status_text =
+        Some(crate::fork::session_reconcile::EXITED_STATUS.to_string());
+    app.selection = Selection::Session(0, 0, 0);
+
+    app.start_feature().unwrap();
+
+    assert!(!app.exited_sessions.contains(&id));
+    assert_eq!(
+        app.store.projects[0].features[0].sessions[0].status_text,
+        None
+    );
+}
+
+#[test]
 fn starting_from_a_stopped_session_row_brings_that_session_up_too() {
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists().return_const(false);

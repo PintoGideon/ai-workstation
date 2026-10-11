@@ -342,6 +342,10 @@ fn check_orphan_sessions(inputs: &Inputs<'_>) -> Finding {
         .tmux_sessions
         .iter()
         .filter(|session| !known.contains(session.as_str()))
+        // FORK(cockpit): grouped view sessions (`aiw grid`, the cockpit's
+        // agent pane) share a feature's windows and go when their client
+        // does; they hold no agent of their own.
+        .filter(|session| !session.starts_with("aiw-view-"))
         .cloned()
         .collect();
 

@@ -146,6 +146,10 @@ fn shorten_cwd(cwd: &str, budget: u16) -> String {
         .collect()
 }
 
+/// Below this title width (the cockpit sidebar) the header shows `AIW` and
+/// the pills only: no version, cwd or badge.
+const NARROW_TITLE_WIDTH: u16 = 40;
+
 /// The header title laid out for a region `title_width` columns wide.
 struct TitleLayout {
     /// Name, version, separator, cwd — the cwd already shortened to fit.
@@ -176,14 +180,21 @@ fn layout_title(
     needs_you: usize,
     pills: Option<HeaderPills>,
 ) -> TitleLayout {
-    let [name, ver, sep] = title_prefix_parts(version);
+    // FORK(cockpit): the sidebar pane is 28–50 columns wide; there the
+    // header is the name and the pills, nothing else.
+    let narrow = title_width < NARROW_TITLE_WIDTH;
+    let [name, ver, sep] = if narrow {
+        ["AIW".to_string(), String::new(), String::new()]
+    } else {
+        title_prefix_parts(version)
+    };
     let fixed_head: u16 = [&name, &ver]
         .iter()
         .map(|part| part.chars().count() as u16)
         .sum();
     let fixed = fixed_head.saturating_add(sep.chars().count() as u16);
     // The badge is ASCII-only, so byte length is its rendered width.
-    let mut badge = badge_text(needs_you);
+    let mut badge = if narrow { None } else { badge_text(needs_you) };
     let mut badge_width = badge.as_ref().map_or(0, |b| b.len() as u16);
     // FORK: a badge that cannot be shown whole next to the name and version
     // falls back to its compact form (and to none at all) rather than being
@@ -216,7 +227,11 @@ fn layout_title(
         .saturating_sub(fixed)
         .saturating_sub(badge_width)
         .saturating_sub(pills_cols);
-    let shown_cwd = shorten_cwd(cwd, cwd_budget);
+    let shown_cwd = if narrow {
+        String::new()
+    } else {
+        shorten_cwd(cwd, cwd_budget)
+    };
     // A separator with nothing after it just spends a column on punctuation.
     let sep = if shown_cwd.is_empty() {
         String::new()

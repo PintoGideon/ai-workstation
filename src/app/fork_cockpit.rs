@@ -27,6 +27,9 @@ pub struct CockpitRuntime {
     zoomed: bool,
     /// Counter for unique view-session names.
     views: u64,
+    /// The sidebar width last seen, so a resize that left the pane at the
+    /// wrong width is corrected once, not every tick.
+    seen_cols: u16,
     /// This executable, for the pane commands.
     aiw: String,
     /// The cockpit server's socket, for the pane commands that retitle.
@@ -130,6 +133,18 @@ impl App {
         }
         let mut sent = false;
         let normal = matches!(self.mode, AppMode::Normal);
+        // The resize hook pins the width, but a resize that races the layout
+        // can leave the pane wider or narrower; the sidebar sees its own
+        // width and asks once per change (never while zoomed: that is the
+        // whole window, by design).
+        if normal && self.viewport_cols != 0 && self.viewport_cols != self.fork_cockpit.seen_cols {
+            self.fork_cockpit.seen_cols = self.viewport_cols;
+            let want = cockpit::sidebar_width(self.config.aiw.sidebar_width);
+            if self.viewport_cols != want && !self.fork_cockpit.zoomed {
+                self.cockpit_send(Request::SidebarWidth(want));
+                sent = true;
+            }
+        }
         if !normal && !self.fork_cockpit.zoomed {
             self.cockpit_send(Request::Zoom(true));
             self.fork_cockpit.zoomed = true;
