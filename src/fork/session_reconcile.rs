@@ -60,7 +60,16 @@ enum Fix {
     /// Marked exited, but the pane runs an agent again (relaunched by `c`
     /// while a sweep still saw the shell, or started by hand): clear it.
     ClearExited,
+    /// Stopped *and* marked exited, but the pane runs an agent again: a
+    /// relaunch the sweep re-marked before the harness replaced the shell,
+    /// or an agent the user started by hand. Running again, then.
+    Revive,
 }
+
+/// A session launched this recently is left alone by the exited sweep: its
+/// pane is a plain shell until the launch script `exec`s the harness.
+const LAUNCH_GRACE: std::time::Duration =
+    std::time::Duration::from_secs(CREATION_GRACE_SECS as u64);
 
 /// FORK: a window's agent pane: the pane the window was created with (the
 /// lowest pane id), where AIW launched the agent.
@@ -163,15 +172,30 @@ impl App {
                         continue;
                     }
                     let key = (feature.tmux_session.clone(), session.tmux_window.clone());
+                    // FORK: just launched — the shell in its pane is the
+                    // launch script about to `exec` the harness, not an exit.
+                    let just_launched = self
+                        .recent_launches
+                        .get(&session.id)
+                        .is_some_and(|at| at.elapsed() < LAUNCH_GRACE);
                     if session.stopped {
-                        // The in-memory marker does not survive a restart of
-                        // AIW; the stopped flag does. Without the marker a
-                        // restart would take the window for "up after all".
                         if session.kind.is_agent_harness()
-                            && !self.exited_sessions.contains(&session.id)
-                            && commands.get(&key).is_some_and(AgentPane::agent_exited)
+                            && let Some(window) = commands.get(&key)
                         {
-                            fixes.push((pi, fi, si, Fix::RestoreExited));
+                            if self.exited_sessions.contains(&session.id)
+                                && !is_plain_shell(&window.pane.command)
+                            {
+                                fixes.push((pi, fi, si, Fix::Revive));
+                            } else if !self.exited_sessions.contains(&session.id)
+                                && !just_launched
+                                && window.agent_exited()
+                            {
+                                // The in-memory marker does not survive a
+                                // restart of AIW; the stopped flag does.
+                                // Without the marker a restart would take
+                                // the window for "up after all".
+                                fixes.push((pi, fi, si, Fix::RestoreExited));
+                            }
                         }
                         continue;
                     }
@@ -190,7 +214,9 @@ impl App {
                         continue;
                     };
                     if session.kind.is_agent_harness() && window.agent_exited() {
-                        fixes.push((pi, fi, si, Fix::MarkExited));
+                        if !just_launched {
+                            fixes.push((pi, fi, si, Fix::MarkExited));
+                        }
                     } else if session.kind.is_agent_harness()
                         && self.exited_sessions.contains(&session.id)
                         && !is_plain_shell(&window.pane.command)
@@ -247,6 +273,18 @@ impl App {
                     {
                         session.status_text = None;
                     }
+                }
+                Fix::Revive => {
+                    let label = self.store.projects[pi].features[fi].sessions[si]
+                        .label
+                        .clone();
+                    let feature_name = self.store.projects[pi].features[fi].name.clone();
+                    // Clears the exited marker and its status text too.
+                    self.set_session_stopped(pi, fi, si, false);
+                    self.log_info(
+                        "reconcile",
+                        format!("{label} in {feature_name} runs an agent again (○)"),
+                    );
                 }
                 Fix::Remove => {
                     self.store.projects[pi].features[fi].sessions.remove(si);

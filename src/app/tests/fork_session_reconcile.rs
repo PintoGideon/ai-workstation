@@ -183,6 +183,58 @@ fn selection_shifts_past_a_removed_session() {
 
 // ── agent exited, shell alive ────────────────────────────────────────────────
 
+/// A sweep that ran between the relaunch and the harness's `exec` saw a plain
+/// shell and marked the session exited *and stopped*; the plain ClearExited
+/// path never looks at stopped sessions, so the row stayed ■ while the agent
+/// ran (e2e "c: exited agent is launched again", 1 in ~10 runs). A stopped,
+/// exited session whose pane runs an agent is revived.
+#[test]
+fn a_stopped_exited_session_whose_pane_runs_an_agent_again_is_revived() {
+    let mut app = app_with(
+        vec![session(SessionKind::Claude, "claude")],
+        &[(FEATURE, "claude", "claude")],
+    );
+    let id = app.store.projects[0].features[0].sessions[0].id.clone();
+    app.store.projects[0].features[0].sessions[0].stopped = true;
+    app.store.projects[0].features[0].sessions[0].status_text = Some(EXITED_STATUS.to_string());
+    app.exited_sessions.insert(id.clone());
+
+    assert!(app.reconcile_vanished_windows());
+
+    assert_eq!(listed(&app), vec![("claude".into(), false)]);
+    assert!(!app.session_is_exited(&id));
+    assert_eq!(
+        app.store.projects[0].features[0].sessions[0].status_text,
+        None
+    );
+    assert!(!app.reconcile_vanished_windows());
+}
+
+/// And the root cause: a session launched moments ago sits at the launch
+/// script's shell until the harness is `exec`ed. The sweep leaves it alone.
+#[test]
+fn a_just_launched_agent_at_its_shell_is_not_marked_exited() {
+    let mut app = app_with(
+        vec![session(SessionKind::Claude, "claude")],
+        &[(FEATURE, "claude", "zsh")],
+    );
+    let id = app.store.projects[0].features[0].sessions[0].id.clone();
+    app.recent_launches
+        .insert(id.clone(), std::time::Instant::now());
+
+    assert!(!app.reconcile_vanished_windows());
+    assert_eq!(listed(&app), vec![("claude".into(), false)]);
+    assert!(!app.session_is_exited(&id));
+
+    // Once the grace has passed the same shell is an exit.
+    app.recent_launches.insert(
+        id.clone(),
+        std::time::Instant::now() - std::time::Duration::from_secs(60),
+    );
+    assert!(app.reconcile_vanished_windows());
+    assert!(app.session_is_exited(&id));
+}
+
 /// FORK(cockpit): `c` relaunches an exited agent into the same pane; a sweep
 /// that still saw the shell re-marked it, and nothing cleared the marker
 /// while the agent ran. A pane running an agent again clears it.

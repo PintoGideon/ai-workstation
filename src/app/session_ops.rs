@@ -2129,6 +2129,10 @@ impl App {
                 remote_control: use_rc,
                 session_name: if use_rc { Some(feature_name) } else { None },
             });
+            // FORK: see `recent_launches` — the sweep must not read the
+            // launch script's shell as another exit.
+            self.recent_launches
+                .insert(session.id.clone(), std::time::Instant::now());
             self.launch_agent_session_window_in(
                 &agent,
                 &tmux_session,

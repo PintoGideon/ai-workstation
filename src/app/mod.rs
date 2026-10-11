@@ -774,6 +774,11 @@ pub struct App {
     /// sweep re-detects the state after a relaunch. Cleared when the session
     /// is started again.
     pub exited_sessions: std::collections::HashSet<String>,
+    /// FORK: when each agent session was last launched (feature start or
+    /// `c` on an exited agent). The exited-agent sweep leaves a session
+    /// alone for a few seconds after that: its pane sits at the shell
+    /// until the launch script `exec`s the harness.
+    pub recent_launches: std::collections::HashMap<String, Instant>,
     /// FORK: when `confirm_quit` is on and agents are running, the first `q`
     /// arms this and a second one within a few seconds quits.
     pub quit_confirm_armed_at: Option<Instant>,
@@ -1419,6 +1424,7 @@ impl App {
             pending_inputs: Vec::new(),
             user_stopped_features: std::collections::HashSet::new(),
             exited_sessions: std::collections::HashSet::new(),
+            recent_launches: std::collections::HashMap::new(),
             quit_confirm_armed_at: None,
             reported_config_errors: HashMap::new(),
             config_error_checks: Default::default(),
@@ -1670,6 +1676,7 @@ impl App {
             pending_inputs: Vec::new(),
             user_stopped_features: std::collections::HashSet::new(),
             exited_sessions: std::collections::HashSet::new(),
+            recent_launches: std::collections::HashMap::new(),
             quit_confirm_armed_at: None,
             reported_config_errors: HashMap::new(),
             config_error_checks: Default::default(),

@@ -1344,6 +1344,10 @@ impl App {
                 continue;
             }
 
+            // FORK: the exited sweep gives a fresh launch a few seconds
+            // before it reads the pane's shell as an exit.
+            self.recent_launches
+                .insert(session.id.clone(), std::time::Instant::now());
             match session.kind {
                 SessionKind::Claude => {
                     launched_agent_sessions += 1;
