@@ -513,3 +513,100 @@ session` / `Ctrl+Q: back to AIW`) and, on AIW's own server only, `bind-key -T ro
 user-owned server keeps its key tables and the status line says `prefix d`. On return the status line is
 restored, `last_resize` is dropped so the pane is resized and captured afresh, and the session's unread `✓` is
 cleared. While attached AIW is idle: no capture, no polling, nothing between the terminal and the agent.
+
+## 16. Hook-driven productivity (2026-10-10)
+
+With 10–30 agents the dashboard must answer and steer them without opening each one. The agent CLIs all
+offer hooks (docs/development/harness-hooks-reference.md has the exact contracts), and AIW already reached
+them the same way: a per-worktree hook file points at an embedded script in `~/.config/ai_workstation/hooks/`,
+the script calls `aiw <subcommand>` with the hook's JSON on stdin, and the subcommand writes one JSON line to
+the Unix socket `aiw.sock`. Shell scripts never parse JSON; the Rust side does. This section adds the
+capabilities that need an *answer* to go back to the agent, and the ones that only need the agent to say more.
+
+**No cloud.** Everything here is local: the scripts, the socket, the status line Claude pipes to AIW, the
+files read for Codex and Gemini. The only AIW code that talks to a provider is still the existing headless
+review path; nothing new was added. The status line restores the Claude 5-hour / 7-day meters from the
+numbers Claude itself hands the command — the OAuth usage call stays removed (NO_CLOUD.md).
+
+### 16.1 Requests that wait for an answer (`src/fork/ipc_reply.rs`)
+
+The socket was fire-and-forget. A hook that needs the user's decision keeps its connection open instead: the
+payload carries `"await_reply": true` and a `request_id`; the accept thread parks the stream in a registry
+keyed by that id (`try_clone`, no second listener, no reply-socket directory) and hands the message to the
+app as usual. The app answers with `ipc_reply::reply(request_id, json)`, one line on that stream, then closes
+it. The main loop never blocks: the stream sits in the map until the user decides. When the client gives up
+first (its own timeout, or it was killed) the accept thread sends `{"type":"reply_abandoned","request_id":…}`
+so the pending UI state is dropped. The client side, `ipc_reply::request(path, payload, timeout)`, returns
+`Ok(None)` on timeout — "print nothing, let the harness do its own thing" — and `Err` only when AIW is not
+listening at all.
+
+### 16.2 Permission approvals (P6)
+
+Claude `PermissionRequest`, Codex `PermissionRequest` and Cursor `beforeShellExecution` /
+`beforeMCPExecution` run `scripts/permission-request.sh` → `aiw permission-request --harness …`, which sends
+`{"type":"permission_request", request_id, harness, session_id, tool_name, tool_input, aiw_*}` and waits up to
+`permission_wait_seconds` (default 300). The app (`src/app/fork_permissions.rs`) keeps a `PendingPermission`
+per request and records an attention `Question` with `notification_type: permission_request` and the reason
+`<tool> — <input preview>`, so the existing badge model shows `⛔ permission: Bash — cargo test` everywhere
+(Codex and Cursor get the question even though their older signals cannot ask one). Keys: `a` allow, `X`
+deny — `y` is "mark ready" on the dashboard, so the obvious pair was taken; the same keys work on a selected
+row, in the needs-you picker and in the detail overlay (`Enter` in the picker: tool, full input, `p` = let the
+agent ask in its pane, `o` = open it). The reply is `{"behavior":"allow"|"deny"|"pass"}`; the hook prints the
+harness's decision JSON (`hookSpecificOutput.decision.behavior` for Claude/Codex, `permission` for Cursor —
+`ask` on pass, because Cursor treats an empty answer from a permission hook as invalid and would block).
+Allowing clears the `⛔`; a timeout clears it too (the agent shows its own prompt). Gemini's hooks cannot grant,
+so its `Notification(ToolPermission)` stays a `⛔` answered in the pane. Every decision is in the debug log.
+
+### 16.3 Context and cost (P4, `src/fork/telemetry.rs`)
+
+Claude: `--settings` (16.6) carries a `statusLine` command, `scripts/status-line.sh` → `aiw status-line`,
+which parses Claude's status JSON, sends `status_line` (model, used %, window, cost, lines, rate limits,
+and the raw `context_window` object) and prints `Opus 4 · ctx 42% · $0.84` for Claude's footer — or runs
+the user's own status line from `~/.claude/settings.json` and prints that instead. The raw `context_window`
+is fed to the existing context collector as a *direct* sample (`runtime_payload`), so the tree's `Ctx` label
+stops estimating. Codex: the rollout's `token_count` (`last_token_usage` vs `model_context_window` for the
+percentage, `total_token_usage` for the session total) and `turn_context.model`, folded incrementally by
+`line_fold` on a background thread each 5-second sweep. Gemini: the newest `*.jsonl` under
+`<GEMINI home>/tmp/<sha256(project root)>/chats/` (`getProjectHash` in gemini-cli's `paths.ts` is a plain
+SHA-256 of the root path; the directory is only read when it exists), last `gemini` record's `tokens.total`
+— no window, so tokens only. Cursor reports nothing usable. `App::telemetry` is keyed by feature session id;
+the sidebar row shows `42%` at its right edge in the thresholds' tone, the badge label becomes
+`working 6m · 42% ctx`, split tiles and the GUI contract (`SidebarSession.telemetry`) carry the same.
+
+### 16.4 Queued follow-ups (P7, `src/fork/followups.rs`)
+
+A per-session FIFO in `aiw_followups` (created by `FORK_SCHEMA`), mirrored in `App::followups` so drawing
+reads no database. The dialog (`e` on a session row; `Ctrl+Space Q` in the pane or a view; `Q` itself is
+the quick plan interview) is a multi-line editor over the list: `Enter` queues, `Tab` reaches the list,
+`J`/`K` reorder, `d` drops, `Enter` takes an item back to edit. `aiw automation queue --session <id> "<text>"`
+queues from a script. Delivery is the harness asking: the Stop hooks (Claude `Stop`, Codex `Stop`, Gemini
+`AfterAgent`, Cursor `stop`) run `scripts/stop-hook.sh` → `aiw stop-hook`, which sends `followup_take` and
+waits ≤ 2 s for `{"followup": text|null}`; with a text it prints the continuation (`{"decision":"block",
+"reason":…}`; Cursor `{"followup_message":…}`), otherwise nothing (Codex: `{}`, it requires JSON). The task
+prompt is never sent on its own and nothing is ever typed into a busy agent. `stop_hook_active` is logged
+only; the queue draining bounds the loop (Claude caps 8 continuations; Cursor's `loop_limit` is set to 20).
+The badge reason line shows `⏭ 2 queued`.
+
+### 16.5 Subagents and the launch context
+
+`SubagentStart`/`SubagentStop` (Claude, Codex; Cursor `subagentStart`/`subagentStop`, whose start entry
+answers `{"permission":"allow"}` itself) → `aiw subagent` → a count per feature session, cleared at
+`thinking-stop` and on session end: `working 6m · 2 subagents`. At launch every agent is told
+`AIW context: project …, feature …, branch …, worktree …, AIW session …. Mention the branch name in commit
+messages and PR titles.` — Claude in `--append-system-prompt` (joined after the screenshot-evidence text),
+Codex in `developer_instructions`, Gemini and Cursor through their session-start hooks (`aiw session-context`
+rebuilds the paragraph from the store, read-only). `agent_context_prompt: false` turns it off.
+
+### 16.6 Claude hooks via `--settings`
+
+Claude's docs say hook entries merge across settings levels ("Hook entries merge across settings levels
+rather than replacing each other"; "Lists merge instead of overriding"; the same handler in two files runs
+once), so `claude_hooks_via_settings_flag` defaults to **on**: `fork::claude_settings::hook_entries` is the
+one builder, `fork::launch` writes `<state>/claude-settings/<feature session id>.json` (`hooks` +
+`statusLine`) at each launch and passes `--settings <file>`, and `ensure_notification_hooks` only removes the
+entries an older AIW wrote into `.claude/settings.local.json` (the file keeps the user's entries and the
+permissions diff review needs; the worktree copy still happens). With the flag off the legacy writer is used
+unchanged. `aiw doctor` reports the mode and reminds about Codex's one-time `/hooks` trust.
+
+Dropped on request (2026-10-10): the Obsidian vault log (P2b) — stability first; the PreCompact / SessionEnd
+hooks it needed are not wired.

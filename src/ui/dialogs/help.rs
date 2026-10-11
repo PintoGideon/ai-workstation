@@ -175,6 +175,15 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("u", "Preferred harness / worktree config"),
         ("F", "Fork feature (new branch)"),
         ("y", "Toggle mark feature as ready"),
+        // FORK: hook-driven productivity (DESIGN.md §16).
+        (
+            "a / X",
+            "Allow / deny the permission the selected agent is asking for",
+        ),
+        (
+            "e",
+            "Queue a follow-up for the selected agent (delivered when its turn ends)",
+        ),
         ("Z", "Generate session summary"),
         ("z", "Dormant features (idle + unattended)"),
         ("w", "Context window / warning settings"),
@@ -232,6 +241,19 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         (
             "",
             "        ○ idle · ■ stopped · ■ exited (agent died at its shell)",
+        ),
+        // FORK: hook-driven productivity (DESIGN.md §16).
+        (
+            "",
+            "        42% on a row = context used · working … · 2 subagents · ⏭ 2 queued",
+        ),
+        (
+            "a / X",
+            "Allow / deny a ⛔ permission request on the row (also in the i list; Enter there shows it)",
+        ),
+        (
+            "e",
+            "Queue a follow-up for the agent; Ctrl+Space Q does the same from the pane or a view",
         ),
     ];
     lines.extend(

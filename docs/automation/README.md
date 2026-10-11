@@ -186,3 +186,20 @@ Typical error response:
   "error": "Project 'plan-42' already exists"
 }
 ```
+
+## Queue a follow-up
+
+```bash
+aiw automation queue --session <aiw-session-id> "rebase on main and rerun the tests"
+echo "second instruction" | aiw automation queue --session <aiw-session-id>
+```
+
+Queues an instruction for an agent session. It is **not** typed into the
+agent: the agent's own turn-end hook (Claude/Codex `Stop`, Gemini
+`AfterAgent`, Cursor `stop`) asks AIW when the current turn ends and receives
+the next queued text as its continuation, one per turn. The reply is
+`{"type":"automation-result","action":"queue_followup","ok":true,"session_id":…,"queued":N}`;
+an unknown session id or empty text is an error. The queue is stored in
+`aiw.db` and shown on the session row as `⏭ N queued`; the dashboard dialog
+(`e` on the row) lists, reorders and drops items. See the README section
+"Harness hooks: what AIW does with them".

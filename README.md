@@ -269,6 +269,8 @@ and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-inte
 | `d` | Delete a project, feature, or session |
 | `/` | Search and jump |
 | `i` | Show agents needing attention: questions first, then finished work |
+| `a` / `X` | Allow / deny the permission prompt the selected agent is waiting on (Claude, Codex, Cursor); in the `i` list too, where `Enter` shows the tool and its full input |
+| `e` | Queue a follow-up for the selected agent: delivered only when its current turn ends (`Ctrl+Space`, then `Q`, from the pane or a view) |
 | `I` | On a TODOs session row: start an agent on the next TODO in priority order, across the lists currently showing |
 | `z` | Show dormant features: idle and unattended |
 | `G` | Open GitHub PR triage; on a project row, review a PR yourself |
@@ -301,6 +303,7 @@ unless you turn it on with `Ctrl+Space`, then `e`. These controls belong to AIW:
 | `Ctrl+Space`, then `E` | Edit headless AI prompt templates (overrides) |
 | `Ctrl+Space`, then `N` | Add a TODO to this worktree's list |
 | `Ctrl+Space`, then `e` | Turn the compose box on or off for this session |
+| `Ctrl+Space`, then `Q` | Queue a follow-up for this agent (see "Harness hooks" below) |
 | `Ctrl+Space`, then `?` | Show all leader commands |
 
 In split view, `Ctrl+Space` then an arrow key moves focus between tiles, `z`
@@ -338,15 +341,18 @@ split-view tiles and the needs-you list use:
 
 | Badge | Meaning |
 | --- | --- |
-| `⛔` | needs you: a permission prompt, a question, or a stop nothing explained (the reason is on the next line) |
-| `●` | working (the activity line, when the agent reports one) |
+| `⛔` | needs you: a permission prompt, a question, or a stop nothing explained (the reason is on the next line; `permission: Bash — cargo test` can be answered with `a` / `X`) |
+| `●` | working (the activity line, when the agent reports one: `working 6m · 42% ctx · 2 subagents · Edit src/auth.rs`) |
 | `✓` | finished a turn; bright until you look at it, dim after |
 | `○` | idle (running, nothing to report) |
 | `■` | stopped; `■ exited` when the agent died at its shell (`c` relaunches it) |
 
 Project rows show their counts (`⛔1 ●7 ✓2`); feature rows show their most
 pressing session. The pane border turns amber while the shown agent needs
-you.
+you. A session row's right edge shows its context use (`42%`) when the
+harness reports it, in the warning / critical colour past
+`context_warning_percent` / `context_critical_percent`; `⏭ 2 queued` on the
+reason line counts the follow-ups waiting for it.
 
 | Key | Action |
 | --- | --- |
@@ -779,6 +785,90 @@ there is no local window for AIW to own, so it always reports a skip.
 
 Press `z` to list dormant features — idle *and* unattended — with per-row stop,
 close-editor, delete, and open.
+
+
+## Harness hooks: what AIW does with them
+
+AIW integrates with each agent through the hooks the agent CLI itself offers
+(Claude Code, Codex, Gemini CLI, Cursor agent). The hooks run small shell
+scripts under `~/.config/ai_workstation/hooks/` that call `aiw <subcommand>`,
+which talks to the dashboard over its local Unix socket. Nothing here reaches
+the network: the status line, the permission answers and the follow-ups all
+stay on this machine (see [NO_CLOUD.md](NO_CLOUD.md)). The exact hook
+contracts are in [docs/development/harness-hooks-reference.md](docs/development/harness-hooks-reference.md).
+
+| | Claude Code | Codex | Gemini CLI | Cursor agent |
+| --- | --- | --- | --- | --- |
+| Needs-you / finished badges, activity line | ✓ | ✓ | ✓ | ✓ |
+| **Answer permission prompts from the dashboard** (`a` / `X`) | ✓ `PermissionRequest` | ✓ `PermissionRequest` | – (its hooks can only observe: the `⛔` stays, answer in the pane) | ✓ `beforeShellExecution` + `beforeMCPExecution` |
+| **Context used and cost on the row** | ✓ status line (model, `42%`, cost, 5h/7d limits) | ✓ rollout file (model, context of the last request, total tokens) | ✓ newest chat file (tokens only, no window) | – |
+| **Queued follow-ups** (`e`, `Ctrl+Space Q`, `aiw automation queue`) | ✓ `Stop` | ✓ `Stop` | ✓ `AfterAgent` | ✓ `stop` (`loop_limit` 20) |
+| **Subagent count on the working badge** | ✓ | ✓ | – | ✓ |
+| **Launch context in the system prompt** (project, feature, branch, worktree, AIW session; "mention the branch in commits and PR titles") | ✓ `--append-system-prompt` | ✓ `developer_instructions` | ✓ `SessionStart` additional context | ✓ `sessionStart` additional context |
+| Where AIW puts its hooks | `--settings <file>` at launch (default) or `.claude/settings.local.json` | `.codex/hooks.json` + `notify` at launch | `.gemini/settings.json` | `.cursor/hooks.json` |
+
+How the pieces work:
+
+- **Permission prompts.** When Claude, Codex or Cursor is about to ask, its
+  hook sends the request to AIW and *waits* (up to `permission_wait_seconds`,
+  default 300) for your answer. The row shows `⛔ permission: Bash — cargo
+  test`; `a` allows, `X` denies, on the row, in the `i` list, or in the detail
+  overlay (`Enter` in the `i` list: tool, full input, `p` lets the agent ask
+  in its own pane, `o` opens it). If you do not answer in time, or AIW is not
+  running, the hook prints nothing and the agent shows its own prompt, so
+  nothing can get stuck. `y` was taken (mark ready), hence `a` / `X`. Every
+  decision is in the debug log (`D`).
+- **Context and cost.** Claude runs AIW's `statusLine` command (passed with
+  `--settings`), which prints one line in Claude's footer (`Opus 4 · ctx 42% ·
+  $0.84`) and sends the numbers to AIW; if you configured your own status line
+  in `~/.claude/settings.json`, AIW runs it and shows its output instead.
+  Codex rollouts and Gemini chat files are read locally on the 5-second sweep.
+  The working badge says `working 6m · 42% ctx`; split tiles and the GUI
+  contract carry the same numbers.
+- **Queued follow-ups.** `e` on a session row opens "Queue a follow-up":
+  type the next instruction, `Enter` queues it (`Shift+Enter` for a newline,
+  `Tab` to the list to reorder with `J`/`K` or drop with `d`). The queue is
+  stored in `aiw.db`, so it survives a restart, and is delivered one item per
+  turn: when the agent's turn ends, its Stop hook asks AIW and gets the next
+  text as a continuation. The task prompt is never sent on its own; only what
+  you queued is. Claude stops after 8 continuations in a row, Cursor after
+  `loop_limit` (AIW sets 20) — the queue draining bounds the loop anyway.
+  `aiw automation queue --session <id> "text"` queues from a script.
+- **Subagents.** `SubagentStart` / `SubagentStop` keep a count per session
+  (`working 6m · 2 subagents`), cleared when the turn ends.
+- **Launch context.** Every agent is told its project, feature, branch,
+  worktree path and AIW session id, and asked to mention the branch name in
+  commit messages and PR titles (`agent_context_prompt: false` turns it off).
+
+One-time setup per harness:
+
+- **Codex** trusts a project hook by the hash of its definition: the first
+  Codex session in a worktree asks you to trust AIW's hooks once (`/hooks` in
+  the Codex TUI). AIW never passes `--dangerously-bypass-hook-trust`; `aiw
+  doctor` reminds you.
+- **Gemini CLI** cannot answer a permission prompt from a hook. To stop being
+  asked for safe commands, add them to `tools.allowed` in `.gemini/settings.json`
+  (for example `["run_shell_command(git)"]`; Gemini needs a restart).
+- **Cursor agent** runs project hooks from `.cursor/hooks.json` only in a
+  trusted workspace; trust the worktree once when Cursor asks.
+
+Claude settings: with `claude_hooks_via_settings_flag: true` (the default)
+AIW builds its hooks and status line into
+`~/.local/state/ai_workstation/claude-settings/<session>.json` and passes it
+with `--settings`, so nothing of AIW's is written into the repo's
+`.claude/settings.local.json` any more (entries an older AIW wrote there are
+removed on the next refresh; your own entries stay). Claude merges hook
+entries across settings levels rather than replacing them, so your project
+hooks keep running alongside AIW's. Set the flag to `false` to go back to
+writing `settings.local.json`; `aiw doctor` reports which mode is active.
+
+```json
+{
+  "permission_wait_seconds": 300,
+  "agent_context_prompt": true,
+  "claude_hooks_via_settings_flag": true
+}
+```
 
 ## Configuration
 

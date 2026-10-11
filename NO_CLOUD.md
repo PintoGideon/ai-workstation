@@ -69,6 +69,7 @@ linked packages. Added: `sha1` (pure hash, for the local WebSocket handshake).
 | Claude `--remote-control` launch flag, `/rc` URL copy/open (`src/app/remote_control.rs`, `src/project.rs`, leader `c`/`O`) | Claude Code's own Remote Control bridge to claude.ai. | The agent's own network feature, opt-in per feature; AIW only passes the flag and parses the pane. |
 | `src/app/model_analysis/session_control.rs` + `local_ws.rs` | Codex settings over `codex app-server proxy` stdin/stdout. | Local pipe to a child process. |
 | `src/ipc.rs`, tmux sockets | Unix-domain sockets. | Local IPC, not network. |
+| Harness hooks and Claude's status line (`scripts/*.sh` → `aiw permission-request`, `status-line`, `stop-hook`, `subagent`, `session-context`; DESIGN.md §16) | The agent CLIs run AIW's scripts on their own events; the scripts talk to AIW's Unix socket and print a line or a JSON decision back to the agent. The status line restores the Claude 5h/7d meters from the numbers Claude itself passes to the command. | Local processes and the local socket; nothing of AIW's opens a network connection. |
 | Agents' own traffic | Claude, Codex, Gemini, Cursor, Pi, … | Outside AIW. |
 
 Not product code: the dev harness for the removed remote screenshot sources

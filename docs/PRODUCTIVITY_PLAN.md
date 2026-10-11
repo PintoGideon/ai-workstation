@@ -85,7 +85,7 @@ Sources (October 2026):
   - The fields go into `AttentionRecord` (`src/app/attention.rs`) and are rendered in the picker.
 - **Effort:** S.
 
-### P4 Usage meters restored, locally
+### P4 Usage meters restored, locally — **done 2026-10-10** (DESIGN.md §16): Claude's status line via `--settings` (context %, cost, 5h/7d limits), Codex rollouts, Gemini chat files; shown on rows, badges, tiles and the GUI contract. Verified: `--settings` hooks merge with the worktree's (hooks.md), so the status line and the hooks both ride on the flag.
 - **What:** context %, cost per session, and the Claude 5-hour and weekly limits in the header and sidebar, as before
   the OAuth call was removed, without any network.
 - **How:**
@@ -114,7 +114,7 @@ Sources (October 2026):
   - Matching: a small built-in subsequence scorer, with no new dependency.
 - **Effort:** M.
 
-### P2b Obsidian log of what every agent did
+### P2b Obsidian log of what every agent did — not built (dropped on 2026-10-10 to keep the app stable first; the hooks it would use, `PreCompact` / `SessionEnd`, are not wired)
 - **What:** every summary from P2 is also appended to a Markdown note in your Obsidian vault, which shows it live.
   No plugin, no MCP, no server: a vault is a folder of Markdown files.
 - **How:**
@@ -132,7 +132,7 @@ Sources (October 2026):
 
 ## Phase 2: steer many agents in one pass
 
-### P6 Approve or deny from the dashboard
+### P6 Approve or deny from the dashboard — **done 2026-10-10** (DESIGN.md §16): keys are `a` allow / `X` deny (`y` is "mark ready"); Claude + Codex `PermissionRequest`, Cursor `beforeShellExecution` / `beforeMCPExecution`; the hook waits on one IPC connection. Gemini stays a `⛔` answered in the pane (its hooks cannot grant).
 - **What:** in the needs-you list, `y` approves, `n` denies, and `Enter` opens the agent as today.
 - **How:**
   - A `PermissionRequest` hook (Claude, Codex) or a `beforeShellExecution` hook (Cursor) sends the request and waits
@@ -144,7 +144,7 @@ Sources (October 2026):
   - Gemini's hook can only observe, so `y` / `n` send the matching keys to the pane instead.
 - **Effort:** M.
 
-### P7 Queued follow-ups
+### P7 Queued follow-ups — **done 2026-10-10** (DESIGN.md §16): `e` on the row, `Ctrl+Space Q` in a pane/view, `aiw automation queue`; `aiw_followups` table; delivered by the Stop hooks (Claude/Codex `Stop`, Gemini `AfterAgent`, Cursor `stop` with `loop_limit` 20). Gemini is delivered through its hook, not `send-keys`; Pi has none.
 - **What:** write the next instruction for a busy agent now (leader `q`). It's delivered the moment that agent
   finishes. The row shows `⏵2` for two queued messages; you can edit or drop them before they're sent.
 - **How:**
@@ -265,6 +265,12 @@ Sources (October 2026):
   task moves to Codex with the diff, the original request, recent turns and the changed files.
 - **How:** extend `src/app/handoff.rs`. A same-agent fork uses `claude --resume <id> --fork-session` or `codex fork`.
 - **Effort:** S.
+
+## Also done 2026-10-10 (hook-driven, DESIGN.md §16)
+
+- **Subagent count** on the working badge (`working 6m · 2 subagents`) from the Claude, Codex and Cursor subagent hooks.
+- **Launch context in the system prompt** (project, feature, branch, worktree, AIW session id, "mention the branch name in commit messages and PR titles") for Claude (`--append-system-prompt`), Codex (`developer_instructions`), Gemini and Cursor (session-start hooks). The "shared context" item below is thereby partly covered.
+- **Claude hooks and status line via `--settings`** (`claude_hooks_via_settings_flag`, default on): AIW no longer writes hooks into the repo's `.claude/settings.local.json`.
 
 ## Later or maybe
 - **G7** many-projects dashboard: tags, colours, `0`–`9` scope.
