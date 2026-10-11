@@ -610,3 +610,59 @@ unchanged. `aiw doctor` reports the mode and reminds about Codex's one-time `/ho
 
 Dropped on request (2026-10-10): the Obsidian vault log (P2b) — stability first; the PreCompact / SessionEnd
 hooks it needed are not wired.
+
+## 17. One prompt, several agents (fan-out) — design (2026-10-11)
+
+**Ask.** "Give me the option to start several sessions for the same prompt, either all in one worktree or one
+worktree each." Not a split view, not a comparison tool: the launch step only. Today the `n` dialog picks one
+agent, `s` adds a second agent by hand, `B` makes N features for one agent, and the prompt has to be typed
+into each pane. Everything the feature needs already exists as a primitive; this section wires them.
+
+### 17.1 What the user sees
+
+1. `n` on a project, as now: branch, source, worktree.
+2. **Agents** (the step that picked one agent): `j`/`k` move, `Space` ticks any number of the enabled
+   harnesses, `Enter` continues. The first ticked one is the primary (its mode and review flags apply to
+   all; Codex refuses Vibeless, so a mixed set falls back to Vibe with a note).
+3. **Layout** (only when more than one agent is ticked):
+   - `one worktree` — one feature, one tmux session, a window per agent (`claude`, `codex`), labels
+     `Claude 1`, `Codex 1`. The dialog says: *agents share the files; good for questions, review and
+     planning; for code changes pick one worktree each.*
+   - `one worktree each` — sibling features `<branch>-claude`, `<branch>-codex`, each its own worktree
+     from the same base, same flags, tagged with a shared `fanout_group` so the sidebar shows them as a
+     group (`⇶ auth-fix · claude / codex`) and `v` on the project row tiles them side by side as it does now.
+4. **Prompt** — the `TaskPrompt` step that is already drawn and handled but never reached (`CreateFeatureStep::TaskPrompt`):
+   type or paste, `Ctrl+L` picks from the prompt library, `Ctrl+O` opens `$EDITOR`. Empty is allowed.
+5. **Send** — `[ ] send the prompt to every agent as soon as it is ready` (default off, keeps the rule
+   that the task prompt is never sent on its own). Off: every session gets the prompt **pre-filled and
+   unsent**; opening a session (`Enter`, `o`) shows it in the compose box, `Enter` sends. On: the prompt
+   is pasted and sent when the agent's own SessionStart hook reports it ready — never typed blind into a
+   pane that is still starting.
+6. The dashboard lands on the primary session as today; the others show `○` with `⏸ prompt ready` in the
+   reason line until their prompt is sent.
+
+CLI: `aiw automation create-feature` gains `"agents": ["claude","codex"]` (replaces `agent`, which stays as
+the one-element form), `"fan_out": "shared" | "worktree_each"`, `"prompt"` or `"prompt_file"`, `"send": bool`.
+Feature presets (`extension.feature_presets`) gain the same `agents` and `fan_out` fields.
+
+### 17.2 How it maps onto what exists
+
+| Step | Existing piece | Change |
+| --- | --- | --- |
+| Agent multi-select | `CreateFeatureState.agent` / `agent_index`, Mode step with `mode_focus == 0` (`src/handlers/feature_creation.rs:339-389`) | `agents: Vec<AgentKind>` (ordered, first = primary); `agent` becomes a view of `agents[0]` so nothing downstream changes |
+| Layout step | none | `CreateFeatureStep::FanOut` between Mode and SessionName; skipped when one agent |
+| Prompt step | `CreateFeatureStep::TaskPrompt` + `task_prompt` + `prompt_analysis`, dead today (`state.rs:2518`, `feature_creation.rs:456-484`, `ui/dialogs/feature.rs:925`) | reached from SessionName; `startup_prompt` already flows into `PreparedFeatureLaunch` |
+| Shared layout | `initialize_feature_sessions` makes the primary (`feature_ops.rs:916`); `create_agent_session_labeled_identified(pi, fi, label, Some(harness), intent)` adds one more agent window in the same session and workdir (`session_ops.rs:1570`) | after `ensure_feature_running`, loop over `agents[1..]` |
+| Worktree-each layout | `create_feature` itself (`feature_ops.rs:269`); naming rules in `project.rs` (`slugify`, `worktree_name`, `tmux_session_name`) | loop `create_feature` with branch `<branch>-<agent slug>`; new `features.fanout_group` column (migration) for the sidebar grouping |
+| Unsent delivery | `compose_drafts: HashMap<target, ComposeDraft>` restored by `open_compose_from_view` (`compose.rs:457`); `open_compose_seeded` seeds only the current view | seed a draft per session at launch; persist in a new `aiw_pending_prompts(session_id, text)` table so a restart keeps them; delete on send |
+| Sent-on-ready | SessionStart hooks already reach `aiw session-context` for Gemini/Cursor; Claude and Codex fire SessionStart too (`docs/development/harness-hooks-reference.md`) | a `session_ready` IPC line from the session-start script; the app pastes the pending prompt with `tmux.paste_text` + Enter once, then deletes it |
+| Follow-ups | `aiw automation queue` / Stop hook (§16.3) | unchanged: not usable for the first prompt, since Stop fires only after a turn |
+
+Two commits: (1) agent multi-select + shared layout + prompt step + unsent drafts; (2) worktree-each + grouping
++ automation/presets + optional send-on-ready. Tests: dialog state transitions and naming (unit), draft
+seeding and restart survival (unit, DB), an e2e scenario with the fake agents (`/perm`, `/done`) that creates
+a two-agent feature both ways, checks the two windows / two worktrees, opens each session and finds the prompt
+in the compose box unsent, then ticks "send" on a second run and checks both panes received it exactly once.
+
+**Out of scope here:** comparing the two results (a `git diff` between sibling worktrees in a dialog) and the
+split view; both come after this lands.
