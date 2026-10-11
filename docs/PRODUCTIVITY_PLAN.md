@@ -286,7 +286,7 @@ Sources (October 2026):
   `additionalContext`.
 - **Discovering dev-server ports:** map `ss -ltnp` / `lsof` to process ids, then up the process tree to the tmux pane.
 - **Shared MCP server pool:** 30 agents × N MCP servers use a lot of memory (agent-deck `mcppool`).
-- **Scheduled headless runs** feeding the needs-you list.
+- ~~Scheduled headless runs feeding the needs-you list.~~ Dropped 2026-10-11 with the headless runner (DESIGN.md §18.1).
 - **Driving agents over a protocol:** Codex `app-server`, Gemini/Cursor ACP, Pi RPC.
 
 ## Things to know about the agents

@@ -1,5 +1,7 @@
 # Token-efficient agent sessions
 
+> **Note (2026-10-11).** The Review-mode note tax and the headless prompts this plan tunes were removed with the harness-native duplicates (DESIGN.md §18.1); the remaining items are about the agents' own usage.
+
 - **Status:** Partial
 - **Owner:** unassigned
 - **Relates to:** [per-session agent usage](per-session-usage-plan.md),

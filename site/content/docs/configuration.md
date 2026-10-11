@@ -8,8 +8,8 @@ AIW creates its global configuration at `~/.config/ai_workstation/config.json`. 
 project can add `aiw.json` at its repository root; project settings override
 matching global settings.
 
-From an embedded session, press `Ctrl+Space`, then `c` to open the
-configuration wizard. It covers the common customizations, including:
+On the dashboard, press `Ctrl+Space`, then `c` to open the configuration
+wizard. It covers the common customizations, including:
 
 - feature presets;
 - custom session commands;
@@ -69,5 +69,6 @@ feature workspaces so the agent can safely customize the project-local AIW
 config for you: `aiw:configure` explains the current setup, `aiw:add-session`
 adds a dev server or other persistent command, `aiw:add-hook` automates
 feature lifecycle events, `aiw:add-preset` creates a reusable feature setup,
-and `aiw:add-prompt` adds a shared prompt template. You can invoke a skill by
+`aiw:add-prompt` adds a shared prompt template, and `aiw:release-notes`
+keeps the changelog in the house style. You can invoke a skill by
 name or simply describe the customization you want.

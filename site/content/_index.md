@@ -4,13 +4,13 @@ template = "index.html"
 
 [extra]
 headline = "Run multiple AI coding agents in parallel, without losing track of them."
-subhead = "AIW is a terminal dashboard for managing Claude Code, Codex, and Pi sessions. It organizes work by project and feature, creates isolated git worktrees when needed, and shows which agents are asking a question and which have finished work waiting to be reviewed."
+subhead = "AIW is a terminal cockpit for managing Claude Code, Codex, Gemini CLI, Cursor agent and Pi sessions. It organizes work by project and feature, creates isolated git worktrees, and shows which agents are asking a question and which have finished work waiting for you."
 install_cmd = "cargo +1.99.0 install --path . --locked\naiw"
 install_note = "The crate installs the aiw binary. Keep ~/.cargo/bin in your PATH. This source installation requires Rust, a C compiler, and tmux."
 hero_image = "images/dashboard.png"
 hero_image_alt = "AIW dashboard showing a project with four concurrent Claude agent sessions, each on its own git worktree"
 
-agents = ["Claude Code", "Codex", "Pi"]
+agents = ["Claude Code", "Codex", "Gemini CLI", "Cursor agent", "Pi"]
 
 [[extra.features]]
 title = "One dashboard, many agents"
@@ -21,16 +21,16 @@ title = "Isolated by design"
 body = "Concurrent features stay isolated with git branches and worktrees, so parallel agents never step on each other's changes."
 
 [[extra.features]]
-title = "Everything embedded"
-body = "Agent terminals, shells, Neovim, VS Code, and custom sessions all run inside the same dashboard."
+title = "The agent's real terminal"
+body = "The sidebar sits in a tmux pane beside the agent's own pane. Typing is native; nothing is relayed or redrawn."
 
 [[extra.features]]
-title = "Guided workflows"
-body = "Guided planning, supervised edits, final diff review, and GitHub PR review workflows, without leaving the terminal."
+title = "Answer from the dashboard"
+body = "Permission prompts and Vibeless edit approvals are answered from the sidebar, and follow-ups queue up for the agent's next turn."
 
 [[extra.features]]
-title = "Understand code you didn't write"
-body = "Browse a repository read-only and ask an agent about any file, hunk, or line range, with answers kept per project."
+title = "Know what it costs"
+body = "Context use, cost and rate-limit windows on every row, read from the harness's own files. No network calls."
 
 [[extra.features]]
 title = "Reusable building blocks"
@@ -39,4 +39,4 @@ body = "Reusable prompts, scoped TODO lists, themes, lifecycle hooks, and worksp
 
 ## About the project
 
-🤖 AIW is a terminal-based control center for running AI coding agents (Claude Code, Codex, Pi) against your own repos — built for everyday developers, not teams burning enterprise budgets on the priciest frontier models. It's designed around subscription plans people already have through work or pay for out of pocket, so you get real leverage from AI-assisted coding without needing a premium API tier. Full transparency is the core value: every prompt is visible and editable, every diff is reviewable before it lands, and nothing happens in a black box — whether you want to read every line an agent writes or just skim the summary and trust the process. The goal is to make AI-assisted development practical and honest for the average developer, not just the well-funded ones.
+🤖 AIW is a terminal-based control center for running AI coding agents against your own repos — built for everyday developers, not teams burning enterprise budgets on the priciest frontier models. It's designed around subscription plans people already have through work or pay for out of pocket, so you get real leverage from AI-assisted coding without needing a premium API tier. AIW stays out of the agent's way: planning, code review and compaction happen in the agent's own session, and AIW manages the sessions, the worktrees, the permissions and the attention. It makes no network calls of its own.

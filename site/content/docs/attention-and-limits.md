@@ -16,37 +16,36 @@ session as one of:
 | **Completed** | The agent finished its turn; the work is waiting to be looked at. |
 | **Waiting** | The session stopped, but its harness could not say why. |
 
-The state shows on the feature's dashboard row and in the header count.
+The state shows as a badge on the session's row, on the feature row, and in
+the header count. `a` allows and `X` denies a pending permission without
+leaving the dashboard.
 Press `i` for the full list, questions first and oldest first within each
 group; `Enter` opens the session, `x` dismisses the row.
 
-Fidelity depends on the harness. Claude Code reports all three
-states. Codex fires one hook when a turn ends and cannot say whether it
-finished or is asking, so its sessions show as **Waiting** either way. Pi
-has no hook mechanism, so its sessions carry no state at all. See
-[Choosing a Harness](@/docs/harnesses.md) for how this and other AIW
-features vary across the four harnesses.
+Fidelity depends on the harness. Claude Code and Gemini CLI report all
+three states. Codex fires one hook when a turn ends and cannot say whether it
+finished or is asking, so its sessions show as **Waiting** either way. Cursor
+reports working and completed. Pi has no hook mechanism, so its sessions
+carry no state at all. See [Choosing a Harness](@/docs/harnesses.md) for how
+this and other AIW features vary across the five harnesses.
 
-## Track context and usage in the sidebar
+## Track context and usage
 
-An embedded session's sidebar carries two more readouts, when a harness
-reports the data:
+The sidebar carries two more readouts, when a harness reports the data:
 
-- **Context** shows the active session's context-window usage, e.g.
-  `Ctx 42% · 12,345` (a `~` prefix marks a reading AIW estimated rather than
-  read directly from the harness). Approaching the limit appends `WARNING`
-  or `CRITICAL`; a reading AIW couldn't refresh appends `STALE` but keeps
-  showing the last real value rather than going blank. In the warning or
-  critical band the section adds a hint that the context is filling up, so
-  you can compact or start a new session in the harness before it runs out.
+- **Context** shows each session's context-window usage at the right edge
+  of its row, and with cost and age in the session info block under the
+  sessions list. Past 70% it turns the warning colour, past 85% the critical
+  colour; both thresholds are settings (`w`). Compact or start a new session
+  in the harness before it runs out.
 - **Usage** shows Claude's and Codex's rolling rate-limit windows as small
   bars, one per line, drawn like the dashboard status bar's usage bar, e.g.
   `5h ┃┃┃┃░░░░░░ 38% · 3h` (percentage used, changing colour at 50% and
   80% like the dashboard's, then time to reset once known). Pi has no
   known usage API, so the section is simply omitted for their sessions.
 
-Context tracking works across all three harnesses; the usage windows are
-Claude- and Codex-only. See [Choosing a Harness](@/docs/harnesses.md) for
+Context tracking works for Claude Code, Codex and Gemini CLI; the usage
+windows are Claude- and Codex-only. See [Choosing a Harness](@/docs/harnesses.md) for
 the full breakdown.
 
 <figure>

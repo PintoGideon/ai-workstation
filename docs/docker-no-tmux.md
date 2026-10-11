@@ -3,10 +3,10 @@
 This image is for testing AIW installation in a container that does not
 preinstall the system `tmux` package.
 
-It installs the latest AIW release bundle into `/opt/aiw`, installs
-Claude Code into the image, then exposes wrapper commands in
-`/opt/aiw/bin` that point at the bundled `aiw` and `tmux` binaries
-from that release.
+AIW publishes no release bundles, so the image installs a bundle you build
+yourself (see below) into `/opt/aiw`, installs Claude Code into the image,
+then exposes wrapper commands in `/opt/aiw/bin` that point at the bundled
+`aiw` and `tmux` binaries.
 
 For local testing of a checkout, use
 [`scripts/dev/package-no-tmux-test-bundle.sh`](../scripts/dev/package-no-tmux-test-bundle.sh)
@@ -38,10 +38,9 @@ aiw -V
 tmux -V
 ```
 
-## Custom Release
+## Choosing the bundle
 
-You can point the installer at a different archive without changing the
-image:
+Point the installer at an archive without changing the image:
 
 ```bash
 AIW_RELEASE_ARCHIVE="$PWD/aiw.tar.gz" scripts/dev/run-no-tmux-docker.sh

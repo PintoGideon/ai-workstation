@@ -124,7 +124,7 @@ scripts/dev/e2e/run.sh            # sandbox in /tmp/aiw-e2e-$USER, prints PASS/F
 Everything the run writes stays under the sandbox (`HOME` and `XDG_*` point at
 it; it must be a short path because tmux and IPC sockets live under it). It
 walks the README quick start (first run, projects, features with every agent,
-sessions, hooks → header pills and `i`, split view with resizes, rename, stop/
+sessions, hooks → header pills and `i`, the grid with resizes, rename, stop/
 start, resume, delete, quit/relaunch, `doctor`), then adversarial cases (killed
 windows, deleted worktrees, corrupt `aiw.json` and its toast, ghost hooks,
 removed IPC socket, a second `aiw` instance against the lock, an agent that
@@ -138,7 +138,12 @@ tmux driver helpers (`aiw_start`, `keys`, `cap`, `wait_for`, `snap`, …).
 
 ## Verification status
 
-Final local validation on 2026-09-08 passed all 2,512 tests (22.82s, no failures
+After the 2026-10-11 removal of the harness-native duplicates (DESIGN.md
+§18.1) the full suite is 1,697 tests (4 ignored), with formatting, strict
+locked all-target Clippy, `scripts/check-no-network.sh`, a release build and
+the GUI's `tsc` and vitest all passing.
+
+The earlier final local validation on 2026-09-08 passed all 2,512 tests (22.82s, no failures
 or ignored tests), formatting, strict locked all-target Clippy, Actionlint 1.7.7,
 and local documentation-link checks. The patched lockfile audit exited 0 with
 zero blocking findings and five documented nonfatal warnings.
@@ -147,4 +152,4 @@ Local Linux/WSL baseline and inventory evidence are in
 [baseline/README.md](baseline/README.md). Hosted Linux/macOS/audit runs must be
 inspected for the published commit before CI is called green. Workflow linting
 and a local audit do not establish macOS execution or hosted success. Publishing
-this work remains a separate authorized step under `AIW_PLAN.md`.
+this work remains a separate authorized step.

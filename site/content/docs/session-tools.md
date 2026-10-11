@@ -5,16 +5,15 @@ weight = 37
 +++
 
 A few more tools for moving between sessions and managing how much history
-each one is carrying, reachable from the dashboard or from inside a
-session.
+each one is carrying, all reachable from the dashboard.
 
 ## Bookmark a session
 
-Press `Ctrl+Space`, then `H` to bookmark the current session into the next
+Press `Ctrl+Space`, then `H` to bookmark the selected session into the next
 open slot — there are nine. `Ctrl+Space`, then `h` opens the bookmark
-picker, showing all nine slots and what's in each; from anywhere, a digit
-key `1`–`9` jumps straight to that slot's session. `Ctrl+Space`, then `M`
-removes the current session's bookmark. Once all nine slots are full,
+picker, showing all nine slots and what's in each; `Ctrl+Space`, then a digit
+`1`–`9` jumps straight to that slot's session. `Ctrl+Space`, then `M`
+removes the selected session's bookmark. Once all nine slots are full,
 bookmarking a new session evicts the oldest one. A slot pointing at a
 session that's since been deleted clears itself the next time you try to
 jump to it.

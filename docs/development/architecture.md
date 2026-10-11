@@ -21,8 +21,8 @@ workers -> channels/mailbox -> feature poll/apply methods -> AppMode/display sta
 `src/main.rs` is a thin binary that calls `ai_workstation::cli::run`;
 `src/cli.rs` owns CLI dispatch, terminal setup/teardown and `run_loop`. The loop
 reads terminal/IPC events, polls workers, reconciles session state, schedules
-pane refreshes and redraws. It uses deadlines and mode-dependent work; Viewing
-and Compose both keep the pane live. Active PR sweeps have their own cadence.
+pane refreshes and redraws. It uses deadlines and mode-dependent work. The PR
+badge refresh has its own cadence.
 
 `src/handlers/mod.rs` routes by AppMode. Handlers translate input into feature
 operations and sometimes edit dialog fields directly. `src/ui/dashboard.rs`
@@ -108,7 +108,7 @@ adapter only where it establishes a concrete dependency boundary.
 
 | Suite | Coverage |
 | --- | --- |
-| `startup_navigation`, `pane_input` | Startup, dashboard navigation, view/mailbox/input and Compose |
+| `startup_navigation`, `pane_input` | Startup, dashboard navigation and pane input |
 | `status_sidebar`, `attention` | Sync, IPC status, sidebar caches, badges and attention reconciliation |
 | `feature_sessions`, `hooks_setup`, `automation` | Creation/recovery/start/stop, local hooks and automation entrypoints |
 | `prompts_configuration`, `todos` | Configuration/prompts and scoped TODO workflows |

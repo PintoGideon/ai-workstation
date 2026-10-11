@@ -16,7 +16,7 @@ are tagged.
   `ai-workstation`; GUI "AI Workstation" (`aiw-gui`); env vars `AIW_*`; tmux
   sessions `aiw-*`; config in `~/.config/ai_workstation` (`aiw.db`, hooks in
   `hooks/`); state in `~/.local/state/ai_workstation`; repo files `aiw.json`,
-  `.aiw/`, `AIW_PLAN.md`; skills `aiw-*`; theme `classic`. The first launch
+  `.aiw/`; skills `aiw-*`; theme `classic`. The first launch
   copies the upstream setup into the new folders without touching the
   original, and old names in configs keep loading. See README ("Coming from
   …") and DESIGN.md §11.

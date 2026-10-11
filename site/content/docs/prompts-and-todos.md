@@ -6,9 +6,11 @@ weight = 60
 
 ## Reuse prompts
 
-Press `L` to manage reusable prompt templates, or open them from a session
-with `Ctrl+Space`, then `p`. Templates may include `{% raw %}{{placeholder}}{% endraw %}` fields
-that AIW asks you to fill before injection.
+Press `L` to manage reusable prompt templates. Pick one and it is pasted into
+the selected agent's pane, unsent, so you can edit it before pressing Enter.
+Templates may include `{% raw %}{{placeholder}}{% endraw %}` fields that AIW
+asks you to fill first. `Ctrl+Space`, then `l` lists the session's past and
+unsent prompts; `s` there saves one as a template.
 
 ## Scoped TODO lists
 
@@ -33,8 +35,8 @@ a copy lands as fresh, unstarted work.
   <figcaption>The three TODO states: not started, in progress (agent reserved), and completed.</figcaption>
 </figure>
 
-From any session, press `Ctrl+Space`, then `N` to capture a TODO without
-leaving your current work. It lands in that feature's worktree list (the
+With a session selected, press `Ctrl+Space`, then `N` to capture a TODO
+without leaving your current work. It lands in that feature's worktree list (the
 project's if the feature sits on the repo root).
 
 ## Starting work from a TODO
@@ -43,8 +45,8 @@ Press `Enter` on a TODO to start work on it. AIW asks how:
 
 | Choice | What happens |
 | --- | --- |
-| **Start an agent on this TODO** | Opens a session with the TODO in the composer, unsent — in this feature for a worktree TODO, or in a feature you pick for a project or global one. |
-| **Start an agent in a new feature** | Opens the ordinary create-feature wizard, pre-filled with a branch name from the TODO title. Once the feature exists, the TODO is linked to it and its agent is seeded with the TODO, unsent. |
+| **Start an agent on this TODO** | Opens a session with the TODO pasted into its pane, unsent — in this feature for a worktree TODO, or in a feature you pick for a project or global one. |
+| **Start an agent in a new feature** | Opens the ordinary create-feature wizard, pre-filled with a branch name from the TODO title. Once the feature exists, the TODO is linked to it and its agent gets the TODO pasted, unsent. |
 
 Press `I` to work the list rather than a particular item: AIW takes the
 highest-priority TODO nobody has started, opens an agent on it, and marks
@@ -53,8 +55,8 @@ lists are currently visible, preferring the narrower scope at equal
 priority: worktree, then project, then global.
 
 <figure>
-  <img src="/images/docs/todo-implement-next.png" alt="Session opened by Implement Next, with the composer pre-filled with the TODO's text and the sidebar showing the same prompt">
-  <figcaption><code>I</code> opens a session on the next TODO with its text already in the composer.</figcaption>
+  <img src="/images/docs/todo-implement-next.png" alt="Session opened by Implement Next, with the TODO's text pasted into the agent's pane and the sidebar showing the same prompt">
+  <figcaption><code>I</code> opens a session on the next TODO with its text already pasted, unsent.</figcaption>
 </figure>
 
 Press `i` on a TODO to set or clear its in-progress mark by hand — useful

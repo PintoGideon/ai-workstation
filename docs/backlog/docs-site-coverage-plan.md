@@ -1,5 +1,7 @@
 # Docs site feature coverage
 
+> **Note (2026-10-11).** The pages this plan lists for Final Review, PR Triage, Learning, the plan interview, prompt overrides and the fresh-context handoff were removed with those features (DESIGN.md §18.1).
+
 - **Status:** All 7 epics shipped and verified. The Open Questions
   screenshots follow-up is also done — see "Screenshots pass" below.
 - **Owner:** unassigned

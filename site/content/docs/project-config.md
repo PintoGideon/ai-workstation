@@ -13,7 +13,7 @@ is the field reference for what it can hold.
 | Key | Holds | Edit via | Merge with global |
 | --- | --- | --- | --- |
 | `custom_sessions` | Dev servers or other persistent commands offered in the `s` session picker | Config wizard | Project appends; a name collision lets the project entry win |
-| `feature_presets` | Named create-feature templates (agent, mode, branch prefix, review, Chrome) | Config wizard | Same append/override-by-name rule |
+| `feature_presets` | Named create-feature templates (agent, mode, branch prefix, worktree, Chrome) | Config wizard | Same append/override-by-name rule |
 | `lifecycle_hooks` | `on_start` / `on_stop` / `on_worktree_created` scripts, optionally prompting the user with options first | Config wizard | Each of the three hooks independently overrides its global counterpart when set |
 | `keybindings` | Remap a dashboard action to a different key | Config wizard | Project overrides global per action |
 | `allowed_agents` | Restrict which harnesses this project offers | Config wizard | Project replaces the whole list when set |
@@ -23,8 +23,7 @@ The config wizard (`Ctrl+Space`, then `c`) covers everything marked
 "Config wizard" above — see
 [Configuration](@/docs/configuration.md#built-in-customization-skills) for
 how to open it and for the `aiw:configure` family of skills that can edit
-these on your behalf. Everything marked "Hand-edit" has no wizard step yet;
-edit `aiw.json` directly.
+these on your behalf. Every key can also be edited in `aiw.json` directly.
 
 A field with no entry in the project's `aiw.json` simply inherits the
 global value — an empty project config never overrides anything.

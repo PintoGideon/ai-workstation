@@ -31,7 +31,7 @@ prompt library · TODO lists · usage/cost panels · themes · config wizard ·
 
 | # | Gap upstream | What AIW adds | Priority | Status |
 |---|---|---|---|---|
-| G1 | One agent on screen at a time | **Split view**: 2–4 live agents tiled inside the TUI, plus `aiw grid` for an external terminal | P1 | ✅ in-TUI split (`v`) + `aiw grid`; pinning across projects ⏳ |
+| G1 | One agent on screen at a time | **Split view**: 2–4 live agents tiled inside the TUI, plus `aiw grid` for an external terminal | P1 | ✅ grid in the cockpit pane (`v`) + `aiw grid`; the in-TUI captured split was replaced by the cockpit (§18) |
 | G2 | No Gemini, no Cursor | **Gemini CLI** and **Cursor agent** as first-class agents | P1 | ✅ (untested live — CLIs not installed) |
 | G3 | App makes its own network calls | **No-cloud build**: remove self-upgrade, phone remote control, GitHub screenshot fetching, background PR polling | P1 | ✅ (`NO_CLOUD.md`, `scripts/check-no-network.sh`) |
 | G4 | Edits `~/.codex/config.toml` (and, before OpenCode was removed, `~/.config/opencode`) | per-session config only | P1 | ✅ |
@@ -184,7 +184,7 @@ with `Fixes <KEY>` · Linear by personal API key, **only on explicit actions, ne
 gone), crate `ai-workstation` / lib `ai_workstation`, GUI `aiw-gui` (Tauri product "AI Workstation"), env vars
 `AIW_*`, tmux sessions `aiw-*` on AIW's own socket, config/data in `~/.config/ai_workstation` (database `aiw.db`,
 hook scripts in `~/.config/ai_workstation/hooks`), state in `~/.local/state/ai_workstation` (`/tmp/ai_workstation`
-on macOS), repo files `aiw.json` / `.aiw/` / `AIW_PLAN*.md`, injected skills `aiw-*`, theme `classic`.
+on macOS), repo files `aiw.json` / `.aiw/`, injected skills `aiw-*`, theme `classic`.
 We no longer merge upstream; useful commits are cherry-picked by hand ([FORK.md](FORK.md)).
 
 **Data migrated by copy.** On the first start with no `~/.config/ai_workstation`, an existing upstream setup

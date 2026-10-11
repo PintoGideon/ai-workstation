@@ -19,8 +19,8 @@ non-git directories without it.
 
 Optional tools:
 
-- An authenticated [GitHub CLI](https://cli.github.com/) (`gh`) enables PR
-  issue browser and the dashboard's open/merged/closed PR badge.
+- An authenticated [GitHub CLI](https://cli.github.com/) (`gh`) enables the
+  issue browser (`g`) and the dashboard's open/merged/closed PR badges (`R`).
 - A [Nerd Font](https://www.nerdfonts.com/) provides the best icon rendering.
 - The `code` command enables VS Code sessions.
 

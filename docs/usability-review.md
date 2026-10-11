@@ -1,5 +1,8 @@
 # Usability and reliability review
 
+> Historical (written before the cockpit, DESIGN.md §18). The session
+> switcher and the embedded session it mentions were removed on 2026-10-11.
+
 Reviewed the dashboard, project form and browser entry, search, help, session
 pickers, harness settings, rename validation, removal flows, and their displayed
 controls. Fixes are intentionally focused on existing workflows.
@@ -9,7 +12,7 @@ controls. Fixes are intentionally focused on existing workflows.
 - Search accepts all letters, supports arrow keys and Tab/Shift+Tab, finds
   feature nicknames, and expands the parents of a selected result. Opening an
   empty query shows the available items consistently.
-- Search, notifications, commands, bookmarks, the session switcher, and saved
+- Search, notifications, commands, bookmarks, and saved
   session pickers keep the selected item visible. Command scrolling accounts
   for category headings as well as selectable commands.
 - Markdown search accepts navigation letters and uppercase text while filtering.

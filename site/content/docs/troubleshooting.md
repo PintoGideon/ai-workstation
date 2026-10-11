@@ -28,9 +28,10 @@ features without scripting the TUI:
 aiw automation create-project --file request.json
 aiw automation create-feature --file request.json
 aiw automation create-batch-features --file request.json
+aiw automation queue --session <id> "follow-up text"
 ```
 
-Each command sends a request to the running dashboard over the same local
+The create commands send a request to the running dashboard over the same local
 IPC system AIW's own lifecycle hooks use; AIW applies it inside the
 dashboard process and prints a JSON response. Every command accepts
 `--dry-run` to validate and preview without changing AIW state.
