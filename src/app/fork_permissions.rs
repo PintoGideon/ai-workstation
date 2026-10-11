@@ -208,6 +208,12 @@ impl App {
         };
         let pending = self.pending_permissions.remove(index);
         let delivered = crate::fork::ipc_reply::reply(request_id, &reply_json(behavior, None));
+        // FORK(cockpit): the info block shows the last decision (DESIGN.md §18).
+        self.record_permission_decision(
+            pending.feature_session_id.as_deref(),
+            &pending.tool_name,
+            behavior,
+        );
         self.clear_permission_attention(&pending.tmux_session);
         let reason = pending.detail();
         let feature = self

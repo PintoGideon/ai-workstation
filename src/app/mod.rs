@@ -25,6 +25,7 @@ pub(crate) mod fork_followups; // FORK: queued follow-ups (P7, DESIGN.md §16)
 pub(crate) mod fork_launch; // FORK: launch-time arguments from the store (DESIGN.md §16)
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6, DESIGN.md §16)
 mod fork_render_memo; // FORK: per-frame dialog values (DESIGN.md §12.3)
+pub(crate) mod fork_session_info; // FORK: the session info block (DESIGN.md §18)
 pub(crate) mod fork_split; // FORK: split view (DESIGN.md §4.1)
 pub(crate) mod fork_subagents; // FORK: subagent counts per session (P5, DESIGN.md §16)
 pub(crate) mod fork_telemetry; // FORK: per-session context and cost (P4, DESIGN.md §16)
@@ -1016,6 +1017,8 @@ pub struct App {
     pub fork_workspace: fork_workspace::WorkspaceRuntime,
     /// FORK: the cockpit link (DESIGN.md §18).
     pub fork_cockpit: fork_cockpit::CockpitRuntime,
+    /// FORK: the session info block's cache and sweep (DESIGN.md §18).
+    pub fork_session_info: fork_session_info::SessionInfoRuntime,
     /// FORK: ids of sessions whose finished turn has been looked at (their
     /// `✓` is dim). Not persisted; a new finished event clears the id.
     pub finished_seen: std::collections::HashSet<String>,
@@ -2660,12 +2663,13 @@ impl App {
             toasts: Vec::new(),
             should_quit: false,
             pane_content: String::new(),
-            fork_split: Default::default(),     // FORK: split view
-            fork_workspace: Default::default(), // FORK: workspace layout
-            fork_cockpit: Default::default(),   // FORK: cockpit
+            fork_split: Default::default(),        // FORK: split view
+            fork_workspace: Default::default(),    // FORK: workspace layout
+            fork_cockpit: Default::default(),      // FORK: cockpit
+            fork_session_info: Default::default(), // FORK: session info block
             finished_seen: std::collections::HashSet::new(), // FORK: badges
-            badge_ages: Default::default(),     // FORK: badges
-            fork_render_memo: Default::default(), // FORK: render memo
+            badge_ages: Default::default(),        // FORK: badges
+            fork_render_memo: Default::default(),  // FORK: render memo
             pane_lines: Vec::new(),
             pane_content_cols: 0,
             pane_content_rows: 0,
@@ -2934,12 +2938,13 @@ impl App {
             toasts: Vec::new(),
             should_quit: false,
             pane_content: String::new(),
-            fork_split: Default::default(),     // FORK: split view
-            fork_workspace: Default::default(), // FORK: workspace layout
-            fork_cockpit: Default::default(),   // FORK: cockpit
+            fork_split: Default::default(),        // FORK: split view
+            fork_workspace: Default::default(),    // FORK: workspace layout
+            fork_cockpit: Default::default(),      // FORK: cockpit
+            fork_session_info: Default::default(), // FORK: session info block
             finished_seen: std::collections::HashSet::new(), // FORK: badges
-            badge_ages: Default::default(),     // FORK: badges
-            fork_render_memo: Default::default(), // FORK: render memo
+            badge_ages: Default::default(),        // FORK: badges
+            fork_render_memo: Default::default(),  // FORK: render memo
             pane_lines: Vec::new(),
             pane_content_cols: 0,
             pane_content_rows: 0,

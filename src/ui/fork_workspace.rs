@@ -42,7 +42,18 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) -> bool {
         app.fork_workspace.sidebar_rect = Some(area);
         app.fork_workspace.pane_rect = None;
         let compact = app.workspace_compact();
-        draw_sidebar(frame, app, area, compact);
+        // The info block takes the bottom rows when the sidebar is tall
+        // enough and a session is selected (or shown for a feature row).
+        let target = app.session_info_target();
+        let info_rows = super::fork_session_info::rows(area.height, target.is_some());
+        let list_area = Rect::new(area.x, area.y, area.width, area.height - info_rows);
+        draw_sidebar(frame, app, list_area, compact);
+        if let Some(target) = target
+            && info_rows > 0
+        {
+            let info_area = Rect::new(area.x, area.y + list_area.height, area.width, info_rows);
+            super::fork_session_info::draw(frame, app, info_area, target);
+        }
         return true;
     }
     if !app.workspace_layout_enabled() || app.store.projects.is_empty() {
