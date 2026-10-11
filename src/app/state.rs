@@ -1,4 +1,3 @@
-pub use crate::app::learning::state::*;
 pub use crate::app::pr_review::state::*;
 pub use crate::app::review::state::*;
 use ratatui_explorer::FileExplorer;
@@ -1360,9 +1359,6 @@ impl TodoLaunchStep {
 pub enum AppMode {
     Normal,
     Todos(TodoViewState),
-    /// Read-only Learning Mode overlay: browse the project and ask an agent
-    /// about what you're looking at (`crate::app::learning`).
-    Learning(Box<LearningViewState>),
     TodoQuickCapture(TodoQuickCaptureState),
     /// Collect the user's instruction before starting a fresh-context agent
     /// session (see `FreshContextPromptState`).
@@ -1482,7 +1478,7 @@ pub enum AppMode {
     PromptOverrides(Box<PromptOverridesState>),
     /// The blocking pre-call notice shown before a user-initiated headless AI
     /// run: announces the prompt ID + harness, with view / edit / continue /
-    /// cancel. Automated runs (Learning Mode answers, session summaries) show
+    /// cancel. Automated runs (session summaries) show
     /// a toast instead and never reach this.
     PromptPrecall(Box<crate::app::precall::PendingPrecall>),
     SkillPicker(SkillPickerState),

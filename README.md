@@ -285,7 +285,6 @@ and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-inte
 | `z` | Show dormant features: idle and unattended |
 | `G` | Open GitHub PR triage; on a project row, review a PR yourself |
 | `W` | Run AIW's AI review of a PR diff |
-| `K` | Open Learning Mode: read the code and ask about it |
 | `L` | Open the prompt library |
 | `E` | Edit headless AI prompt templates (overrides) |
 | `T` | Choose a theme |
@@ -354,7 +353,7 @@ keeps for itself: it flips the keyboard between the sidebar and the agent.
 Nothing is sent to an agent on its own.
 
 Prompts AIW prepares for an agent — a plan-interview kickoff, a TODO, a
-learning-mode escalation, a prompt-library template, a feature's startup
+prompt-library template, a feature's startup
 prompt, a past prompt from `Ctrl+Space` then `l` — are **pasted into the
 agent's pane unsent** and the pane is focused: you read the text where the
 agent will, edit it if you like, and press Enter yourself. The pasted text
@@ -392,86 +391,6 @@ reason line counts the follow-ups waiting for it. Below 28 columns the
 sidebar shows glyph and name only.
 
 ## User workflows
-
-### Understand a codebase you didn't write
-
-Select a feature and press `K` to open Learning Mode. It is a read-only reader
-for the project's code with an agent attached: browse the files, point at the
-part you don't understand, and ask about it. **Nothing in Learning Mode changes
-your files.** The only key that can lead to an edit is `S`, which hands the
-answer to an ordinary agent session and says so.
-
-If you don't know where to start, you don't have to. On a project you have not
-asked anything about yet, the file list opens on a pinned **Start here** group:
-a ready-made question asking for a tour of the whole project, with the cursor
-already on it, followed by whichever of the README, the contribution guide, the
-entry point, and the manifest that project actually has. Press `t` at any time
-for starter questions ("Explain this line by line", "What would break if I
-deleted this?") that load into the prompt so you can edit them before asking.
-
-Below that group the project's files are a **folder tree**, so the list shows
-you the layout rather than a wall of paths. Folders open at the top level with
-the way down to the Start here files already unfolded, and each closed folder
-says how many files are inside it, so you can skip whole areas you have no
-business in yet.
-
-| Key | Moves you |
-| --- | --- |
-| `l` | Open the folder under the cursor, or step into an open one |
-| `h` | Close the folder, or step out to the one above |
-| `Z` | Open every folder in the project, or fold them all back |
-| `Enter` | The same, on a folder — and opens the file, on a file |
-
-Resting on a folder changes nothing about the question you have lined up;
-folders are only for finding files.
-
-Point at what you want to ask about with `f` (the whole file), `v` (start a line
-range), `P` (the whole project), or `x` (the change under the cursor, in
-branch-changes scope). Then ask one of two ways:
-
-| Key | Asks for |
-| --- | --- |
-| `e` | *Explain this to me* — a teaching answer; no change is proposed |
-| `c` | *Ask for a change* — a concrete proposal you can act on later |
-
-Asking never blocks: keep browsing and asking while earlier answers arrive, and
-the header counts what is still generating. Answers are written for a
-**newcomer** by default — terms defined on first use, ending with what to read
-next — and `L` switches to **familiar** for denser answers. `s` switches between
-all files in the project and only the files changed on this branch. `m` picks
-which agent answers, and is already set to one that works.
-
-Once an answer is on screen, five keys act on it:
-
-| Key | Action |
-| --- | --- |
-| `F` | Ask a follow-up; the agent keeps the question and answer you just read |
-| `D` | Ask again with the repository readable — slower, but it checks (except on Codex, see below) |
-| `i` | Re-file the entry as the other kind; the answer text is left alone |
-| `a` | Keep the answer as a to-do on this feature's TODO list |
-| `S` | Hand it to a live agent session, with the prompt filled in and unsent |
-
-`D` is worth knowing about: an ordinary answer only sees the code on screen, so
-it can name files or line numbers that don't exist. `D` re-asks the same
-question with the repository open and keeps both answers so you can read them
-against each other.
-
-Codex is the exception: it has no way to answer without reading the repository,
-so every Codex answer already read it — the row says *read the repo* from the
-start, and `D` tells you there is nothing deeper to ask for and points you at
-`F` instead. If you want the on-screen-only answer and the repository-checked
-answer side by side, ask with an agent that offers both (`m`).
-
-Questions and answers are kept per project, so reopening `K` brings back what
-you asked before, with follow-ups still under the question they continue. A
-question remembers the lines it was about, and the code moves on — so on the way
-in AIW checks each one against the project as it is now. An entry whose code has
-shifted is marked **moved** and the answer tells you where it went; one whose
-code is gone is marked **anchor lost**. Either way the question and the answer
-are kept exactly as they were: the point of the mark is that a stale line number
-should not read as an answer that was always wrong. Press `?` inside Learning
-Mode for the full key list; it opens by itself the first time you enter a
-project.
 
 ### Review changes before shipping
 
@@ -694,7 +613,7 @@ the deletion. Nothing is killed or removed until you answer.
 
 ### Override the AI prompts AIW sends
 
-Behind the plan interview, Learning Mode, the final-review diff helpers, the AI
+Behind the plan interview, the final-review diff helpers, the AI
 PR review, and the review-memory bootstrap/compaction, AIW makes one-shot
 ("headless") AI calls with prompts it builds for you. Press `E` on the
 dashboard — or `Ctrl+Space`, then `E` from a session — to open the
@@ -728,7 +647,7 @@ the stable prompt id (shown in the manager):
     "pr_review.ai_review": {
       "template": "You are reviewing a diff... {{annotated_diff}} ..."
     },
-    "learning.answer": {
+    "review.question": {
       "template": "shared text with {{question}}",
       "harnesses": { "codex": "codex-specific text with {{question}}" }
     }
@@ -743,8 +662,8 @@ Before each user-initiated headless call, a **pre-call notice** names the
 prompt and target harness: `v` shows the exact rendered prompt, `e` jumps to
 the manager for that prompt (continue afterwards and the override applies to
 this run), `Enter` makes the call, `Esc` cancels it. There is no "don't ask
-again". Calls that run without you watching — the Learning Mode answer queue
-and session summaries — announce with a toast instead of the modal.
+again". Calls that run without you watching — session summaries — announce
+with a toast instead of the modal.
 
 ### See which agents need you
 

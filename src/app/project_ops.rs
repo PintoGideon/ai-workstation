@@ -357,18 +357,6 @@ impl App {
             );
         }
 
-        // Learning Mode history is keyed the same way, for the same reason.
-        let learning_cleanup_err = match (&self.db, &project_id) {
-            (Some(db), Some(pid)) => db.delete_learning_sessions_for_project(pid).err(),
-            _ => None,
-        };
-        if let (Some(e), Some(pid)) = (learning_cleanup_err, &project_id) {
-            self.log_warn(
-                "learning",
-                format!("failed to delete learning history for project {pid}: {e}"),
-            );
-        }
-
         // PR comment investigations too: plain-TEXT `project_id`, no FK, so
         // the rows would otherwise outlive the project they belong to.
         let investigation_cleanup_err = match (&self.db, &project_id) {

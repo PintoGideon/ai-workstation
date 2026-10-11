@@ -79,8 +79,8 @@ def wait(expression, timeout=10):
         time.sleep(0.1)
     # Say what the page showed instead, so a CI failure is diagnosable.
     state = evaluate(
-        'JSON.stringify({header:document.querySelector(".diff-file-header,.learning-code-header")?.innerText,'
-        'code:(document.querySelector(".diff-code,.learning-code")?.innerHTML||"").slice(0,1500),'
+        'JSON.stringify({header:document.querySelector(".diff-file-header")?.innerText,'
+        'code:(document.querySelector(".diff-code")?.innerHTML||"").slice(0,1500),'
         'alerts:Array.from(document.querySelectorAll("[role=alert],[role=status]")).map(e=>e.innerText)})'
     )
     raise AssertionError(f"{expression}\nPage: {state}")

@@ -343,12 +343,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         return;
     }
 
-    if let AppMode::Learning(state) = &mut app.mode {
-        super::dialogs::draw_learning_view(frame, state, &app.theme);
-        super::draw_toasts(frame, frame.area(), &app.toasts, &app.theme);
-        return;
-    }
-
     // FORK(cockpit): the dialogs that used to open over the embedded view
     // open over the dashboard; it is drawn first, the dialog on top.
     let over_dashboard = matches!(

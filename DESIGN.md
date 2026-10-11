@@ -23,7 +23,7 @@ Status legend: ✅ done · 🔨 in progress · ⏳ planned.
 
 Projects → Features (branch/worktree) → Sessions · Claude, Codex, Pi · permission modes (Vibeless / Vibe /
 SuperVibe) · needs-you list `i` · dormant `z` · resource guards · plan interview · final review · PR triage and review ·
-Learning mode · prompt library · prompt overrides · TODO lists · usage/cost panels · themes · config wizard ·
+prompt library · prompt overrides · TODO lists · usage/cost panels · themes · config wizard ·
 `doctor` / `automation` commands.
 
 ## 3. Gaps and what we add
@@ -339,7 +339,7 @@ summaries). Busy pane = a spinner-like line rewritten every 100 ms.
   capture-remote-dashboard.cjs` and the `remote-dashboard-collapse` scenario + config (the removed phone PWA).
 - Dead code (unused even by tests): `GithubTransport::{resolve_pr, fetch_pr_by_number}`, `AiwDb::{prompt_overrides,
   delete_prompt_overrides_for_workdir, delete_pr_investigation}`, `pr_investigations::delete`,
-  `PromptOverrides::{all, remove}`, `BrowseScope::label`, `LearningViewState::{anchor_path, selected_qa}`,
+  `PromptOverrides::{all, remove}`,
   `PlanQuestion::accepts_answer`, two unused prompt-version constants, `PromptContext::{insert, is_empty}`,
   `BatchReviewOutput::is_empty`, the never-constructed `TmuxInputWriter::Pipe` transport and the `Info`/`Error` startup
   validation levels left over from the removed parser re-download, a dead test helper, and `sidebar_plan_cache`
@@ -746,7 +746,7 @@ switcher (`w`), remote-control URL copy, scroll mode and text selection went wit
 the switcher, and tmux has copy mode.
 
 **Prompts, unsent (`src/app/fork_prompt_paste.rs`).** Every path that opened the composer seeded with text —
-learning-mode escalation, TODO spawn (both kinds), plan-interview kickoff (both kinds), prompt-library
+TODO spawn (both kinds), plan-interview kickoff (both kinds), prompt-library
 delivery, the PR-triage fix prompt, a feature's `startup_prompt`, the fresh-context handoff, `Ctrl+Space l` —
 calls `App::paste_prompt_unsent(pi, fi, si, text)`: it writes `.claude/latest-prompt.txt`, pastes with
 `tmux.paste_text` (bracketed paste, **no Enter**), selects the row, closes whatever dialog asked, and focuses

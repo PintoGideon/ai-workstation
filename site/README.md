@@ -16,7 +16,6 @@ site/
       installation.md
       quick-start.md
       core-concepts.md
-      learning-mode.md
       configuration.md
   templates/            # Tera templates (base, index, docs list, docs page)
   sass/style.scss       # single stylesheet, compiled to /style.css

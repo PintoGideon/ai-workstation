@@ -5,7 +5,7 @@ weight = 35
 +++
 
 This covers the controls you need to get around AIW day to day. Feature-specific
-keys — Learning Mode, PR Triage, TODOs — are documented on their own pages.
+keys — PR Triage, TODOs — are documented on their own pages.
 Press `?` at any time on the dashboard, or `Ctrl+Space` then `?` in a session,
 for the complete, current keybinding reference built into that version of AIW.
 
@@ -35,7 +35,6 @@ for the complete, current keybinding reference built into that version of AIW.
 | `Z` | Generate a short AI summary of the selected feature's recent activity |
 | `G` | Open GitHub PR triage |
 | `W` | Run AIW's AI review of a PR diff |
-| `K` | Open Learning Mode: read the code and ask about it |
 | `L` | Open the prompt library |
 | `E` | Edit headless AI prompt templates (overrides) |
 | `T` | Choose a theme |
@@ -104,8 +103,6 @@ windows and leaves nothing behind when it closes.
 
 ## Where the rest live
 
-- [Understanding a Codebase](@/docs/learning-mode.md) — the file-tree, ask,
-  and act-on-answer keys inside Learning Mode.
 - [Reviewing Changes and PR Feedback](@/docs/review-and-pr-feedback.md) —
   PR Triage's investigate/fix/reply keys.
 - [Prompts and TODOs](@/docs/prompts-and-todos.md) — the TODO list's own

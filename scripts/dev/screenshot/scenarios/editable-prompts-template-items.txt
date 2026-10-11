@@ -5,7 +5,7 @@
 # prompt declares (PromptSpec::placeholders) on an "Available template
 # items:" line above the edit box, so a user knows which tokens they can
 # use before editing. This walks: manager list -> editor for a
-# many-placeholder prompt (learning.answer, 11 tokens, wrapped list) ->
+# many-placeholder prompt (review.question, 8 tokens, wrapped list) ->
 # editor for a single-placeholder prompt (plan_interview.round) -> the
 # updated help panel.
 #
@@ -25,10 +25,14 @@ shot:feature-selected
 # `E` opens the prompt-override manager.
 key:E
 wait:500
-note:The prompt-override manager lists every headless prompt AIW sends; all 15 start on the built-in default.
+note:The prompt-override manager lists every headless prompt AIW sends; all start on the built-in default.
 shot:manager-list
 
-# Down to "Learning Mode: answer" (row 7 of the list: six `j` from the top).
+# Down to "Review: ask AI" (row 9 of the list: eight `j` from the top).
+key:j
+wait:120
+key:j
+wait:120
 key:j
 wait:120
 key:j
@@ -41,18 +45,22 @@ key:j
 wait:120
 key:j
 wait:150
-note:The "Learning Mode: answer" row is selected -- the prompt with the most runtime context of any in the registry.
-shot:learning-answer-row
+note:The "Review: ask AI" row is selected -- a prompt that takes a wrapped list of runtime context.
+shot:review-question-row
 
 # `Enter` opens the editor pre-filled with the effective template.
 key:Enter
 wait:500
-note:The editor now shows an "Available template items:" line listing all eleven {{token}} placeholders learning.answer accepts -- project_name, feature_name, file_line, anchor_description, code_block, surrounding_context, earlier_turns, question, intent_instructions, level_instructions, run_mode_instructions -- wrapped above the edit box. The line below restates that tokens are re-filled at run time with no validation.
+note:The editor now shows an "Available template items:" line listing all eight {{token}} placeholders review.question accepts -- review_identity, repository_path, review_revision, context_version, selection, diff, earlier_turns, question -- wrapped above the edit box. The line below restates that tokens are re-filled at run time with no validation.
 shot:editor-many-items
 
 # Back to the list, then up to a single-placeholder prompt.
 key:Escape
 wait:200
+key:k
+wait:120
+key:k
+wait:120
 key:k
 wait:120
 key:k

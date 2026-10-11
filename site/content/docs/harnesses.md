@@ -13,7 +13,6 @@ row links back to the page that documents the feature in full.
 | --- | --- | --- | --- |
 | [Permission modes](@/docs/core-concepts.md#permission-modes) | Vibeless, Vibe, SuperVibe | Vibe, SuperVibe — Vibeless is blocked | Selectable, but has no effect — Pi does not receive AIW's permission-mode flags |
 | [Attention-state fidelity](@/docs/attention-and-limits.md#see-which-agents-need-you) | Question, Completed, and Waiting | Waiting only — one lifecycle hook fires at turn-end with no way to tell a question from a completion | None — Pi has no lifecycle-hook mechanism |
-| [Learning Mode](@/docs/learning-mode.md) default run mode | No-tools (restricted); `D` re-asks with the repo readable | Always reads the repo — `codex exec` has no no-tools mode, so every answer is already a deep dive | No-tools (restricted); `D` re-asks with the repo readable |
 | [Context-window tracking](@/docs/attention-and-limits.md#track-context-and-usage-in-the-sidebar) | Yes | Yes | Yes |
 | [Usage/quota sidebar](@/docs/attention-and-limits.md#track-context-and-usage-in-the-sidebar) (5h / 7-day windows) | Yes | Yes | No usage API is currently known for this harness |
 | Saved-session resume | Yes | Yes | Not available |
@@ -31,7 +30,3 @@ A few notes worth expanding on:
   a question from a finished turn, so every stopped Codex session shows as
   Waiting. Pi has no hook mechanism at all, so its sessions carry no
   attention state.
-- **Learning Mode** answers are always harness-neutral in wording (the
-  newcomer/familiar level and explain/change intent apply the same way to
-  all four); what varies is only whether the *default* answer can read the
-  repository.

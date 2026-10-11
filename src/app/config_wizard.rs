@@ -684,10 +684,9 @@ mod tests {
     /// A dashboard action that never reaches this list can't be rebound, so
     /// the wizard is the only place a user can discover it exists.
     #[test]
-    fn the_wizard_offers_every_dashboard_action_including_learning_mode() {
+    fn the_wizard_offers_every_dashboard_action() {
         let actions = sorted_keybinding_actions(&HashMap::new());
 
-        assert!(actions.contains(&"learning_mode".to_string()));
         for (action, _) in crate::handlers::DASHBOARD_KEYBINDING_ACTIONS {
             assert!(
                 actions.contains(&(*action).to_string()),

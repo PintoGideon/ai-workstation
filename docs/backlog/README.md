@@ -130,27 +130,8 @@ doc always says exactly what remains.
   scopes, plan mode from a TODO, and quick-capture from any session view
   are all in place. Deleting a feature asks what happens to the
   unfinished work in its worktree list.
-- [Learning Mode](learning-mode-plan.md) — _All epics shipped._ A read-only
-  overlay (`K`) for studying a project you didn't write: browse the repo as a
-  collapsible folder tree or just the branch's changes, anchor a question to a
-  file, hunk, line range, or the project as a whole, and get a headless answer
-  from the selected harness. Built for a newcomer — nothing mutates the repo,
-  answers default to a define-your-terms "newcomer" level, starter
-  questions and a "Start here" group give a first move, and follow-ups
-  thread. Answers persist per project as anchored notes; making one
-  actionable (a TODO) or escalating it into a live agent session are
-  explicit, optional gestures. Seven epics: foundations, browsing, asking,
-  surface, acting on an answer, hardening, and the file tree. Deferred work
-  is tracked separately in
-  [Learning Mode follow-ups](learning-mode-followups-plan.md).
-- [Learning Mode follow-ups](learning-mode-followups-plan.md) — _Backlog._
-  Three deferrals from the Learning Mode plan plus a follow-up found through
-  use: anchor drift (since fixed), question history scoped to the selected
-  file or the whole project with context-aware jumps, alternative mechanisms
-  for making an answer actionable (seeded-and-scoped composer, inline
-  suggested patch), and turning an answer's "Where to look next" references
-  into navigable jumps — which also surfaces the fabricated paths a no-tools
-  answer is known to invent.
+
+
 - [Needs Attention](needs-attention-plan.md) — _In progress._ The
   dashboard says *why* an agent stopped instead of one flat "waiting for
   input": Question, Completed, or an unexplained Waiting, read from the

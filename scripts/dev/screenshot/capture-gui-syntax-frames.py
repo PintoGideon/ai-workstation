@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Assert native GUI syntax highlighting through WebKit IPC and capture its X11 window.
 
-Covers unified/split diffs, Final Review with a line comment and the Learning
-reader in light and dark. Parsers are installed through the GUI's own
+Covers unified/split diffs and Final Review with a line comment in light and
+dark. Parsers are installed through the GUI's own
 `syntax_install` command (the TUI picker's installer: `git clone` from GitHub,
 `cc`) into the private XDG config. No agent or AI harness runs.
 Only the window belonging to the supplied isolated GUI PID is inspected.
@@ -82,8 +82,8 @@ def wait(expression, timeout=10):
         time.sleep(0.1)
     # Say what the page showed instead, so a CI failure is diagnosable.
     state = evaluate(
-        'JSON.stringify({header:document.querySelector(".diff-file-header,.learning-code-header")?.innerText,'
-        'code:(document.querySelector(".diff-code,.learning-code")?.innerHTML||"").slice(0,1500),'
+        'JSON.stringify({header:document.querySelector(".diff-file-header")?.innerText,'
+        'code:(document.querySelector(".diff-code")?.innerHTML||"").slice(0,1500),'
         'alerts:Array.from(document.querySelectorAll("[role=alert],[role=status]")).map(e=>e.innerText)})'
     )
     raise AssertionError(f"{expression}\nPage: {state}")
@@ -348,34 +348,8 @@ try:
     click("Pause review")
     wait('!document.querySelector(".diff-reader")')
 
-    # The Learning reader shows the whole file with the same colours.
-    click("Learning")
-    wait('!!document.querySelector(".learning-file")', timeout=20)
-    if not evaluate('Array.from(document.querySelectorAll(".learning-file")).some(b=>b.textContent.trim().endsWith("lib.rs"))'):
-        evaluate('Array.from(document.querySelectorAll(".learning-file")).find(b=>b.textContent.trim()==="src").click()')
-        wait('Array.from(document.querySelectorAll(".learning-file")).some(b=>b.textContent.trim().endsWith("lib.rs"))')
-    evaluate('Array.from(document.querySelectorAll(".learning-file")).find(b=>b.textContent.trim().endsWith("lib.rs")).click()')
-    wait('document.querySelector(".learning-code-header strong")?.textContent==="src/lib.rs"')
-    wait('!!document.querySelector(".learning-code .syn-comment")', timeout=20)
-    evaluate('document.querySelector(\'button[aria-label="Select line 9"]\').click()')
-    wait('document.querySelector(\'button[aria-label="Select line 9"]\')?.classList.contains("learning-line-selected")')
-    capture(
-        "008-learning-reader.png",
-        "The Learning reader colours the whole Rust file, and a selected line inside the block comment keeps its comment colour.",
-        ["src/lib.rs", "Rust", "credit notes carry a negative total", "pub fn total_cents"],
-        '!!document.querySelector(".learning-line-selected .syn-comment")&&!!document.querySelector(".learning-code .syn-keyword")',
-    )
-
     # Dark mode: the same views through the dark syntax tokens.
     set_dark(True)
-    capture(
-        "009-learning-reader-dark.png",
-        "In dark mode the Learning reader switches to the dark syntax tokens.",
-        ["src/lib.rs", "Rust", "pub fn total_cents"],
-        'getComputedStyle(document.querySelector(".learning-code .syn-keyword")).color!=="rgb(124, 58, 237)"',
-    )
-    evaluate('document.querySelector("button[aria-label=Close]").click()')
-    wait('!document.querySelector(".learning-reader")')
     open_changes()
     choose_file("src/lib.rs")
     wait(row_has("credit notes carry a negative total", "comment"))

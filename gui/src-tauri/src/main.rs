@@ -34,7 +34,6 @@ use ai_workstation::gui_contract::{
 use ai_workstation::gui_debug_log::{self, DebugLogView};
 use ai_workstation::gui_diff::{self, DiffOptions, DiffView};
 use ai_workstation::gui_dormancy::{self, DormancyStopResult, DormancyView, DormantObservation};
-use ai_workstation::gui_learning::{self, LearningAction, LearningHandoff, LearningView};
 use ai_workstation::gui_plans::{self, PlanAction, PlanInput, PlanStatus};
 use ai_workstation::gui_pr_review::{self, PrReviewAction, PrReviewView};
 use ai_workstation::gui_pr_triage::{
@@ -1002,49 +1001,6 @@ fn plan_act(
 }
 
 #[tauri::command]
-fn learning_begin(state: State<AppState>, target: FeatureTarget) -> Result<LearningView, GuiError> {
-    gui_learning::begin(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        target,
-    )
-}
-
-#[tauri::command]
-fn learning_snapshot(state: State<AppState>) -> Result<Option<LearningView>, GuiError> {
-    gui_learning::snapshot(&mut state.0.lock().expect("gui handle mutex poisoned"))
-}
-
-#[tauri::command]
-fn learning_act(
-    state: State<AppState>,
-    workflow_id: String,
-    revision: u64,
-    action: LearningAction,
-) -> Result<Option<LearningView>, GuiError> {
-    gui_learning::act(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &workflow_id,
-        revision,
-        action,
-    )
-}
-
-#[tauri::command]
-fn learning_launch_agent(
-    app: tauri::AppHandle,
-    state: State<AppState>,
-    workflow_id: String,
-    revision: u64,
-    qa_id: String,
-    approved: bool,
-) -> Result<LearningHandoff, GuiError> {
-    let mut gui = state.0.lock().expect("gui handle mutex poisoned");
-    let response = gui_learning::launch_agent(&mut gui, &workflow_id, revision, &qa_id, approved)?;
-    emit_workspace_changed(&app, &gui.broadcast_snapshot());
-    Ok(response)
-}
-
-#[tauri::command]
 async fn debug_log_load(state: State<'_, AppState>) -> Result<DebugLogView, GuiError> {
     gui_debug_log::load(&mut state.0.lock().expect("gui handle mutex poisoned"))
 }
@@ -1409,10 +1365,6 @@ fn main() {
             todo_reorder,
             todo_launch_agent,
             todo_launch_new_feature,
-            learning_begin,
-            learning_snapshot,
-            learning_act,
-            learning_launch_agent,
             plan_begin,
             plan_begin_todo_host,
             plan_begin_creation,

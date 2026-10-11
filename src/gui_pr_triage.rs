@@ -3429,7 +3429,6 @@ mod tests {
             feature_id: "other".into(),
         };
         assert!(begin(&mut gui, other).is_err());
-        assert!(crate::gui_learning::begin(&mut gui, view.target.feature().unwrap()).is_err());
         let app = gui.app_for_workflow();
         app.store.projects[0].features.clear();
         if let Some(db) = &app.db {

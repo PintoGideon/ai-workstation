@@ -4,7 +4,7 @@ description = "Edit the exact prompts AIW sends for headless AI calls."
 weight = 70
 +++
 
-Behind the plan interview, Learning Mode, the final-review diff helpers, the
+Behind the plan interview, the final-review diff helpers, the
 AI PR review, and the review-memory bootstrap/compaction, AIW makes one-shot
 ("headless") AI calls with prompts it builds for you. Press `E` on the
 dashboard — or `Ctrl+Space`, then `E` from a session — to open the
@@ -39,7 +39,7 @@ the stable prompt id (shown in the manager):
     "pr_review.ai_review": {
       "template": "You are reviewing a diff... {{annotated_diff}} ..."
     },
-    "learning.answer": {
+    "review.question": {
       "template": "shared text with {{question}}",
       "harnesses": { "codex": "codex-specific text with {{question}}" }
     }
@@ -54,5 +54,5 @@ else `aiw.json` can declare.
 Before each user-initiated headless call, a **pre-call notice** names the
 prompt and target harness: `v` shows the exact rendered prompt, `e` jumps to
 the manager for that prompt, `Enter` makes the call, `Esc` cancels it.
-Calls that run without you watching — the Learning Mode answer queue and
-session summaries — announce with a toast instead of the modal.
+Calls that run without you watching — session summaries — announce with a
+toast instead of the modal.

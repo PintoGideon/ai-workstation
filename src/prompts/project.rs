@@ -13,7 +13,7 @@
 //! ```json
 //! "prompt_overrides": {
 //!   "pr_review.ai_review": { "template": "…text with {{tokens}}…" },
-//!   "learning.answer": {
+//!   "review.question": {
 //!     "template": "…shared…",
 //!     "harnesses": { "codex": "…codex-specific…" }
 //!   }
@@ -234,7 +234,7 @@ mod tests {
             let entry = map.entry("session.summary".into()).or_default();
             entry.set_harness(&AgentKind::Pi, Some("pi".into()));
             entry.set_harness(&AgentKind::Codex, Some("codex".into()));
-            map.entry("learning.answer".into())
+            map.entry("review.question".into())
                 .or_default()
                 .set_shared(Some("shared".into()));
         })
@@ -251,7 +251,7 @@ mod tests {
         assert!(at("\"on_stop\"") < at("\"on_start\""));
         assert!(at("\"lifecycle_hooks\"") < at("\"alpha\""));
         assert!(at("\"alpha\"") < at("\"prompt_overrides\""));
-        assert!(at("\"learning.answer\"") < at("\"session.summary\""));
+        assert!(at("\"review.question\"") < at("\"session.summary\""));
         assert!(at("\"codex\": \"codex\"") < at("\"pi\": \"pi\""));
     }
 
@@ -322,7 +322,7 @@ mod tests {
         let mut map = ProjectPromptOverrides::new();
         map.insert("session.summary".to_string(), entry(Some("s"), &[]));
         map.insert(
-            "learning.answer".to_string(),
+            "review.question".to_string(),
             entry(None, &[("codex", "c")]),
         );
 

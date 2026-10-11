@@ -964,7 +964,7 @@ fn prompt_override_manager_saves_to_each_scope_and_survives_reopen() {
             PromptSource::Global,
         ),
         (
-            PromptId::LearningAnswer,
+            PromptId::ReviewQuestion,
             "This feature",
             "FEATURE answer {{question}}",
             PromptSource::Feature,
@@ -1104,7 +1104,7 @@ fn automated_headless_runs_announce_with_a_toast_not_a_modal() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.announce_headless_run(crate::prompts::PromptId::LearningAnswer, &AgentKind::Codex);
+    app.announce_headless_run(crate::prompts::PromptId::SessionSummary, &AgentKind::Codex);
     assert!(!matches!(app.mode, AppMode::PromptPrecall(_)));
     assert!(
         app.toasts

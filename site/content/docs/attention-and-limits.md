@@ -68,8 +68,8 @@ Press `Z` on the dashboard, or `Ctrl+Space`, then `g` from inside a
 session, to have AIW write a short (60-character) summary of the selected
 feature's recent terminal activity, shown on that feature's dashboard row.
 It's a one-off, on-demand call rather than something that runs
-automatically — press it again any time the row goes stale. Like Learning
-Mode's quick answers, it runs in AIW's restricted, no-tools headless mode,
+automatically — press it again any time the row goes stale. It runs in
+AIW's restricted, no-tools headless mode,
 so it costs one small call regardless of which harness the feature uses.
 
 <figure>

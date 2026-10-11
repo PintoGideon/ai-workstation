@@ -876,7 +876,7 @@ mod tests {
     fn clear_removes_exactly_one_slot_and_refuses_stale_or_missing_ones() {
         let mut fx = fixture();
         let ctx = fx.feature.clone();
-        let id = PromptId::LearningAnswer;
+        let id = PromptId::ReviewQuestion;
         let view = load(&mut fx.gui, &ctx, None).unwrap();
         save(
             &mut fx.gui,

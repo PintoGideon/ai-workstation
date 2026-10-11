@@ -19,7 +19,6 @@ cargo build --locked
 cargo test --locked app::tests::feature_sessions
 cargo test --locked app::pr_review
 cargo test --locked app::review
-cargo test --locked app::learning
 ```
 
 For a code milestone, run the normal parallel suite and both checks:

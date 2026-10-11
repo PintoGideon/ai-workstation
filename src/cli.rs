@@ -1733,12 +1733,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             force_redraw = true;
         }
 
-        // Learning Mode answers arrive one per finished question, and several
-        // can be in flight at once, so this drains rather than polling a
-        // single-shot slot.
-        if app.poll_learning_answers_bg() {
-            force_redraw = true;
-        }
         // FORK: a broken aiw.json read by any action is announced here.
         if app.report_config_errors() {
             force_redraw = true;

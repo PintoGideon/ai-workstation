@@ -24,7 +24,7 @@
 use anyhow::Result;
 use rusqlite::{Connection, params};
 
-use super::learning::now_timestamp;
+use super::now_timestamp;
 use super::store::{agent_from_str, agent_to_str};
 pub use crate::app::pr_review::{PrInvestigationStatus, PrInvestigationTurn};
 use crate::project::AgentKind;

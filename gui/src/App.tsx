@@ -9,12 +9,6 @@ import {
   reviewAct,
   reviewSnapshot,
   reviewTakeCompletion,
-  LearningView,
-  LearningAction,
-  learningBegin,
-  learningSnapshot,
-  learningAct,
-  learningLaunchAgent,
   AgentSlug,
   NewSessionKind,
   CollapseTarget,
@@ -81,7 +75,6 @@ import ScreenshotsPanel from "./ScreenshotsPanel";
 import ReviewPanel from "./ReviewPanel";
 import type { PrTriageTarget } from "./prTriageApi";
 import TodoPanel, { TodoAgentTarget, TodoDestination } from "./TodoPanel";
-import LearningPanel from "./LearningPanel";
 import PlanPanel from "./PlanPanel";
 import RecoveryDialog from "./RecoveryDialog";
 import NewSessionDialog, { PreCheckFailure } from "./NewSessionDialog";
@@ -172,10 +165,6 @@ export default function App() {
   const [createFeatureFor, setCreateFeatureFor] = useState<string | null>(null);
   const [tabByFeature, setTabByFeature] = useState<Record<string, string>>({});
   const [pendingSessionByFeature, setPendingSessionByFeature] = useState<Record<string, string>>({});
-  const [learning, setLearning] = useState<LearningView | null>(null);
-  const [learningBusy, setLearningBusy] = useState(false);
-  const learningActionPending = useRef(false);
-  const [learningApproval, setLearningApproval] = useState<{ qaId: string; message: string } | null>(null);
   const [promptLibrary, setPromptLibrary] = useState<{ scope: LibraryScope; target: SessionTarget | null } | null>(null);
   const [promptOverrides, setPromptOverrides] = useState<{
     context: OverrideContext; promptId: string | null; harness: AgentSlug | null; fromPrecall: boolean;
@@ -560,32 +549,6 @@ export default function App() {
     }
   }
 
-  useEffect(() => {
-    if (!learning || learningBusy) return;
-    let cancelled = false;
-    const workflowId = learning.workflow_id;
-    const timer = window.setInterval(() => {
-      void learningSnapshot().then((next) => {
-        if (cancelled) return;
-        setLearning((current) => {
-          if (current?.workflow_id !== workflowId) return current;
-          if (!next) return null;
-          return next.workflow_id === current.workflow_id && next.revision >= current.revision ? next : current;
-        });
-      }).catch(() => { /* Explicit actions report deleted/stale targets. */ });
-    }, 1000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [learning?.workflow_id, learningBusy]);
-
-  async function beginLearning(target: FeatureTarget) {
-    if (learningActionPending.current) return;
-    learningActionPending.current = true;
-    setLearningBusy(true);
-    try { setLearning(await learningBegin(target)); }
-    catch (err) { reportError(err); }
-    finally { learningActionPending.current = false; setLearningBusy(false); }
-  }
-
   // Poll while AI work or a project check is in flight, and nothing
   // else changes the review without an explicit action.
   useEffect(() => {
@@ -656,40 +619,6 @@ export default function App() {
       return !(action.kind === "pause" && next !== null);
     } catch (err) { setReviewError(asGuiError(err).message); return false; }
     finally { reviewPending.current = false; setReviewBusy(false); }
-  }
-
-  async function actLearning(action: LearningAction): Promise<boolean> {
-    if (!learning || learningActionPending.current) return false;
-    learningActionPending.current = true;
-    setLearningBusy(true);
-    try {
-      setLearning(await learningAct(learning, action));
-      if (action.kind === "keep_todo") void queryClient.invalidateQueries({ queryKey: ["todos"] });
-      return true;
-    }
-    catch (err) { reportError(err); return false; }
-    finally { learningActionPending.current = false; setLearningBusy(false); }
-  }
-
-  async function launchLearning(qaId: string, approved = false) {
-    if (!learning || learningActionPending.current) return;
-    learningActionPending.current = true;
-    setLearningBusy(true);
-    try {
-      const handoff = await learningLaunchAgent(learning, qaId, approved);
-      setLearning(null); setLearningApproval(null);
-      openSession(handoff.target, handoff.draft_prompt);
-      if (handoff.notice) pushToast({ tone: "error", title: "Learning", message: handoff.notice });
-      if (handoff.info) pushToast({ tone: "info", title: "Learning", message: handoff.info });
-      // A stopped linked session goes through the tab's own start, which
-      // offers to resume its saved conversation.
-      if (handoff.start_required) void beginSessionStart(handoff.target);
-      void queryClient.invalidateQueries({ queryKey: SNAPSHOT_KEY });
-    } catch (err) {
-      const error = asGuiError(err);
-      if (error.kind === "needs_approval") setLearningApproval({ qaId, message: error.message });
-      else { setLearningApproval(null); reportError(err); }
-    } finally { learningActionPending.current = false; setLearningBusy(false); }
   }
 
   function updatePlan(status: PlanStatus) {
@@ -1233,18 +1162,6 @@ export default function App() {
       </Suspense>}
       {diffTarget && <DiffPanel key={`${diffTarget.project_id}:${diffTarget.feature_id}`} target={diffTarget} onClose={() => setDiffTarget(null)} />}
       {review && <ReviewPanel key={review.workflow_id} view={review} busy={reviewBusy} error={reviewError} onAct={actReview} onEditPrompt={() => void editPrecallPrompt()} onSyntaxInstalled={() => void refreshReviewSyntax()} />}
-      {learning && (
-        <LearningPanel key={learning.workflow_id} view={learning} busy={learningBusy || learningApproval !== null}
-          onAct={actLearning} onLaunch={(qaId) => void launchLearning(qaId)}
-          onClose={() => void actLearning({ kind: "close" })} />
-      )}
-      {learningApproval && (
-        <ApprovalDialog label="Approve Learning agent" title="Start editing agent?"
-          message={learningApproval.message} confirmLabel="Start anyway" busy={learningBusy}
-          onConfirm={() => void launchLearning(learningApproval.qaId, true)}
-          onCancel={() => setLearningApproval(null)} />
-      )}
-
       <main className="main">
         {view?.kind === "todos" && (
           <div className="page">
@@ -1309,8 +1226,6 @@ export default function App() {
               { project_id: selectedProject.id, feature_id: selectedFeature.id },
               quick,
             )}
-            onLearning={() => void beginLearning({ project_id: selectedProject.id, feature_id: selectedFeature.id })}
-            learningBusy={learningBusy}
             onDiff={() => setDiffTarget({ project_id: selectedProject.id, feature_id: selectedFeature.id })}
             pendingEdits={pendingEdits[selectedFeature.id] ?? 0}
             onSupervisedEdits={() => openSupervisedEdits({ project_id: selectedProject.id, feature_id: selectedFeature.id })}
@@ -1842,8 +1757,6 @@ function FeatureView({
   onTab,
   onBack,
   onPlan,
-  onLearning,
-  learningBusy,
   onDiff,
   pendingEdits,
   onSupervisedEdits,
@@ -1883,8 +1796,6 @@ function FeatureView({
   onTab: (tab: string) => void;
   onBack: () => void;
   onPlan: (quick: boolean) => void;
-  onLearning: () => void;
-  learningBusy: boolean;
   onDiff: () => void;
   /** Supervised edits waiting for an answer in this feature. */
   pendingEdits: number;
@@ -1979,9 +1890,6 @@ function FeatureView({
           <>
             <button className="btn btn-secondary" onClick={onNewSession} disabled={newSessionLoading}>
               {newSessionLoading ? <Spinner /> : <Icon name="plus" size={12} />} New session
-            </button>
-            <button className="btn btn-secondary" onClick={onLearning} disabled={learningBusy}>
-              <Icon name="file" size={12} /> Learning
             </button>
             {project.is_git && <button className="btn btn-secondary" onClick={onDiff}>
               <Icon name="branch" size={12} /> Changes

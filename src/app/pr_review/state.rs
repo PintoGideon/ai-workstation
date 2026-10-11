@@ -616,7 +616,7 @@ pub struct PendingFollowUp {
 
 /// Flat single-select harness picker shown before an investigation runs — the
 /// operator picks the harness per investigation. Mirrors
-/// [`crate::app::LearningHarnessPicker`].
+/// the flat harness picker Learning Mode used to own.
 #[derive(Debug, Clone)]
 pub struct InvestigationHarnessPick {
     pub harnesses: Vec<crate::project::AgentKind>,

@@ -330,7 +330,6 @@ pub struct GuiHandle {
     app: App,
     /// Configured-session launches whose pre-check is running outside the lock.
     pub(crate) custom_session_adds: std::collections::HashSet<(String, String)>,
-    pub(crate) learning_context: Option<crate::gui_learning::LearningContext>,
     pub(crate) review_context: Option<crate::gui_review::ReviewContext>,
     /// A completed review's result, until the interface takes it once.
     pub(crate) review_completion: Option<crate::gui_review::ReviewCompletion>,
@@ -343,7 +342,6 @@ impl GuiHandle {
         Ok(Self {
             app: App::new(db_path)?,
             custom_session_adds: Default::default(),
-            learning_context: None,
             review_context: None,
             review_completion: None,
             pr_triage_context: None,
@@ -361,7 +359,6 @@ impl GuiHandle {
         Self {
             app,
             custom_session_adds: Default::default(),
-            learning_context: None,
             review_context: None,
             review_completion: None,
             pr_triage_context: None,
@@ -391,7 +388,6 @@ impl GuiHandle {
     /// that only need the store current: the sidebar it would build reads
     /// notification directories, the DB, and `aiw.json`.
     pub fn refresh_store(&mut self) -> GuiResult<()> {
-        self.app.poll_learning_answers_bg();
         if let Some(db) = &self.app.db {
             let current = db.current_store_version().map_err(GuiError::from)?;
             if self.app.store_version != Some(current) {
@@ -2082,7 +2078,6 @@ mod tests {
         GuiHandle {
             app: App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new())),
             custom_session_adds: Default::default(),
-            learning_context: None,
             review_context: None,
             review_completion: None,
             pr_triage_context: None,
@@ -2107,7 +2102,6 @@ mod tests {
         GuiHandle {
             app,
             custom_session_adds: Default::default(),
-            learning_context: None,
             review_context: None,
             review_completion: None,
             pr_triage_context: None,
@@ -4120,7 +4114,6 @@ mod tests {
         GuiHandle {
             app,
             custom_session_adds: Default::default(),
-            learning_context: None,
             review_context: None,
             review_completion: None,
             pr_triage_context: None,
@@ -4318,7 +4311,6 @@ mod tests {
             GuiHandle {
                 app,
                 custom_session_adds: Default::default(),
-                learning_context: None,
                 review_context: None,
                 review_completion: None,
                 pr_triage_context: None,

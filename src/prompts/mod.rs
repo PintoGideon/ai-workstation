@@ -1,7 +1,7 @@
 //! Central registry of every headless AI prompt AIW sends.
 //!
 //! Historically each headless call site (`app/plan_interview.rs`,
-//! `app/learning/`, `app/review/`, `app/ai_review.rs`, `app/pr_review/`,
+//! `app/review/`, `app/ai_review.rs`, `app/pr_review/`,
 //! `handlers/diff_review.rs`, `summary.rs`) assembled its prompt inline. This
 //! module is the single place those templates live, so they can be listed,
 //! displayed, and overridden.
@@ -53,8 +53,6 @@ pub enum PromptId {
     /// Quick Plan: decide direct-to-work / show a lightweight plan / escalate
     /// to the full Plan-mode interview (no-tools).
     PlanInterviewQuickSynthesis,
-    /// Learning Mode read-only code-reading Q&A (`app/learning.rs`).
-    LearningAnswer,
     /// Review questions: answer a reviewer's question about the code under
     /// Final Review, a manual PR review, or the AI PR pane
     /// (`app/review_questions/`, read-only tools).
@@ -95,7 +93,7 @@ pub enum PromptId {
 
 impl PromptId {
     /// Every registered prompt, in registry (and manager-list) order.
-    pub const ALL: [PromptId; 25] = [
+    pub const ALL: [PromptId; 24] = [
         PromptId::ModelAnalysis,
         PromptId::PlanInterviewRound,
         PromptId::PlanInterviewSynthesis,
@@ -105,7 +103,6 @@ impl PromptId {
         PromptId::PlanInterviewInvestigationMerge,
         PromptId::PlanInterviewQuickRound,
         PromptId::PlanInterviewQuickSynthesis,
-        PromptId::LearningAnswer,
         PromptId::ReviewQuestion,
         PromptId::ReviewQuestionDraft,
         PromptId::ReviewWalkthrough,
@@ -136,7 +133,6 @@ impl PromptId {
             PromptId::PlanInterviewInvestigationMerge => "plan_interview.investigation_merge",
             PromptId::PlanInterviewQuickRound => "plan_interview.quick_round",
             PromptId::PlanInterviewQuickSynthesis => "plan_interview.quick_synthesis",
-            PromptId::LearningAnswer => "learning.answer",
             PromptId::ReviewQuestion => "review.question",
             PromptId::ReviewQuestionDraft => "review.question_draft",
             PromptId::ReviewWalkthrough => "review.walkthrough",
@@ -217,7 +213,7 @@ pub fn spec(id: PromptId) -> &'static PromptSpec {
 
 const NO_HARNESS_VARIANTS: &[(AgentKind, &str)] = &[];
 
-static SPECS: [PromptSpec; 25] = [
+static SPECS: [PromptSpec; 24] = [
     PromptSpec {
         id: PromptId::ModelAnalysis,
         title: "Implementation model advice",
@@ -288,26 +284,6 @@ static SPECS: [PromptSpec; 25] = [
         summary: "Decides direct-to-work, a lightweight plan, or escalation to full Plan mode.",
         placeholders: &["tool_access_note", "interview_input"],
         default_template: defaults::PLAN_INTERVIEW_QUICK_SYNTHESIS,
-        harness_variants: NO_HARNESS_VARIANTS,
-    },
-    PromptSpec {
-        id: PromptId::LearningAnswer,
-        title: "Learning Mode: answer",
-        summary: "Answers a question about code the reader did not write (read-only).",
-        placeholders: &[
-            "project_name",
-            "feature_name",
-            "file_line",
-            "anchor_description",
-            "code_block",
-            "surrounding_context",
-            "earlier_turns",
-            "question",
-            "intent_instructions",
-            "level_instructions",
-            "run_mode_instructions",
-        ],
-        default_template: defaults::LEARNING_ANSWER,
         harness_variants: NO_HARNESS_VARIANTS,
     },
     PromptSpec {

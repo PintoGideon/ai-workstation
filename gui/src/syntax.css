@@ -1,5 +1,5 @@
 /*
- * Syntax highlighting colours for diffs, Final Review and the Learning
+ * Syntax highlighting colours for diffs and Final Review
  * reader. The backend sends tree-sitter token classes (src/gui_syntax.rs);
  * each class maps to one of thirteen roles, the same roles the TUI palette
  * uses (src/highlight/theme.rs). A theme overrides the `--syn-*` role tokens

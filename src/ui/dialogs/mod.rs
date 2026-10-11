@@ -15,7 +15,6 @@ mod harness;
 mod help;
 mod hooks;
 mod issue_fixer;
-mod learning;
 mod markdown;
 mod model_analysis;
 mod plan_interview;
@@ -54,7 +53,6 @@ pub use hooks::{
     draw_running_hook_dialog,
 };
 pub use issue_fixer::{draw_issue_browser, draw_issue_duplicate_warning, draw_issue_setup};
-pub use learning::draw_learning_view;
 pub use markdown::{draw_markdown_loading, draw_markdown_viewer};
 pub use model_analysis::draw_model_analysis;
 pub use plan_interview::draw_plan_interview_dialog;

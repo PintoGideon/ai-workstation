@@ -17,7 +17,6 @@ mod harness;
 mod hooks;
 mod input;
 mod issue_fixer;
-mod learning;
 mod model_analysis;
 mod mouse;
 mod normal;
@@ -66,7 +65,6 @@ pub use input::handle_paste;
 pub use issue_fixer::{
     handle_issue_browser_key, handle_issue_duplicate_warning_key, handle_issue_setup_key,
 };
-pub use learning::handle_learning_key;
 pub use mouse::handle_mouse;
 pub use normal::handle_normal_key;
 pub(crate) use normal::{
@@ -114,7 +112,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent, visible_rows: u16) -> Result<()>
     match &app.mode {
         AppMode::Normal => handle_normal_key(app, key),
         AppMode::Todos(_) => handle_todos_key(app, key),
-        AppMode::Learning(_) => handle_learning_key(app, key),
         AppMode::TodoQuickCapture(_) => handle_todo_quick_capture_key(app, key),
         AppMode::FreshContextPrompt(_) => handle_fresh_context_prompt_key(app, key),
         AppMode::TodosHostReassign(_) => handle_todos_host_reassign_key(app, key.code),

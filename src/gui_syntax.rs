@@ -1,4 +1,4 @@
-//! Syntax highlighting for the desktop GUI's diffs, Final Review and Learning
+//! Syntax highlighting for the desktop GUI's diffs and Final Review
 //! reader.
 //!
 //! Decision: highlighting happens here, in Rust, through the TUI's own
@@ -228,32 +228,6 @@ impl DiffHighlights {
         }
         Some(spans)
     }
-}
-
-/// Highlights a whole file shown line by line (the Learning reader's
-/// repository view). Returns one entry per line plus the badge.
-pub(crate) fn source_lines(path: &Path, lines: &[String]) -> (Vec<SyntaxLine>, SyntaxInfo) {
-    let source = lines.join("\n");
-    let info = SyntaxInfo::detected(highlight::language_for_source(Some(path), &source));
-    let plain = |info| (vec![None; lines.len()], info);
-    if info.status != SyntaxStatus::Highlighted {
-        return plain(info);
-    }
-    if lines.len() > MAX_HIGHLIGHT_LINES || source.len() > MAX_HIGHLIGHT_BYTES {
-        return plain(info.with_status(SyntaxStatus::TooLarge));
-    }
-    let highlighted = highlight(path, &source);
-    let spans = lines
-        .iter()
-        .enumerate()
-        .map(|(index, text)| {
-            highlighted
-                .lines
-                .get(index)
-                .and_then(|line| spans_matching(line, text))
-        })
-        .collect();
-    (spans, info)
 }
 
 /// Converts one highlighted line to spans, but only when they reproduce
@@ -586,13 +560,6 @@ mod tests {
         binary.is_binary = true;
         let binary = DiffHighlights::for_file(&binary, &mut budget);
         assert_eq!(binary.info.status, SyntaxStatus::Binary);
-
-        let (lines, info) = source_lines(
-            Path::new("README.md"),
-            &["# Title".to_string(), "text".to_string()],
-        );
-        assert_eq!(info.status, SyntaxStatus::NotInstalled);
-        assert_eq!(lines, vec![None, None]);
     }
 
     #[test]

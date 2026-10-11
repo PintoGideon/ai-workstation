@@ -3,7 +3,6 @@ mod debug_log;
 pub mod editors;
 mod followups; // FORK: queued follow-ups (src/app/fork_followups.rs)
 mod hook_approvals; // FORK: repo lifecycle hook approvals (src/fork/hook_approval.rs)
-pub mod learning;
 mod migrations;
 pub(crate) mod model_evidence;
 pub mod plan_interviews;
@@ -702,100 +701,6 @@ impl AiwDb {
     }
 }
 
-/// Learning Mode sessions and their anchored Q&A history (see
-/// `docs/backlog/learning-mode-plan.md`). The overlay lands in later epics, so
-/// parts of this are written before anything reads them.
-#[allow(dead_code)]
-impl AiwDb {
-    /// The project's learning session, or `None` if it has never opened
-    /// Learning Mode.
-    pub fn learning_session(&self, project_id: &str) -> Result<Option<learning::LearningSession>> {
-        learning::load_session(&self.conn, project_id)
-    }
-
-    /// Return the project's learning session, creating one hosted by
-    /// `feature_id` if it has none.
-    pub fn load_or_create_learning_session(
-        &self,
-        project_id: &str,
-        feature_id: &str,
-        title: &str,
-        harness: &crate::project::AgentKind,
-        level: learning::LearningLevel,
-    ) -> Result<learning::LearningSession> {
-        learning::load_or_create_session(&self.conn, project_id, feature_id, title, harness, level)
-    }
-
-    pub fn create_learning_session(
-        &self,
-        project_id: &str,
-        feature_id: &str,
-        title: &str,
-        harness: &crate::project::AgentKind,
-        level: learning::LearningLevel,
-    ) -> Result<learning::LearningSession> {
-        learning::create_session(&self.conn, project_id, feature_id, title, harness, level)
-    }
-
-    /// Persist a session's harness / level / onboarding flag.
-    pub fn update_learning_session(&self, session: &learning::LearningSession) -> Result<()> {
-        learning::update_session(&self.conn, session)
-    }
-
-    /// Persist the harness / level the user picked mid-session.
-    pub fn set_learning_session_settings(
-        &self,
-        session_id: &str,
-        harness: &crate::project::AgentKind,
-        level: learning::LearningLevel,
-    ) -> Result<()> {
-        learning::set_session_settings(&self.conn, session_id, harness, level)
-    }
-
-    /// Whether the first-open help overlay has already been shown.
-    pub fn learning_session_onboarding_seen(&self, session_id: &str) -> Result<bool> {
-        learning::onboarding_seen(&self.conn, session_id)
-    }
-
-    pub fn set_learning_onboarding_seen(&self, session_id: &str) -> Result<()> {
-        learning::set_onboarding_seen(&self.conn, session_id)
-    }
-
-    pub fn delete_learning_session(&self, session_id: &str) -> Result<()> {
-        learning::delete_session(&self.conn, session_id)
-    }
-
-    /// Drop a deleted project's learning history, since there is no FK cascade
-    /// from `projects`.
-    pub fn delete_learning_sessions_for_project(&self, project_id: &str) -> Result<()> {
-        learning::delete_sessions_for_project(&self.conn, project_id)
-    }
-
-    pub fn learning_qa(&self, session_id: &str) -> Result<Vec<learning::LearningQa>> {
-        learning::list_qa(&self.conn, session_id)
-    }
-
-    pub fn upsert_learning_qa(&self, qa: &learning::LearningQa) -> Result<()> {
-        learning::upsert_qa(&self.conn, qa)
-    }
-
-    /// Record a finished run against one row by id, without the whole row.
-    pub fn finish_learning_qa(
-        &self,
-        qa_id: &str,
-        answer: Option<&str>,
-        status: crate::app::LearningQaStatus,
-        error: Option<&str>,
-    ) -> Result<bool> {
-        learning::finish_qa(&self.conn, qa_id, answer, status, error)
-    }
-
-    /// Delete one Q&A row; its follow-up thread cascades away with it.
-    pub fn delete_learning_qa(&self, qa_id: &str) -> Result<()> {
-        learning::delete_qa(&self.conn, qa_id)
-    }
-}
-
 /// Plan-interview drafts and accepted transcripts. The re-run pre-fill that
 /// reads accepted transcripts is still ahead (see
 /// `docs/backlog/plan-mode-interview-plan.md`, Epic 5), so part of this is
@@ -1017,6 +922,13 @@ fn load_legacy_worktree_store() -> Option<crate::project::ProjectStore> {
     }
 
     merged
+}
+
+/// Timestamp text for rows this module writes: UTC, millisecond precision.
+pub fn now_timestamp() -> String {
+    chrono::Utc::now()
+        .format("%Y-%m-%d %H:%M:%S%.3f")
+        .to_string()
 }
 
 #[cfg(test)]

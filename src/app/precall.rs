@@ -3,8 +3,7 @@
 //! harness and offers view / edit / continue / cancel — there is no "don't
 //! ask again" (a deliberate product decision).
 //!
-//! Automated headless runs (the Learning Mode answer queue, session
-//! summaries) deliberately do **not** gate here — a modal with nobody
+//! Automated headless runs (session summaries) deliberately do **not** gate here — a modal with nobody
 //! watching would stall the queue. They push a non-blocking toast instead
 //! (`App::announce_headless_run`).
 //!

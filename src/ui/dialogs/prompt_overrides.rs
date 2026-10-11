@@ -138,7 +138,7 @@ fn draw_editor(frame: &mut Frame, area: Rect, state: &PromptOverridesState, them
 
     // Rough char-count estimate of the wrapped "Available template items: …"
     // line over the editor's inner width, plus a line of slack, clamped so a
-    // long list (learning.answer declares 11) never crowds out the editor.
+    // long list never crowds out the editor.
     let inner_width = area.width.saturating_sub(2).max(1);
     let items_chars = placeholders.iter().map(|n| n.len() + 5).sum::<usize>() + 26;
     let items_height: u16 = if placeholders.is_empty() {

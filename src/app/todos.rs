@@ -223,14 +223,6 @@ impl App {
         }
     }
 
-    pub(crate) fn set_todo_scope_visibility(&mut self, scope: &TodoScope, visible: bool) {
-        match scope {
-            TodoScope::Worktree { .. } => {}
-            TodoScope::Project { .. } => self.todo_project_visible = visible,
-            TodoScope::Global => self.todo_global_visible = visible,
-        }
-    }
-
     // ----- open / close ---------------------------------------------------
 
     /// Open the native TODOs overlay for the TODOs session at `(pi, fi)`.

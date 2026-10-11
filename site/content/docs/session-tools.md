@@ -37,7 +37,7 @@ even once most of it is no longer relevant. Press `Ctrl+Space`, then
 new session should do, and AIW starts a brand-new session in the same
 feature, seeded with the feature's plan file (if any), a sample of the
 branch's changed files, and your instruction — left unsent in the compose
-box for review, the same way Learning Mode hands off an escalated answer.
+box for review.
 `Ctrl+Space`, then `Shift+X` dismisses the sidebar's context-usage hint
 without starting a session. See
 [Track context and usage in the sidebar](@/docs/attention-and-limits.md#track-context-and-usage-in-the-sidebar)

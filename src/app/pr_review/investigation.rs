@@ -571,7 +571,7 @@ impl App {
             }
             created_at
         } else {
-            crate::db::learning::now_timestamp()
+            crate::db::now_timestamp()
         };
 
         // Move the pane into the modal loading state.
@@ -706,7 +706,7 @@ impl App {
                                 question: question.clone(),
                                 answer: answer.clone(),
                                 harness: outcome.harness.clone(),
-                                created_at: crate::db::learning::now_timestamp(),
+                                created_at: crate::db::now_timestamp(),
                             });
                         row.status = PrInvestigationStatus::Complete;
                         (Some(row.clone()), Ok("Follow-up answered".to_string()))

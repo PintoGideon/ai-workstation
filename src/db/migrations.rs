@@ -680,7 +680,7 @@ ALTER TABLE launched_editors ADD COLUMN proc_started_at TEXT NOT NULL DEFAULT ''
 // Shaped after MIGRATION_011's todo tables: `project_id` / `feature_id` are
 // plain TEXT with no FK to projects/features (those live in the store tables
 // and are rewritten wholesale on save), so cleanup on project deletion is
-// explicit — see `learning::delete_sessions_for_project`.
+// explicit (the tables are kept for existing databases; nothing reads them now).
 //
 // `project_id` is deliberately *not* UNIQUE: whether a project has one
 // learning session or many is still open (the plan's "learning-session

@@ -45,7 +45,7 @@ while `App.tsx` appends the handoff to the session draft after a final workspace
 cache check. Neither browsing nor preparation launches a process or writes the
 library. Library authoring remains a separate workflow.
 
-`src/gui_syntax.rs` highlights GUI diffs, reviews and the Learning reader
+`src/gui_syntax.rs` highlights GUI diffs and reviews
 through the TUI's `highlight` service (detection, installed tree-sitter
 parsers, cache). It highlights each diff file's whole base and current
 contents and sends per-line token spans that must reproduce the line text
@@ -183,11 +183,6 @@ rules; the module signals no process itself. Terminal attachment records
 | | `review/pr_drafts.rs` | PR review drafts in SQLite: save, resume, PR-update flags and outdated comments |
 | | `review/pr_submit.rs` | PR review submit dialog, GitHub payload and posting |
 | | `review/state.rs` | Viewer/comment/undo/history state and mode-owned child handles |
-| Learning | `learning/lifecycle.rs` | Open/close, reload, settings and persistence coordination |
-| | `learning/navigation.rs` | File trees, anchors, selection and answer navigation |
-| | `learning/workers.rs` | Question prompts, execution and answer application |
-| | `learning/follow_up.rs` | TODO creation and agent-session handoffs |
-| | `learning/state.rs`, `runtime.rs` | Session/display types and persistent answer tracking |
 
 Feature roots expose consumed entrypoints and compatibility re-exports. Free
 helpers are imported from their owning sibling module; new private helper access
@@ -217,10 +212,7 @@ boundaries with private fields and shared production/test defaults:
   invalidation clears them together; closing the running screen preserves them
   for later result application and reopening. Existing PR/workdir/head matching
   stays in feature orchestration, including successor invalidation.
-- `LearningRuns`: persistent answer channel and in-flight question IDs. Delivery
-  retires its matching ID, then orchestration updates the visible matching row
-  or the original DB row when the overlay has closed/switched. Closing the
-  overlay does not cancel the worker or erase its pending identity.
+
 
 Final Review already owns its children in mode state; it keeps that boundary.
 No second authoritative copy was added. Shared routing/store/configuration,
@@ -233,7 +225,7 @@ state remain available for later incremental ownership work.
 `src/project.rs` models projects, features and sessions. `db/mod.rs` owns the
 SQLite connection and open/seed entrypoints; `migrations.rs` owns schema changes;
 `store.rs` persists projects. Other DB modules persist session status, tokens,
-debug logs, editors, prompt templates/overrides, TODOs, plan interviews, Learning,
+debug logs, editors, prompt templates/overrides, TODOs, plan interviews,
 PR triage/investigations/terminal state, PR/AI review caches and manual PR review
 drafts (`pr_review_drafts.rs`, keyed by repository and PR number). DB code knows
 project/domain types and uses WorktreeManager to resolve legacy stores.
@@ -265,8 +257,7 @@ adapter only where it establishes a concrete dependency boundary.
 | `pr_triage`, `final_review` | PR/AI/investigation/memory/integration and diff review workflows |
 | `resources`, `editor_lifecycle` | Admission, process identity and editor stop races |
 
-Each extracted feature also retains its own `tests.rs`; Learning's suite was
-already local and its handler fixture paths remain stable. Four branch-matching
+Each extracted feature also retains its own `tests.rs`. Four branch-matching
 tests moved with PR state. Preserve the old/new path maps when auditing coverage.
 Shared helpers belong in support only when multiple suites consume them. Temporary
 repositories, DBs and process guards remain per-test, with their original lifetimes.

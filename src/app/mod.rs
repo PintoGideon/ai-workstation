@@ -33,7 +33,6 @@ pub(crate) mod github_workflow;
 mod handoff;
 mod hooks;
 pub(crate) mod issue_fixer;
-pub(crate) mod learning;
 pub(crate) mod model_analysis;
 mod navigation;
 mod notifications;
@@ -819,7 +818,6 @@ pub struct App {
     pub active_todos_sidebar_cache: HashMap<String, String>,
     sidebar_load_tx: Sender<SidebarLoadResult>,
     sidebar_load_rx: Receiver<SidebarLoadResult>,
-    pub(crate) learning_runs: learning::runtime::LearningRuns,
     sidebar_load_executor: Option<SidebarLoadExecutor>,
     sidebar_load_signatures: HashMap<String, u64>,
     pending_sidebar_loads: std::collections::HashSet<String>,
@@ -1434,7 +1432,6 @@ impl App {
             active_todos_sidebar_cache: HashMap::new(),
             sidebar_load_tx,
             sidebar_load_rx,
-            learning_runs: learning::runtime::LearningRuns::default(),
             sidebar_load_executor: None,
             sidebar_load_signatures: HashMap::new(),
             pending_sidebar_loads: std::collections::HashSet::new(),
@@ -1686,7 +1683,6 @@ impl App {
             active_todos_sidebar_cache: HashMap::new(),
             sidebar_load_tx,
             sidebar_load_rx,
-            learning_runs: learning::runtime::LearningRuns::default(),
             sidebar_load_executor: None,
             sidebar_load_signatures: HashMap::new(),
             pending_sidebar_loads: std::collections::HashSet::new(),

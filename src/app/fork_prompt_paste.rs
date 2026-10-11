@@ -1,7 +1,7 @@
 //! FORK: prompts handed to an agent, unsent (DESIGN.md §18).
 //!
 //! Every path that used to open the compose box seeded with text — a
-//! learning escalation, a TODO spawn, a plan-interview kickoff, a prompt
+//! a TODO spawn, a plan-interview kickoff, a prompt
 //! from the library, a feature's `startup_prompt` — now pastes the text into
 //! the agent's real tmux window with `paste_text` and **no Enter**, saves it
 //! as the checkout's `latest-prompt.txt`, selects the session's row and

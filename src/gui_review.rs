@@ -3167,7 +3167,7 @@ mod tests {
     }
 
     #[test]
-    fn malformed_progress_is_preserved_and_another_workflow_is_not_replaced() {
+    fn malformed_progress_is_preserved() {
         let (dir, mut gui, target) = fixture();
         let path = crate::app::review::review_progress_path(&dir.path().join("repo"));
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -3176,12 +3176,6 @@ mod tests {
         assert!(matches!(gui.app_for_workflow().mode, AppMode::Normal));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "bad json");
         std::fs::remove_file(path).unwrap();
-        crate::gui_learning::begin(&mut gui, target.clone()).unwrap();
-        assert_eq!(
-            begin(&mut gui, target).unwrap_err().kind,
-            GuiErrorKind::Conflict
-        );
-        assert!(matches!(gui.app_for_workflow().mode, AppMode::Learning(_)));
         // The fixture's harness is mocked, and the repo remains usable.
         assert!(!git(&dir.path().join("repo"), &["rev-parse", "HEAD"]).is_empty());
     }

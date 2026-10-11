@@ -375,7 +375,7 @@ mod tests {
         let conn = conn();
         upsert(
             &conn,
-            "learning.answer",
+            "review.question",
             &feature("/repo/.worktrees/x"),
             Some(&AgentKind::Codex),
             "codex-only",
@@ -384,7 +384,7 @@ mod tests {
 
         let one = load_one(
             &conn,
-            "learning.answer",
+            "review.question",
             &feature("/repo/.worktrees/x"),
             Some(&AgentKind::Codex),
         )
@@ -398,7 +398,7 @@ mod tests {
         assert!(
             load_one(
                 &conn,
-                "learning.answer",
+                "review.question",
                 &feature("/repo/.worktrees/x"),
                 Some(&AgentKind::Claude),
             )
@@ -462,9 +462,9 @@ mod tests {
     #[test]
     fn delete_for_workdir_only_touches_that_checkout() {
         let conn = conn();
-        upsert(&conn, "learning.answer", &feature("/a"), None, "a").unwrap();
-        upsert(&conn, "learning.answer", &feature("/b"), None, "b").unwrap();
-        upsert(&conn, "learning.answer", &OverrideScope::Global, None, "g").unwrap();
+        upsert(&conn, "review.question", &feature("/a"), None, "a").unwrap();
+        upsert(&conn, "review.question", &feature("/b"), None, "b").unwrap();
+        upsert(&conn, "review.question", &OverrideScope::Global, None, "g").unwrap();
 
         delete_for_workdir(&conn, "/a").unwrap();
 
@@ -526,7 +526,7 @@ mod tests {
         let mut set = PromptOverrides::load(Some(&conn)).unwrap();
         set.set(
             Some(&conn),
-            "learning.answer",
+            "review.question",
             OverrideScope::Global,
             None,
             "shared",
@@ -534,7 +534,7 @@ mod tests {
         .unwrap();
         set.set(
             Some(&conn),
-            "learning.answer",
+            "review.question",
             OverrideScope::Global,
             Some(AgentKind::Pi),
             "pi-specific",
@@ -542,11 +542,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            set.effective_at("learning.answer", &OverrideScope::Global, &AgentKind::Pi),
+            set.effective_at("review.question", &OverrideScope::Global, &AgentKind::Pi),
             Some("pi-specific")
         );
         assert_eq!(
-            set.effective_at("learning.answer", &OverrideScope::Global, &AgentKind::Codex),
+            set.effective_at("review.question", &OverrideScope::Global, &AgentKind::Codex),
             Some("shared"),
             "a harness with no specific row falls back to shared"
         );
