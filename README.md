@@ -188,8 +188,10 @@ writes `aiw.json` and leaves `amf.json` alone for AMF.
    aiw
    ```
 
-2. On first launch, choose the agent CLIs you want AIW to use. AIW checks that
-   each selected CLI is installed. You can reopen this setup later with `A`.
+2. On first launch, AIW probes every supported agent CLI and ticks the ones
+   it finds on your `PATH`; untick any you do not want and confirm. `A`
+   reopens this screen later: it shows what is installed, and `Enter` ticks
+   or unticks a row without changing your earlier choices on its own.
 
 3. Press `N` to add a project, then enter its name and directory. The directory
    may be a git repository or an ordinary folder.

@@ -1331,11 +1331,19 @@ pub struct App {
     view_display_frozen_until: Option<Instant>,
     pub(crate) harness_check_tx: Sender<HarnessCheckResult>,
     harness_check_rx: Receiver<HarnessCheckResult>,
+    /// FORK: how the harness screen finds out whether a CLI is installed
+    /// (`check_harness_available` in the app; tests swap in a stub so no
+    /// real `claude --version` runs under `cargo test`).
+    pub(crate) harness_probe: fn(&AgentKind) -> Result<()>,
 }
 
 pub(crate) struct HarnessCheckResult {
     pub kind: AgentKind,
     pub result: Result<()>,
+    /// Tick the harness when it is found: a user's Enter, or the automatic
+    /// sweep on the first-run screen. The Manage screen's sweep only
+    /// reports, so a harness the user unticked on purpose stays unticked.
+    pub enable_on_success: bool,
 }
 
 struct ComposeClipboardPaste {
@@ -2779,6 +2787,7 @@ impl App {
             view_display_frozen_until: None,
             harness_check_tx,
             harness_check_rx,
+            harness_probe: Self::check_harness_available,
         };
 
         match crate::fswatch::FsWatcher::start(app.view_wakeup_tx()) {
@@ -3050,6 +3059,7 @@ impl App {
             view_display_frozen_until: None,
             harness_check_tx,
             harness_check_rx,
+            harness_probe: |kind| anyhow::bail!("{} is not probed in tests", kind.display_name()),
         }
     }
 
@@ -3716,7 +3726,9 @@ impl App {
                 match result.result {
                     Ok(()) => {
                         harness.status = HarnessCheckStatus::Installed;
-                        harness.enabled = true;
+                        if result.enable_on_success {
+                            harness.enabled = true;
+                        }
                     }
                     Err(_) => {
                         let hint = Self::harness_install_hint(&result.kind);
@@ -3727,11 +3739,39 @@ impl App {
         }
     }
 
+    /// Open the harness screen and probe every CLI at once, so the screen
+    /// says what is installed without an Enter per row. On first run the
+    /// installed ones are ticked as they are found (there is no earlier
+    /// choice to respect); the Manage screen only refreshes the status
+    /// text and leaves the ticks to the user.
     pub(crate) fn open_harness_setup(&mut self, is_startup: bool) {
         let state =
             crate::app::state::HarnessSetupState::new(is_startup, &self.store.available_harnesses);
         self.mode = AppMode::HarnessSetup(state);
         self.message = None;
+        for kind in AgentKind::ALL.iter() {
+            self.spawn_harness_check(kind.clone(), is_startup);
+        }
+    }
+
+    /// Check one harness on a background thread; the result lands through
+    /// `poll_harness_checks`. The row shows a spinner meanwhile.
+    pub(crate) fn spawn_harness_check(&mut self, kind: AgentKind, enable_on_success: bool) {
+        if let AppMode::HarnessSetup(state) = &mut self.mode
+            && let Some(harness) = state.harnesses.iter_mut().find(|h| h.kind == kind)
+        {
+            harness.status = HarnessCheckStatus::Checking;
+        }
+        let tx = self.harness_check_tx.clone();
+        let probe = self.harness_probe;
+        std::thread::spawn(move || {
+            let result = probe(&kind);
+            let _ = tx.send(HarnessCheckResult {
+                kind,
+                result,
+                enable_on_success,
+            });
+        });
     }
 
     pub(crate) fn check_harness_available(kind: &AgentKind) -> Result<()> {

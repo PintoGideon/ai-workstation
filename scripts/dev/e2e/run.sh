@@ -52,8 +52,11 @@ echo "=== Part 1: happy path"
 aiw_start 200 60
 wait_for 'icon check' 8; check "first run: icon check shown" $?
 keys y; wait_for 'Configure Agent Harnesses' 10; check "first run: harness selection shown" $?
-keys Enter j Enter j Enter j Enter j Enter; sleep 0.3
-cap | grep -q '\[x\] Cursor (installed)'; check "all five fake CLIs detected as installed" $?
+# every CLI is probed on open and ticked as found: no Enter per row
+wait_for '\[x\] Cursor \(installed\)' 10
+[ "$(cap | grep -c '\[x\] .* (installed)')" = 5 ]; check "first run: all five fake CLIs probed and ticked without a keypress" $?
+keys j Enter; sleep 0.3; cap | grep -q '\[ \] Codex'; check "first run: Enter unticks a found harness" $?
+keys Enter; wait_for '\[x\] Codex \(installed\)' 5; check "first run: Enter re-checks and ticks it again" $?
 keys c; wait_for 'No projects yet' 5; check "empty dashboard" $?
 # no concurrency guard for the rest of the run: every start would otherwise ask
 aiw_quit; python3 - <<EOF

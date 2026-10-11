@@ -1,7 +1,6 @@
 use anyhow::Result;
 use crossterm::event::KeyCode;
 
-use crate::app::HarnessCheckResult;
 use crate::app::{App, AppMode, HarnessCheckStatus};
 
 pub fn handle_harness_setup_key(app: &mut App, key: KeyCode) -> Result<()> {
@@ -76,24 +75,15 @@ fn check_and_toggle(app: &mut App) -> Result<()> {
         return Ok(());
     }
 
-    // Already checking — ignore repeated Enter
-    if harness.status == HarnessCheckStatus::Checking {
+    // A row already known to be installed ticks at once; anything else
+    // (never checked, not found, or the opening sweep still running) is
+    // checked again with "tick when found", so an Enter during the sweep
+    // is not lost.
+    if harness.status == HarnessCheckStatus::Installed {
+        harness.enabled = true;
         return Ok(());
     }
-
-    // Show progress immediately, check in background
-    harness.status = HarnessCheckStatus::Checking;
-
-    let tx = app.harness_check_tx.clone();
-    let kind_clone = kind.clone();
-    std::thread::spawn(move || {
-        let result = App::check_harness_available(&kind_clone);
-        let _ = tx.send(HarnessCheckResult {
-            kind: kind_clone,
-            result,
-        });
-    });
-
+    app.spawn_harness_check(kind, true);
     Ok(())
 }
 

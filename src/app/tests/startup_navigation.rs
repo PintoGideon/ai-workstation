@@ -29,6 +29,138 @@ fn startup_harness_setup_allows_quit_with_q() {
     assert!(app.should_quit);
 }
 
+// FORK: the harness screen probes every CLI on open.
+
+fn harness_app(available: Vec<AgentKind>) -> App {
+    let store = ProjectStore {
+        version: 5,
+        projects: vec![],
+        session_bookmarks: vec![],
+        available_harnesses: available,
+        prompt_templates: Vec::new(),
+        extra: HashMap::new(),
+    };
+    let mut app = App::new_for_test(
+        store,
+        Box::new(MockTmuxOps::new()),
+        Box::new(MockWorktreeOps::new()),
+    );
+    // Claude and Codex are "on PATH"; the other three are not.
+    app.harness_probe = |kind| match kind {
+        AgentKind::Claude | AgentKind::Codex => Ok(()),
+        other => anyhow::bail!("{} missing", other.display_name()),
+    };
+    app
+}
+
+fn harness_rows(app: &App) -> Vec<(AgentKind, HarnessCheckStatus, bool)> {
+    match &app.mode {
+        AppMode::HarnessSetup(state) => state
+            .harnesses
+            .iter()
+            .map(|h| (h.kind.clone(), h.status.clone(), h.enabled))
+            .collect(),
+        _ => panic!("expected the harness screen"),
+    }
+}
+
+fn settle_harness_checks(app: &mut App) {
+    let deadline = Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        app.poll_harness_checks();
+        let pending = harness_rows(app)
+            .iter()
+            .any(|(_, status, _)| *status == HarnessCheckStatus::Checking);
+        if !pending {
+            return;
+        }
+        assert!(Instant::now() < deadline, "harness checks never finished");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+fn select_harness(app: &mut App, kind: &AgentKind) {
+    if let AppMode::HarnessSetup(state) = &mut app.mode {
+        state.selected = AgentKind::index_in(&AgentKind::ALL, kind);
+    }
+}
+
+fn harness_row(app: &App, kind: &AgentKind) -> (HarnessCheckStatus, bool) {
+    harness_rows(app)
+        .into_iter()
+        .find(|(k, _, _)| k == kind)
+        .map(|(_, status, enabled)| (status, enabled))
+        .unwrap()
+}
+
+#[test]
+fn first_run_probes_every_harness_and_ticks_the_installed_ones() {
+    let mut app = harness_app(vec![]);
+    app.open_harness_setup(true);
+    assert!(
+        harness_rows(&app)
+            .iter()
+            .all(|(_, status, _)| *status == HarnessCheckStatus::Checking),
+        "every row is probed as soon as the screen opens"
+    );
+    settle_harness_checks(&mut app);
+    for (kind, status, enabled) in harness_rows(&app) {
+        match kind {
+            AgentKind::Claude | AgentKind::Codex => {
+                assert_eq!(status, HarnessCheckStatus::Installed, "{kind:?}");
+                assert!(enabled, "{kind:?} is ticked without a keypress");
+            }
+            _ => {
+                assert!(
+                    matches!(status, HarnessCheckStatus::NotFound(_)),
+                    "{kind:?}"
+                );
+                assert!(!enabled, "{kind:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn the_manage_screen_reports_what_is_installed_but_keeps_the_saved_choice() {
+    let mut app = harness_app(vec![AgentKind::Claude]);
+    app.open_harness_setup(false);
+    settle_harness_checks(&mut app);
+    let (status, enabled) = harness_row(&app, &AgentKind::Codex);
+    assert_eq!(status, HarnessCheckStatus::Installed);
+    assert!(
+        !enabled,
+        "Codex is shown as installed but left for the user to tick"
+    );
+    assert!(
+        harness_row(&app, &AgentKind::Claude).1,
+        "the saved choice stays ticked"
+    );
+
+    // Enter on the installed Codex row ticks it at once, and c saves both.
+    select_harness(&mut app, &AgentKind::Codex);
+    crate::handlers::handle_harness_setup_key(&mut app, KeyCode::Enter).unwrap();
+    assert!(harness_row(&app, &AgentKind::Codex).1);
+    crate::handlers::handle_harness_setup_key(&mut app, KeyCode::Char('c')).unwrap();
+    assert_eq!(
+        app.store.available_harnesses,
+        vec![AgentKind::Claude, AgentKind::Codex]
+    );
+}
+
+#[test]
+fn enter_during_the_opening_sweep_still_ticks_the_row() {
+    let mut app = harness_app(vec![]);
+    app.open_harness_setup(false);
+    // Codex is still "checking" when the user presses Enter on it.
+    select_harness(&mut app, &AgentKind::Codex);
+    crate::handlers::handle_harness_setup_key(&mut app, KeyCode::Enter).unwrap();
+    settle_harness_checks(&mut app);
+    let (status, enabled) = harness_row(&app, &AgentKind::Codex);
+    assert_eq!(status, HarnessCheckStatus::Installed);
+    assert!(enabled, "the Enter was not lost to the sweep");
+}
+
 #[test]
 fn startup_mask_expires_without_snapshot_updates() {
     let mut view = ViewState::new(

@@ -47,10 +47,11 @@ pub fn draw_harness_setup_dialog(
         .split(inner);
 
     // Header
+    // FORK: every CLI is probed on open; the ticks follow on first run.
     let header_text = if state.is_startup {
-        "Select which agent harnesses to enable:"
+        "Installed harnesses are ticked as found:"
     } else {
-        "Toggle harnesses (Enter to check & enable):"
+        "Installed = found on PATH; Enter toggles:"
     };
     let header = Paragraph::new(Line::from(Span::styled(
         format!("  {}", header_text),
