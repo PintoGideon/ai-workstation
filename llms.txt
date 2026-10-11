@@ -17,6 +17,7 @@ Key features:
 
 ## Documentation
 
+- [Product guide](docs/PRODUCT.md): Everything the app can do today, in plain English: concepts, every key, configuration, harnesses, CLI, what is on disk, and what was removed in favour of the harnesses' own features
 - [README](README.md): Install, quick start, keybindings, configuration, themes, and architecture
 - [CLAUDE.md](CLAUDE.md): Architecture and module map for working in the codebase
 - [AGENTS.md](AGENTS.md): Guidance for AI agents contributing to the project

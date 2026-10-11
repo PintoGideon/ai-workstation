@@ -3,7 +3,8 @@
 **AI Workstation (AIW)** is our own fork of the upstream project credited in [README.md](README.md)
 (MIT © Ryan Eldridge, see [LICENSE](LICENSE)). It keeps upstream's terminal dashboard and tmux-based engine and adds
 what our own design work asked for (`~/ai_harness_ui/SPEC.md`, `DESIGN.md`, `TUI_DESIGN.md`). Maintenance and
-cherry-picking from upstream: [FORK.md](FORK.md). "Upstream" below means that original project.
+cherry-picking from upstream: [FORK.md](FORK.md). What the app does today, in plain English:
+[docs/PRODUCT.md](docs/PRODUCT.md). "Upstream" below means that original project.
 
 Status legend: ✅ done · 🔨 in progress · ⏳ planned.
 
