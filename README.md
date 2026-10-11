@@ -26,8 +26,8 @@ reviewed.
 - Embeds agent terminals, shells, Neovim, VS Code, and custom sessions.
 - Surfaces which agents need attention, session status, token usage, and
   estimated cost.
-- Supports guided planning, supervised edits, final diff review, and GitHub PR
-  review workflows.
+- Supports supervised edits, final diff review, and GitHub PR review
+  workflows.
 - Explains code you didn't write: browse a repository read-only and ask an
   agent about any file, hunk, or line range, with the answers kept per project.
 - Provides reusable prompts, scoped TODO lists, themes, lifecycle hooks, and
@@ -202,9 +202,8 @@ writes `aiw.json` and leaves `amf.json` alone for AMF.
 3. Press `N` to add a project, then enter its name and directory. The directory
    may be a git repository or an ordinary folder.
 
-4. Press `n` to create a feature. Choose a branch name, agent, permission mode,
-   and whether to use the guided plan interview. The feature starts when setup
-   is complete.
+4. Press `n` to create a feature. Choose a branch name, agent, and permission
+   mode. The feature starts when setup is complete.
 
 5. Select the agent session: it appears in the right pane as you move. Press
    `Enter` (or `Ctrl+Q`) to put the keyboard in that pane — typing is native,
@@ -244,22 +243,6 @@ AIW asks you to choose how much autonomy an agent receives for each feature:
 Codex and Pi do not support AIW's Vibeless edit-review hooks. Pi also does not
 receive AIW permission-mode flags.
 
-### Plan mode
-
-Plan mode interviews you about a feature before launching its agent. You can
-review and edit the resulting plan, ask an agent to improve it, or cancel it.
-AIW does not save the plan or launch the feature until you accept it. Press `P`
-on an existing feature to run the interview again.
-
-Multiple-choice questions in the interview also take your own answer: press `e`
-to type into the "Your own answer" box under the options. You can answer with
-your own text alone or add it alongside a picked option; `Enter` in the box
-returns to the options without submitting, and `Enter` on the option list
-submits.
-
-To let the interview read a ticket the brief links to (Asana, Linear, Jira,
-and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-interviews).
-
 ## Essential controls
 
 ### Dashboard
@@ -290,7 +273,7 @@ and so on), see [Issue trackers in plan interviews](#issue-trackers-in-plan-inte
 | `T` | Choose a theme |
 | `A` | Manage installed agent harnesses |
 | `?` | Show all keybindings |
-| `Ctrl+Space` | Commands on the selected session (a menu lists them): `f` final diff review · `d` diff viewer · `n` current plan · `m` Markdown files · `l` past and unsent prompts, pasted again · `N` capture a TODO · `F` fresh-context session · `P` back to PR Triage · `z` complete the TODO this session came from · `h` `H` `M` `1-9` bookmarks · `/` command picker · `a` local actions · `c` config wizard · `C` compact review memory · `r` refresh |
+| `Ctrl+Space` | Commands on the selected session (a menu lists them): `f` final diff review · `d` diff viewer · `m` Markdown files · `l` past and unsent prompts, pasted again · `N` capture a TODO · `F` fresh-context session · `P` back to PR Triage · `z` complete the TODO this session came from · `h` `H` `M` `1-9` bookmarks · `/` command picker · `a` local actions · `c` config wizard · `C` compact review memory · `r` refresh |
 | `q` | Quit the dashboard; the agents keep running (`Esc` does nothing on the dashboard) |
 
 Search accepts every letter, including `j` and `k`. Use arrow keys or
@@ -335,7 +318,7 @@ redrawn: tmux draws the agent, AIW draws the sidebar.
   agent; a stopped session shows a "select a session" placeholder.
 - The sidebar is `sidebar_width` columns wide (`config.json`, default 36,
   minimum 28) at every terminal size; the agent gets the rest.
-- A dialog (`n`, `?`, `i`, the plan interview, …) zooms the sidebar pane over
+- A dialog (`n`, `?`, `i`, …) zooms the sidebar pane over
   the whole window and un-zooms when it closes. The agent keeps running
   underneath.
 - A second `aiw` while one is open attaches a second client to the same
@@ -352,8 +335,7 @@ scrollback, the agent's own key bindings. `Ctrl+Q` is the one key the cockpit
 keeps for itself: it flips the keyboard between the sidebar and the agent.
 Nothing is sent to an agent on its own.
 
-Prompts AIW prepares for an agent — a plan-interview kickoff, a TODO, a
-prompt-library template, a feature's startup
+Prompts AIW prepares for an agent — a TODO, a prompt-library template, a feature's startup
 prompt, a past prompt from `Ctrl+Space` then `l` — are **pasted into the
 agent's pane unsent** and the pane is focused: you read the text where the
 agent will, edit it if you like, and press Enter yourself. The pasted text
@@ -568,26 +550,12 @@ Press `Enter` on a TODO to start work on it. AIW asks how:
 | Choice | What happens |
 | --- | --- |
 | **Start an agent on this TODO** | Pastes the TODO into an agent's pane, unsent — in this feature for a worktree TODO, or in a feature you pick for a project or global one. |
-| **Start an agent in a new feature** | Opens the ordinary create-feature wizard, pre-filled with a branch name from the TODO title and plan mode off; once the feature exists, the TODO is linked to it and the TODO is pasted into its agent's pane, unsent. Needs a git repository. |
-| **Plan this TODO first** | Runs the guided plan interview, with the TODO's title, notes, and the list scratchpad already filled in as the feature brief — editable before the first question. |
+| **Start an agent in a new feature** | Opens the ordinary create-feature wizard, pre-filled with a branch name from the TODO title; once the feature exists, the TODO is linked to it and the TODO is pasted into its agent's pane, unsent. Needs a git repository. |
 
-If you choose to plan it, AIW then asks where the plan should land: **here**, in
-the feature the list lives in, or in a **new feature and worktree** created for
-it. Picking a new feature opens the ordinary create-feature wizard, pre-filled
-from the TODO, so the branch, agent, and permission mode are still yours to
-change; the worktree is created before the interview starts, so the plan is
-written into a real checkout.
-
-Either way the accepted plan is saved and an agent is started on it. A plan that
-lands in an existing feature is written to `AIW_PLAN.todo-<name>.md` rather than
-`AIW_PLAN.md`, so it sits beside that feature's own plan instead of replacing
-it, and the agent is told which file is its own.
-
-A TODO planned into a new feature stays open on the list, marked as linked, and
+A TODO started in a new feature stays open on the list, marked as linked, and
 `Enter` afterwards jumps to that feature rather than asking again. If the
 feature is later deleted the TODO survives, the link is dropped, and `Enter`
-offers the choice again. An interrupted interview is saved as a draft and
-offered back the next time you press `Enter` on that TODO.
+offers the choice again.
 
 Press `I` to work the list rather than a particular item: AIW takes the
 highest-priority TODO nobody has started, opens an agent on it, and marks the
@@ -613,8 +581,8 @@ the deletion. Nothing is killed or removed until you answer.
 
 ### Override the AI prompts AIW sends
 
-Behind the plan interview, the final-review diff helpers, the AI
-PR review, and the review-memory bootstrap/compaction, AIW makes one-shot
+Behind the final-review diff helpers, the AI PR review, and the
+review-memory bootstrap/compaction, AIW makes one-shot
 ("headless") AI calls with prompts it builds for you. Press `E` on the
 dashboard — or `Ctrl+Space`, then `E` from a session — to open the
 **prompt-override manager**. It lists every template with its effective source
@@ -810,8 +778,7 @@ wizard. It covers the common customizations, including:
 - feature presets;
 - custom session commands;
 - lifecycle hooks;
-- workspace-specific agent restrictions;
-- plan interview questions; and
+- workspace-specific agent restrictions; and
 - key remapping.
 
 Use `T` on the dashboard to choose an AIW theme. If your terminal does not have
@@ -861,103 +828,6 @@ back to plain idle and the session leaves the `i` list. `0` keeps states up
 until the agent produces output again. Ageing out does not stop or change the
 session, and a waiting session still counts toward `max_concurrent_agents` and
 still qualifies as dormant.
-
-### Issue trackers in plan interviews
-
-Plan interviews can read tickets from an issue tracker such as Asana, Linear,
-or Jira through the same MCP tools Claude Code uses. When the brief links a
-ticket, the interview fetches it and treats its contents as part of the
-brief, so you don't have to paste it in. This works only when the interview
-runs on Claude. Other harnesses ignore the setting and log that they did.
-
-This is a **global-only** setting in `~/.config/ai_workstation/config.json`. A
-repository's `aiw.json` can't turn it on, because MCP servers run programs.
-
-**claude.ai connectors** (tools named `mcp__claude_ai_<Name>__…`) and
-servers you added with `claude mcp add` load automatically. You only list
-the tools the interview may call:
-
-```json
-{
-  "plan_interview_mcp": {
-    "allowed_tools": [
-      "mcp__claude_ai_Asana__get_task",
-      "mcp__claude_ai_Asana2__get_task"
-    ]
-  }
-}
-```
-
-`allowed_tools` takes **exact** tool names in the form
-`mcp__<server>__<tool>`. Wildcards such as `mcp__claude_ai_Asana__*` are
-rejected, because most tracker tools can also create and edit tickets. List
-only tools that read. The interview sees every connected tool, but anything
-not on this list is denied.
-
-The tool names above are placeholders. To print the real ones, run this
-command, which makes one small model call:
-
-```sh
-echo hi | MCP_CONNECTION_NONBLOCKING=false claude -p --output-format stream-json \
-  --verbose --setting-sources "" --tools Read --model haiku \
-  | grep -o '"mcp__claude_ai_Asana[^"]*"' | sort -u
-```
-
-If you have more than one connector for the same tracker (for example two
-Asana workspaces, `Asana` and `Asana2`), allow the read tools from each one
-so tickets from either workspace can be read.
-
-**A server that isn't in Claude Code yet** can be supplied as a file with
-`config`, which takes an absolute or `~/` path to a file in the
-`{"mcpServers": {...}}` format of `.mcp.json`:
-
-```json
-{
-  "plan_interview_mcp": {
-    "config": "~/.config/ai_workstation/plan-mcp.json",
-    "allowed_tools": ["mcp__linear__get_issue"]
-  }
-}
-```
-
-```json
-{
-  "mcpServers": {
-    "linear": {
-      "type": "http",
-      "url": "<the server's MCP URL>"
-    }
-  }
-}
-```
-
-The server key (`linear` here) is the middle part of each tool name.
-
-With this configured, the adaptive rounds, the synthesis pass, the Expert
-plan review, and its follow-up run with read-only repository tools plus the
-listed MCP tools. Directed revisions and isolated investigations don't use
-them. The interview still can't edit files or run shell commands, and the
-repository's own Claude settings, hooks, `.mcp.json` servers, `CLAUDE.md`,
-skills, and subagents are not loaded (the interview can still read those
-files, like any other file in the repository). AIW passes `--setting-sources ""` for that, plus
-`MCP_CONNECTION_NONBLOCKING=false` so a run waits for claude.ai connectors
-instead of sometimes starting without them. If a tool name or the config
-file is invalid, the interview runs without MCP and shows why.
-
-To test a setup outside AIW, run the same command the interview uses from
-the feature's directory. Like AIW, it sends the prompt on stdin: a prompt
-argument after `--allowedTools` can be read as another tool name. Add
-`--mcp-config <path>` before `--allowedTools` if you set `config`, and
-separate several tools with commas.
-
-```sh
-echo "Fetch Asana task 1201234567890 and summarize it" |
-  MCP_CONNECTION_NONBLOCKING=false claude -p --output-format text \
-    --setting-sources "" --tools Read,Glob,Grep \
-    --permission-mode dontAsk --no-session-persistence \
-    --allowedTools mcp__claude_ai_Asana__get_task
-```
-
 ### Built-in customization skills
 
 AIW injects a small set of skills into Claude Code and Codex feature

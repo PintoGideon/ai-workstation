@@ -210,8 +210,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         | AppMode::CreatingBatchFeatures(_)
         | AppMode::RenamingSession(_)
         | AppMode::RenamingFeature(_)
-        | AppMode::BrowsingPath(_)
-        | AppMode::PlanInterviewAttachDoc(_) => Line::from(vec![
+        | AppMode::BrowsingPath(_) => Line::from(vec![
             Span::styled("Enter", key_style()),
             Span::raw(" confirm  "),
             Span::styled("Esc", key_style()),
@@ -304,14 +303,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 Span::raw(" confirm  "),
                 Span::styled("Esc", key_style()),
                 Span::raw(" back to list"),
-            ]),
-            Some(crate::app::TodoLaunchStep::Destination { .. }) => Line::from(vec![
-                Span::styled("j/k", key_style()),
-                Span::raw(" choose  "),
-                Span::styled("Enter", key_style()),
-                Span::raw(" start interview  "),
-                Span::styled("Esc", key_style()),
-                Span::raw(" back"),
             ]),
             None => Line::from(vec![
                 Span::styled("j/k", key_style()),
@@ -760,11 +751,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("Esc", key_style()),
             Span::raw(" close"),
         ]),
-        AppMode::MarkdownFilePicker(state) => {
-            let selecting_plan = matches!(
-                state.purpose,
-                crate::app::MarkdownFilePickerPurpose::SelectPlan { .. }
-            );
+        AppMode::MarkdownFilePicker(_) => {
             let mut spans = vec![
                 Span::styled(" j/k", key_style()),
                 Span::raw(" navigate  "),
@@ -772,17 +759,9 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 Span::raw(" search  "),
             ];
             spans.push(Span::styled("p", key_style()));
-            spans.push(Span::raw(if selecting_plan {
-                " new plan  "
-            } else {
-                " plan  "
-            }));
+            spans.push(Span::raw(" plan  "));
             spans.push(Span::styled("Enter", key_style()));
-            spans.push(Span::raw(if selecting_plan {
-                " select  "
-            } else {
-                " open  "
-            }));
+            spans.push(Span::raw(" open  "));
             spans.push(Span::styled("Esc", key_style()));
             spans.push(Span::raw(" cancel"));
             Line::from(spans)
@@ -864,16 +843,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::raw(" run  "),
             Span::styled("q/Esc", key_style()),
             Span::raw(" close"),
-        ]),
-        // The plan interview is a full-viewport modal: `draw_plan_interview_dialog`
-        // runs after this bar and clears the whole frame, so nothing written
-        // here reaches the screen. Its per-phase hints — including which
-        // actions spend tokens — live in the dialog's own footer, which is the
-        // only copy a user ever sees. This line exists to keep the match
-        // exhaustive, not to duplicate them.
-        AppMode::PlanInterview(_) => Line::from(vec![
-            Span::styled(" Esc", key_style()),
-            Span::raw(" cancel plan interview"),
         ]),
         AppMode::Dormant(_) => Line::from(vec![
             Span::styled(" Enter", key_style()),

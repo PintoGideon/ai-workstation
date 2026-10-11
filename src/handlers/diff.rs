@@ -1657,7 +1657,6 @@ index 1111111..2222222 100644
             false,
             VibeMode::Vibeless,
             false,
-            false,
             AgentKind::Claude,
             false,
         ));
@@ -2019,7 +2018,6 @@ index 1111111..2222222 100644
             false,
             VibeMode::Vibeless,
             false,
-            false,
             AgentKind::Claude,
             false,
         ));
@@ -2029,7 +2027,6 @@ index 1111111..2222222 100644
             dir.path().to_path_buf(),
             true,
             VibeMode::Vibeless,
-            false,
             false,
             AgentKind::Claude,
             false,
@@ -2088,7 +2085,6 @@ index 1111111..2222222 100644
             false,
             VibeMode::Vibeless,
             false,
-            false,
             AgentKind::Claude,
             false,
         ));
@@ -2130,7 +2126,6 @@ index 1111111..2222222 100644
             false,
             VibeMode::Vibeless,
             false,
-            false,
             AgentKind::Claude,
             false,
         );
@@ -2141,7 +2136,6 @@ index 1111111..2222222 100644
             dir.path().to_path_buf(),
             true,
             VibeMode::Vibeless,
-            false,
             false,
             AgentKind::Claude,
             false,
@@ -2241,7 +2235,6 @@ index 1111111..2222222 100644
             false,
             VibeMode::Vibeless,
             false,
-            false,
             AgentKind::Claude,
             false,
         );
@@ -2332,7 +2325,6 @@ index 1111111..2222222 100644
             dir.path().to_path_buf(),
             false,
             VibeMode::Vibeless,
-            false,
             false,
             AgentKind::Claude,
             false,
@@ -2426,7 +2418,6 @@ index 1111111..2222222 100644
             dir.path().to_path_buf(),
             false,
             VibeMode::Vibeless,
-            false,
             false,
             AgentKind::Claude,
             false,

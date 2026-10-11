@@ -31,6 +31,15 @@ pub mod sidebar;
 /// instead of a bare string, so the frontend can branch on `kind` (e.g. a
 /// "this was deleted elsewhere, refresh?" affordance for `NotFound`) instead
 /// of pattern-matching message text.
+/// A pending pre-call notice for a headless AI run, as the GUI shows it.
+#[derive(Debug, Clone, Serialize)]
+pub struct PrecallView {
+    pub title: String,
+    pub harness: String,
+    pub preview: String,
+    pub viewing: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct GuiError {
     pub kind: GuiErrorKind,
@@ -1214,9 +1223,9 @@ impl GuiHandle {
         if !matches!(self.app.mode, AppMode::Normal) {
             return Err(GuiError::conflict("Finish the current workflow first"));
         }
-        if request.dry_run || request.plan_mode || request.use_worktree != Some(true) {
+        if request.dry_run || request.use_worktree != Some(true) {
             return Err(GuiError::conflict(
-                "Starting a TODO in a new feature requires a git worktree without planning",
+                "Starting a TODO in a new feature requires a git worktree",
             ));
         }
         let project = self
@@ -1352,7 +1361,7 @@ impl GuiHandle {
             .take_unsent_prompt()
             .map(|handoff| handoff.text)
             .unwrap_or_default();
-        self.app.exit_view_without_resuming_plan_interview();
+        self.app.exit_view_to_dashboard();
         Ok(TodoAgentLaunchResponse {
             target: SessionTarget {
                 project_id: target.project_id,
@@ -1747,15 +1756,6 @@ impl GuiHandle {
         let project_name = self.app.store.projects[pi].name.clone();
         let feature = &self.app.store.projects[pi].features[fi];
         let feature_name = feature.name.clone();
-        if self
-            .app
-            .paused_plan_interview_belongs_to_feature(&feature.id)
-        {
-            return Err(GuiError::conflict(
-                "Resume or finish the parked plan interview before deleting its feature",
-            ));
-        }
-
         let disposition = self
             .app
             .pending_todo_disposition(&project_name, &feature_name);
@@ -2052,7 +2052,6 @@ mod tests {
             PathBuf::from("/tmp/test-workdir"),
             false,
             VibeMode::default(),
-            false,
             false,
             AgentKind::default(),
             false,
@@ -4141,7 +4140,6 @@ mod tests {
             false,
             crate::project::VibeMode::default(),
             false,
-            false,
             AgentKind::default(),
             false,
         );
@@ -4322,7 +4320,6 @@ mod tests {
                 agent: AgentKind::default(),
                 mode: VibeMode::default(),
                 review: false,
-                plan_mode: false,
                 create_terminal: false,
                 use_worktree: Some(true),
                 enable_chrome: false,

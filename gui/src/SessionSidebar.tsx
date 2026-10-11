@@ -1,15 +1,14 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { asGuiError, type SessionTarget } from "./api";
-import Markdown from "./Markdown";
 import FreshContextDialog from "./FreshContextDialog";
 import {
-  sessionSidebar, sessionSidebarCompleteTodo, sessionSidebarPlan,
-  type SessionPlanView, type SessionSidebarSection, type SidebarAction, type SidebarContextMeter,
+  sessionSidebar, sessionSidebarCompleteTodo,
+  type SessionSidebarSection, type SidebarAction, type SidebarContextMeter,
   type SidebarLine,
 } from "./sessionSidebarApi";
 import { useSidebarCollapsed, useSidebarShortcut } from "./sidebarPrefs";
-import { Icon, Modal, Spinner } from "./ui";
+import { Icon, Spinner } from "./ui";
 import "./sessionSidebar.css";
 
 const POLL_MS = 2_000;
@@ -17,7 +16,6 @@ const ITEM_MARK = { done: "✓", active: "●", pending: "○" } as const;
 
 /** The TUI's leader key for each action, named in its tooltip. */
 const TUI_KEY: Record<SidebarAction["kind"], string> = {
-  open_plan: "leader n",
   reuse_prompt: "leader l",
   pr_triage: "leader G",
   complete_todo: "leader z",
@@ -53,8 +51,6 @@ export default function SessionSidebar({
     enabled: !collapsed,
     refetchInterval: collapsed ? false : POLL_MS,
   });
-  const [plan, setPlan] = useState<{ loading: boolean; view?: SessionPlanView; error?: string } | null>(null);
-  const planRequest = useRef(0);
   const [freshContext, setFreshContext] = useState(false);
 
   if (collapsed) {
@@ -77,15 +73,6 @@ export default function SessionSidebar({
 
   const view = sidebar.error ? undefined : sidebar.data;
   const error = sidebar.error ? asGuiError(sidebar.error).message : null;
-
-  const openPlan = () => {
-    const request = ++planRequest.current;
-    setPlan({ loading: true });
-    sessionSidebarPlan(target).then(
-      (result) => { if (request === planRequest.current) setPlan({ loading: false, view: result }); },
-      (err) => { if (request === planRequest.current) setPlan({ loading: false, error: asGuiError(err).message }); },
-    );
-  };
 
   return (
     <aside className="agent-sidebar" data-harness={view?.harness} aria-label={view?.title ?? "Agent sidebar"}>
@@ -110,7 +97,6 @@ export default function SessionSidebar({
             key={section.kind}
             target={target}
             section={section}
-            onOpenPlan={openPlan}
             onFreshContext={() => setFreshContext(true)}
             onReusePrompt={onReusePrompt}
             onPrTriage={onPrTriage}
@@ -121,26 +107,6 @@ export default function SessionSidebar({
       </div>
       {freshContext && <FreshContextDialog target={target} onClose={() => setFreshContext(false)}
         onCreated={onFreshSession} />}
-      {plan && (
-        <Modal
-          label="Current plan"
-          title="Current plan"
-          subtitle={plan.view && <span className="mono">{plan.view.path}</span>}
-          size="lg"
-          onClose={() => { ++planRequest.current; setPlan(null); }}
-        >
-          {plan.loading && <p><Spinner /> Reading the plan…</p>}
-          {plan.error && <p role="alert" className="agent-sidebar-error">{plan.error}</p>}
-          {plan.view && (
-            <>
-              <Markdown source={plan.view.markdown} />
-              {plan.view.truncated && (
-                <p className="agent-sidebar-note">The plan is longer than the GUI shows; open the file to read the rest.</p>
-              )}
-            </>
-          )}
-        </Modal>
-      )}
     </aside>
   );
 }
@@ -148,7 +114,6 @@ export default function SessionSidebar({
 function Section({
   target,
   section,
-  onOpenPlan,
   onFreshContext,
   onReusePrompt,
   onPrTriage,
@@ -156,7 +121,6 @@ function Section({
 }: {
   target: SessionTarget;
   section: SessionSidebarSection;
-  onOpenPlan: () => void;
   onFreshContext: () => void;
   onReusePrompt: (prompt: string) => void;
   onPrTriage: () => void;
@@ -185,8 +149,6 @@ function Section({
   const button = (action: SidebarAction) => {
     const title = (text: string) => `${text} (TUI: ${TUI_KEY[action.kind]})`;
     switch (action.kind) {
-      case "open_plan":
-        return <button key={action.kind} type="button" className="sb-action" title={title("Read the current plan")} onClick={onOpenPlan}>Open</button>;
       case "reuse_prompt":
         return (
           <span key={action.kind} className="sb-action-group">

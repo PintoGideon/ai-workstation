@@ -30,12 +30,12 @@ pub(crate) fn running_agents(app: &App) -> usize {
 /// `q` on the dashboard.
 pub(crate) fn request_quit(app: &mut App) {
     if !app.config.aiw.confirm_quit {
-        app.request_dashboard_quit();
+        app.should_quit = true;
         return;
     }
     let running = running_agents(app);
     if running == 0 {
-        app.request_dashboard_quit();
+        app.should_quit = true;
         return;
     }
     if app
@@ -43,7 +43,7 @@ pub(crate) fn request_quit(app: &mut App) {
         .is_some_and(|armed| armed.elapsed() <= WINDOW)
     {
         app.quit_confirm_armed_at = None;
-        app.request_dashboard_quit();
+        app.should_quit = true;
         return;
     }
     app.quit_confirm_armed_at = Some(Instant::now());
@@ -59,10 +59,6 @@ pub(crate) fn request_quit(app: &mut App) {
 pub(crate) fn cancel(app: &mut App) {
     if app.quit_confirm_armed_at.take().is_some() {
         app.message = None;
-        return;
-    }
-    if app.paused_plan_interview.is_some() {
-        app.request_dashboard_quit();
     }
 }
 
@@ -87,7 +83,6 @@ mod tests {
             std::path::PathBuf::from("/tmp/p"),
             false,
             crate::project::VibeMode::default(),
-            false,
             false,
             crate::project::AgentKind::default(),
             false,

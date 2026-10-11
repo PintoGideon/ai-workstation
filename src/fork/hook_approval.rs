@@ -388,24 +388,6 @@ impl App {
         None
     }
 
-    /// For front ends without the approval dialog (the GUI): if an approval
-    /// dialog just opened, skip the hook this time with a warning and replay.
-    pub(crate) fn skip_pending_repo_hook_without_dialog(&mut self) -> Result<()> {
-        let AppMode::ApprovingRepoHook(state) = &self.mode else {
-            return Ok(());
-        };
-        let hook = state.subject.hook.as_str();
-        let repo = state.subject.repo.display().to_string();
-        self.log_warn(
-            "hooks",
-            format!("skipped unapproved {hook} hook from {repo} (no approval dialog here)"),
-        );
-        self.push_toast_warning(format!(
-            "Skipped the repository's {hook} hook — approve it once from the terminal dashboard"
-        ));
-        self.finish_hook_decision(Decision::Skip)
-    }
-
     fn finish_hook_decision(&mut self, decision: Decision) -> Result<()> {
         let AppMode::ApprovingRepoHook(state) = std::mem::replace(&mut self.mode, AppMode::Normal)
         else {

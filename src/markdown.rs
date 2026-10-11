@@ -12,11 +12,7 @@ use crate::{
     theme::Theme,
 };
 
-// FORK: `AMF_PLAN.md` is the plan file upstream AMF wrote; old worktrees
-// still have it, so it is found after AIW's own.
 const MARKDOWN_VIEW_CANDIDATES: &[&str] = &[
-    "AIW_PLAN.md",
-    "AMF_PLAN.md",
     "PLAN.md",
     ".claude/plan.md",
     ".claude/context.md",
@@ -1529,10 +1525,9 @@ mod tests {
         std::fs::write(claude_dir.join("context.md"), "# Context").unwrap();
         std::fs::write(claude_dir.join("plan.md"), "# Legacy plan").unwrap();
         std::fs::write(dir.path().join("PLAN.md"), "# Repository plan").unwrap();
-        std::fs::write(dir.path().join("AIW_PLAN.md"), "# Plan").unwrap();
 
         let found = collect_markdown_view_paths(dir.path(), None);
-        assert_eq!(found.first(), Some(&dir.path().join("AIW_PLAN.md")));
+        assert_eq!(found.first(), Some(&dir.path().join("PLAN.md")));
     }
 
     #[test]

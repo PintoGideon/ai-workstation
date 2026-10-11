@@ -390,7 +390,6 @@ impl App {
             use_worktree,
             request.mode.clone(),
             request.review,
-            request.plan_mode,
             request.agent.clone(),
             request.enable_chrome,
         );
@@ -548,7 +547,6 @@ impl App {
                 true,
                 request.mode.clone(),
                 request.review,
-                false,
                 request.agent.clone(),
                 request.enable_chrome,
             );

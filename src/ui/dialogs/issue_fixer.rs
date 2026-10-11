@@ -180,13 +180,6 @@ pub fn draw_issue_setup(frame: &mut Frame, state: &IssueSetupState, theme: &Them
             "Project workdir"
         }
         .to_string(),
-        if !state.plan_mode {
-            "Off".to_string()
-        } else if state.quick_plan {
-            "Quick plan".to_string()
-        } else {
-            "Plan interview".to_string()
-        },
         if state.prompt_editing {
             "Editing…".to_string()
         } else {

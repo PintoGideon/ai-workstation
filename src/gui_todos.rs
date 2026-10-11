@@ -209,7 +209,6 @@ mod tests {
             false,
             VibeMode::default(),
             false,
-            false,
             AgentKind::default(),
             false,
         );

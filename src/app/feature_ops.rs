@@ -1,9 +1,7 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
-use super::setup::{
-    ensure_notification_hooks, ensure_plan_mode_instructions, ensure_review_claude_md,
-};
+use super::setup::{ensure_notification_hooks, ensure_review_claude_md};
 use super::*;
 use crate::automation::CreateBatchFeaturesRequest;
 use crate::extension::load_global_extension_config;
@@ -192,13 +190,6 @@ impl App {
     }
 
     pub fn start_create_feature(&mut self) {
-        if self.paused_plan_interview.is_some() {
-            self.message = Some(
-                "Resume or finish the parked plan interview before creating another feature".into(),
-            );
-            return;
-        }
-
         let (project_name, project_repo, preferred_agent, is_first, used_workdirs) = match &self
             .selection
         {
@@ -263,8 +254,6 @@ impl App {
         let worktree_name = worktree_name(&project_name, &branch);
         let mode = state.mode.clone();
         let review = state.review;
-        let plan_mode = state.plan_mode;
-        let quick_plan = state.quick_plan;
         let create_terminal = state.create_terminal;
         let session_name = state.session_name.trim().to_string();
         let use_worktree = state.use_worktree;
@@ -391,8 +380,6 @@ impl App {
                             branch,
                             mode,
                             review,
-                            plan_mode,
-                            quick_plan,
                             agent: agent.clone(),
                             create_terminal,
                             enable_chrome,
@@ -411,8 +398,6 @@ impl App {
                         branch,
                         mode,
                         review,
-                        plan_mode,
-                        quick_plan,
                         agent.clone(),
                         create_terminal,
                         session_name,
@@ -439,8 +424,6 @@ impl App {
             is_worktree,
             mode,
             review,
-            plan_mode,
-            quick_plan,
             agent: agent.clone(),
             create_terminal,
             session_name,
@@ -455,32 +438,7 @@ impl App {
     }
 
     pub(crate) fn finish_feature_launch(&mut self, prepared: PreparedFeatureLaunch) -> Result<()> {
-        if prepared.plan_mode && prepared.quick_plan {
-            self.start_quick_plan_interview(prepared);
-            return Ok(());
-        }
-        if prepared.plan_mode {
-            self.start_plan_interview(prepared);
-            return Ok(());
-        }
-        self.finish_feature_launch_without_interview(prepared)
-    }
-
-    pub(crate) fn finish_feature_launch_without_interview(
-        &mut self,
-        prepared: PreparedFeatureLaunch,
-    ) -> Result<()> {
         self.finish_feature_launch_with_resource_approval(prepared, false)
-    }
-
-    /// Finish a launch whose resource confirmation has already been answered.
-    /// The approved bit reaches the start primitive so the resumed operation
-    /// cannot park again or fall back to the creation-time warning toast.
-    pub(crate) fn finish_feature_launch_resource_approved(
-        &mut self,
-        prepared: PreparedFeatureLaunch,
-    ) -> Result<()> {
-        self.finish_feature_launch_with_resource_approval(prepared, true)
     }
 
     fn finish_feature_launch_with_resource_approval(
@@ -524,7 +482,6 @@ impl App {
             feature.is_worktree = prepared.is_worktree;
             feature.mode = prepared.mode.clone();
             feature.review = prepared.review;
-            feature.plan_mode = prepared.plan_mode;
             feature.agent = prepared.agent.clone();
             feature.enable_chrome = prepared.enable_chrome;
             feature.issue_source = prepared.issue_source.clone();
@@ -553,7 +510,6 @@ impl App {
                 prepared.is_worktree,
                 prepared.mode.clone(),
                 prepared.review,
-                prepared.plan_mode,
                 prepared.agent.clone(),
                 prepared.enable_chrome,
             );
@@ -688,10 +644,9 @@ impl App {
             }
             self.save()?;
             if started {
-                // A non-plan "start an agent in a new feature" spawn from a
-                // TODO: link the row to this feature and seed its agent with the
-                // TODO. The plan variant is handled by `resume_accepted_plan_launch`.
-                if let Some(origin) = prepared.todo_origin.clone().filter(|_| !prepared.plan_mode) {
+                // A "start an agent in a new feature" spawn from a TODO: link
+                // the row to this feature and seed its agent with the TODO.
+                if let Some(origin) = prepared.todo_origin.clone() {
                     let prompt = todo_spawn_seed.unwrap_or_else(|| {
                         // The normal seed carries the TODO's notes as well as
                         // its title; only fall back to the title-only prompt
@@ -727,13 +682,9 @@ impl App {
 
         if !started {
             // `autostart_allowed` already reported why. The feature still
-            // exists, so a non-plan TODO spawn should at least link its row to
-            // it — the agent seed waits until the user starts the feature.
-            if let Some(origin) = prepared
-                .todo_origin
-                .as_ref()
-                .filter(|_| !prepared.plan_mode)
-            {
+            // exists, so a TODO spawn should at least link its row to it — the
+            // agent seed waits until the user starts the feature.
+            if let Some(origin) = prepared.todo_origin.as_ref() {
                 match target_feature_id.clone() {
                     Some(feature_id) => {
                         if let Some(db) = self.db.as_ref()
@@ -1013,7 +964,6 @@ impl App {
             feature.is_worktree,
         );
         ensure_review_claude_md(&feature.workdir, feature.review);
-        ensure_plan_mode_instructions(&feature.workdir, &feature.agent, feature.plan_mode);
 
         Self::initialize_feature_sessions(feature, false, None);
 
@@ -1553,14 +1503,12 @@ impl App {
             Self::run_custom_session_on_stop(feature, self.db.as_ref());
         }
 
-        let (tmux_session, workdir, agent) =
-            match self.store.projects.get(pi).and_then(|p| p.features.get(fi)) {
-                Some(f) => (f.tmux_session.clone(), f.workdir.clone(), f.agent.clone()),
-                None => return Ok(None),
-            };
+        let tmux_session = match self.store.projects.get(pi).and_then(|p| p.features.get(fi)) {
+            Some(f) => f.tmux_session.clone(),
+            None => return Ok(None),
+        };
 
         self.tmux.kill_session(&tmux_session)?;
-        ensure_plan_mode_instructions(&workdir, &agent, false);
 
         let feature = match self
             .store
@@ -1634,27 +1582,6 @@ impl App {
             _ => return Ok(()),
         };
 
-        let feature_id = self
-            .store
-            .find_project(&project_name)
-            .and_then(|project| {
-                project
-                    .features
-                    .iter()
-                    .find(|feature| feature.name == feature_name)
-            })
-            .map(|feature| feature.id.clone());
-        if feature_id
-            .as_deref()
-            .is_some_and(|id| self.paused_plan_interview_belongs_to_feature(id))
-        {
-            self.mode = AppMode::Normal;
-            self.message = Some(
-                "Resume or finish the parked plan interview before deleting its feature".into(),
-            );
-            return Ok(());
-        }
-
         // Deleting the worktree takes its TODO list with it, so unfinished
         // work in that list is settled before anything destructive runs. The
         // prompt is blocking: nothing is killed or removed until it is
@@ -1664,7 +1591,7 @@ impl App {
             return Ok(());
         }
 
-        let (tmux_session, is_worktree, repo, workdir, agent, audit_details) = if let Some(project) =
+        let (tmux_session, is_worktree, repo, workdir, audit_details) = if let Some(project) =
             self.store.find_project(&project_name)
             && let Some(feature) = project.features.iter().find(|f| f.name == feature_name)
         {
@@ -1675,7 +1602,6 @@ impl App {
                 feature.is_worktree,
                 project.repo.clone(),
                 feature.workdir.clone(),
-                feature.agent.clone(),
                 Self::feature_audit_details(&project_name, feature),
             )
         } else {
@@ -1686,7 +1612,6 @@ impl App {
             "feature_delete",
             format!("Delete requested: {}", audit_details),
         );
-        ensure_plan_mode_instructions(&workdir, &agent, false);
 
         let spawned = TmuxManager::spawn_kill_session(&tmux_session)?;
         let (child, output_rx) = match spawned {
@@ -1866,7 +1791,6 @@ impl App {
         if let Some((feature_id, branch)) = feature_identity.as_ref() {
             self.clear_pr_association_for_deleted_feature(feature_id, &repo, branch);
         }
-        self.delete_plan_interviews_for_deleted_feature(&project_name, &feature_name, &feature_id);
         self.clear_todo_links_to_deleted_feature(feature_id.as_deref());
         if let Some(removed) = self.store.remove_feature(&project_name, &feature_name) {
             self.forget_deleted_feature_sessions(&removed); // FORK: queues, settings files
@@ -2030,11 +1954,6 @@ impl App {
                             branch,
                         );
                     }
-                    self.delete_plan_interviews_for_deleted_feature(
-                        &deletion.project_name,
-                        &deletion.feature_name,
-                        &feature_id,
-                    );
                     self.clear_todo_links_to_deleted_feature(feature_id.as_deref());
                     if let Some(removed) = self
                         .store
@@ -2215,8 +2134,6 @@ impl App {
                         branch: new_branch,
                         mode,
                         review,
-                        plan_mode: false,
-                        quick_plan: false,
                         agent: agent.clone(),
                         create_terminal: false,
                         session_name: Self::default_session_name_for_agent(&agent),
@@ -2238,8 +2155,6 @@ impl App {
                 new_branch.clone(),
                 mode.clone(),
                 review,
-                false,
-                false,
                 agent.clone(),
                 false,
                 Self::default_session_name_for_agent(&agent),
@@ -2261,7 +2176,6 @@ impl App {
             true,
             mode,
             review,
-            false,
             agent,
             enable_chrome,
         );

@@ -194,7 +194,6 @@ mod tests {
             true,
             VibeMode::Vibe,
             false,
-            false,
             AgentKind::Claude,
             false,
         );

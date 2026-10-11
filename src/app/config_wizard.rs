@@ -7,8 +7,8 @@ use tempfile::NamedTempFile;
 
 use super::*;
 use crate::extension::{
-    ConfiguredPlanQuestion, CustomSessionConfig, ExtensionConfig, FeaturePreset, HookConfig,
-    HookPrompt, LifecycleHooks, save_project_extension_config,
+    CustomSessionConfig, ExtensionConfig, FeaturePreset, HookConfig, HookPrompt, LifecycleHooks,
+    save_project_extension_config,
 };
 use crate::project::{AgentKind, VibeMode};
 
@@ -28,8 +28,6 @@ impl App {
             input_mode: false,
             sessions: Vec::new(),
             presets: Vec::new(),
-            plan_questions: Vec::new(),
-            skip_builtin_questions: None,
             hooks: LifecycleHooks::default(),
             keybindings: HashMap::new(),
             allowed_agents: None,
@@ -71,8 +69,6 @@ impl App {
         if let AppMode::ConfigWizard(state) = &mut self.mode {
             state.sessions = config.custom_sessions;
             state.presets = config.feature_presets;
-            state.plan_questions = config.plan_questions;
-            state.skip_builtin_questions = config.skip_builtin_questions;
             state.hooks = config.lifecycle_hooks;
             state.keybindings = config.keybindings;
             state.allowed_agents = allowed_agents;
@@ -141,16 +137,7 @@ impl App {
                         mode_to_index(&preset.mode).to_string(),
                         agent_to_index(&preset.agent).to_string(),
                     ];
-                    state.field_toggles =
-                        vec![preset.review, preset.plan_mode, preset.enable_chrome];
-                }
-                ConfigCategory::PlanQuestions => {
-                    let question = index
-                        .and_then(|i| state.plan_questions.get(i).cloned())
-                        .unwrap_or_default();
-                    state.field_values =
-                        vec![question.id, question.text, question.options.join(", ")];
-                    state.field_toggles = vec![question.optional];
+                    state.field_toggles = vec![preset.review, preset.enable_chrome];
                 }
                 ConfigCategory::LifecycleHooks => {
                     let hook =
@@ -254,55 +241,10 @@ impl App {
                                 .unwrap_or(0),
                         ),
                         review: *state.field_toggles.first().unwrap_or(&false),
-                        plan_mode: *state.field_toggles.get(1).unwrap_or(&false),
-                        // Not editable from this wizard in v1; a preset saved
-                        // here always defers to full Plan mode, never Quick Plan.
-                        quick_plan: false,
-                        enable_chrome: *state.field_toggles.get(2).unwrap_or(&false),
+                        enable_chrome: *state.field_toggles.get(1).unwrap_or(&false),
                     };
 
                     upsert_or_push(&mut state.presets, state.editing_index, preset);
-                }
-                ConfigCategory::PlanQuestions => {
-                    let id = state
-                        .field_values
-                        .first()
-                        .map(|value| value.trim())
-                        .unwrap_or_default()
-                        .to_string();
-                    if id.is_empty() {
-                        state.error = Some("Question ID cannot be empty".into());
-                        return false;
-                    }
-                    if state
-                        .plan_questions
-                        .iter()
-                        .enumerate()
-                        .any(|(index, question)| {
-                            Some(index) != state.editing_index && question.id.trim() == id
-                        })
-                    {
-                        state.error = Some("Question ID must be unique in this scope".into());
-                        return false;
-                    }
-                    let text = state
-                        .field_values
-                        .get(1)
-                        .map(|value| value.trim())
-                        .unwrap_or_default()
-                        .to_string();
-                    if text.is_empty() {
-                        state.error = Some("Question text cannot be empty".into());
-                        return false;
-                    }
-                    let question = ConfiguredPlanQuestion {
-                        id,
-                        text,
-                        options: split_prompt_options(state.field_values.get(2)),
-                        optional: *state.field_toggles.first().unwrap_or(&true),
-                        ..Default::default()
-                    };
-                    upsert_or_push(&mut state.plan_questions, state.editing_index, question);
                 }
                 ConfigCategory::LifecycleHooks => {
                     let script = state
@@ -484,8 +426,6 @@ fn build_extension_config(state: &ConfigWizardState) -> ExtensionConfig {
             .as_ref()
             .map(|config| config.prompt_templates.clone())
             .unwrap_or_default(),
-        plan_questions: state.plan_questions.clone(),
-        skip_builtin_questions: state.skip_builtin_questions,
         final_review_check_command: loaded
             .as_ref()
             .and_then(|config| config.final_review_check_command.clone()),
@@ -608,7 +548,6 @@ fn item_count_for_category(state: &ConfigWizardState) -> usize {
     match state.category {
         ConfigCategory::CustomSessions => state.sessions.len(),
         ConfigCategory::FeaturePresets => state.presets.len(),
-        ConfigCategory::PlanQuestions => state.plan_questions.len(),
         ConfigCategory::LifecycleHooks => 3,
         ConfigCategory::Keybindings => state.keybinding_actions.len(),
         ConfigCategory::AllowedAgents => AgentKind::ALL.len(),
@@ -657,8 +596,6 @@ mod tests {
             input_mode: false,
             sessions: Vec::new(),
             presets: Vec::new(),
-            plan_questions: Vec::new(),
-            skip_builtin_questions: None,
             hooks: LifecycleHooks::default(),
             keybindings: HashMap::new(),
             allowed_agents,
@@ -752,49 +689,5 @@ mod tests {
             build_extension_config(&state).allowed_agents,
             Some(Vec::new())
         );
-    }
-
-    #[test]
-    fn saving_unrelated_settings_preserves_plan_question_config() {
-        let mut state =
-            state_for_allowed_agents(ConfigScope::Project(PathBuf::from("/repo")), None, false);
-        let original = ExtensionConfig {
-            plan_questions: vec![crate::extension::ConfiguredPlanQuestion {
-                id: "delivery".into(),
-                text: "Where should this ship?".into(),
-                options: vec!["Desktop".into(), "Web".into()],
-                optional: false,
-                ..Default::default()
-            }],
-            skip_builtin_questions: Some(true),
-            ..Default::default()
-        };
-        state.original_json = serde_json::to_string(&original).unwrap();
-        state.plan_questions = original.plan_questions.clone();
-        state.skip_builtin_questions = original.skip_builtin_questions;
-
-        let rebuilt = build_extension_config(&state);
-
-        assert_eq!(rebuilt.plan_questions, original.plan_questions);
-        assert_eq!(rebuilt.skip_builtin_questions, Some(true));
-    }
-
-    #[test]
-    fn plan_question_config_is_built_from_wizard_state() {
-        let mut state =
-            state_for_allowed_agents(ConfigScope::Project(PathBuf::from("/repo")), None, false);
-        state.plan_questions = vec![ConfiguredPlanQuestion {
-            id: "ui-surface".into(),
-            text: "Where should this appear?".into(),
-            options: vec!["Dashboard".into(), "Session view".into()],
-            optional: false,
-            ..Default::default()
-        }];
-        state.skip_builtin_questions = Some(true);
-
-        let rebuilt = build_extension_config(&state);
-
-        assert_eq!(rebuilt.plan_questions, state.plan_questions);
-        assert_eq!(rebuilt.skip_builtin_questions, Some(true));
     }
 }

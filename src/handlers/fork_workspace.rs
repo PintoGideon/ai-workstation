@@ -31,8 +31,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
             if matches!(
                 app.selection,
                 Selection::Session(..) | Selection::Feature(..)
-            ) && !app.paused_plan_interview_matches_selection()
-                && app.desired_live_target_exists() =>
+            ) && app.desired_live_target_exists() =>
         {
             app.cockpit_focus_agent();
             Ok(true)

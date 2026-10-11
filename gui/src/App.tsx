@@ -20,9 +20,6 @@ import {
   HarnessInfo,
   ModeInfo,
   ModeSlug,
-  PlanAction,
-  PlanInput,
-  PlanStatus,
   Project,
   SavedAgentSession,
   SessionTarget,
@@ -38,12 +35,6 @@ import {
   deleteFeature,
   getSnapshot,
   newSessionOptions,
-  planAct,
-  planBegin,
-  planBeginCreation,
-  planBeginTodoHost,
-  planBeginTodoNew,
-  planSnapshot,
   recoverSession,
   savedAgentSessions,
   sessionRecoveryOption,
@@ -75,7 +66,6 @@ import ScreenshotsPanel from "./ScreenshotsPanel";
 import ReviewPanel from "./ReviewPanel";
 import type { PrTriageTarget } from "./prTriageApi";
 import TodoPanel, { TodoAgentTarget, TodoDestination } from "./TodoPanel";
-import PlanPanel from "./PlanPanel";
 import RecoveryDialog from "./RecoveryDialog";
 import NewSessionDialog, { PreCheckFailure } from "./NewSessionDialog";
 import VscodePanel from "./VscodePanel";
@@ -98,7 +88,6 @@ import {
   IconName,
   Menu,
   Modal,
-  Segmented,
   Spinner,
   StatusBadge,
   StatusDot,
@@ -110,7 +99,6 @@ import {
 const PrReviewPanel = lazy(() => import("./PrReviewPanel"));
 const PrTriagePanel = lazy(() => import("./PrTriagePanel"));
 const SNAPSHOT_KEY = ["workspace-snapshot"];
-const PLAN_KEY = ["plan-interview"];
 const TODOS_TAB = "todos";
 // The VS Code windows tab: no session row and no tmux pane (gui_sessions).
 const VSCODE_TAB = "vscode";
@@ -132,11 +120,6 @@ const ERROR_TITLE: Record<GuiError["kind"], string> = {
   internal: "Something went wrong",
 };
 
-const LOADING_PHASES = new Set([
-  "ai_loading", "synthesis_loading", "directed_feedback_loading",
-  "investigation_loading", "critique_loading", "done",
-]);
-
 const sessionKey = (target: { feature_id: string; session_id: string }) =>
   `${target.feature_id}:${target.session_id}`;
 
@@ -153,8 +136,8 @@ function pruneKeys<T>(current: Record<string, T>, live: Set<string>): Record<str
 }
 
 /// Workspace shell: sidebar navigation (global TODOs, projects, features),
-/// a main view for the selection, and modals for creation, approvals and
-/// the plan interview. Id resolution, idempotency, and terminal correctness
+/// a main view for the selection, and modals for creation and approvals.
+/// Id resolution, idempotency, and terminal correctness
 /// have their own Rust-side coverage; this file is the UI wiring.
 export default function App() {
   const appearance = useGuiTheme();
@@ -177,8 +160,6 @@ export default function App() {
   const promptSendsInFlight = useRef(new Set<string>());
   const [composerFocusKey, setComposerFocusKey] = useState<string | null>(null);
   const composerFocusHandled = useCallback(() => setComposerFocusKey(null), []);
-  const [planMinimized, setPlanMinimized] = useState(false);
-  const [pendingPlanApproval, setPendingPlanApproval] = useState<string | null>(null);
   const [recoveryDialog, setRecoveryDialog] = useState<{
     target: SessionTarget;
     option: SessionRecoveryOption;
@@ -210,7 +191,6 @@ export default function App() {
     todoId: string;
     title: string;
     projectIds: string[];
-    kind: "plan" | "launch";
   } | null>(null);
   const [pendingTodoNewApproval, setPendingTodoNewApproval] = useState<{
     todoId: string;
@@ -218,8 +198,6 @@ export default function App() {
     message: string;
   } | null>(null);
   const [todoNewBusy, setTodoNewBusy] = useState(false);
-  const [planBusy, setPlanBusy] = useState(false);
-  const planActionInFlight = useRef(false);
   // `isPending` reaches the dialog a render late, so a double-click (or
   // Enter then click) would otherwise send two launches and two sessions.
   const addSessionInFlight = useRef(false);
@@ -284,11 +262,6 @@ export default function App() {
     queryKey: SNAPSHOT_KEY,
     queryFn: getSnapshot,
     refetchInterval: 2_000,
-  });
-  const plan = useQuery({
-    queryKey: PLAN_KEY,
-    queryFn: planSnapshot,
-    refetchInterval: planBusy ? false : 750,
   });
 
   // "Resynchronization": every mutating command emits a fresh snapshot on
@@ -441,10 +414,8 @@ export default function App() {
   function newFeatureHandlers(projectIds: string[]) {
     if (projectIds.length === 0) return {};
     return {
-      onPlanNew: (todoId: string, title: string) =>
-        setPendingTodoNew({ todoId, title, projectIds, kind: "plan" }),
       onLaunchNew: (todoId: string, title: string) =>
-        setPendingTodoNew({ todoId, title, projectIds, kind: "launch" }),
+        setPendingTodoNew({ todoId, title, projectIds }),
     };
   }
 
@@ -619,72 +590,6 @@ export default function App() {
       return !(action.kind === "pause" && next !== null);
     } catch (err) { setReviewError(asGuiError(err).message); return false; }
     finally { reviewPending.current = false; setReviewBusy(false); }
-  }
-
-  function updatePlan(status: PlanStatus) {
-    queryClient.setQueryData(PLAN_KEY, status);
-    if (status.handoff) {
-      openSession(status.handoff.target, status.handoff.draft_prompt);
-      void queryClient.invalidateQueries({ queryKey: ["todos"] });
-    }
-    if (!status.active && status.message) {
-      pushToast({ tone: "info", title: "Plan", message: status.message });
-    }
-  }
-
-  async function runPlanBegin(start: () => Promise<PlanStatus>): Promise<boolean> {
-    if (planActionInFlight.current) return false;
-    planActionInFlight.current = true;
-    setPlanBusy(true);
-    try {
-      await queryClient.cancelQueries({ queryKey: PLAN_KEY });
-      const status = await start();
-      updatePlan(status);
-      if (status.hook_warning) {
-        pushToast({ tone: "info", title: "Plan", message: status.hook_warning });
-      }
-      setPlanMinimized(false);
-      return true;
-    } catch (err) {
-      reportError(err);
-      return false;
-    } finally {
-      planActionInFlight.current = false;
-      setPlanBusy(false);
-    }
-  }
-
-  async function beginPlan(target: FeatureTarget, quick: boolean) {
-    await runPlanBegin(() => planBegin(target, quick));
-  }
-
-  async function beginTodoPlan(todoId: string, target: FeatureTarget) {
-    await runPlanBegin(() => planBeginTodoHost(todoId, target));
-  }
-
-  async function actOnPlan(action: PlanAction, input?: PlanInput) {
-    if (planActionInFlight.current) return;
-    const step = plan.data?.active?.step_key;
-    if (!step) return;
-    planActionInFlight.current = true;
-    setPlanBusy(true);
-    try {
-      await queryClient.cancelQueries({ queryKey: PLAN_KEY });
-      updatePlan(await planAct(step, action, input ?? null));
-      setPendingPlanApproval(null);
-    } catch (err) {
-      const error = asGuiError(err);
-      if (error.kind === "needs_approval" && action === "accept") {
-        setPendingPlanApproval(error.message);
-      } else {
-        setPendingPlanApproval(null);
-        reportError(error);
-        void plan.refetch();
-      }
-    } finally {
-      planActionInFlight.current = false;
-      setPlanBusy(false);
-    }
   }
 
   async function launchTodoAgent(todoId: string, target: FeatureTarget, approved: boolean) {
@@ -1028,7 +933,6 @@ export default function App() {
     }
   };
 
-  const activePlan = plan.data?.active ?? null;
   const createFeatureProject = projects.find((project) => project.id === createFeatureFor);
 
   return (
@@ -1094,11 +998,6 @@ export default function App() {
               : view?.kind === "feature" ? { ...view, tab: tabByFeature[view.featureId] } : null}
             deletingFeatureId={deleteFeatureMutation.isPending
               ? deleteFeatureMutation.variables?.target.feature_id ?? null : null}
-            pausedPlan={activePlan && planMinimized ? {
-              featureId: activePlan.pending_project_name ? null : activePlan.interview_key,
-              projectName: activePlan.pending_project_name ?? null,
-              featureName: activePlan.feature_name,
-            } : null}
             onSelectProject={(projectId) => setView({ kind: "project", projectId })}
             onSelectFeature={(projectId, featureId) => setView({ kind: "feature", projectId, featureId })}
             onSelectSession={(target, kind) => {
@@ -1112,7 +1011,6 @@ export default function App() {
               setTabByFeature((current) => ({ ...current, [featureId]: VSCODE_TAB }));
             }}
             onToggleCollapsed={toggleCollapsed}
-            onResumePlan={() => setPlanMinimized(false)}
             onCreateFeature={setCreateFeatureFor}
             renderFeatureExtra={(feature) => pendingEdits[feature.id] > 0 && (
               <span className="nav-count nav-count-attention" title="Edits waiting for review">
@@ -1122,16 +1020,6 @@ export default function App() {
           />
         </nav>
 
-        {activePlan && planMinimized && (
-          <button className="plan-pill" onClick={() => setPlanMinimized(false)}>
-            {LOADING_PHASES.has(activePlan.phase) ? <Spinner /> : <Icon name="sparkles" />}
-            <span>
-              <strong>{activePlan.kind === "quick" ? "Quick Plan" : "Plan interview"}</strong>
-              <span className="muted">{activePlan.feature_name}</span>
-            </span>
-            <span className="plan-pill-open">Open</span>
-          </button>
-        )}
       </ProjectsSidebar>
 
       {supervisedTarget && <SupervisedEditsPanel key={`${supervisedTarget.project_id}:${supervisedTarget.feature_id}`}
@@ -1177,7 +1065,6 @@ export default function App() {
                 destinations={todoDestinations}
                 launchTargets={todoAgentTargets}
                 onLaunch={(todoId, target) => launchTodoAgent(todoId, target, false)}
-                onPlan={beginTodoPlan}
                 {...newFeatureHandlers(gitProjectIds)}
                 onError={reportError}
               />
@@ -1203,7 +1090,6 @@ export default function App() {
                 destinations={todoDestinations}
                 launchTargets={todoAgentTargets.filter((candidate) => candidate.target.project_id === selectedProject.id)}
                 onLaunch={(todoId, target) => launchTodoAgent(todoId, target, false)}
-                onPlan={beginTodoPlan}
                 {...newFeatureHandlers(selectedProject.is_git ? [selectedProject.id] : [])}
                 onError={reportError}
               />
@@ -1222,10 +1108,6 @@ export default function App() {
             pendingSessionId={pendingSessionByFeature[selectedFeature.id]}
             onTab={(tab) => setTabByFeature((current) => ({ ...current, [selectedFeature.id]: tab }))}
             onBack={() => setView({ kind: "project", projectId: selectedProject.id })}
-            onPlan={(quick) => void beginPlan(
-              { project_id: selectedProject.id, feature_id: selectedFeature.id },
-              quick,
-            )}
             onDiff={() => setDiffTarget({ project_id: selectedProject.id, feature_id: selectedFeature.id })}
             pendingEdits={pendingEdits[selectedFeature.id] ?? 0}
             onSupervisedEdits={() => openSupervisedEdits({ project_id: selectedProject.id, feature_id: selectedFeature.id })}
@@ -1299,7 +1181,6 @@ export default function App() {
                   target: { project_id: selectedProject.id, feature_id: selectedFeature.id },
                 }]}
                 onLaunch={(todoId, target) => launchTodoAgent(todoId, target, false)}
-                onPlan={beginTodoPlan}
                 {...newFeatureHandlers(selectedProject.is_git ? [selectedProject.id] : [])}
                 onError={reportError}
               />
@@ -1339,68 +1220,26 @@ export default function App() {
           modes={modes.data ?? []}
           isGit={createFeatureProject.is_git}
           defaultUseWorktree={createFeatureProject.is_git && createFeatureProject.features.length > 0}
-          pending={createFeatureMutation.isPending || planBusy}
+          pending={createFeatureMutation.isPending}
           onCancel={() => setCreateFeatureFor(null)}
-          onSubmit={(request, planKind) => {
-            const fullRequest = { ...request, project_name: createFeatureProject.name };
-            if (planKind === "none") {
-              createFeatureMutation.mutate(fullRequest);
-            } else {
-              void runPlanBegin(() => planBeginCreation(fullRequest, planKind === "quick"))
-                .then((started) => { if (started) setCreateFeatureFor(null); });
-            }
+          onSubmit={(request) => {
+            createFeatureMutation.mutate({ ...request, project_name: createFeatureProject.name });
           }}
         />
       )}
 
       {pendingTodoNew && (
         <TodoNewFeatureForm
-          kind={pendingTodoNew.kind}
           todoTitle={pendingTodoNew.title}
           projects={projects.filter((project) => pendingTodoNew.projectIds.includes(project.id))}
           agents={harnesses.data ?? []}
           modes={modes.data ?? []}
-          pending={planBusy || todoNewBusy || pendingTodoNewApproval !== null}
+          pending={todoNewBusy || pendingTodoNewApproval !== null}
           onCancel={() => setPendingTodoNew(null)}
           onSubmit={(request) => {
-            if (pendingTodoNew.kind === "plan") {
-              void runPlanBegin(() => planBeginTodoNew(pendingTodoNew.todoId, request))
-                .then((started) => { if (started) setPendingTodoNew(null); });
-            } else {
-              void launchTodoNewFeature(pendingTodoNew.todoId, request, false);
-            }
+            void launchTodoNewFeature(pendingTodoNew.todoId, request, false);
           }}
         />
-      )}
-
-      {activePlan && (
-        <div hidden={planMinimized}>
-          <Modal
-            label="Plan interview"
-            title={activePlan.kind === "quick" ? "Quick Plan" : "Plan interview"}
-            subtitle={activePlan.feature_name}
-            size="lg"
-            onClose={() => setPlanMinimized(true)}
-            dismissable={false}
-            headerActions={
-              <button
-                className="btn btn-sm btn-ghost"
-                onClick={() => setPlanMinimized(true)}
-                title="Keep the interview running and hide this window"
-              >
-                <Icon name="minimize" /> Minimize
-              </button>
-            }
-          >
-            <PlanPanel
-              view={activePlan}
-              precall={plan.data?.precall ?? null}
-              busy={planBusy}
-              onAct={actOnPlan}
-              onEditPrompt={() => void editPrecallPrompt()}
-            />
-          </Modal>
-        </div>
       )}
 
       {pendingTodoNewApproval && (
@@ -1412,19 +1251,6 @@ export default function App() {
           busy={todoNewBusy}
           onConfirm={() => void launchTodoNewFeature(pendingTodoNewApproval.todoId, pendingTodoNewApproval.request, true)}
           onCancel={() => setPendingTodoNewApproval(null)}
-        />
-      )}
-
-      {pendingPlanApproval && (
-        <ApprovalDialog
-          label="Approve planned agent"
-          title="Start the planned agent?"
-          message={pendingPlanApproval}
-          confirmLabel="Accept plan and start agent"
-          cancelLabel="Keep reviewing"
-          busy={planBusy}
-          onConfirm={() => void actOnPlan("accept_approved")}
-          onCancel={() => setPendingPlanApproval(null)}
         />
       )}
 
@@ -1756,7 +1582,6 @@ function FeatureView({
   pendingSessionId,
   onTab,
   onBack,
-  onPlan,
   onDiff,
   pendingEdits,
   onSupervisedEdits,
@@ -1795,7 +1620,6 @@ function FeatureView({
   pendingSessionId: string | undefined;
   onTab: (tab: string) => void;
   onBack: () => void;
-  onPlan: (quick: boolean) => void;
   onDiff: () => void;
   /** Supervised edits waiting for an answer in this feature. */
   pendingEdits: number;
@@ -1906,16 +1730,6 @@ function FeatureView({
             {project.is_git && <button className="btn btn-secondary" onClick={onPrTriage}>
               <Icon name="inbox" size={12} /> PR Triage
             </button>}
-            <Menu
-              label="Plan"
-              icon="sparkles"
-              text="Plan"
-              className="btn btn-secondary"
-              items={[
-                { label: "Plan interview", icon: "sparkles", hint: "Full", onSelect: () => onPlan(false) },
-                { label: "Quick Plan", icon: "zap", hint: "Fast", onSelect: () => onPlan(true) },
-              ]}
-            />
             {activeSession && !isStopped && (
               <SessionStartStopButton
                 label={activeSession.label}
@@ -2163,8 +1977,6 @@ function CreateProjectForm({
   );
 }
 
-type PlanKind = "none" | "quick" | "full";
-
 export function CreateFeatureForm({
   projectId,
   projectName,
@@ -2184,13 +1996,12 @@ export function CreateFeatureForm({
   defaultUseWorktree: boolean;
   pending: boolean;
   onCancel: () => void;
-  onSubmit: (request: Omit<CreateFeatureRequest, "project_name">, planKind: PlanKind) => void;
+  onSubmit: (request: Omit<CreateFeatureRequest, "project_name">) => void;
 }) {
   const [branch, setBranch] = useState("");
   const [agent, setAgent] = useState<AgentSlug>(agents[0]?.slug ?? "claude");
   const [mode, setMode] = useState<ModeSlug>(modes[0]?.slug ?? "vibe");
   const [useWorktree, setUseWorktree] = useState(defaultUseWorktree);
-  const [planKind, setPlanKind] = useState<PlanKind>("none");
   const modeInfo = modes.find((candidate) => candidate.slug === mode);
   const hook = useWorktreeHookChoice(projectId, isGit && useWorktree);
 
@@ -2208,20 +2019,19 @@ export function CreateFeatureForm({
           agent,
           mode,
           review: false,
-          plan_mode: planKind !== "none",
           create_terminal: false,
           use_worktree: useWorktree,
           enable_chrome: false,
           hook_choice: hook.choice || null,
           dry_run: false,
-        }, planKind);
+        });
       }}
       footer={
         <>
           <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={pending}>Cancel</button>
           <button type="submit" className="btn btn-primary" disabled={pending || !hook.ready || !branch.trim()}>
             {pending && <Spinner />}
-            {pending ? "Creating…" : planKind === "none" ? "Create feature" : "Create and plan"}
+            {pending ? "Creating…" : "Create feature"}
           </button>
         </>
       }
@@ -2254,25 +2064,6 @@ export function CreateFeatureForm({
           </Field>
         </div>
         {modeInfo?.description && <p className="field-hint mode-hint">{modeInfo.description}</p>}
-        <Field
-          label="Planning"
-          hint={{
-            none: "Start the agent right away.",
-            quick: "A short triage: a question or two, then a plan only if the task needs one.",
-            full: "A guided interview that produces a reviewed plan before the agent starts.",
-          }[planKind]}
-        >
-          <Segmented
-            label="Planning"
-            value={planKind}
-            onChange={setPlanKind}
-            options={[
-              { value: "none", label: "Start directly" },
-              { value: "quick", label: "Quick Plan" },
-              { value: "full", label: "Full Plan" },
-            ]}
-          />
-        </Field>
         {isGit && (
           <Switch
             checked={useWorktree}
@@ -2288,7 +2079,6 @@ export function CreateFeatureForm({
 }
 
 export function TodoNewFeatureForm({
-  kind,
   todoTitle,
   projects,
   agents,
@@ -2297,7 +2087,6 @@ export function TodoNewFeatureForm({
   onCancel,
   onSubmit,
 }: {
-  kind: "plan" | "launch";
   todoTitle: string;
   projects: Project[];
   agents: { slug: AgentSlug; display_name: string }[];
@@ -2323,8 +2112,8 @@ export function TodoNewFeatureForm({
 
   return (
     <Modal
-      label={kind === "plan" ? "Plan TODO in a new feature" : "Start TODO in a new feature"}
-      title={kind === "plan" ? "Plan in a new feature" : "Start in a new feature"}
+      label="Start TODO in a new feature"
+      title="Start in a new feature"
       subtitle={todoTitle}
       onClose={onCancel}
       dismissable={!pending}
@@ -2336,7 +2125,6 @@ export function TodoNewFeatureForm({
           agent: selectedAgent,
           mode: selectedMode,
           review: false,
-          plan_mode: kind === "plan",
           create_terminal: false,
           use_worktree: true,
           enable_chrome: false,
@@ -2349,15 +2137,13 @@ export function TodoNewFeatureForm({
           <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={pending}>Cancel</button>
           <button type="submit" className="btn btn-primary" disabled={pending || !project || !branch.trim() || !hook.ready}>
             {pending && <Spinner />}
-            {kind === "plan" ? "Start plan" : "Create and start"}
+            Create and start
           </button>
         </>
       }
     >
       <p className="muted small modal-lead">
-        {kind === "plan"
-          ? "Creates the worktree and runs its setup before the interview. The agent starts after you accept the plan."
-          : "Creates a worktree and starts its agent. The TODO prompt opens as an editable draft."}
+        Creates a worktree and starts its agent. The TODO prompt opens as an editable draft.
       </p>
       <div className="form-stack">
         {projects.length > 1 && (

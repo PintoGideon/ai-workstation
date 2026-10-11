@@ -21,9 +21,7 @@ use ai_workstation::automation::{
 use ai_workstation::gui_contract::fresh_context::{
     FreshContextPreview, FreshContextRequest, FreshContextResponse,
 };
-use ai_workstation::gui_contract::session_sidebar::{
-    CompleteSidebarTodo, SessionPlanView, SessionSidebarView,
-};
+use ai_workstation::gui_contract::session_sidebar::{CompleteSidebarTodo, SessionSidebarView};
 use ai_workstation::gui_contract::sidebar::{CollapseTarget, SidebarClock};
 use ai_workstation::gui_contract::{
     AddSessionResponse, DeleteFeatureResponse, FeatureTarget, GuiError, GuiErrorKind, GuiHandle,
@@ -34,7 +32,6 @@ use ai_workstation::gui_contract::{
 use ai_workstation::gui_debug_log::{self, DebugLogView};
 use ai_workstation::gui_diff::{self, DiffOptions, DiffView};
 use ai_workstation::gui_dormancy::{self, DormancyStopResult, DormancyView, DormantObservation};
-use ai_workstation::gui_plans::{self, PlanAction, PlanInput, PlanStatus};
 use ai_workstation::gui_pr_review::{self, PrReviewAction, PrReviewView};
 use ai_workstation::gui_pr_triage::{
     self, PrTriageAction, PrTriagePrefetch, PrTriageReads, PrTriageTarget, PrTriageView,
@@ -930,77 +927,6 @@ fn todo_launch_new_feature(
 }
 
 #[tauri::command]
-fn plan_begin(
-    state: State<AppState>,
-    target: FeatureTarget,
-    quick: bool,
-) -> Result<PlanStatus, GuiError> {
-    gui_plans::begin(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &target,
-        quick,
-    )
-}
-
-#[tauri::command]
-fn plan_begin_todo_host(
-    state: State<AppState>,
-    todo_id: String,
-    target: FeatureTarget,
-) -> Result<PlanStatus, GuiError> {
-    gui_plans::begin_todo_in_host(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &todo_id,
-        &target,
-    )
-}
-
-#[tauri::command]
-fn plan_begin_creation(
-    state: State<AppState>,
-    request: CreateFeatureRequest,
-    quick: bool,
-) -> Result<PlanStatus, GuiError> {
-    gui_plans::begin_feature_creation(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &request,
-        quick,
-    )
-}
-
-#[tauri::command]
-fn plan_begin_todo_new(
-    state: State<AppState>,
-    todo_id: String,
-    request: CreateFeatureRequest,
-) -> Result<PlanStatus, GuiError> {
-    gui_plans::begin_todo_in_new_feature(
-        &mut state.0.lock().expect("gui handle mutex poisoned"),
-        &todo_id,
-        &request,
-    )
-}
-
-#[tauri::command]
-fn plan_snapshot(state: State<AppState>) -> PlanStatus {
-    gui_plans::poll(&mut state.0.lock().expect("gui handle mutex poisoned"))
-}
-
-#[tauri::command]
-fn plan_act(
-    app: tauri::AppHandle,
-    state: State<AppState>,
-    expected_step: String,
-    action: PlanAction,
-    input: Option<PlanInput>,
-) -> Result<PlanStatus, GuiError> {
-    let mut gui = state.0.lock().expect("gui handle mutex poisoned");
-    let result = gui_plans::act(&mut gui, &expected_step, action, input)?;
-    emit_workspace_changed(&app, &gui.broadcast_snapshot());
-    Ok(result)
-}
-
-#[tauri::command]
 async fn debug_log_load(state: State<'_, AppState>) -> Result<DebugLogView, GuiError> {
     gui_debug_log::load(&mut state.0.lock().expect("gui handle mutex poisoned"))
 }
@@ -1267,15 +1193,6 @@ fn fresh_context_start(
 }
 
 #[tauri::command]
-fn session_sidebar_plan(
-    state: State<AppState>,
-    target: SessionTarget,
-) -> Result<SessionPlanView, GuiError> {
-    let mut gui = state.0.lock().expect("gui handle mutex poisoned");
-    gui.session_sidebar_plan(&target)
-}
-
-#[tauri::command]
 fn session_sidebar_complete_todo(
     state: State<AppState>,
     target: SessionTarget,
@@ -1365,12 +1282,6 @@ fn main() {
             todo_reorder,
             todo_launch_agent,
             todo_launch_new_feature,
-            plan_begin,
-            plan_begin_todo_host,
-            plan_begin_creation,
-            plan_begin_todo_new,
-            plan_snapshot,
-            plan_act,
             supervised_edits_load,
             supervised_edit_counts,
             supervised_edit_respond,
@@ -1386,7 +1297,6 @@ fn main() {
             syntax_install_status,
             syntax_install,
             session_sidebar,
-            session_sidebar_plan,
             fresh_context_preview,
             fresh_context_start,
             session_sidebar_complete_todo,

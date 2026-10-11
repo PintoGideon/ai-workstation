@@ -18,9 +18,8 @@ use crate::app::prompt_library::LostPromptContext;
 use crate::app::{
     App, AppMode, ReapplyOutcome, SAVE_CONFLICT_MESSAGE, Selection, StartIntent,
     TodoDeleteDisposition, TodoImplementChoice, TodoImplementChoiceState, TodoLaunchAction,
-    TodoLaunchStep, TodoPane, TodoPaneKind, TodoPlanDestination, TodoPlanOrigin,
-    TodoReferenceCompletionState, TodoScopeMoveState, TodoSpawnTargetState, TodoViewState,
-    TodosHostReassignState,
+    TodoLaunchStep, TodoPane, TodoPaneKind, TodoPlanOrigin, TodoReferenceCompletionState,
+    TodoScopeMoveState, TodoSpawnTargetState, TodoViewState, TodosHostReassignState,
 };
 use crate::db::todos::{Todo, TodoPriority, TodoScope, TodoStatus, TodoWorkState};
 use crate::project::ProjectStore;
@@ -51,8 +50,6 @@ pub(crate) struct SelectedTodoContext {
     /// Which pane the item came from — the scope decides whether a spawn can
     /// pick its own feature or has to ask for one.
     pub pane_kind: TodoPaneKind,
-    /// The list-level scratchpad note (`todo_lists.carry_over`).
-    pub scratchpad: Option<String>,
 }
 
 /// What [`App::next_todo_index`] settled on.
@@ -333,7 +330,6 @@ impl App {
             self.selection = self.todos_session_selection(pi, fi);
         }
         self.mode = AppMode::Normal;
-        self.resume_paused_plan_interview();
     }
 
     /// Resolve a `Selection` for the TODOs session under `(pi, fi)`, falling
@@ -1205,7 +1201,6 @@ impl App {
                     host_feature_id: pane.list.as_ref().and_then(|l| l.feature_id.clone()),
                     list_id: pane.list.as_ref().map(|l| l.id.clone()),
                     pane_kind: pane.kind,
-                    scratchpad: pane.list.as_ref().and_then(|l| l.carry_over.clone()),
                 })
             }
             _ => None,
@@ -1299,23 +1294,10 @@ impl App {
         }
     }
 
-    /// `Esc`: unwind one step — destination back to the chooser, chooser back
-    /// to the list.
+    /// `Esc`: back from the chooser to the list.
     pub fn cancel_todo_launch_step(&mut self) {
         if let AppMode::Todos(state) = &mut self.mode {
-            state.launch = match state.launch.take() {
-                Some(TodoLaunchStep::Destination { origin, .. }) => Some(TodoLaunchStep::Choice {
-                    origin,
-                    // Return the cursor to the option that got here — the
-                    // destination step is only reachable from "Plan this TODO
-                    // first".
-                    selected: TodoLaunchAction::ALL
-                        .iter()
-                        .position(|a| *a == TodoLaunchAction::PlanMode)
-                        .unwrap_or(0),
-                }),
-                _ => None,
-            };
+            state.launch = None;
         }
     }
 
@@ -1326,83 +1308,25 @@ impl App {
         };
         let Some(step) = step else { return Ok(()) };
 
-        match (&step, step.action(), step.destination()) {
-            (_, Some(TodoLaunchAction::SpawnSession), _) => {
+        match step.action() {
+            Some(TodoLaunchAction::SpawnSession) => {
                 self.close_todo_launch_step();
                 self.todos_spawn_agent()
             }
-            (_, Some(TodoLaunchAction::SpawnInNewFeature), _) => {
+            Some(TodoLaunchAction::SpawnInNewFeature) => {
                 let origin = step.origin().clone();
                 // `start_todo_spawn_in_new_feature` reads the selected TODO from
                 // the still-open overlay, so close only the launch sub-step.
                 self.close_todo_launch_step();
                 self.start_todo_spawn_in_new_feature(origin)
             }
-            (_, Some(TodoLaunchAction::PlanMode), _) => {
-                self.todos_mark_in_progress(&step.origin().todo_id, None)?;
-                self.open_todo_plan_destination(step.origin().clone());
-                Ok(())
-            }
-            (_, _, Some(TodoPlanDestination::HostFeature)) => {
-                let origin = step.origin().clone();
-                self.close_todo_launch_step();
-                self.start_todo_plan_in_host_feature(origin)
-            }
-            (
-                TodoLaunchStep::Destination {
-                    can_create_worktree,
-                    ..
-                },
-                _,
-                Some(TodoPlanDestination::NewFeature),
-            ) => {
-                if !*can_create_worktree {
-                    self.push_toast_warning(
-                        "This project has no git repository, so a new worktree cannot be created",
-                    );
-                    return Ok(());
-                }
-                let origin = step.origin().clone();
-                self.close_todo_launch_step();
-                self.start_todo_plan_in_new_feature(origin)
-            }
-            _ => Ok(()),
+            None => Ok(()),
         }
     }
 
     fn close_todo_launch_step(&mut self) {
         if let AppMode::Todos(state) = &mut self.mode {
             state.launch = None;
-        }
-    }
-
-    fn open_todo_plan_destination(&mut self, origin: TodoPlanOrigin) {
-        let (host_feature_name, can_create_worktree) = match &self.mode {
-            AppMode::Todos(state) => {
-                let host_feature_id = state
-                    .focused()
-                    .and_then(|p| p.list.as_ref())
-                    .and_then(|l| l.feature_id.clone());
-                let fi =
-                    self.resolve_todo_host_feature(state.pi, host_feature_id.as_deref(), state.fi);
-                let project = self.store.projects.get(state.pi);
-                (
-                    project
-                        .and_then(|p| p.features.get(fi))
-                        .map(|f| f.name.clone())
-                        .unwrap_or_else(|| state.feature_name.clone()),
-                    project.is_some_and(|p| p.is_git),
-                )
-            }
-            _ => return,
-        };
-        if let AppMode::Todos(state) = &mut self.mode {
-            state.launch = Some(TodoLaunchStep::Destination {
-                origin,
-                host_feature_name,
-                can_create_worktree,
-                selected: 0,
-            });
         }
     }
 
@@ -1695,6 +1619,63 @@ impl App {
         Ok(())
     }
 
+    /// "Start an agent in a new feature": pre-seed the create-feature wizard
+    /// from the selected TODO and stash the TODO as the composer seed for the
+    /// launch to pick up once the wizard hands over.
+    pub(crate) fn start_todo_spawn_in_new_feature(&mut self, origin: TodoPlanOrigin) -> Result<()> {
+        let Some(ctx) = self.selected_todo_context() else {
+            self.push_toast_warning("No TODO selected");
+            return Ok(());
+        };
+        let (todo, pi) = (ctx.todo, ctx.pi);
+        let fi =
+            self.resolve_todo_host_feature(pi, ctx.host_feature_id.as_deref(), ctx.fallback_fi);
+
+        if !self.store.projects.get(pi).is_some_and(|p| p.is_git) {
+            self.push_toast_warning(
+                "This project has no git repository, so a new worktree cannot be created",
+            );
+            return Ok(());
+        }
+
+        let seed = Self::todo_spawn_prompt(&todo);
+        let host = self
+            .store
+            .projects
+            .get(pi)
+            .and_then(|project| project.features.get(fi))
+            .map(|feature| (feature.agent.clone(), feature.mode.clone()));
+
+        // Selecting the TODOs session already puts the wizard on the right
+        // project; it reads `self.selection` for that.
+        self.start_create_feature();
+        let session_name_for_agent =
+            |agent: &crate::project::AgentKind| Self::default_session_name_for_agent(agent);
+        let AppMode::CreatingFeature(state) = &mut self.mode else {
+            // `start_create_feature` refused (no harness); it has already said
+            // why, and that message must survive.
+            return Ok(());
+        };
+
+        state.branch = todo_branch_name(&todo.title);
+        state.branch_error = None;
+        state.step = crate::app::CreateFeatureStep::Branch;
+        state.use_worktree = true;
+        state.todo_origin = Some(origin);
+        if let Some((agent, mode)) = host {
+            state.agent = agent;
+            state.mode = mode;
+            state.session_name = session_name_for_agent(&state.agent);
+        }
+
+        // The seed is stashed for the launch to pick up once the wizard hands
+        // over: the new feature's session does not exist yet, and the wizard
+        // has nowhere to keep it.
+        self.pending_todo_spawn_prompt = Some(seed);
+        self.message = None;
+        Ok(())
+    }
+
     /// Finish a "start an agent in a new feature" launch once the create-feature
     /// wizard has built the feature: link the TODO row to it, reserve and
     /// associate the feature's initial agent session, tag that session as this
@@ -1874,119 +1855,6 @@ impl App {
         prompt
     }
 
-    /// Compose the feature brief a TODO-originated plan interview opens on.
-    ///
-    /// Everything the TODO row actually carries goes in: its title as the
-    /// heading, its notes, the list-level scratchpad, and a **provenance**
-    /// paragraph naming work already started for it. The brief is a starting
-    /// point, not a submission — the interview's `Brief` phase opens it in an
-    /// editor, so a wrong guess here costs the user an edit, not an answer.
-    ///
-    /// Provenance is deliberately a statement *that* work happened, not a
-    /// transcript of it. AIW keeps no per-TODO history: transcripts are scoped
-    /// to a workdir (and in practice to one harness), and a tmux capture holds
-    /// only whatever is still on screen. Either would put text in the brief
-    /// that does not reliably describe this TODO, which is worse than a line
-    /// the reader can trust.
-    pub(crate) fn compose_plan_brief(
-        todo: &Todo,
-        scratchpad: Option<&str>,
-        provenance: &[String],
-    ) -> String {
-        let mut brief = format!("## {}\n", todo.title.trim());
-
-        if let Some(body) = todo
-            .body
-            .as_deref()
-            .map(str::trim)
-            .filter(|b| !b.is_empty())
-        {
-            brief.push('\n');
-            brief.push_str(body);
-            brief.push('\n');
-        }
-
-        // The scratchpad belongs to the list, not the item, so it is labelled
-        // as the shared note it is rather than folded in as if the user had
-        // written it about this TODO.
-        if let Some(note) = scratchpad.map(str::trim).filter(|n| !n.is_empty()) {
-            brief.push_str("\n## List scratchpad\n\n");
-            brief.push_str(note);
-            brief.push('\n');
-        }
-
-        if !provenance.is_empty() {
-            brief.push_str("\n## Prior work\n\n");
-            for line in provenance {
-                brief.push_str(line);
-                brief.push('\n');
-            }
-        }
-
-        brief
-    }
-
-    /// Provenance lines for `todo`: what AIW has already started for it.
-    ///
-    /// Each link is reported only when its target still exists, and says so
-    /// when it does not, because a brief that names a session the user cannot
-    /// find is worse than one that says the session is gone. The session is
-    /// looked for store-wide, since a project- or global-scoped TODO's agent
-    /// need not be in the feature the brief is being written under.
-    pub(crate) fn todo_provenance(&self, _pi: usize, _fi: usize, todo: &Todo) -> Vec<String> {
-        let mut lines = Vec::new();
-
-        if let Some(session_id) = todo.work.agent_session_id.as_deref() {
-            let found = self
-                .session_indices_by_id(session_id)
-                .and_then(|(pi, fi, si)| {
-                    let feature = self.store.projects.get(pi)?.features.get(fi)?;
-                    let label = feature.sessions.get(si)?.label.clone();
-                    Some((label, feature.clone()))
-                });
-            match found {
-                Some((label, feature)) => {
-                    let live = feature.status != crate::project::ProjectStatus::Stopped
-                        && self.tmux.session_exists(&feature.tmux_session);
-                    lines.push(format!(
-                        "- An agent session \"{label}\" was already started for this item in \
-                         feature \"{}\" and is {}.",
-                        feature.name,
-                        if live { "still running" } else { "not running" }
-                    ));
-                }
-                None => lines.push(
-                    "- An agent session was started for this item earlier, but it no longer \
-                     exists."
-                        .to_string(),
-                ),
-            }
-        }
-
-        if let Some(feature_id) = todo.linked_feature_id.as_deref() {
-            let found = self
-                .store
-                .projects
-                .iter()
-                .flat_map(|project| project.features.iter())
-                .find(|feature| feature.id == feature_id);
-            match found {
-                Some(feature) => lines.push(format!(
-                    "- A feature \"{}\" was already created for this item from a previous plan \
-                     run, on branch \"{}\".",
-                    feature.name, feature.branch
-                )),
-                None => lines.push(
-                    "- A feature was created for this item from a previous plan run, but it has \
-                     since been deleted."
-                        .to_string(),
-                ),
-            }
-        }
-
-        lines
-    }
-
     /// Truncate `title` to at most `max` characters, appending an ellipsis when
     /// it was shortened."""
     fn truncate_title(title: &str, max: usize) -> String {
@@ -2029,24 +1897,6 @@ impl App {
             }
         }
         Ok(true)
-    }
-
-    /// Prepare the agent launch that follows an accepted TODO plan.
-    ///
-    /// Plan mode normally marked the item in progress when the workflow began,
-    /// so that state is permission to continue rather than a duplicate-launch
-    /// conflict. A not-started item can still occur when accepting an older
-    /// draft or after an external status edit; reserve it through the ordinary
-    /// launch path (this always succeeds, since `todo`'s status was just
-    /// checked here and nothing re-reads it in between) and tell the caller
-    /// that a startup failure should undo that new reservation. Completed work
-    /// remains blocked.
-    pub(crate) fn todos_prepare_planned_launch(&mut self, todo: &Todo) -> Result<Option<bool>> {
-        match todo.work.status {
-            TodoStatus::InProgress => Ok(Some(false)),
-            TodoStatus::NotStarted => Ok(self.todos_reserve_launch(todo)?.then_some(true)),
-            TodoStatus::Completed => Ok(None),
-        }
     }
 
     /// Restore the pre-launch state after agent creation or prompt setup fails.
@@ -3237,4 +3087,12 @@ impl App {
         }
         self.confirm_todos_host_reassign()
     }
+}
+
+/// A branch name seeded from a TODO title.
+fn todo_branch_name(todo_title: &str) -> String {
+    /// Long enough for four or five words, short enough to sit in a dashboard
+    /// row beside its project without pushing the status off the end.
+    const MAX_BRANCH_SLUG: usize = 32;
+    crate::app::util::slugify_shortened(todo_title, MAX_BRANCH_SLUG)
 }

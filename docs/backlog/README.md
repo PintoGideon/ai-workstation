@@ -70,7 +70,7 @@ doc always says exactly what remains.
   page, plus context-window/usage tracking, a multi-harness capability
   matrix, the `aiw.json` project-config schema, session bookmarks/saved-
   transcript resume/Fresh Context handoff, Remote Control, task-prompt
-  coaching, plan-interview reference-doc attachment, and combined-batch
+  coaching, and combined-batch
   fix-cost disclosure. Landed as three new pages —
   [Choosing a Harness](../../site/content/docs/harnesses.md),
   [Project Config Reference](../../site/content/docs/project-config.md),
@@ -106,17 +106,10 @@ doc always says exactly what remains.
   `.aiw/config.json` is still read and migrates on first write; the
   directory gains an injected README explaining what it is.
 
-- [Plan Mode: guided feature discovery](plan-mode-interview-plan.md) —
-  _All epics shipped._ Plan mode now runs a native TUI interview: feature
-  brief, built-in + per-project question
-  banks, AI-adaptive follow-up rounds (headless run of the feature's
-  own agent harness, with fallback), then an
-  AI-synthesized structured plan behind a user review/edit gate before
-  the agent session launches seeded with it. Triggered from the feature
-  wizard when plan mode is on, and on-demand for existing features with
-  transcripts persisted for re-runs. Six epics: interview engine,
-  config templates, AI rounds, synthesis + review gate, on-demand +
-  persistence, polish.
+- Plan Mode: guided feature discovery — _Removed 2026-10-11._ The native
+  TUI interview, Quick Plan, `AIW_PLAN.md` and the per-project question
+  banks were taken out; Claude Code's and Codex's own plan modes replace
+  them.
 - [Feature TODOs](feature-todos-plan.md) — _All epics shipped._ Scoped
   TODO lists added as a `SessionKind::Todos` session via the `s` picker
   (one per feature, native UI, SQLite-backed). A feature's editor opens
@@ -127,7 +120,7 @@ doc always says exactly what remains.
   (add/edit/notes/done/priority/reorder/delete
   + a per-list scratchpad), spawning an agent from a TODO with a
   pre-filled composer prompt, "implement next" across the visible
-  scopes, plan mode from a TODO, and quick-capture from any session view
+  scopes, and quick-capture from any session view
   are all in place. Deleting a feature asks what happens to the
   unfinished work in its worktree list.
 

@@ -1330,7 +1330,6 @@ fn fix_session_index_prefers_dedicated_else_creates() {
         false,
         VibeMode::Vibeless,
         false,
-        false,
         AgentKind::Claude,
         false,
     );
@@ -1387,7 +1386,6 @@ fn named_triage_sessions_resolve_independently() {
         false,
         VibeMode::default(),
         false,
-        false,
         AgentKind::default(),
         false,
     );
@@ -1418,7 +1416,6 @@ fn named_triage_session_rejects_a_different_selected_harness() {
         std::path::PathBuf::from("/tmp/feature"),
         false,
         VibeMode::default(),
-        false,
         false,
         AgentKind::default(),
         false,
@@ -1456,7 +1453,6 @@ fn fix_session_index_ignores_non_agent_sessions() {
         std::path::PathBuf::from("/tmp/wd"),
         false,
         VibeMode::Vibeless,
-        false,
         false,
         AgentKind::Claude,
         false,

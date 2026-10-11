@@ -18,11 +18,10 @@ const project = {
 };
 
 describe("TodoNewFeatureForm", () => {
-  it("submits a direct TODO launch as a worktree feature without planning", async () => {
+  it("submits a direct TODO launch as a worktree feature", async () => {
     const onSubmit = vi.fn();
     render(
       <QueryClientProvider client={new QueryClient()}><TodoNewFeatureForm
-        kind="launch"
         todoTitle="Improve the API"
         projects={[project] as Parameters<typeof TodoNewFeatureForm>[0]["projects"]}
         agents={[{ slug: "claude", display_name: "Claude" }]}
@@ -39,7 +38,6 @@ describe("TodoNewFeatureForm", () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       project_name: "demo",
       branch: "improve-the-api",
-      plan_mode: false,
       use_worktree: true,
       dry_run: false,
     }));

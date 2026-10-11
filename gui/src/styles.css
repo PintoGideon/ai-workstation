@@ -223,7 +223,7 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tree-empty-hint, .tree-project-plan { margin: 2px 8px 4px 32px; }
+.tree-empty-hint { margin: 2px 8px 4px 32px; }
 .tree-empty-hint {
   border: 0;
   padding: 0;
@@ -384,24 +384,6 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.plan-pill {
-  margin: 8px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-  text-align: left;
-  color: var(--accent);
-}
-.plan-pill > span:nth-child(2) { display: flex; flex-direction: column; min-width: 0; flex: 1; color: var(--text); font-size: 13px; }
-.plan-pill .muted { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.plan-pill-open { font-size: 12px; font-weight: 600; }
-.plan-pill:hover { border-color: var(--accent); }
 
 /* ── Status ─────────────────────────────────────────────── */
 
@@ -881,7 +863,7 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
 .field-hint { display: block; font-size: 12.5px; color: var(--text-muted); }
 .mode-hint { margin-top: -8px; }
 
-.field input, .field select, .attach-row input, .plan-textarea {
+.field input, .field select, .plan-textarea {
   width: 100%;
   height: 34px;
   padding: 0 10px;
@@ -891,7 +873,7 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
   transition: border-color 0.12s, box-shadow 0.12s;
 }
 .field select { padding-right: 6px; }
-.field input:focus, .field select:focus, .plan-textarea:focus, .attach-row input:focus {
+.field input:focus, .field select:focus, .plan-textarea:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
@@ -1020,14 +1002,10 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
 .toast-text { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; }
 .toast-text span { color: var(--text-muted); overflow-wrap: anywhere; }
 
-/* ── Plan interview ─────────────────────────────────────── */
+/* ── Workflow panels ────────────────────────────────────── */
 
-.plan { display: flex; flex-direction: column; gap: 14px; }
-.plan-phase { display: flex; align-items: center; gap: 10px; }
 .progress { flex: 1; max-width: 200px; height: 4px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .progress > div { height: 100%; background: var(--accent); border-radius: inherit; transition: width 0.2s; }
-.plan-lead { font-size: 15px; font-weight: 500; }
-.plan-question { font-size: 16px; font-weight: 600; line-height: 1.4; }
 
 .plan-textarea {
   height: auto;
@@ -1036,18 +1014,6 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
   resize: vertical;
   min-height: 72px;
 }
-
-.plan-loading {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 18px;
-  border-radius: var(--radius);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.plan-loading strong { color: var(--text); }
-.plan-loading .spinner { margin-top: 3px; }
 
 .options { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
 .options > .btn { align-self: flex-start; }
@@ -1063,23 +1029,6 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
 .option:hover { background: var(--surface-2); }
 .option-selected { border-color: var(--accent); background: var(--accent-soft) !important; }
 .option input { accent-color: var(--accent); margin: 0; }
-
-.choice-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
-.choice-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 14px;
-  text-align: left;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--accent);
-}
-.choice-card strong { color: var(--text); font-size: 13.5px; }
-.choice-card span { color: var(--text-muted); font-size: 12.5px; }
-.choice-card:not(:disabled):hover { border-color: var(--accent); background: var(--accent-soft); }
 
 .doc {
   margin: 0;
@@ -1097,10 +1046,6 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
 }
 .doc-mono { font-family: var(--mono); font-size: 12px; max-height: 50vh; }
 
-.attach { display: flex; flex-direction: column; gap: 8px; }
-.attach-row { display: flex; align-items: center; gap: 8px; color: var(--text-faint); }
-.attach-row input { height: 30px; font-size: 13px; }
-.attach-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .chip {
   max-width: 100%;
   padding: 3px 8px;
@@ -1121,11 +1066,6 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
   padding-top: 4px;
 }
 
-.plan-cancel { padding-top: 10px; border-top: 1px solid var(--border); }
-.plan-cancel .callout-danger .row { justify-content: flex-end; }
-
-.precall { display: flex; flex-direction: column; gap: 12px; }
-
 @media (max-width: 760px) {
   .sidebar { width: min(200px, 40vw); }
   .page-header { padding: 16px 16px 12px; flex-wrap: wrap; }
@@ -1134,7 +1074,7 @@ button.nav-item:hover, div.nav-item:hover { background: var(--surface-3); color:
   .form-row { grid-template-columns: 1fr; }
 }
 
-/* Rendered plan markdown */
+/* Rendered markdown */
 .md { white-space: normal; }
 .md > :first-child { margin-top: 0; }
 .md h1, .md h2, .md h3, .md h4 { margin: 18px 0 6px; line-height: 1.3; }

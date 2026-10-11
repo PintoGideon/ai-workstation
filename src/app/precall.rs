@@ -30,12 +30,6 @@ use crate::prompts::PromptId;
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PrecallAction {
-    PlanRound,
-    PlanSynthesis,
-    PlanCritique,
-    PlanCritiqueFollowup,
-    PlanDirectedRevision,
-    PlanInvestigation,
     ReviewWalkthrough,
     ReviewCoReview,
     ReviewChangesetOverview,
@@ -52,12 +46,6 @@ pub enum PrecallAction {
 impl PrecallAction {
     pub fn prompt_id(self) -> PromptId {
         match self {
-            PrecallAction::PlanRound => PromptId::PlanInterviewRound,
-            PrecallAction::PlanSynthesis => PromptId::PlanInterviewSynthesis,
-            PrecallAction::PlanCritique => PromptId::PlanInterviewCritique,
-            PrecallAction::PlanCritiqueFollowup => PromptId::PlanInterviewCritique,
-            PrecallAction::PlanDirectedRevision => PromptId::PlanInterviewDirectedRevision,
-            PrecallAction::PlanInvestigation => PromptId::PlanInterviewInvestigation,
             PrecallAction::ReviewWalkthrough => PromptId::ReviewWalkthrough,
             PrecallAction::ReviewCoReview => PromptId::ReviewCoReview,
             PrecallAction::ReviewChangesetOverview => PromptId::ReviewChangesetOverview,
@@ -227,12 +215,6 @@ impl App {
 
     fn dispatch_precall(&mut self, action: PrecallAction, harness: AgentKind) -> Result<()> {
         match action {
-            PrecallAction::PlanRound => self.start_next_plan_interview_ai_round(),
-            PrecallAction::PlanSynthesis => self.start_plan_interview_synthesis(),
-            PrecallAction::PlanCritique => self.start_plan_interview_critique(),
-            PrecallAction::PlanCritiqueFollowup => self.start_plan_interview_critique_followup(),
-            PrecallAction::PlanDirectedRevision => self.start_plan_interview_directed_feedback(),
-            PrecallAction::PlanInvestigation => self.start_plan_interview_investigation(),
             PrecallAction::ReviewWalkthrough => {
                 self.generate_review_walkthrough();
                 Ok(())

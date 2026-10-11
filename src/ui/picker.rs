@@ -577,17 +577,7 @@ pub fn draw_markdown_file_picker(
     };
     crate::ui::draw_modal_overlay(frame, area, theme);
 
-    let selecting_plan = matches!(
-        state.purpose,
-        crate::app::MarkdownFilePickerPurpose::SelectPlan { .. }
-    );
-    let title = if selecting_plan {
-        format!(
-            " Select Current Plan — Worktree Markdown ({}/{}) ",
-            visible_count,
-            state.files.len()
-        )
-    } else if showing_repo_root {
+    let title = if showing_repo_root {
         format!(
             " Markdown Files: Worktree + Repo Root ({}/{}) ",
             visible_count,
@@ -782,14 +772,7 @@ pub fn draw_markdown_file_picker(
                 Style::default().fg(theme.text_muted.to_color()),
             ),
             Span::styled("Enter", Style::default().fg(theme.warning.to_color())),
-            Span::styled(
-                if selecting_plan {
-                    " select  "
-                } else {
-                    " open  "
-                },
-                Style::default().fg(theme.text_muted.to_color()),
-            ),
+            Span::styled(" open  ", Style::default().fg(theme.text_muted.to_color())),
             Span::styled("Backspace", Style::default().fg(theme.warning.to_color())),
             Span::styled(
                 " clear filter  ",
@@ -812,21 +795,14 @@ pub fn draw_markdown_file_picker(
                 Style::default().fg(theme.text_muted.to_color()),
             ),
             Span::styled("Enter", Style::default().fg(theme.warning.to_color())),
-            Span::styled(
-                if selecting_plan {
-                    " select  "
-                } else {
-                    " open  "
-                },
-                Style::default().fg(theme.text_muted.to_color()),
-            ),
+            Span::styled(" open  ", Style::default().fg(theme.text_muted.to_color())),
             Span::styled("/", Style::default().fg(theme.warning.to_color())),
             Span::styled(
                 " search  ",
                 Style::default().fg(theme.text_muted.to_color()),
             ),
         ];
-        if !selecting_plan {
+        {
             spans.push(Span::styled(
                 "p",
                 Style::default().fg(theme.warning.to_color()),

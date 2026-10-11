@@ -35,9 +35,6 @@ mod hooks;
 pub(crate) mod issue_fixer;
 mod navigation;
 mod notifications;
-pub(crate) mod plan;
-mod plan_interview;
-mod plan_interview_attach;
 pub(crate) mod pr_review;
 pub(crate) mod precall;
 mod project_ops;
@@ -187,7 +184,6 @@ pub enum LocalCommand {
     OpenDebugLog,
     RefreshNotifications,
     CheckPendingDiffReview,
-    PlanInterview,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -430,12 +426,6 @@ pub struct AppConfig {
     // `remote_public_url`, `remote_tailscale_cli`, `remote_tailscale_socket`)
     // were removed with the feature; old config files still load (unknown
     // keys are ignored).
-    /// MCP servers (e.g. an issue tracker) the plan interview's Claude
-    /// passes may consult, read-only. Global scope only, deliberately: an MCP
-    /// config names programs to run, so a repository's `aiw.json` must not be
-    /// able to supply one. See [`crate::headless::HeadlessMcpConfig`].
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub plan_interview_mcp: Option<crate::headless::HeadlessMcpConfig>,
     // FORK: AIW-only keys (worktree_base_dir, worktree_include) at top level.
     #[serde(flatten)]
     pub aiw: crate::fork::config::AiwConfig,
@@ -595,7 +585,6 @@ impl Default for AppConfig {
             context_warning_percent: default_context_warning_percent(),
             context_critical_percent: default_context_critical_percent(),
             review_prompt_budget_tokens: None,
-            plan_interview_mcp: None,
             aiw: Default::default(), // FORK: AIW-only config keys
         }
     }
@@ -698,26 +687,12 @@ pub struct App {
     pub theme: crate::theme::Theme,
     pub selection: Selection,
     pub mode: AppMode,
-    /// A plan interview temporarily parked while the user inspects the
-    /// dashboard or one of its sessions. Unlike a persisted draft this keeps
-    /// the live editor cursor and uncommitted answer text intact.
-    pub paused_plan_interview: Option<PlanInterviewState>,
-    /// Brief composed from a TODO, waiting for the create-feature wizard to
-    /// hand over to the interview it seeds.
-    ///
-    /// It cannot ride on the wizard state: the wizard may detour through an
-    /// `on_worktree_created` hook that rebuilds its launch from scratch. Taken
-    /// by `start_plan_interview`, and only ever read when that launch carries a
-    /// `todo_origin`, so an unrelated feature created afterwards cannot pick up
-    /// a stale brief.
-    pub pending_todo_plan_brief: Option<String>,
     /// Composer seed for a "start an agent in a new feature" spawn from a TODO,
     /// waiting for the create-feature wizard to finish. Kept here rather than on
-    /// the wizard state for the same reason [`Self::pending_todo_plan_brief`]
-    /// is: the wizard can detour through an `on_worktree_created` hook that
-    /// rebuilds its launch from scratch. Taken unconditionally by
-    /// `finish_feature_launch_with_resource_approval`, and only read when that
-    /// launch carries a `todo_origin` and is not a plan run.
+    /// the wizard state because the wizard can detour through an
+    /// `on_worktree_created` hook that rebuilds its launch from scratch. Taken
+    /// unconditionally by `finish_feature_launch_with_resource_approval`, and
+    /// only read when that launch carries a `todo_origin`.
     pub pending_todo_spawn_prompt: Option<String>,
     /// Process-lifetime visibility for the project TODO scope. This is shared
     /// by every TODO view but intentionally resets whenever AIW starts.
@@ -791,17 +766,6 @@ pub struct App {
     pub missing_project_repos: std::collections::HashSet<String>,
     pub latest_prompt_cache: HashMap<String, String>,
     pub sidebar_model_cache: HashMap<String, String>,
-    // FORK: `sidebar_plan_cache` removed — written (a plan-file read on the main
-    // thread every 5 s while viewing) but never read outside tests; the sidebar
-    // uses `sidebar_effective_plan_cache`, filled by the background load.
-    /// The sidebar's "Current: <path>" line for each feature's effective
-    /// plan (see `app::plan::resolve_effective_plan`); no entry means no
-    /// plan resolved (or none has loaded yet). Populated by the
-    /// background sidebar-load pipeline, never resolved on the render
-    /// thread — the resolution touches the filesystem (an `is_file` check
-    /// and, for a manual selection, a `canonicalize`), and `draw()` runs
-    /// up to ~20x/sec while a pane is in view.
-    pub sidebar_effective_plan_cache: HashMap<String, String>,
     pub codex_session_title_cache: HashMap<String, Option<String>>,
     pub codex_session_prompt_cache: HashMap<String, Option<String>>,
     pub codex_session_model_cache: HashMap<String, Option<String>>,
@@ -864,33 +828,6 @@ pub struct App {
     /// for a session can be slow, so it runs off the UI thread; see
     /// `app::session_tools::open_latest_prompt_for_selection`.
     pub(crate) latest_prompt_menu_bg: Option<Receiver<session_tools::LatestPromptScanResult>>,
-    /// Receiver for the background AI-adaptive plan-interview round (a
-    /// headless harness call). Carries the round number alongside the
-    /// result so a late-arriving response can be matched or discarded. See
-    /// `app::plan_interview::poll_plan_interview_ai_bg`.
-    pub plan_interview_ai_bg: Option<Receiver<(usize, Result<String>)>>,
-    /// The `plan_interview_mcp` validation error last reported, so an invalid
-    /// config warns once rather than on every pass and every precall replay.
-    /// Cleared when the config validates, so breaking it again warns again.
-    pub(crate) plan_interview_mcp_warned: Option<String>,
-    /// Receiver for the final plan-synthesis headless call. Kept separate
-    /// from adaptive rounds so late results can only be applied to the
-    /// matching loading phase.
-    pub plan_interview_synthesis_bg: Option<Receiver<Result<String>>>,
-    /// Receiver for the optional Expert review of a draft plan. Separate again
-    /// so a late review can never be mistaken for a synthesis result and
-    /// overwrite the plan it was only meant to comment on.
-    pub plan_interview_critique_bg: Option<Receiver<Result<String>>>,
-    /// Receiver for a user-directed plan revision. This pass is separate from
-    /// synthesis and critique because it may inspect the feature workdir with
-    /// read-only tools and is only valid for its dedicated loading phase.
-    pub plan_interview_directed_feedback_bg: Option<Receiver<Result<String>>>,
-    /// Receiver for the optional context-isolated investigation workflow. Its
-    /// worker runs one fresh read-only context per focus, then a separate
-    /// no-tools merge context, and returns the proposed revised plan alongside
-    /// the focuses whose investigator failed.
-    pub plan_interview_investigation_bg:
-        Option<Receiver<Result<crate::plan_interview::PlanInvestigationOutcome>>>,
     /// A PR Triage pane stashed by `pr_review_toggle_to_session` (`P`) while the
     /// user watches the linked fix session; `leader+P` pops it back without a
     /// re-fetch. See [`PrReviewReturn`].
@@ -1050,7 +987,6 @@ struct SidebarLoadResult {
     changed: bool,
     latest_prompt: Option<String>,
     model_text: Option<String>,
-    plan_text: Option<String>,
 }
 
 type SidebarLoadTask = Box<dyn FnOnce() + Send + 'static>;
@@ -1177,16 +1113,6 @@ impl App {
             | AppMode::ReviewMemoryBootstrapRunning(_)
             | AppMode::ReviewMemoryCompactRunning(_)
             | AppMode::AiReviewRunning(_) => true,
-            // Animates the loading frame's throbber and elapsed-time display
-            // while plan-interview AI work runs in the background.
-            AppMode::PlanInterview(state) => matches!(
-                state.phase,
-                PlanInterviewPhase::AiLoading
-                    | PlanInterviewPhase::SynthesisLoading
-                    | PlanInterviewPhase::CritiqueLoading
-                    | PlanInterviewPhase::DirectedFeedbackLoading
-                    | PlanInterviewPhase::InvestigationLoading
-            ),
             _ => false,
         };
         base || self.has_active_toasts()
@@ -1386,8 +1312,6 @@ impl App {
             theme,
             selection: Selection::Project(0),
             mode: AppMode::Normal,
-            paused_plan_interview: None,
-            pending_todo_plan_brief: None,
             pending_todo_spawn_prompt: None,
             todo_project_visible: true,
             todo_global_visible: true,
@@ -1416,7 +1340,6 @@ impl App {
             missing_project_repos: std::collections::HashSet::new(),
             latest_prompt_cache,
             sidebar_model_cache: HashMap::new(),
-            sidebar_effective_plan_cache: HashMap::new(),
             codex_session_title_cache: HashMap::new(),
             codex_session_prompt_cache: HashMap::new(),
             codex_session_model_cache: HashMap::new(),
@@ -1445,12 +1368,6 @@ impl App {
             issue_work: issue_fixer::IssueWork::default(),
             issue_comment_work: issue_fixer::IssueCommentWork::default(),
             latest_prompt_menu_bg: None,
-            plan_interview_ai_bg: None,
-            plan_interview_mcp_warned: None,
-            plan_interview_synthesis_bg: None,
-            plan_interview_critique_bg: None,
-            plan_interview_directed_feedback_bg: None,
-            plan_interview_investigation_bg: None,
             pr_review_return: None,
             pr_review_pending_local: None,
             review_memory_bootstrap_bg: None,
@@ -1636,8 +1553,6 @@ impl App {
             theme: crate::theme::Theme::default(),
             selection: Selection::Project(0),
             mode: AppMode::Normal,
-            paused_plan_interview: None,
-            pending_todo_plan_brief: None,
             pending_todo_spawn_prompt: None,
             todo_project_visible: true,
             todo_global_visible: true,
@@ -1666,7 +1581,6 @@ impl App {
             missing_project_repos: std::collections::HashSet::new(),
             latest_prompt_cache,
             sidebar_model_cache: HashMap::new(),
-            sidebar_effective_plan_cache: HashMap::new(),
             codex_session_title_cache: HashMap::new(),
             codex_session_prompt_cache: HashMap::new(),
             codex_session_model_cache: HashMap::new(),
@@ -1695,12 +1609,6 @@ impl App {
             issue_work: issue_fixer::IssueWork::default(),
             issue_comment_work: issue_fixer::IssueCommentWork::default(),
             latest_prompt_menu_bg: None,
-            plan_interview_ai_bg: None,
-            plan_interview_mcp_warned: None,
-            plan_interview_synthesis_bg: None,
-            plan_interview_critique_bg: None,
-            plan_interview_directed_feedback_bg: None,
-            plan_interview_investigation_bg: None,
             pr_review_return: None,
             pr_review_pending_local: None,
             review_memory_bootstrap_bg: None,
@@ -1862,14 +1770,6 @@ impl App {
             } else {
                 self.sidebar_model_cache.remove(&result.tmux_session);
             }
-
-            if let Some(plan_text) = result.plan_text {
-                self.sidebar_effective_plan_cache
-                    .insert(result.tmux_session.clone(), plan_text);
-            } else {
-                self.sidebar_effective_plan_cache
-                    .remove(&result.tmux_session);
-            }
         }
         changed
     }
@@ -1879,7 +1779,6 @@ impl App {
         self.sidebar_load_signatures.remove(tmux_session);
         self.latest_prompt_cache.remove(tmux_session);
         self.sidebar_model_cache.remove(tmux_session);
-        self.sidebar_effective_plan_cache.remove(tmux_session);
         self.codex_live_threads.remove(tmux_session);
         self.prune_codex_sidebar_caches();
     }
@@ -2167,42 +2066,6 @@ impl App {
             .review_prompt_budget_tokens
             .or(self.config.review_prompt_budget_tokens)
             .unwrap_or_else(|| crate::headless::default_prompt_budget_tokens(harness))
-    }
-
-    /// The validated `plan_interview_mcp` for a pass run by `harness`, or
-    /// `None` when it is unset, the harness is not Claude (the only one whose
-    /// isolation mode can load an explicit MCP config), or the config is
-    /// invalid — which is logged and surfaced, never fatal: the pass runs
-    /// exactly as it would without MCP.
-    pub(crate) fn plan_interview_mcp(
-        &mut self,
-        harness: &AgentKind,
-    ) -> Option<crate::headless::HeadlessMcp> {
-        let config = self.config.plan_interview_mcp.as_ref()?;
-        if *harness != AgentKind::Claude {
-            self.log_info(
-                "plan_interview",
-                format!(
-                    "plan_interview_mcp ignored: {} passes cannot load MCP servers",
-                    harness.display_name()
-                ),
-            );
-            return None;
-        }
-        match config.validate() {
-            Ok(mcp) => {
-                self.plan_interview_mcp_warned = None;
-                Some(mcp)
-            }
-            Err(reason) => {
-                if self.plan_interview_mcp_warned.as_ref() != Some(&reason) {
-                    self.log_warn("plan_interview", reason.clone());
-                    self.message = Some(format!("MCP not loaded for plan interview: {reason}"));
-                    self.plan_interview_mcp_warned = Some(reason);
-                }
-                None
-            }
-        }
     }
 
     pub(crate) fn allowed_agents_for_repo(&self, repo: &Path) -> Vec<AgentKind> {
@@ -2796,7 +2659,6 @@ struct SidebarLoadRequest {
     workdir: PathBuf,
     preferred_session_kind: Option<SessionKind>,
     preferred_session_id: Option<String>,
-    selected_plan_path: Option<PathBuf>,
 }
 
 impl SidebarLoadRequest {
@@ -2831,7 +2693,6 @@ impl SidebarLoadRequest {
             workdir: feature.workdir.clone(),
             preferred_session_kind,
             preferred_session_id,
-            selected_plan_path: feature.selected_plan_path.clone(),
         }
     }
 
@@ -2841,8 +2702,6 @@ impl SidebarLoadRequest {
         self.preferred_session_id.hash(&mut hasher);
         session_kind_signature(self.preferred_session_kind.as_ref()).hash(&mut hasher);
         sidebar_prompt_input_signature(&self.workdir).hash(&mut hasher);
-        sidebar_plan_input_signature(&self.workdir, self.selected_plan_path.as_deref())
-            .hash(&mut hasher);
 
         if self.preferred_session_kind == Some(SessionKind::Claude) {
             claude_sessions::sidebar_input_signature(
@@ -2876,7 +2735,6 @@ impl SidebarLoadRequest {
                 changed,
                 latest_prompt: None,
                 model_text: None,
-                plan_text: None,
             };
         }
 
@@ -2898,18 +2756,12 @@ impl SidebarLoadRequest {
             }
             _ => None,
         };
-        let plan_text = crate::app::plan::plan_sidebar_display_text(
-            &self.workdir,
-            self.selected_plan_path.as_deref(),
-        );
-
         SidebarLoadResult {
             tmux_session: self.tmux_session,
             signature,
             changed,
             latest_prompt,
             model_text,
-            plan_text,
         }
     }
 }
@@ -2948,24 +2800,6 @@ fn sidebar_prompt_input_signature(workdir: &Path) -> u64 {
         &mut hasher,
         workdir.join(".codex").join("latest-prompt.txt"),
     );
-    hasher.finish()
-}
-
-fn sidebar_plan_input_signature(workdir: &Path, selected_plan_path: Option<&Path>) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    hash_path_metadata(
-        &mut hasher,
-        workdir.join(crate::app::plan::DEFAULT_PLAN_FILE),
-    );
-    selected_plan_path.hash(&mut hasher);
-    if let Some(selected) = selected_plan_path {
-        let candidate = if selected.is_absolute() {
-            selected.to_path_buf()
-        } else {
-            workdir.join(selected)
-        };
-        hash_path_metadata(&mut hasher, candidate);
-    }
     hasher.finish()
 }
 

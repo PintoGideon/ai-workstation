@@ -22,7 +22,6 @@ use super::{App, AppMode, Selection, ViewState};
 /// A prompt an embedding frontend still has to show, unsent.
 #[derive(Clone)]
 pub struct UnsentPromptHandoff {
-    pub view: ViewState,
     pub text: String,
 }
 
@@ -81,7 +80,6 @@ impl App {
                 .with_context(|| format!("could not paste the prompt into {label}"))?;
         } else {
             self.unsent_prompt_handoff = Some(UnsentPromptHandoff {
-                view,
                 text: text.to_string(),
             });
         }
@@ -216,10 +214,6 @@ mod tests {
         app.paste_prompt_unsent(0, 0, 1, "For the GUI").unwrap();
         let handoff = app.take_unsent_prompt().expect("kept");
         assert_eq!(handoff.text, "For the GUI");
-        assert_eq!(
-            (handoff.view.session.as_str(), handoff.view.window.as_str()),
-            ("aiw-hx-12", "codex")
-        );
         assert!(app.take_unsent_prompt().is_none(), "taken once");
         assert!(matches!(app.selection, Selection::Session(0, 0, 1)));
         assert!(matches!(app.mode, AppMode::Normal));

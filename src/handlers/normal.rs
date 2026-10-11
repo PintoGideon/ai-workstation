@@ -102,9 +102,6 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
                 app.open_issue_browser_for_project(project_index);
             }
         }
-        KeyCode::Enter if app.paused_plan_interview_matches_selection() => {
-            app.resume_paused_plan_interview();
-        }
         KeyCode::Enter => match &app.selection {
             Selection::Project(_) => {
                 app.toggle_collapse();
@@ -139,14 +136,7 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
             Selection::Project(pi) => {
                 if let Some(project) = app.store.projects.get(*pi) {
                     let name = project.name.clone();
-                    if app.paused_plan_interview_belongs_to_project(&name) {
-                        app.message = Some(
-                            "Resume or finish the parked plan interview before deleting its project"
-                                .into(),
-                        );
-                    } else {
-                        app.mode = AppMode::DeletingProject(name);
-                    }
+                    app.mode = AppMode::DeletingProject(name);
                 }
             }
             Selection::Feature(pi, fi) => {
@@ -155,15 +145,7 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
                 {
                     let pn = project.name.clone();
                     let fn_ = feature.name.clone();
-                    let feature_id = feature.id.clone();
-                    if app.paused_plan_interview_belongs_to_feature(&feature_id) {
-                        app.message = Some(
-                            "Resume or finish the parked plan interview before deleting its feature"
-                                .into(),
-                        );
-                    } else {
-                        app.mode = AppMode::DeletingFeature(pn, fn_);
-                    }
+                    app.mode = AppMode::DeletingFeature(pn, fn_);
                 }
             }
             Selection::Session(_, _, _) => {
@@ -349,16 +331,6 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char('W') => {
             app.open_ai_review();
         }
-        KeyCode::Char('P') => {
-            if !app.resume_paused_plan_interview() {
-                app.start_plan_interview_for_selected_feature();
-            }
-        }
-        KeyCode::Char('Q') => {
-            if !app.resume_paused_plan_interview() {
-                app.start_quick_plan_interview_for_selected_feature();
-            }
-        }
         KeyCode::Char('E') => {
             app.open_prompt_overrides(None);
         }
@@ -429,9 +401,6 @@ fn handle_normal_leader_key(app: &mut App, key: KeyEvent) -> Result<()> {
         }
         KeyCode::Char('d') => {
             app.open_diff_viewer()?;
-        }
-        KeyCode::Char('n') => {
-            app.open_current_plan_for_selection()?;
         }
         KeyCode::Char('m') => {
             app.open_markdown_viewer_for_selection()?;
@@ -555,11 +524,6 @@ mod tests {
         assert_eq!(default_key_for_action("syntax_picker"), Some('p'));
         assert_eq!(default_key_for_action("session_config"), Some('u'));
         assert_eq!(default_key_for_action("mark_ready"), Some('y'));
-        assert_eq!(
-            default_key_for_action("open_current_plan"),
-            None,
-            "the plan command is embedded-view-only, not a dashboard shortcut"
-        );
     }
 
     /// Two actions sharing a default key would make one of them unreachable,

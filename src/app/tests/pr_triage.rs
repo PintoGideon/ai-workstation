@@ -6553,8 +6553,6 @@ fn triage_setup_preset_fills_in_the_rows_below_it() {
         mode: VibeMode::Vibeless,
         agent: AgentKind::Codex,
         review: true,
-        plan_mode: true,
-        quick_plan: false,
         enable_chrome: true,
     }];
     enter_pr_review_for_feature(&mut app, 1);

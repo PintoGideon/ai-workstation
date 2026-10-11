@@ -27,7 +27,7 @@ function derived(extra: Partial<SidebarFeature> = {}): SidebarFeature {
 function renderTree(projects: Project[], sidebar: Partial<SidebarSnapshot> = {}, props: Partial<SidebarTreeProps> = {}) {
   const handlers = {
     onSelectProject: vi.fn(), onSelectFeature: vi.fn(), onSelectSession: vi.fn(),
-    onToggleCollapsed: vi.fn(), onResumePlan: vi.fn(), onCreateFeature: vi.fn(),
+    onToggleCollapsed: vi.fn(), onCreateFeature: vi.fn(),
   };
   render(<nav><SidebarTree
     projects={projects}
@@ -35,7 +35,6 @@ function renderTree(projects: Project[], sidebar: Partial<SidebarSnapshot> = {},
     stoppedSessionIds={[]}
     selection={null}
     deletingFeatureId={null}
-    pausedPlan={null}
     {...handlers}
     {...props}
   /></nav>);
@@ -70,8 +69,8 @@ it("labels PR badges like the TUI for open, unknown-thread, merged and closed PR
 
 it("shows every feature badge and keeps the name as the row's accessible name", () => {
   const nick = feature("round-totals", {
-    nickname: "Round totals", is_worktree: false, mode: "supervibe", collapsed: false, review: true, plan_mode: true,
-    remote_control: true, pending_worktree_script: true, summary: "Rounds invoice totals to cents",
+    nickname: "Round totals", is_worktree: false, mode: "supervibe", collapsed: false, review: true,
+    pending_worktree_script: true, summary: "Rounds invoice totals to cents",
     sessions: [session("Claude 1", "claude"), session("Shell", "terminal", { stopped: true })],
   });
   renderTree([project([nick])], {
@@ -79,7 +78,7 @@ it("shows every feature badge and keeps the name as the row's accessible name", 
       issue: "github.com/acme/invoice#42", usage: "usage 21.8k eff · $0.07", pending_input: true,
       waiting_for_input: true, pr: { state: "open", number: 321, unresolved_threads: 4 },
     }) },
-  }, { pausedPlan: { featureId: "round-totals", projectName: null, featureName: "Round totals" }, deletingFeatureId: "round-totals" });
+  }, { deletingFeatureId: "round-totals" });
 
   const name = screen.getByRole("button", { name: "Round totals", exact: true });
   const row = name.closest(".tree-feature") as HTMLElement;
@@ -88,7 +87,7 @@ it("shows every feature badge and keeps the name as the row's accessible name", 
   const chips = Array.from(meta.querySelectorAll(".tree-chip")).map((chip) => chip.textContent);
   expect(chips).toEqual([
     "repo", "github.com/acme/invoice#42", "PR #321 · 4 open", "usage 21.8k eff · $0.07", "supervibe", "review",
-    "plan", "plan paused · Resume", "remote", "deleting…", "running worktree script…", "5m ago", "2 sessions", "1 stopped",
+    "deleting…", "running worktree script…", "5m ago", "2 sessions", "1 stopped",
   ]);
   expect(meta.querySelector(".mode-supervibe")).toBeTruthy();
   expect(meta.querySelector(".tree-pr.pr-open")).toBeTruthy();
@@ -140,15 +139,13 @@ it("marks a waiting diff review with the waiting glyph but not the input marker"
   expect(screen.queryByRole("img", { name: "Input requested" })).toBeNull();
 });
 
-it("shows the project path, an empty-project hint and a paused creation-time plan", () => {
+it("shows the project path and an empty-project hint", () => {
   const handlers = renderTree([project([], { id: "p2", name: "Empty" })], {
     projects: { p2: { repo_display: "~/invoice" } },
-  }, { pausedPlan: { featureId: null, projectName: "Empty", featureName: "planned-feature" } });
+  });
   expect(screen.getByText("~/invoice")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "No features yet. Add one" }));
   expect(handlers.onCreateFeature).toHaveBeenCalledWith("p2");
-  fireEvent.click(screen.getByRole("button", { name: "plan paused: planned-feature · Resume" }));
-  expect(handlers.onResumePlan).toHaveBeenCalledTimes(1);
 });
 
 it("nests session rows with kind icons, run state, context and status text", () => {
@@ -258,9 +255,8 @@ it("renders from the persisted snapshot alone and carries a workflow's extra mar
     stoppedSessionIds={[]}
     selection={{ kind: "feature", projectId: "p1", featureId: "f", tab: undefined }}
     deletingFeatureId={null}
-    pausedPlan={null}
     onSelectProject={vi.fn()} onSelectFeature={vi.fn()} onSelectSession={vi.fn()}
-    onToggleCollapsed={vi.fn()} onResumePlan={vi.fn()} onCreateFeature={vi.fn()}
+    onToggleCollapsed={vi.fn()} onCreateFeature={vi.fn()}
     renderFeatureExtra={(f) => <span className="nav-count">{`${f.id}-extra`}</span>}
   /></nav>);
   const name = screen.getByRole("button", { name: "f", exact: true });

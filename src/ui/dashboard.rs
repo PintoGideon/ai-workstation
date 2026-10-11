@@ -432,17 +432,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         );
     }
 
-    if let AppMode::PlanInterview(state) = &mut app.mode {
-        super::dialogs::draw_plan_interview_dialog(
-            frame,
-            state,
-            app.message.as_deref(),
-            &app.theme,
-            &app.throbber_state,
-        );
-        return;
-    }
-
     match &app.mode {
         AppMode::CreatingProject(state) => {
             let allowed_agents =
@@ -483,7 +472,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 &app.theme,
             );
         }
-        AppMode::PlanInterview(_) => unreachable!("plan interview handled above"),
         AppMode::CreatingBatchFeatures(state) => {
             super::dialogs::draw_create_batch_features_dialog(frame, state, &app.theme);
         }
@@ -500,9 +488,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         }
         AppMode::BrowsingPath(state) => {
             super::dialogs::draw_browse_path_dialog(frame, state, &app.theme);
-        }
-        AppMode::PlanInterviewAttachDoc(state) => {
-            super::dialogs::draw_plan_interview_attach_doc_dialog(frame, state, &app.theme);
         }
         _ => {}
     }
@@ -1062,7 +1047,6 @@ mod tests {
             collapsed: false,
             mode: VibeMode::Vibeless,
             review: false,
-            plan_mode: false,
             agent: AgentKind::Claude,
             enable_chrome: false,
             pending_worktree_script: false,
@@ -1073,7 +1057,6 @@ mod tests {
             summary: None,
             summary_updated_at: None,
             nickname: None,
-            selected_plan_path: None,
             triage_source: None,
             review_source: None,
             issue_source: None,

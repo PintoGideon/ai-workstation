@@ -302,7 +302,7 @@ pub fn begin(gui: &mut GuiHandle, target: FeatureTarget) -> GuiResult<ReviewView
         ));
     }
     let app = gui.app_for_workflow();
-    if !matches!(app.mode, AppMode::Normal) || app.paused_plan_interview.is_some() {
+    if !matches!(app.mode, AppMode::Normal) {
         return Err(GuiError::conflict(
             "Finish the current workflow before opening Final Review",
         ));

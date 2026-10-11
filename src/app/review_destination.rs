@@ -450,9 +450,6 @@ impl App {
             true,
             setup.mode.clone(),
             setup.review,
-            // Plan mode would defer the launch into a planning interview; this
-            // feature exists to apply review feedback that already says what to do.
-            false,
             agent.clone(),
             setup.enable_chrome,
         );
@@ -710,7 +707,6 @@ mod tests {
             std::path::PathBuf::from(format!("/tmp/{project}/{branch}")),
             true,
             VibeMode::Vibeless,
-            false,
             false,
             AgentKind::Claude,
             false,

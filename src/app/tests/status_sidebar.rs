@@ -28,7 +28,6 @@ fn poll_sidebar_load_results_updates_feature_caches() {
             changed: true,
             latest_prompt: Some("lazy prompt".to_string()),
             model_text: Some("Model: openai/gpt-5.5".to_string()),
-            plan_text: Some("Current: AIW_PLAN.md".to_string()),
         })
         .unwrap();
 
@@ -37,12 +36,6 @@ fn poll_sidebar_load_results_updates_feature_caches() {
     assert_eq!(
         app.latest_prompt_for_session("aiw-my-feat"),
         Some("lazy prompt")
-    );
-    assert_eq!(
-        app.sidebar_effective_plan_cache
-            .get("aiw-my-feat")
-            .map(String::as_str),
-        Some("Current: AIW_PLAN.md")
     );
     assert_eq!(
         app.sidebar_model_cache
@@ -774,7 +767,6 @@ fn sync_thinking_status_drains_sidebar_results() {
             changed: true,
             latest_prompt: Some("warm prompt".to_string()),
             model_text: None,
-            plan_text: None,
         })
         .unwrap();
 
@@ -1025,7 +1017,6 @@ pub(super) fn store_with_single_agent_session(
         collapsed: false,
         mode: VibeMode::default(),
         review: false,
-        plan_mode: false,
         agent: agent.clone(),
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1036,7 +1027,6 @@ pub(super) fn store_with_single_agent_session(
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        selected_plan_path: None,
         triage_source: None,
         review_source: None,
         issue_source: None,
@@ -1179,7 +1169,6 @@ fn sync_session_status_shows_agent_token_usage() {
         collapsed: true,
         mode: VibeMode::default(),
         review: false,
-        plan_mode: false,
         agent: AgentKind::Claude,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1190,7 +1179,6 @@ fn sync_session_status_shows_agent_token_usage() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        selected_plan_path: None,
         triage_source: None,
         review_source: None,
         issue_source: None,
@@ -1478,7 +1466,6 @@ fn sync_session_status_marks_discovered_codex_usage_as_inferred() {
         collapsed: false,
         mode: VibeMode::default(),
         review: false,
-        plan_mode: false,
         agent: AgentKind::Codex,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1489,7 +1476,6 @@ fn sync_session_status_marks_discovered_codex_usage_as_inferred() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        selected_plan_path: None,
         triage_source: None,
         review_source: None,
         issue_source: None,
@@ -1609,7 +1595,6 @@ fn sync_session_status_does_not_infer_stale_codex_usage_for_new_session() {
         collapsed: false,
         mode: VibeMode::default(),
         review: false,
-        plan_mode: false,
         agent: AgentKind::Codex,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1620,7 +1605,6 @@ fn sync_session_status_does_not_infer_stale_codex_usage_for_new_session() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        selected_plan_path: None,
         triage_source: None,
         review_source: None,
         issue_source: None,
@@ -1720,7 +1704,6 @@ fn sync_session_status_does_not_duplicate_inferred_sources_in_feature() {
         collapsed: false,
         mode: VibeMode::default(),
         review: false,
-        plan_mode: false,
         agent: AgentKind::Codex,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1731,7 +1714,6 @@ fn sync_session_status_does_not_duplicate_inferred_sources_in_feature() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        selected_plan_path: None,
         triage_source: None,
         review_source: None,
         issue_source: None,
@@ -1815,7 +1797,6 @@ fn sync_session_status_checks_sidebar_inputs_off_thread() {
         collapsed: false,
         mode: VibeMode::default(),
         review: false,
-        plan_mode: false,
         agent: AgentKind::Claude,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1826,7 +1807,6 @@ fn sync_session_status_checks_sidebar_inputs_off_thread() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        selected_plan_path: None,
         triage_source: None,
         review_source: None,
         issue_source: None,

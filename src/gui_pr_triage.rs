@@ -28,8 +28,8 @@ use crate::app::toast::ToastKind;
 use crate::app::{App, AppMode, PendingFollowUp, PrPickerState, PrReviewState};
 use crate::editor::TextEditor;
 use crate::github::{PrListEntry, PrMeta, PrRef, PrResolution, ReviewThread};
+use crate::gui_contract::PrecallView;
 use crate::gui_contract::{FeatureTarget, GuiError, GuiHandle, GuiResult, SessionTarget};
-use crate::gui_plans::PrecallView;
 use crate::project::AgentKind;
 
 /// The title the pre-call notice shows for a PR investigation.
@@ -684,7 +684,7 @@ fn opening(gui: &mut GuiHandle, target: &PrTriageTarget) -> GuiResult<Opening> {
         gui.pr_triage_context = None;
     }
     let app = gui.app_for_workflow();
-    if !matches!(app.mode, AppMode::Normal) || app.paused_plan_interview.is_some() {
+    if !matches!(app.mode, AppMode::Normal) {
         return Err(GuiError::conflict(
             "Finish the current workflow before opening PR Triage",
         ));

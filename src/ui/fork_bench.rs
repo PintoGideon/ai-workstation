@@ -96,7 +96,6 @@ pub(crate) fn realistic_store() -> ProjectStore {
                         mode: [VibeMode::Vibeless, VibeMode::Vibe, VibeMode::SuperVibe][fi % 3]
                             .clone(),
                         review: fi == 1,
-                        plan_mode: false,
                         agent: AgentKind::Claude,
                         enable_chrome: false,
                         pending_worktree_script: false,
@@ -114,7 +113,6 @@ pub(crate) fn realistic_store() -> ProjectStore {
                             .then(|| "Wire SSO callback into the session store".into()),
                         summary_updated_at: None,
                         nickname: None,
-                        selected_plan_path: None,
                         triage_source: None,
                         review_source: None,
                         issue_source: None,

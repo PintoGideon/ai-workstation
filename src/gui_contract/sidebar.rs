@@ -597,7 +597,6 @@ mod tests {
             true,
             VibeMode::default(),
             false,
-            false,
             AgentKind::Claude,
             false,
         );
@@ -687,7 +686,6 @@ mod tests {
         feat.summary_updated_at = Some(Utc::now());
         feat.pending_worktree_script = true;
         feat.review = true;
-        feat.plan_mode = true;
         let mut app = app_for(store_with(vec![feat], dir.path()));
         app.context_states
             .insert("s-claude".into(), context(74, ContextBand::Warning, true));
@@ -719,7 +717,6 @@ mod tests {
             "collapsed",
             "mode",
             "review",
-            "plan_mode",
             "agent",
             "pending_worktree_script",
             "ready",

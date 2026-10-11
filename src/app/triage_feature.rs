@@ -335,9 +335,6 @@ impl App {
             true,
             setup.mode.clone(),
             setup.review,
-            // Plan mode would defer the launch into a planning interview; a
-            // triage feature exists to apply comments that already say what to do.
-            false,
             agent.clone(),
             setup.enable_chrome,
         );

@@ -32,7 +32,6 @@ function fullView(): SessionSidebarView {
       { kind: "context", title: "Context", actions: [], lines: [
         { kind: "text", text: "Ctx ~85% CRITICAL STALE · 170,000", tone: "plain", emphasised: false },
       ], context: { percent: 85, used_tokens: 170000, limit_tokens: 200000, band: "critical", estimated: true, stale: true, fresh_context_hint: true } },
-      { kind: "plan", title: "Plan", actions: [{ kind: "open_plan" }], lines: [field("Current", "AIW_PLAN.md")] },
       { kind: "issue", title: "Issue", actions: [], lines: [field("Repository", "github.com/acme/widget"), field("Issue", "#42")] },
       { kind: "pr_triage", title: "PR Triage", actions: [{ kind: "pr_triage" }], lines: [field("PR", "#77 · 2 open"), field("Status", "Working", "pr_working", true)] },
       { kind: "work", title: "Work", actions: [{ kind: "supervised_edits" }], lines: [field("State", "waiting for diff review", "waiting", true)] },
@@ -59,7 +58,6 @@ function sparseView(): SessionSidebarView {
     session_id: "claude", harness: "pi", title: "Pi Sidebar", notes: [],
     sections: [
       { kind: "status", title: "Status", actions: [], lines: [field("Activity", "Ready", "ready", true)] },
-      { kind: "plan", title: "Plan", actions: [], lines: [{ kind: "text", text: "No plan selected", tone: "plain", emphasised: false }] },
     ],
   };
 }
@@ -73,7 +71,6 @@ beforeEach(() => {
   current = fullView();
   vi.mocked(invoke).mockImplementation(async (command) => {
     if (command === "session_sidebar") return current;
-    if (command === "session_sidebar_plan") return { path: "AIW_PLAN.md", markdown: "# The plan\n\nStep one", truncated: false };
     if (command === "session_sidebar_complete_todo") return "Marked referenced TODO complete";
     throw new Error(`Unexpected command: ${command}`);
   });
@@ -123,7 +120,7 @@ describe("session sidebar", () => {
     expect(await screen.findByRole("heading", { name: "Claude Sidebar" })).toBeTruthy();
     expect(sidebar().getAttribute("data-harness")).toBe("claude");
     expect(sectionTitles()).toEqual([
-      "Status", "Usage", "Context", "Plan", "Issue", "PR Triage", "Work", "Summary", "Prompt", "Todos", "Active TODO",
+      "Status", "Usage", "Context", "Issue", "PR Triage", "Work", "Summary", "Prompt", "Todos", "Active TODO",
     ]);
     expect(sidebarCalls()[0]).toEqual(["session_sidebar", { target }]);
     const status = section("Status");
@@ -134,12 +131,11 @@ describe("session sidebar", () => {
     expect(screen.getByText(/reported only to a running TUI/)).toBeTruthy();
   });
 
-  it("hides empty sections and offers no action without a plan", async () => {
+  it("hides empty sections", async () => {
     current = sparseView();
     mount();
     expect(await screen.findByRole("heading", { name: "Pi Sidebar" })).toBeTruthy();
-    expect(sectionTitles()).toEqual(["Status", "Plan"]);
-    expect(within(section("Plan")).queryByRole("button")).toBeNull();
+    expect(sectionTitles()).toEqual(["Status"]);
     expect(screen.queryByText(/running TUI/)).toBeNull();
   });
 
@@ -197,23 +193,6 @@ describe("session sidebar", () => {
     expect(onSupervisedEdits).toHaveBeenCalledTimes(1);
   });
 
-  it("reads the current plan in a dialog and reports a missing one", async () => {
-    mount();
-    fireEvent.click(await waitFor(() => within(section("Plan")).getByRole("button", { name: "Open" })));
-    const dialog = await screen.findByRole("dialog", { name: "Current plan" });
-    expect(await within(dialog).findByText("Step one")).toBeTruthy();
-    expect(within(dialog).getByText("AIW_PLAN.md")).toBeTruthy();
-    expect(vi.mocked(invoke)).toHaveBeenCalledWith("session_sidebar_plan", { target });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
-
-    vi.mocked(invoke).mockImplementation(async (command) => {
-      if (command === "session_sidebar") return current;
-      throw { kind: "not_found", message: "This feature has no current plan." };
-    });
-    fireEvent.click(within(section("Plan")).getByRole("button", { name: "Open" }));
-    expect(await within(await screen.findByRole("dialog")).findByText("This feature has no current plan.")).toBeTruthy();
-  });
-
   it("hides cached actions when a refresh reports a deleted session", async () => {
     mount();
     await waitFor(() => section("Active TODO"));
@@ -222,20 +201,6 @@ describe("session sidebar", () => {
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Session deleted elsewhere");
     expect(screen.queryByRole("region", { name: "Active TODO" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Reuse" })).toBeNull();
-  });
-
-  it("keeps a dismissed plan closed when its read finishes later", async () => {
-    let finish!: (value: unknown) => void;
-    vi.mocked(invoke).mockImplementation(async (command) => {
-      if (command === "session_sidebar") return current;
-      if (command === "session_sidebar_plan") return new Promise((resolve) => { finish = resolve; });
-      throw new Error(command);
-    });
-    mount();
-    fireEvent.click(await waitFor(() => within(section("Plan")).getByRole("button", { name: "Open" })));
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Close" }));
-    await act(async () => { finish({ path: "AIW_PLAN.md", markdown: "# Late plan", truncated: false }); });
-    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("completes the active TODO only after confirmation", async () => {

@@ -440,10 +440,10 @@ fn draw_create_feature_branch_mode(
     // just below so the agent block never grows into space they need.
     let other_sections_height = 3 + 1 + 3 + 1 // [0..3] branch, spacer, worktree, spacer
         + 1 + 5 + 1 // [5..7] spacer, mode, spacer
-        + 1 + 1 // [8][10] review, plan checkboxes
-        + if has_chrome_row { 1 } else { 0 } // [12] chrome checkbox
-        + 1 // [13] spacer before focused help
-        + 1; // [15] hints
+        + 1 // [8] review checkbox
+        + if has_chrome_row { 1 } else { 0 } // [10] chrome checkbox
+        + 1 // [11] spacer before focused help
+        + 1; // [13] hints
     let min_agent_block_height = 1 + allowed_agents.len() as u16;
     let agent_block_height = wanted_agent_block_height.min(
         inner
@@ -465,12 +465,10 @@ fn draw_create_feature_branch_mode(
             Constraint::Length(1),                                  // [7] spacer
             Constraint::Length(1),                                  // [8] review checkbox
             Constraint::Length(0),                                  // [9] spacer
-            Constraint::Length(1),                                  // [10] plan_mode checkbox
-            Constraint::Length(0),                                  // [11] spacer
-            Constraint::Length(if has_chrome_row { 1 } else { 0 }), // [12] chrome checkbox
-            Constraint::Length(1), // [13] spacer before focused help
-            Constraint::Min(0),    // [14] focused option help
-            Constraint::Length(1), // [15] hints
+            Constraint::Length(if has_chrome_row { 1 } else { 0 }), // [10] chrome checkbox
+            Constraint::Length(1), // [11] spacer before focused help
+            Constraint::Min(0),    // [12] focused option help
+            Constraint::Length(1), // [13] hints
         ])
         .split(inner);
 
@@ -660,37 +658,9 @@ fn draw_create_feature_branch_mode(
     let review_widget = Paragraph::new(review_lines);
     frame.render_widget(review_widget, chunks[8]);
 
-    // Plan checkbox (chunks[10]): a 3-state cycle (None / Quick Plan / Full
-    // Plan) on one field, mirroring how the mode picker above lists its
-    // options rather than adding a second checkbox.
-    let plan_active = state.step == CreateFeatureStep::Mode && state.mode_focus == 3;
-    let (plan_check, plan_label) = match (state.plan_mode, state.quick_plan) {
-        (true, true) => ("[Q]", "Quick Plan"),
-        (true, false) => ("[x]", "Full Plan (collaborative planning)"),
-        (false, _) => ("[ ]", "None"),
-    };
-    let plan_style = if plan_active {
-        Style::default().fg(theme.text.to_color())
-    } else {
-        Style::default().fg(theme.text_muted.to_color())
-    };
-    let plan_lines = vec![Line::from(vec![
-        Span::styled(
-            " Plan: ",
-            if plan_active {
-                Style::default().fg(theme.primary.to_color())
-            } else {
-                Style::default().fg(theme.text_muted.to_color())
-            },
-        ),
-        Span::styled(format!("{plan_check} {plan_label}"), plan_style),
-    ])];
-    let plan_widget = Paragraph::new(plan_lines);
-    frame.render_widget(plan_widget, chunks[10]);
-
-    // Chrome checkbox (chunks[12])
+    // Chrome checkbox (chunks[10])
     let chrome_active = state.step == CreateFeatureStep::Mode
-        && state.mode_focus == 4
+        && state.mode_focus == 3
         && state.agent == AgentKind::Claude;
     let chrome_check = if state.enable_chrome { "[x]" } else { "[ ]" };
     let chrome_style = if chrome_active {
@@ -700,7 +670,7 @@ fn draw_create_feature_branch_mode(
     };
     let chrome_label_style =
         if state.step == CreateFeatureStep::Mode && state.agent == AgentKind::Claude {
-            if state.mode_focus == 4 {
+            if state.mode_focus == 3 {
                 Style::default().fg(theme.primary.to_color())
             } else {
                 Style::default().fg(theme.text_muted.to_color())
@@ -718,19 +688,19 @@ fn draw_create_feature_branch_mode(
             ),
         ])];
         let chrome_widget = Paragraph::new(chrome_lines);
-        frame.render_widget(chrome_widget, chunks[12]);
+        frame.render_widget(chrome_widget, chunks[10]);
     }
 
     if state.step == CreateFeatureStep::Mode
         && let Some(description) = state.focused_mode_description()
     {
-        let help_area = if chunks[14].height > 3 {
+        let help_area = if chunks[12].height > 3 {
             Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Length(3), Constraint::Min(0)])
-                .split(chunks[14])[0]
+                .split(chunks[12])[0]
         } else {
-            chunks[14]
+            chunks[12]
         };
         let help = Paragraph::new(Line::from(vec![
             Span::styled("  Details  ", Style::default().fg(theme.primary.to_color())),
@@ -779,7 +749,7 @@ fn draw_create_feature_branch_mode(
             Span::raw(" cancel"),
         ]))
     };
-    frame.render_widget(hints, chunks[15]);
+    frame.render_widget(hints, chunks[13]);
 }
 
 pub fn draw_confirm_supervibe_dialog(frame: &mut Frame, theme: &Theme) {

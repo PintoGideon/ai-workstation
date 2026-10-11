@@ -1,7 +1,7 @@
 use super::support::*;
 use crate::app::setup::{
-    cleanup_agent_injected_files, ensure_notification_hooks, ensure_plan_mode_instructions,
-    ensure_review_claude_md, strip_between_markers,
+    cleanup_agent_injected_files, ensure_notification_hooks, ensure_review_claude_md,
+    strip_between_markers,
 };
 use crate::app::*;
 use crate::project::{AgentKind, Feature, Project, SessionKind};
@@ -71,68 +71,6 @@ fn strip_between_markers_handles_unicode_before_marker() {
 }
 
 #[test]
-fn plan_mode_instructions_use_claude_local_and_per_workdir_plan() {
-    let workdir = tempfile::TempDir::new().unwrap();
-    std::fs::write(workdir.path().join("CLAUDE.local.md"), "# Existing\n").unwrap();
-
-    ensure_plan_mode_instructions(workdir.path(), &AgentKind::Claude, true);
-    ensure_plan_mode_instructions(workdir.path(), &AgentKind::Claude, true);
-
-    let instructions = std::fs::read_to_string(workdir.path().join("CLAUDE.local.md")).unwrap();
-    assert!(instructions.starts_with("# Existing\n"));
-    assert!(instructions.contains("`AIW_PLAN.md`"));
-    assert_eq!(
-        instructions
-            .matches("<!-- AIW:plan-instructions:begin -->")
-            .count(),
-        1,
-        "instruction injection should be idempotent"
-    );
-    assert!(
-        std::fs::read_to_string(workdir.path().join(".gitignore"))
-            .unwrap()
-            .lines()
-            .any(|line| line == "CLAUDE.local.md")
-    );
-    assert!(!workdir.path().join("AIW_PLAN.md").exists());
-
-    ensure_plan_mode_instructions(workdir.path(), &AgentKind::Claude, false);
-    assert_eq!(
-        std::fs::read_to_string(workdir.path().join("CLAUDE.local.md")).unwrap(),
-        "# Existing\n"
-    );
-}
-
-#[test]
-fn plan_mode_instructions_refresh_legacy_managed_block() {
-    let workdir = tempfile::TempDir::new().unwrap();
-    std::fs::write(
-        workdir.path().join("CLAUDE.local.md"),
-        "# Existing\n\n\
-         <!-- AIW:plan-instructions:begin -->\n\n\
-         ## Plan Mode\n\n\
-         Read `.claude/plan.md` before implementation.\n\n\
-         <!-- AIW:plan-instructions:end -->\n",
-    )
-    .unwrap();
-
-    ensure_plan_mode_instructions(workdir.path(), &AgentKind::Claude, true);
-    ensure_plan_mode_instructions(workdir.path(), &AgentKind::Claude, true);
-
-    let instructions = std::fs::read_to_string(workdir.path().join("CLAUDE.local.md")).unwrap();
-    assert!(instructions.starts_with("# Existing\n"));
-    assert!(!instructions.contains("`.claude/plan.md`"));
-    assert!(instructions.contains("`AIW_PLAN.md`"));
-    assert_eq!(
-        instructions
-            .matches("<!-- AIW:plan-instructions:begin -->")
-            .count(),
-        1,
-        "managed instruction replacement should be idempotent"
-    );
-}
-
-#[test]
 fn review_mode_instructions_refresh_managed_block_and_ignore_archives() {
     let workdir = tempfile::TempDir::new().unwrap();
     std::fs::write(
@@ -169,82 +107,22 @@ fn review_mode_instructions_refresh_managed_block_and_ignore_archives() {
     assert!(ignore.lines().any(|line| line == "review-notes-archive.md"));
 }
 
-#[test]
-fn plan_mode_instructions_use_agents_for_non_claude_harnesses() {
-    for agent in [AgentKind::Codex, AgentKind::Pi] {
-        let workdir = tempfile::TempDir::new().unwrap();
-
-        ensure_plan_mode_instructions(workdir.path(), &agent, true);
-
-        let instructions = std::fs::read_to_string(workdir.path().join("AGENTS.md")).unwrap();
-        assert!(instructions.contains("`AIW_PLAN.md`"));
-        assert!(!workdir.path().join("CLAUDE.local.md").exists());
-        let ignore = std::fs::read_to_string(workdir.path().join(".gitignore")).unwrap();
-        assert!(ignore.lines().any(|line| line == "AGENTS.md"));
-
-        ensure_plan_mode_instructions(workdir.path(), &agent, false);
-        assert!(!workdir.path().join("AGENTS.md").exists());
-        assert!(
-            !workdir.path().join(".gitignore").exists(),
-            "AIW-owned AGENTS.md ignore entry should be cleaned up"
-        );
-    }
-}
-
 /// FORK: a checkout set up by upstream AMF carries its own marker blocks;
-/// AIW replaces them instead of adding a second Plan/Review Mode section.
+/// AIW replaces them instead of adding a second Review Mode section.
 #[test]
 fn upstream_instruction_blocks_are_replaced_not_duplicated() {
     let workdir = tempfile::TempDir::new().unwrap();
-    std::fs::write(
-        workdir.path().join("AGENTS.md"),
-        "# User instructions\n\n<!-- AMF:plan-instructions:begin -->\n\n## Plan Mode\n\nold\n\n<!-- AMF:plan-instructions:end -->\n",
-    )
-    .unwrap();
     std::fs::write(
         workdir.path().join("CLAUDE.local.md"),
         "<!-- AMF:review-instructions:begin -->\n\n## Review Mode\n\nold\n\n<!-- AMF:review-instructions:end -->\n",
     )
     .unwrap();
 
-    ensure_plan_mode_instructions(workdir.path(), &AgentKind::Codex, true);
     ensure_review_claude_md(workdir.path(), true);
 
-    let agents = std::fs::read_to_string(workdir.path().join("AGENTS.md")).unwrap();
-    assert!(agents.starts_with("# User instructions"));
-    assert_eq!(agents.matches("## Plan Mode").count(), 1, "{agents}");
-    assert!(!agents.contains("AMF:plan-instructions"), "{agents}");
-    assert!(agents.contains("`AIW_PLAN.md`"));
     let review = std::fs::read_to_string(workdir.path().join("CLAUDE.local.md")).unwrap();
     assert_eq!(review.matches("## Review Mode").count(), 1, "{review}");
     assert!(!review.contains("AMF:review-instructions"), "{review}");
-
-    // Turning plan mode off leaves only the user's own text.
-    ensure_plan_mode_instructions(workdir.path(), &AgentKind::Codex, false);
-    let agents = std::fs::read_to_string(workdir.path().join("AGENTS.md")).unwrap();
-    assert_eq!(agents, "# User instructions\n");
-}
-
-#[test]
-fn plan_mode_instructions_preserve_user_agents_file_and_ignore_rules() {
-    let workdir = tempfile::TempDir::new().unwrap();
-    std::fs::write(workdir.path().join("AGENTS.md"), "# User instructions\n").unwrap();
-    std::fs::write(workdir.path().join(".gitignore"), "target/\n").unwrap();
-
-    ensure_plan_mode_instructions(workdir.path(), &AgentKind::Codex, true);
-
-    let ignore = std::fs::read_to_string(workdir.path().join(".gitignore")).unwrap();
-    assert_eq!(ignore, "target/\n", "a user's AGENTS.md must stay tracked");
-
-    ensure_plan_mode_instructions(workdir.path(), &AgentKind::Codex, false);
-    assert_eq!(
-        std::fs::read_to_string(workdir.path().join("AGENTS.md")).unwrap(),
-        "# User instructions\n"
-    );
-    assert_eq!(
-        std::fs::read_to_string(workdir.path().join(".gitignore")).unwrap(),
-        "target/\n"
-    );
 }
 
 #[test]
@@ -282,8 +160,6 @@ fn start_worktree_hook_adds_pending_feature_immediately() {
         None,
         "new-feature".to_string(),
         VibeMode::default(),
-        false,
-        false,
         false,
         AgentKind::Claude,
         false,
@@ -327,8 +203,6 @@ fn start_worktree_hook_clears_sidebar_state_for_reused_feature() {
         None,
         "my-feat".to_string(),
         VibeMode::default(),
-        false,
-        false,
         false,
         AgentKind::Claude,
         false,
@@ -385,7 +259,6 @@ fn complete_running_hook_clears_pending_state_and_starts_feature() {
         workdir.path().to_path_buf(),
         true,
         VibeMode::default(),
-        false,
         false,
         AgentKind::Claude,
         false,
@@ -467,8 +340,6 @@ fn complete_running_hook_clears_pending_state_and_starts_feature() {
         branch: "new-feature".to_string(),
         mode: VibeMode::default(),
         review: false,
-        plan_mode: false,
-        quick_plan: false,
         agent: AgentKind::Claude,
         create_terminal: false,
         session_name: "Claude 1".to_string(),
@@ -1103,7 +974,6 @@ fn repair_unquoted_claude_hooks_refreshes_stale_stored_features() {
         true,
         VibeMode::Vibe,
         false,
-        false,
         AgentKind::Claude,
         false,
     );
@@ -1168,7 +1038,6 @@ fn repair_unquoted_claude_hooks_refreshes_legacy_settings_json() {
         workdir.path().to_path_buf(),
         true,
         VibeMode::Vibe,
-        false,
         false,
         AgentKind::Codex,
         false,

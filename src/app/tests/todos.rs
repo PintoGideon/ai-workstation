@@ -337,37 +337,6 @@ fn closing_todos_overlay_returns_to_session_selection() {
 }
 
 #[test]
-fn closing_todos_overlay_returns_to_the_paused_plan_interview() {
-    let mut app = App::new_for_test(
-        store_with_feature(ProjectStatus::Active),
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.selection = Selection::Feature(0, 0);
-    app.start_plan_interview_for_selected_feature();
-    if let AppMode::PlanInterview(state) = &mut app.mode {
-        state.editor = crate::editor::TextEditor::new("Inspect the TODO list".into());
-    }
-    app.pause_plan_interview();
-
-    app.add_builtin_session(0, 0, SessionKind::Todos).unwrap();
-    let si = app.store.projects[0].features[0]
-        .sessions
-        .iter()
-        .position(|session| session.kind == SessionKind::Todos)
-        .unwrap();
-    app.selection = Selection::Session(0, 0, si);
-    app.enter_view().unwrap();
-    app.close_todos_view();
-
-    assert!(matches!(
-        &app.mode,
-        AppMode::PlanInterview(state) if state.editor.text() == "Inspect the TODO list"
-    ));
-    assert!(app.paused_plan_interview.is_none());
-}
-
-#[test]
 fn todos_navigation_wraps_around() {
     let mut app = App::new_for_test(
         store_with_feature(ProjectStatus::Active),
@@ -495,7 +464,7 @@ fn launch_step(app: &App) -> Option<&crate::app::TodoLaunchStep> {
 }
 
 /// `Enter` on a TODO with nothing linked has to ask rather than pick for the user:
-/// spawning and planning are different amounts of work to commit to.
+/// spawning here and spawning in a new feature are different amounts of work.
 #[test]
 fn enter_on_an_unlinked_todo_opens_the_chooser_instead_of_spawning() {
     let mut app = todos_app();
@@ -515,90 +484,8 @@ fn enter_on_an_unlinked_todo_opens_the_chooser_instead_of_spawning() {
     assert_eq!(todo_titles(&app), vec!["wire up the chooser"]);
 }
 
-/// Esc unwinds one step at a time, so reaching the destination step by mistake
-/// costs one keypress rather than dropping the user back to the dashboard.
-#[test]
-fn esc_walks_back_from_destination_to_chooser_to_the_list() {
-    let mut app = todos_app();
-    seed_selected_todo(&mut app, "plan me");
-
-    crate::handlers::handle_todos_key(&mut app, ke(KeyCode::Enter)).unwrap();
-    // Move to "Plan this TODO first" (the third option) and take it.
-    crate::handlers::handle_todos_key(&mut app, ke(KeyCode::Char('j'))).unwrap();
-    crate::handlers::handle_todos_key(&mut app, ke(KeyCode::Char('j'))).unwrap();
-    crate::handlers::handle_todos_key(&mut app, ke(KeyCode::Enter)).unwrap();
-    assert!(matches!(
-        launch_step(&app),
-        Some(crate::app::TodoLaunchStep::Destination { .. })
-    ));
-
-    crate::handlers::handle_todos_key(&mut app, ke(KeyCode::Esc)).unwrap();
-    assert!(
-        matches!(
-            launch_step(&app),
-            Some(crate::app::TodoLaunchStep::Choice { selected: 2, .. })
-        ),
-        "Esc returns to the chooser with the cursor on the option that got here"
-    );
-
-    crate::handlers::handle_todos_key(&mut app, ke(KeyCode::Esc)).unwrap();
-    assert!(
-        launch_step(&app).is_none(),
-        "a second Esc returns to the list"
-    );
-    assert!(
-        matches!(app.mode, AppMode::Todos(_)),
-        "and stays in the overlay"
-    );
-}
-
-/// Choosing plan mode is the lifecycle boundary: the TODO changes before the
-/// destination is chosen, and backing out of that workflow does not pretend it
-/// was never begun. The layered picker must not disturb the list viewport.
-#[test]
-fn starting_then_cancelling_todo_planning_keeps_it_in_progress_and_preserves_the_pane() {
-    let mut app = todos_app();
-    seed_selected_todo(&mut app, "plan me");
-    if let AppMode::Todos(state) = &mut app.mode {
-        state.panes[0].scroll_offset = 7;
-    }
-
-    crate::handlers::handle_todos_key(&mut app, ke(KeyCode::Enter)).unwrap();
-    crate::handlers::handle_todos_key(&mut app, ke(KeyCode::Char('j'))).unwrap();
-    crate::handlers::handle_todos_key(&mut app, ke(KeyCode::Char('j'))).unwrap();
-    crate::handlers::handle_todos_key(&mut app, ke(KeyCode::Enter)).unwrap();
-
-    match &app.mode {
-        AppMode::Todos(state) => {
-            assert!(matches!(
-                state.launch,
-                Some(crate::app::TodoLaunchStep::Destination { .. })
-            ));
-            assert!(state.panes[0].todos[0].work.status.is_in_progress());
-            assert_eq!(state.focus, Some(0));
-            assert_eq!(state.panes[0].selected, 0);
-            assert_eq!(state.panes[0].scroll_offset, 7);
-        }
-        _ => panic!("expected the destination picker over the TODO list"),
-    }
-
-    crate::handlers::handle_todos_key(&mut app, ke(KeyCode::Esc)).unwrap();
-    crate::handlers::handle_todos_key(&mut app, ke(KeyCode::Esc)).unwrap();
-    match &app.mode {
-        AppMode::Todos(state) => {
-            assert!(state.launch.is_none());
-            assert!(state.panes[0].todos[0].work.status.is_in_progress());
-            assert_eq!(state.focus, Some(0));
-            assert_eq!(state.panes[0].selected, 0);
-            assert_eq!(state.panes[0].scroll_offset, 7);
-        }
-        _ => panic!("expected to return to the TODO list"),
-    }
-}
-
-/// The chooser's middle option starts an agent in a fresh worktree without a
-/// plan interview — the answer to "I don't want to plan this, but I don't want
-/// to reuse an existing checkout either".
+/// The chooser's second option starts an agent in a fresh worktree — the
+/// answer to "I don't want to reuse an existing checkout".
 #[test]
 fn chooser_middle_option_is_spawn_in_a_new_feature() {
     assert_eq!(
@@ -636,14 +523,13 @@ fn chooser_middle_option_is_spawn_in_a_new_feature() {
         _ => unreachable!(),
     }
     assert!(app.pending_todo_spawn_prompt.is_none());
-    assert!(app.pending_todo_plan_brief.is_none());
 }
 
 /// On a git-backed project the same option pre-seeds the create-feature wizard
-/// with the TODO — plan mode off — and stashes the TODO as the composer seed
-/// for the launch to pick up once the feature exists.
+/// with the TODO and stashes the TODO as the composer seed for the launch to
+/// pick up once the feature exists.
 #[test]
-fn spawn_in_new_feature_seeds_the_wizard_with_plan_mode_off() {
+fn spawn_in_new_feature_seeds_the_wizard() {
     let mut app = todos_app();
     if let Some(project) = app.store.projects.get_mut(0) {
         project.is_git = true;
@@ -657,7 +543,6 @@ fn spawn_in_new_feature_seeds_the_wizard_with_plan_mode_off() {
 
     match &app.mode {
         AppMode::CreatingFeature(state) => {
-            assert!(!state.plan_mode, "this route is explicitly not plan mode");
             assert!(state.use_worktree);
             assert_eq!(
                 state.todo_origin.as_ref().map(|o| o.todo_title.as_str()),
@@ -666,7 +551,6 @@ fn spawn_in_new_feature_seeds_the_wizard_with_plan_mode_off() {
         }
         _ => panic!("expected the create-feature wizard"),
     }
-    assert!(app.pending_todo_plan_brief.is_none(), "not a plan run");
     assert!(
         app.pending_todo_spawn_prompt
             .as_deref()
@@ -695,7 +579,7 @@ fn chooser_cursor_clamps_at_both_ends() {
     }
     assert_eq!(
         launch_step(&app).unwrap().selected(),
-        2,
+        1,
         "j past the end stays"
     );
 }
@@ -1803,45 +1687,6 @@ fn todo_launch_request_reserves_before_a_session_exists() {
 }
 
 #[test]
-fn accepted_plan_continues_from_the_in_progress_state_created_at_plan_start() {
-    let mut app = todos_app();
-    let mut todo = sample_todo("planned", false);
-    todo.work.status = crate::db::todos::TodoStatus::InProgress;
-    if let AppMode::Todos(state) = &mut app.mode {
-        state.panes[0].todos = vec![todo.clone()];
-    }
-
-    assert_eq!(
-        app.todos_prepare_planned_launch(&todo).unwrap(),
-        Some(false)
-    );
-    match &app.mode {
-        AppMode::Todos(state) => {
-            assert!(state.panes[0].todos[0].work.status.is_in_progress());
-        }
-        _ => panic!("expected Todos overlay"),
-    }
-}
-
-#[test]
-fn accepted_older_plan_reserves_not_started_work_but_blocks_completed_work() {
-    let mut app = todos_app();
-    let not_started = sample_todo("not-started", false);
-    if let AppMode::Todos(state) = &mut app.mode {
-        state.panes[0].todos = vec![not_started.clone()];
-    }
-    assert_eq!(
-        app.todos_prepare_planned_launch(&not_started).unwrap(),
-        Some(true),
-        "a legacy or externally reset plan needs a rollback-capable reservation"
-    );
-
-    let mut completed = sample_todo("completed", true);
-    completed.work.status = crate::db::todos::TodoStatus::Completed;
-    assert_eq!(app.todos_prepare_planned_launch(&completed).unwrap(), None);
-}
-
-#[test]
 fn ordinary_duplicate_spawn_for_in_progress_todo_is_blocked_without_side_effects() {
     let mut app = todos_app();
     let mut todo = sample_todo("a", false);
@@ -1951,143 +1796,6 @@ fn active_todo_completion_keybind_updates_db_and_retains_reference() {
         .expect("completion refreshes this session's active TODO cache");
     assert!(cached.contains("finish sidebar"));
     assert!(cached.ends_with("State: completed"));
-}
-
-/// Planning a TODO into a brand-new feature must leave the same sidebar
-/// provenance the direct "start an agent in a new feature" route records:
-/// `link_todo_to_new_feature` tags the feature's initial agent session, the
-/// active-TODO cache picks it up, and the row's work state names that session.
-#[test]
-fn planning_a_todo_into_a_new_feature_attaches_the_active_todo_sidebar_reference() {
-    let mut app = App::new_for_test(
-        store_with_feature(ProjectStatus::Active),
-        Box::new(MockTmuxOps::new()),
-        Box::new(MockWorktreeOps::new()),
-    );
-    let session_id = app.store.projects[0].features[0]
-        .add_session_named(SessionKind::Claude, "Claude 1".to_string())
-        .id
-        .clone();
-
-    let tmp = tempfile::NamedTempFile::new().unwrap();
-    let db = crate::db::AiwDb::open(tmp.path()).unwrap();
-    let list = db
-        .create_todo_list(&test_project_scope("proj-1"), Some("feat-1"))
-        .unwrap();
-    let todo = db
-        .add_todo(&list.id, "wire the sidebar", None, TodoPriority::High)
-        .unwrap();
-    app.db = Some(db);
-    // Plan mode marks the row in progress when it begins, before the feature
-    // exists, so it has no session association yet.
-    app.todos_mark_in_progress(&todo.id, None).unwrap();
-
-    let origin = TodoPlanOrigin {
-        todo_id: todo.id.clone(),
-        list_id: list.id.clone(),
-        todo_title: "wire the sidebar".to_string(),
-        host_feature_id: "feat-1".to_string(),
-    };
-    app.link_todo_to_new_feature(&origin, "my-project", "my-feat");
-
-    let session = &app.store.projects[0].features[0].sessions[0];
-    let reference = session
-        .todo_reference
-        .as_ref()
-        .expect("the planned feature's agent session carries a TODO reference");
-    assert_eq!(reference.todo_id, todo.id);
-    assert!(reference.launched_from_todo_menu);
-
-    let cached = app
-        .active_todos_sidebar_cache
-        .get(&session_id)
-        .expect("linking refreshes the planned session's active TODO cache");
-    assert!(cached.contains("wire the sidebar"));
-    assert!(cached.ends_with("State: open"));
-
-    let loaded = app
-        .db
-        .as_ref()
-        .unwrap()
-        .find_todo_by_id(&todo.id)
-        .unwrap()
-        .unwrap();
-    assert_eq!(loaded.linked_feature_id.as_deref(), Some("feat-1"));
-    assert_eq!(
-        loaded.work.agent_session_id.as_deref(),
-        Some(session_id.as_str())
-    );
-}
-
-/// The host-feature plan route (`start_todo_plan_session`) spins up a fresh
-/// agent session on the accepted plan; that session must carry the same
-/// sidebar reference the non-plan routes record.
-#[test]
-fn starting_a_host_feature_plan_session_attaches_the_active_todo_sidebar_reference() {
-    let mut tmux = MockTmuxOps::new();
-    tmux.expect_list_sessions().returning(|| Ok(vec![]));
-    tmux.expect_list_panes().returning(Vec::new);
-    tmux.expect_session_exists().return_const(true);
-    tmux.expect_create_window().returning(|_, _, _| Ok(()));
-    tmux.expect_launch_claude()
-        .returning(|_, _, _, _, _| Ok(()));
-    tmux.expect_resize_pane().returning(|_, _, _, _| Ok(()));
-    tmux.expect_select_window().returning(|_, _| Ok(()));
-
-    let mut app = App::new_for_test(
-        store_with_feature(ProjectStatus::Active),
-        Box::new(tmux),
-        Box::new(MockWorktreeOps::new()),
-    );
-    app.config.max_concurrent_agents = 8;
-    app.config.low_memory_warn_mb = 0;
-
-    let tmp = tempfile::NamedTempFile::new().unwrap();
-    let db = crate::db::AiwDb::open(tmp.path()).unwrap();
-    let list = db
-        .create_todo_list(&test_project_scope("proj-1"), Some("feat-1"))
-        .unwrap();
-    let todo = db
-        .add_todo(&list.id, "plan then build", None, TodoPriority::High)
-        .unwrap();
-    app.db = Some(db);
-    app.todos_mark_in_progress(&todo.id, None).unwrap();
-
-    let origin = TodoPlanOrigin {
-        todo_id: todo.id.clone(),
-        list_id: list.id.clone(),
-        todo_title: "plan then build".to_string(),
-        host_feature_id: "feat-1".to_string(),
-    };
-    app.start_todo_plan_session(
-        &origin,
-        std::path::Path::new("/tmp/test-workdir"),
-        "plan.md",
-    )
-    .unwrap();
-
-    let session = app.store.projects[0].features[0]
-        .sessions
-        .iter()
-        .find(|s| {
-            s.todo_reference
-                .as_ref()
-                .is_some_and(|r| r.todo_id == todo.id)
-        })
-        .expect("the plan session is tagged with its TODO");
-    assert!(
-        session
-            .todo_reference
-            .as_ref()
-            .unwrap()
-            .launched_from_todo_menu
-    );
-
-    let cached = app
-        .active_todos_sidebar_cache
-        .get(&session.id)
-        .expect("starting the plan session refreshes its active TODO cache");
-    assert!(cached.contains("plan then build"));
 }
 
 /// `attach_launched_todo_reference` is the shared write behind every TODO
@@ -2225,11 +1933,10 @@ fn failed_agent_session_startup_and_prompt_setup_both_roll_back_todo_reservation
     }
 }
 
-/// The scenario a plan interview hits between generating a plan and the user
-/// accepting it: no `Todos` overlay is open (so there is no in-memory pane to
-/// consult) and the TODO was moved to a different list in the meantime. The
-/// lookup must still find it by id alone rather than the stale list it
-/// started in — see `App::find_todo_by_id` and `start_todo_plan_session`.
+/// No `Todos` overlay is open (so there is no in-memory pane to consult) and
+/// the TODO was moved to a different list in the meantime. The lookup must
+/// still find it by id alone rather than the stale list it started in — see
+/// `App::find_todo_by_id`.
 #[test]
 fn find_todo_by_id_resolves_after_a_move_when_no_overlay_is_open() {
     let mut app = todos_app();

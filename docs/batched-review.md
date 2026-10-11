@@ -19,7 +19,7 @@ saying so.
 
 Everything else — the plain-language walkthrough, the changeset overview,
 PR-triage fix prompts — is per-file or already bounded and is not
-batched. The plan interview has its own, non-diff guard (see below).
+batched.
 
 ## How the split works
 
@@ -131,14 +131,3 @@ first place:
   reviewable steps, then run `W` (or a commit-scoped review) on each.
 
 Each commit then fits in one prompt with its full context intact.
-
-## Plan interview (non-diff)
-
-The plan-interview prompts (adaptive round, synthesis, advisory review)
-are not diffs and are not batched. They have their own guard: if the
-assembled prompt is estimated to overflow, AIW drops the repository
-`README` / `CLAUDE.md` excerpts from that one prompt and retries, noting
-the trim in the interview dialog's footer. If it still overflows, the
-prompt is sent as is with a note that it may not fit. The same
-`review_prompt_budget_tokens` setting controls this threshold; `0`
-disables the guard.

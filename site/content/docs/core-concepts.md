@@ -1,6 +1,6 @@
 +++
 title = "Core Concepts"
-description = "Projects, features, sessions, permission modes, and plan mode."
+description = "Projects, features, sessions, and permission modes."
 weight = 30
 +++
 
@@ -30,29 +30,3 @@ Codex and Pi do not support AIW's Vibeless edit-review hooks. Pi also does
 not receive AIW permission-mode flags. See
 [Choosing a Harness](@/docs/harnesses.md) for the full breakdown of what
 else varies by harness.
-
-## Plan mode
-
-Plan mode interviews you about a feature before launching its agent. You can
-review and edit the resulting plan, ask an agent to improve it, or cancel it.
-AIW does not save the plan or launch the feature until you accept it. Press
-`P` on an existing feature to run the interview again.
-
-Multiple-choice questions in the interview also take your own answer: press
-`e` to type into the "Your own answer" box under the options.
-
-On the brief step, `Ctrl+D` attaches up to 4 reference documents (any
-readable text file, 512KB each) for the interview to read — a design doc,
-an RFC, prior notes — and `Ctrl+X` drops the last one. Attaching a document
-is also what switches the interview's AI passes from writing blind to
-reading the repository: with nothing attached they run with no tool
-access at all.
-
-To let the interview read a ticket the brief links to (Asana, Linear, Jira,
-and so on), configure an MCP server for it. See
-[Issue trackers in plan interviews](@/docs/configuration.md#issue-trackers-in-plan-interviews).
-
-<figure>
-  <img src="/images/docs/plan-review-gate.png" alt="Plan mode's review gate showing a synthesized implementation plan as rendered markdown, with scroll, edit, regenerate, accept, and abort actions">
-  <figcaption>The review gate: read the synthesized plan, edit it, or ask the agent to regenerate it before anything is saved or launched.</figcaption>
-</figure>

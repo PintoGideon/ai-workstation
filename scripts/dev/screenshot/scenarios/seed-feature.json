@@ -4,7 +4,6 @@
   "agent": "claude",
   "mode": "vibe",
   "review": false,
-  "plan_mode": false,
   "create_terminal": true,
   "use_worktree": true,
   "enable_chrome": false,

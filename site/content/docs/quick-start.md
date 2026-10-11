@@ -16,9 +16,8 @@ weight = 20
 3. Press `N` to add a project, then enter its name and directory. The
    directory may be a git repository or an ordinary folder.
 
-4. Press `n` to create a feature. Choose a branch name, agent, permission
-   mode, and whether to use the guided plan interview. The feature starts
-   when setup is complete.
+4. Press `n` to create a feature. Choose a branch name, agent, and permission
+   mode. The feature starts when setup is complete.
 
 5. Select the agent session and press `Enter` to work in its embedded
    terminal. Press `Ctrl+Q` to return to the dashboard.

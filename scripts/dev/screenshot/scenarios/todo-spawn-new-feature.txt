@@ -19,7 +19,7 @@
 # (which needs a git repo to make a worktree) is exercised for real.
 run:rm -rf /tmp/aiw-shot-todo-spawn-repo && mkdir -p /tmp/aiw-shot-todo-spawn-repo && git -C /tmp/aiw-shot-todo-spawn-repo init -q && git -C /tmp/aiw-shot-todo-spawn-repo -c user.email=a@b.c -c user.name=demo commit -q --allow-empty -m init
 run:printf '{"path":"/tmp/aiw-shot-todo-spawn-repo","project_name":"todo-spawn-demo","dry_run":false}' > /tmp/aiw-shot-todo-spawn-project.json
-run:printf '{"project_name":"todo-spawn-demo","branch":"demo-feature","agent":"claude","mode":"vibe","review":false,"plan_mode":false,"create_terminal":true,"use_worktree":false,"enable_chrome":false,"hook_choice":null,"dry_run":false}' > /tmp/aiw-shot-todo-spawn-feature.json
+run:printf '{"project_name":"todo-spawn-demo","branch":"demo-feature","agent":"claude","mode":"vibe","review":false,"create_terminal":true,"use_worktree":false,"enable_chrome":false,"hook_choice":null,"dry_run":false}' > /tmp/aiw-shot-todo-spawn-feature.json
 run:$AIW_BIN automation create-project --file /tmp/aiw-shot-todo-spawn-project.json
 run:$AIW_BIN automation create-feature --file /tmp/aiw-shot-todo-spawn-feature.json
 run:tmux respawn-pane -k -t "$SESSION" "$AIW_BIN"

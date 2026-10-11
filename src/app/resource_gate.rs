@@ -9,7 +9,7 @@
 //! all.
 
 use crate::app::{App, AppConfig};
-use crate::app::{AppMode, PendingPlanLaunch, PendingStart, ResourceConfirmState, ViewState};
+use crate::app::{AppMode, PendingStart, ResourceConfirmState, ViewState};
 use crate::resources::limits::{self, LiveHarnesses};
 use crate::resources::mem::{self, MemorySnapshot};
 
@@ -215,35 +215,8 @@ impl App {
             StartPreconditions::NeedsConfirm {
                 over_limit,
                 low_memory,
-            } => self.open_resource_confirmation(pending, over_limit, low_memory, None),
+            } => self.open_resource_confirmation(pending, over_limit, low_memory),
         }
-    }
-
-    /// Gate an accepted plan launch while retaining the complete review state.
-    /// Unlike generic creation autostart, this path has enough state to pause
-    /// safely and can therefore use the interactive resource confirmation.
-    pub(crate) fn gate_plan_launch(&mut self, pending: PendingPlanLaunch) -> bool {
-        let StartPreconditions::NeedsConfirm {
-            over_limit,
-            low_memory,
-        } = self.check_start_preconditions()
-        else {
-            return false;
-        };
-
-        let interview = match std::mem::replace(&mut self.mode, AppMode::Normal) {
-            AppMode::PlanInterview(interview) => interview,
-            other => {
-                self.mode = other;
-                return false;
-            }
-        };
-        self.open_resource_confirmation(
-            PendingStart::PlannedFeature(Box::new(pending)),
-            over_limit,
-            low_memory,
-            Some(interview),
-        )
     }
 
     fn open_resource_confirmation(
@@ -251,7 +224,6 @@ impl App {
         pending: PendingStart,
         over_limit: Option<OverLimit>,
         low_memory: Option<LowMemory>,
-        plan_interview: Option<crate::app::PlanInterviewState>,
     ) -> bool {
         if let Some(over) = over_limit {
             self.log_warn(
@@ -287,7 +259,6 @@ impl App {
             open_editors,
             pending,
             from_view: None,
-            plan_interview,
         }));
         true
     }
@@ -336,10 +307,7 @@ impl App {
             return Ok(());
         };
         let ResourceConfirmState {
-            pending,
-            from_view,
-            plan_interview,
-            ..
+            pending, from_view, ..
         } = *state;
 
         let result = match pending {
@@ -366,18 +334,12 @@ impl App {
                 }
                 added
             }
+            // Replays its operation from the top with the gate already
+            // satisfied, rather than re-entering the asking variant and
+            // parking the user in the same dialog they just answered.
             PendingStart::RestartSessionWindow { pi, fi, si } => self
                 .restart_stopped_session_window_unchecked(pi, fi, si)
                 .map(|_| ()),
-            // Both replay their operation from the top with the gate already
-            // satisfied, rather than re-entering the asking variant and
-            // parking the user in the same dialog they just answered.
-            PendingStart::PlannedFeature(pending) => {
-                if let Some(interview) = plan_interview {
-                    self.mode = AppMode::PlanInterview(interview);
-                }
-                self.resume_accepted_plan_launch(*pending)
-            }
         };
 
         // Returning to the view the start came from is what the ungated path
@@ -398,16 +360,7 @@ impl App {
         else {
             return;
         };
-        let ResourceConfirmState {
-            from_view,
-            plan_interview,
-            ..
-        } = *state;
-        if let Some(interview) = plan_interview {
-            self.mode = AppMode::PlanInterview(interview);
-            self.message = Some("Planned feature start cancelled; plan kept for review".into());
-            return;
-        }
+        let ResourceConfirmState { from_view, .. } = *state;
         if let Some(view) = from_view {
             self.return_to_dashboard(&view);
         }

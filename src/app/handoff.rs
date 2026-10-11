@@ -76,13 +76,11 @@ impl App {
     /// Shared continuation seed for both interfaces; no view or mode mutation.
     pub(crate) fn fresh_context_seed(&self, feature: &Feature, window: &str) -> String {
         let workdir = &feature.workdir;
-        let relative_plan = plan::resolve_effective_plan(feature)
-            .map(|plan| relative_display_path(workdir, plan.path()));
         let changed_files = crate::diff::load_snapshot(workdir, None, false)
             .map(|snapshot| changed_file_paths(&snapshot))
             .unwrap_or_default();
         build_fresh_context_prompt(
-            relative_plan.as_deref(),
+            None,
             &changed_files,
             feature.summary.as_deref(),
             self.continuation_latest_prompt(feature, window),
@@ -203,13 +201,6 @@ impl App {
         let workdir = feature.workdir.clone();
         let harness = Some(feature.agent.clone());
         let label = fresh_context_session_label(feature);
-        let relative_plan = plan::resolve_effective_plan(feature)
-            .map(|plan| relative_display_path(&workdir, plan.path()));
-
-        if relative_plan.is_none() {
-            self.push_toast_warning("No plan file found for this feature -- starting without one");
-        }
-
         let changed_files = match crate::diff::load_snapshot(&workdir, None, false) {
             Ok(snapshot) => changed_file_paths(&snapshot),
             Err(_) => Vec::new(),
@@ -218,13 +209,7 @@ impl App {
         let prompt = if source == FreshContextPromptSource::ContextHint {
             instruction.clone()
         } else {
-            build_fresh_context_prompt(
-                relative_plan.as_deref(),
-                &changed_files,
-                None,
-                None,
-                &instruction,
-            )
+            build_fresh_context_prompt(None, &changed_files, None, None, &instruction)
         };
 
         // Recording that a fresh session was requested is not what's at
@@ -274,13 +259,6 @@ fn fresh_context_session_label(feature: &Feature) -> String {
         }
         n += 1;
     }
-}
-
-fn relative_display_path(workdir: &Path, path: &Path) -> String {
-    path.strip_prefix(workdir)
-        .unwrap_or(path)
-        .display()
-        .to_string()
 }
 
 /// Changed/new files worth pointing a fresh session at: everything except
@@ -541,7 +519,6 @@ mod tests {
             true,
             VibeMode::Vibeless,
             false,
-            false,
             AgentKind::Codex,
             false,
         );
@@ -552,13 +529,5 @@ mod tests {
 
         feature.add_session_named(SessionKind::Codex, "Fresh Context 2".into());
         assert_eq!(fresh_context_session_label(&feature), "Fresh Context 3");
-    }
-
-    #[test]
-    fn relative_display_path_strips_the_workdir_prefix() {
-        let workdir = Path::new("/repo/worktree");
-        let plan = Path::new("/repo/worktree/AIW_PLAN.md");
-
-        assert_eq!(relative_display_path(workdir, plan), "AIW_PLAN.md");
     }
 }

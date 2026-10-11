@@ -4,7 +4,6 @@ pub mod editors;
 mod followups; // FORK: queued follow-ups (src/app/fork_followups.rs)
 mod hook_approvals; // FORK: repo lifecycle hook approvals (src/fork/hook_approval.rs)
 mod migrations;
-pub mod plan_interviews;
 pub mod pr_comment_triage;
 pub mod pr_investigations;
 mod pr_review_cache;
@@ -697,85 +696,6 @@ impl AiwDb {
 
     pub fn reorder_todos(&self, ordered_ids: &[String]) -> Result<()> {
         todos::reorder_todos(&self.conn, ordered_ids)
-    }
-}
-
-/// Plan-interview drafts and accepted transcripts. The re-run pre-fill that
-/// reads accepted transcripts is still ahead (see
-/// `docs/backlog/plan-mode-interview-plan.md`, Epic 5), so part of this is
-/// written but not yet read.
-#[allow(dead_code)]
-impl AiwDb {
-    /// The feature's in-progress interview, if it has one to resume.
-    pub fn plan_interview_draft(
-        &self,
-        feature_id: &str,
-    ) -> Result<Option<plan_interviews::PlanInterviewRecord>> {
-        plan_interviews::load(
-            &self.conn,
-            feature_id,
-            plan_interviews::PlanInterviewStage::Draft,
-        )
-    }
-
-    /// The interview behind the feature's last accepted plan, used to pre-fill
-    /// a re-run.
-    pub fn plan_interview_final(
-        &self,
-        feature_id: &str,
-    ) -> Result<Option<plan_interviews::PlanInterviewRecord>> {
-        plan_interviews::load(
-            &self.conn,
-            feature_id,
-            plan_interviews::PlanInterviewStage::Final,
-        )
-    }
-
-    /// Insert or overwrite the interview at `record.stage`.
-    pub fn save_plan_interview(&self, record: &plan_interviews::PlanInterviewRecord) -> Result<()> {
-        plan_interviews::save(&self.conn, record)
-    }
-
-    /// Export durable preflight lifecycle data for quality and cost analysis.
-    pub fn export_plan_preflight_evaluation(&self, feature_id: &str) -> Result<String> {
-        plan_interviews::export_preflight_evaluation(&self.conn, feature_id)
-    }
-
-    /// Promote the draft filed under `draft_feature_id` to the accepted
-    /// transcript of `final_feature_id`. `false` when there was no draft to
-    /// promote. The keys differ only for a feature-creation interview, whose
-    /// draft predates the feature id it is finalized under.
-    pub fn finalize_plan_interview_draft(
-        &self,
-        draft_feature_id: &str,
-        final_feature_id: &str,
-        plan: &str,
-    ) -> Result<bool> {
-        plan_interviews::finalize_draft(&self.conn, draft_feature_id, final_feature_id, plan)
-    }
-
-    /// Discard the feature's in-progress interview, keeping any accepted
-    /// transcript.
-    pub fn delete_plan_interview_draft(&self, feature_id: &str) -> Result<()> {
-        plan_interviews::delete(
-            &self.conn,
-            feature_id,
-            plan_interviews::PlanInterviewStage::Draft,
-        )
-    }
-
-    /// Drop both stages when the feature is deleted; there is no FK cascade.
-    pub fn delete_plan_interviews_for_feature(&self, feature_id: &str) -> Result<()> {
-        plan_interviews::delete_for_feature(&self.conn, feature_id)
-    }
-
-    #[cfg(test)]
-    fn count_plan_interviews(&self, feature_id: &str) -> Result<i64> {
-        Ok(self.conn.query_row(
-            "SELECT COUNT(*) FROM plan_interviews WHERE feature_id = ?1",
-            rusqlite::params![feature_id],
-            |row| row.get(0),
-        )?)
     }
 }
 

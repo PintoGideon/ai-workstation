@@ -51,7 +51,6 @@ pub(crate) struct AgentSidebarData {
     pub summary_text: String,
     pub issue_source_text: Option<String>,
     pub pr_triage_text: Option<String>,
-    pub plan_text: String,
     pub context_snapshot: Option<SessionContextSnapshot>,
     pub context_hint_visible: bool,
 }
@@ -74,7 +73,6 @@ pub enum SidebarSectionKind {
     Status,
     Usage,
     Context,
-    Plan,
     Issue,
     PrTriage,
     Work,
@@ -90,7 +88,6 @@ impl SidebarSectionKind {
             Self::Status => "Status",
             Self::Usage => "Usage",
             Self::Context => "Context",
-            Self::Plan => "Plan",
             Self::Issue => "Issue",
             Self::PrTriage => "PR Triage",
             Self::Work => "Work",
@@ -121,9 +118,6 @@ pub(crate) fn sidebar_section_bodies(data: &AgentSidebarData) -> Vec<(SidebarSec
             SidebarSectionKind::Context,
             crate::context_display::format_context_indicator(snapshot).text,
         ));
-    }
-    if non_empty(&data.plan_text) {
-        sections.push((SidebarSectionKind::Plan, data.plan_text.clone()));
     }
     if let Some(issue) = data
         .issue_source_text
@@ -422,7 +416,6 @@ impl App {
                 summary_text,
                 issue_source_text: issue_source_sidebar_text(feature),
                 pr_triage_text: pr_triage_sidebar_text(self, feature, runtime),
-                plan_text: plan_sidebar_text(self, feature),
                 context_snapshot: common.context_snapshot,
                 context_hint_visible: common.context_hint_visible,
             },
@@ -487,7 +480,6 @@ impl App {
                 summary_text,
                 issue_source_text: issue_source_sidebar_text(feature),
                 pr_triage_text: pr_triage_sidebar_text(self, feature, runtime),
-                plan_text: plan_sidebar_text(self, feature),
                 context_snapshot: common.context_snapshot,
                 context_hint_visible: common.context_hint_visible,
             },
@@ -534,7 +526,6 @@ impl App {
                 summary_text,
                 issue_source_text: issue_source_sidebar_text(feature),
                 pr_triage_text: pr_triage_sidebar_text(self, feature, runtime),
-                plan_text: plan_sidebar_text(self, feature),
                 context_snapshot: common.context_snapshot,
                 context_hint_visible: common.context_hint_visible,
             },
@@ -588,27 +579,6 @@ pub(crate) fn issue_source_sidebar_text(feature: &Feature) -> Option<String> {
         source.canonical_repository(),
         source.number
     ))
-}
-
-/// Reads the sidebar's plan status line from the background-loaded cache
-/// (`App::sidebar_effective_plan_cache`) rather than resolving it here.
-/// Resolution touches the filesystem (`is_file`, and `canonicalize` for a
-/// manually selected plan) and the TUI rebuilds the sidebar on every `draw()`
-/// of the pane view — up to ~20x/sec while in Viewing mode — so it must stay
-/// off the render thread.
-pub(crate) fn plan_sidebar_text(app: &App, feature: &Feature) -> String {
-    app.sidebar_effective_plan_cache
-        .get(&feature.tmux_session)
-        .cloned()
-        .unwrap_or_else(|| "No plan selected".to_string())
-}
-
-/// Whether the background sidebar load found an effective plan for
-/// `feature` — the same cache, and the same off-the-hot-path reason, as
-/// [`plan_sidebar_text`].
-pub(crate) fn plan_sidebar_has_plan(app: &App, feature: &Feature) -> bool {
-    app.sidebar_effective_plan_cache
-        .contains_key(&feature.tmux_session)
 }
 
 pub(crate) fn append_model_status_line(

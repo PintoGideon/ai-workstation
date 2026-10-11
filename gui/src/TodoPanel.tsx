@@ -15,7 +15,7 @@ import {
   todoReorder,
   todoSetStatus,
 } from "./api";
-import { Field, Icon, Menu, Modal, Segmented, Spinner } from "./ui";
+import { Field, Icon, Menu, Modal, Spinner } from "./ui";
 
 export interface TodoDestination {
   label: string;
@@ -54,8 +54,6 @@ export default function TodoPanel({
   destinations = [],
   launchTargets = [],
   onLaunch,
-  onPlan,
-  onPlanNew,
   onLaunchNew,
 }: {
   scope: TodoScopeRequest;
@@ -66,8 +64,6 @@ export default function TodoPanel({
   destinations?: TodoDestination[];
   launchTargets?: TodoAgentTarget[];
   onLaunch?: (todoId: string, target: FeatureTarget) => Promise<void>;
-  onPlan?: (todoId: string, target: FeatureTarget) => Promise<void>;
-  onPlanNew?: (todoId: string, title: string) => void;
   onLaunchNew?: (todoId: string, title: string) => void;
 }) {
   const queryClient = useQueryClient();
@@ -134,9 +130,7 @@ export default function TodoPanel({
     (destination) => JSON.stringify(destination.scope) !== JSON.stringify(scope),
   );
   const openCount = todos.filter((todo) => todo.work.status !== "completed").length;
-  const canStart = Boolean(
-    (launchTargets.length > 0 && (onLaunch || onPlan)) || onLaunchNew || onPlanNew,
-  );
+  const canStart = Boolean((launchTargets.length > 0 && onLaunch) || onLaunchNew);
 
   function reorder(index: number, delta: number) {
     const ids = todos.map((todo) => todo.id);
@@ -246,24 +240,19 @@ export default function TodoPanel({
       {startDialog && (
         <StartTodoDialog
           todo={startDialog}
-          launchTargets={onLaunch || onPlan ? launchTargets : []}
-          canLaunch={Boolean(onLaunch)}
-          canPlan={Boolean(onPlan)}
+          launchTargets={onLaunch ? launchTargets : []}
           canLaunchNew={Boolean(onLaunchNew)}
-          canPlanNew={Boolean(onPlanNew)}
           onCancel={() => setStartDialog(null)}
-          onConfirm={(where, how) => {
+          onConfirm={(where) => {
             const todo = startDialog;
             setStartDialog(null);
             if (where === NEW_FEATURE) {
-              if (how === "plan") onPlanNew?.(todo.id, todo.title);
-              else onLaunchNew?.(todo.id, todo.title);
+              onLaunchNew?.(todo.id, todo.title);
               return;
             }
             const target = launchTargets.find((candidate) => targetKey(candidate.target) === where);
             if (!target) return;
-            if (how === "plan" && onPlan) runLaunch(todo.id, () => onPlan(todo.id, target.target));
-            else if (onLaunch) runLaunch(todo.id, () => onLaunch(todo.id, target.target));
+            if (onLaunch) runLaunch(todo.id, () => onLaunch(todo.id, target.target));
           }}
         />
       )}
@@ -286,30 +275,20 @@ export default function TodoPanel({
 function StartTodoDialog({
   todo,
   launchTargets,
-  canLaunch,
-  canPlan,
   canLaunchNew,
-  canPlanNew,
   onCancel,
   onConfirm,
 }: {
   todo: Todo;
   launchTargets: TodoAgentTarget[];
-  canLaunch: boolean;
-  canPlan: boolean;
   canLaunchNew: boolean;
-  canPlanNew: boolean;
   onCancel: () => void;
-  onConfirm: (where: string, how: "launch" | "plan") => void;
+  onConfirm: (where: string) => void;
 }) {
   const [where, setWhere] = useState(
     launchTargets[0] ? targetKey(launchTargets[0].target) : NEW_FEATURE,
   );
   const isNew = where === NEW_FEATURE;
-  const allowLaunch = isNew ? canLaunchNew : canLaunch;
-  const allowPlan = isNew ? canPlanNew : canPlan;
-  const [how, setHow] = useState<"launch" | "plan">(allowLaunch ? "launch" : "plan");
-  const effectiveHow = how === "plan" && !allowPlan ? "launch" : how === "launch" && !allowLaunch ? "plan" : how;
 
   return (
     <Modal
@@ -320,9 +299,9 @@ function StartTodoDialog({
       footer={
         <>
           <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => onConfirm(where, effectiveHow)}>
-            {effectiveHow === "plan" ? <Icon name="sparkles" /> : <Icon name="play" size={12} />}
-            {effectiveHow === "plan" ? "Start planning" : "Start agent"}
+          <button className="btn btn-primary" onClick={() => onConfirm(where)}>
+            <Icon name="play" size={12} />
+            Start agent
           </button>
         </>
       }
@@ -338,29 +317,11 @@ function StartTodoDialog({
                 {candidate.label}
               </option>
             ))}
-            {(canLaunchNew || canPlanNew) && (
+            {canLaunchNew && (
               <option value={NEW_FEATURE}>New feature…</option>
             )}
           </select>
         </Field>
-        {allowLaunch && allowPlan && (
-          <Field
-            label="How"
-            hint={effectiveHow === "plan"
-              ? "Run a plan interview first; the agent starts once you accept the plan."
-              : "Start the agent now. Its prompt opens as an editable draft before sending."}
-          >
-            <Segmented
-              label="How to start"
-              value={effectiveHow}
-              onChange={setHow}
-              options={[
-                { value: "launch", label: "Start agent" },
-                { value: "plan", label: "Plan first" },
-              ]}
-            />
-          </Field>
-        )}
       </div>
     </Modal>
   );

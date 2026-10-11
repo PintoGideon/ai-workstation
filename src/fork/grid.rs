@@ -722,7 +722,6 @@ mod tests {
             false,
             VibeMode::Vibeless,
             false,
-            false,
             AgentKind::Claude,
             false,
         );

@@ -18,7 +18,6 @@
 //! | Status activity | Waiting requests read from the hooks' notification files; thinking from the shared marker files |
 //! | Usage 5h/7d | The shared `UsageManager` (Claude OAuth usage endpoint, Codex rollout files), refreshed while a session sidebar is open |
 //! | Context | The shared context collectors, via the session-status collector |
-//! | Plan | The background sidebar load (`plan_sidebar_display_text`) |
 //! | Issue | The persisted feature |
 //! | PR Triage | The shared open-PR sweep and persisted merged/closed state; review-session activity only where shared sources report it |
 //! | Work | Notification files (input, diff review), thinking markers |
@@ -35,7 +34,6 @@
 //! review are this process's state and are reported.
 
 use serde::{Deserialize, Serialize};
-use std::io::Read;
 
 use super::sidebar::waiting_requests;
 use super::{GuiError, GuiHandle, GuiResult, SessionTarget};
@@ -52,9 +50,6 @@ use super::sidebar::SidebarContextBand;
 /// What the panel says about the signals it leaves out.
 pub const TUI_ONLY_NOTE: &str = "Attention reasons, running tool calls and Codex live events are \
 reported only to a running TUI, so this panel does not show them.";
-
-/// The largest plan file the GUI opens; a bigger one is cut short and says so.
-const PLAN_VIEW_MAX_BYTES: usize = 512 * 1024;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct SessionSidebarView {
@@ -162,8 +157,6 @@ pub struct SidebarContextMeter {
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SidebarAction {
-    /// TUI `leader n`: read the current plan.
-    OpenPlan,
     /// TUI `leader l`: put the last prompt in the composer draft.
     ReusePrompt { prompt: String },
     /// TUI `leader G`.
@@ -172,14 +165,6 @@ pub enum SidebarAction {
     CompleteTodo { todo_id: String },
     /// TUI `leader V`: answer the pending diff review.
     SupervisedEdits,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq)]
-pub struct SessionPlanView {
-    /// Relative to the feature's worktree when inside it.
-    pub path: String,
-    pub markdown: String,
-    pub truncated: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -243,7 +228,6 @@ impl GuiHandle {
             .map(|reference| reference.todo_id.clone())
             .filter(|_| app.db.is_some());
         let actions = ActionContext {
-            has_plan: crate::app::agent_sidebar::plan_sidebar_has_plan(app, feature),
             is_git: project.is_git,
             todo_id,
         };
@@ -251,7 +235,7 @@ impl GuiHandle {
     }
 
     /// Bring this process's sidebar caches up to date for `target`'s
-    /// feature: the background sidebar load (prompt, model, plan), Codex
+    /// feature: the background sidebar load (prompt, model), Codex
     /// rollout metadata and the active-TODO cache. Never
     /// blocks on the loads; results land on a later poll.
     pub fn refresh_session_sidebar_sources(&mut self, target: &SessionTarget) -> GuiResult<()> {
@@ -280,43 +264,6 @@ impl GuiHandle {
     /// shell calls this only while a session sidebar is open.
     pub fn refresh_usage_windows(&mut self) {
         self.app.usage.refresh(None);
-    }
-
-    /// The feature's current plan (TUI `leader n`), read-only.
-    pub fn session_sidebar_plan(&mut self, target: &SessionTarget) -> GuiResult<SessionPlanView> {
-        self.refresh_store()?;
-        let (pi, fi, _) = self.locate_session(target)?;
-        let feature = &self.app.store.projects[pi].features[fi];
-        let plan = crate::app::plan::resolve_effective_plan(feature).ok_or_else(|| {
-            GuiError::not_found(
-                "This feature has no current plan. Choose one from the TUI (leader n) \
-                 or add AIW_PLAN.md to its worktree",
-            )
-        })?;
-        let mut bytes = Vec::new();
-        std::fs::File::open(plan.path())
-            .and_then(|file| {
-                file.take((PLAN_VIEW_MAX_BYTES + 1) as u64)
-                    .read_to_end(&mut bytes)
-            })
-            .map_err(|error| GuiError::not_found(format!("Couldn't read the plan: {error}")))?;
-        let truncated = bytes.len() > PLAN_VIEW_MAX_BYTES;
-        let mut kept = &bytes[..bytes.len().min(PLAN_VIEW_MAX_BYTES)];
-        if truncated {
-            kept = &kept[..split_char_start(kept).unwrap_or(kept.len())];
-        }
-        let markdown = String::from_utf8_lossy(kept).into_owned();
-        let path = plan
-            .path()
-            .strip_prefix(&feature.workdir)
-            .unwrap_or(plan.path())
-            .display()
-            .to_string();
-        Ok(SessionPlanView {
-            path,
-            markdown,
-            truncated,
-        })
     }
 
     /// Complete the TODO `target` was launched for (TUI `leader z`). Refuses
@@ -358,22 +305,7 @@ impl GuiHandle {
     }
 }
 
-/// Where `bytes` ends partway through a UTF-8 character -- what a byte-count
-/// cut leaves behind -- the index that character starts at. `None` when the
-/// last character is complete, or is invalid in its own right: the file's
-/// own bad bytes still decode to U+FFFD rather than being dropped.
-fn split_char_start(bytes: &[u8]) -> Option<usize> {
-    // A character is at most 4 bytes, so its lead byte is in the last 4.
-    let window = bytes.len().saturating_sub(4);
-    let lead = window + bytes[window..].iter().rposition(|b| b & 0xC0 != 0x80)?;
-    match std::str::from_utf8(&bytes[lead..]) {
-        Err(error) if error.error_len().is_none() => Some(lead),
-        _ => None,
-    }
-}
-
 struct ActionContext {
-    has_plan: bool,
     is_git: bool,
     todo_id: Option<String>,
 }
@@ -460,9 +392,6 @@ fn project_view(
                 _ => lines.extend(body.lines().map(|line| field_line(title, line))),
             }
             match kind {
-                SidebarSectionKind::Plan if context.has_plan => {
-                    actions.push(SidebarAction::OpenPlan);
-                }
                 SidebarSectionKind::Prompt => {
                     if let Some(prompt) = assembly
                         .prompt_full
@@ -609,7 +538,6 @@ mod tests {
             true,
             VibeMode::default(),
             false,
-            false,
             agent,
             false,
         );
@@ -693,7 +621,6 @@ mod tests {
     #[test]
     fn a_claude_sidebar_carries_every_section_in_the_tui_order() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("AIW_PLAN.md"), "# Plan\n").unwrap();
         let tmp_db = tempfile::NamedTempFile::new().unwrap();
         let db = crate::db::AiwDb::open(tmp_db.path()).unwrap();
         let list = db
@@ -734,8 +661,6 @@ mod tests {
         app.context_states
             .insert("claude".into(), context(85, ContextBand::Critical));
         app.context_hint_states.sync_all(&app.context_states);
-        app.sidebar_effective_plan_cache
-            .insert(tmux_session.clone(), "Current: AIW_PLAN.md".into());
         app.sidebar_model_cache
             .insert(tmux_session.clone(), "Model: claude-opus".into());
         app.latest_prompt_cache.insert(
@@ -763,7 +688,6 @@ mod tests {
                 SidebarSectionKind::Status,
                 SidebarSectionKind::Usage,
                 SidebarSectionKind::Context,
-                SidebarSectionKind::Plan,
                 SidebarSectionKind::Issue,
                 SidebarSectionKind::PrTriage,
                 SidebarSectionKind::Summary,
@@ -802,10 +726,6 @@ mod tests {
         assert!(matches!(&context.lines[0], SidebarLine::Text { text, .. }
             if text.starts_with("Ctx ~85% CRITICAL STALE")));
         assert_eq!(
-            section(&view, SidebarSectionKind::Plan).actions,
-            vec![SidebarAction::OpenPlan]
-        );
-        assert_eq!(
             fields(section(&view, SidebarSectionKind::Issue))[1],
             field("Issue", "#42")
         );
@@ -840,7 +760,7 @@ mod tests {
         assert_eq!(json["sections"][0]["lines"][0]["tone"], "ready");
         assert_eq!(json["sections"][1]["lines"][0]["kind"], "bar");
         assert_eq!(json["sections"][2]["context"]["band"], "critical");
-        assert_eq!(json["sections"][3]["actions"][0]["kind"], "open_plan");
+        assert_eq!(json["sections"][4]["actions"][0]["kind"], "pr_triage");
     }
 
     #[test]
@@ -856,20 +776,11 @@ mod tests {
         let view = gui.session_sidebar(&target("pi")).unwrap();
 
         assert_eq!(view.title, "Pi Sidebar");
-        // The plan line always reads something ("No plan selected"), as in the TUI.
-        assert_eq!(
-            kinds(&view),
-            vec![SidebarSectionKind::Status, SidebarSectionKind::Plan]
-        );
+        assert_eq!(kinds(&view), vec![SidebarSectionKind::Status]);
         assert_eq!(
             fields(section(&view, SidebarSectionKind::Status)),
             vec![field("Activity", "Ready")]
         );
-        let plan = section(&view, SidebarSectionKind::Plan);
-        assert!(
-            matches!(&plan.lines[0], SidebarLine::Text { text, .. } if text == "No plan selected")
-        );
-        assert!(plan.actions.is_empty(), "no plan file, nothing to open");
     }
 
     #[test]
@@ -1051,50 +962,6 @@ mod tests {
     }
 
     #[test]
-    fn the_plan_opens_read_only_and_a_missing_plan_is_not_found() {
-        let dir = tempfile::tempdir().unwrap();
-        let feat = feature(
-            dir.path(),
-            AgentKind::Codex,
-            vec![session("codex", SessionKind::Codex)],
-        );
-        let mut gui = gui_with(feat, dir.path(), true);
-
-        let missing = gui.session_sidebar_plan(&target("codex")).unwrap_err();
-        assert_eq!(missing.kind, super::super::GuiErrorKind::NotFound);
-
-        std::fs::write(dir.path().join("AIW_PLAN.md"), "# Plan\n\n- [ ] step").unwrap();
-        let plan = gui.session_sidebar_plan(&target("codex")).unwrap();
-        assert_eq!(plan.path, "AIW_PLAN.md");
-        assert_eq!(plan.markdown, "# Plan\n\n- [ ] step");
-        assert!(!plan.truncated);
-
-        let oversized = "a".repeat(PLAN_VIEW_MAX_BYTES - 1) + "é and more";
-        std::fs::write(dir.path().join("AIW_PLAN.md"), &oversized).unwrap();
-        let plan = gui.session_sidebar_plan(&target("codex")).unwrap();
-        assert!(plan.truncated);
-        assert_eq!(plan.markdown, "a".repeat(PLAN_VIEW_MAX_BYTES - 1));
-        assert_eq!(
-            std::fs::read_to_string(dir.path().join("AIW_PLAN.md")).unwrap(),
-            oversized
-        );
-    }
-
-    #[test]
-    fn a_truncated_plan_drops_only_the_character_the_cut_split() {
-        // "é" is 2 bytes and "🙂" 4: each cut leaves a partial lead.
-        assert_eq!(split_char_start(b"ab\xc3"), Some(2));
-        assert_eq!(split_char_start(b"ab\xf0\x9f\x99"), Some(2));
-        assert_eq!(split_char_start("abé".as_bytes()), None);
-        assert_eq!(split_char_start(b""), None);
-        // Replacement characters the file really ends in are content.
-        assert_eq!(split_char_start("ab\u{fffd}\u{fffd}".as_bytes()), None);
-        // So are invalid bytes of its own, at the end or before a split.
-        assert_eq!(split_char_start(b"ab\xff"), None);
-        assert_eq!(split_char_start(b"a\xff\xc3"), Some(2));
-    }
-
-    #[test]
     fn a_codex_sidebar_uses_its_session_prompt_and_usage_windows() {
         let dir = tempfile::tempdir().unwrap();
         let mut codex = session("codex", SessionKind::Codex);
@@ -1151,34 +1018,5 @@ mod tests {
         assert_eq!(gone.kind, super::super::GuiErrorKind::NotFound);
         let shell = gui.session_sidebar(&target("shell")).unwrap_err();
         assert_eq!(shell.kind, super::super::GuiErrorKind::Conflict);
-    }
-
-    #[test]
-    fn refreshing_sources_loads_the_plan_line_off_the_calling_thread() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("AIW_PLAN.md"), "# Plan\n").unwrap();
-        let feat = feature(
-            dir.path(),
-            AgentKind::Claude,
-            vec![session("claude", SessionKind::Claude)],
-        );
-        let mut gui = gui_with(feat, dir.path(), true);
-
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        let plan = loop {
-            gui.refresh_session_sidebar_sources(&target("claude"))
-                .unwrap();
-            let view = gui.session_sidebar(&target("claude")).unwrap();
-            let plan = section(&view, SidebarSectionKind::Plan).clone();
-            if matches!(&plan.lines[0], SidebarLine::Field { value, .. } if value == "AIW_PLAN.md")
-                || std::time::Instant::now() > deadline
-            {
-                break plan;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        };
-
-        assert_eq!(fields(&plan), vec![field("Current", "AIW_PLAN.md")]);
-        assert_eq!(plan.actions, vec![SidebarAction::OpenPlan]);
     }
 }

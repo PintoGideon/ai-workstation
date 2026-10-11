@@ -225,7 +225,7 @@ state remain available for later incremental ownership work.
 `src/project.rs` models projects, features and sessions. `db/mod.rs` owns the
 SQLite connection and open/seed entrypoints; `migrations.rs` owns schema changes;
 `store.rs` persists projects. Other DB modules persist session status, tokens,
-debug logs, editors, prompt templates/overrides, TODOs, plan interviews,
+debug logs, editors, prompt templates/overrides, TODOs,
 PR triage/investigations/terminal state, PR/AI review caches and manual PR review
 drafts (`pr_review_drafts.rs`, keyed by repository and PR number). DB code knows
 project/domain types and uses WorktreeManager to resolve legacy stores.
@@ -253,7 +253,7 @@ adapter only where it establishes a concrete dependency boundary.
 | `startup_navigation`, `pane_input` | Startup, dashboard navigation, view/mailbox/input and Compose |
 | `status_sidebar`, `attention` | Sync, IPC status, sidebar caches, badges and attention reconciliation |
 | `feature_sessions`, `hooks_setup`, `automation` | Creation/recovery/start/stop, local hooks and automation entrypoints |
-| `prompts_configuration`, `plans`, `todos` | Configuration/prompts, plan interviews and scoped TODO workflows |
+| `prompts_configuration`, `todos` | Configuration/prompts and scoped TODO workflows |
 | `pr_triage`, `final_review` | PR/AI/investigation/memory/integration and diff review workflows |
 | `resources`, `editor_lifecycle` | Admission, process identity and editor stop races |
 

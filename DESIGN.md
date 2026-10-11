@@ -22,7 +22,7 @@ Status legend: ✅ done · 🔨 in progress · ⏳ planned.
 ## 2. Kept from upstream (no work needed)
 
 Projects → Features (branch/worktree) → Sessions · Claude, Codex, Pi · permission modes (Vibeless / Vibe /
-SuperVibe) · needs-you list `i` · dormant `z` · resource guards · plan interview · final review · PR triage and review ·
+SuperVibe) · needs-you list `i` · dormant `z` · resource guards · final review · PR triage and review ·
 prompt library · prompt overrides · TODO lists · usage/cost panels · themes · config wizard ·
 `doctor` / `automation` commands.
 
@@ -586,8 +586,8 @@ the sidebar row shows `42%` at its right edge in the thresholds' tone, the badge
 ### 16.4 Queued follow-ups (P7, `src/fork/followups.rs`)
 
 A per-session FIFO in `aiw_followups` (created by `FORK_SCHEMA`), mirrored in `App::followups` so drawing
-reads no database. The dialog (`e` on a session row; `Ctrl+Space Q` in the pane or a view; `Q` itself is
-the quick plan interview) is a multi-line editor over the list: `Enter` queues, `Tab` reaches the list,
+reads no database. The dialog (`e` on a session row; `Ctrl+Space Q` in the pane or a view) is a multi-line
+editor over the list: `Enter` queues, `Tab` reaches the list,
 `J`/`K` reorder, `d` drops, `Enter` takes an item back to edit. `aiw automation queue --session <id> "<text>"`
 queues from a script. Delivery is the harness asking: the Stop hooks (Claude `Stop`, Codex `Stop`, Gemini
 `AfterAgent`, Cursor `stop`) run `scripts/stop-hook.sh` → `aiw stop-hook`, which sends `followup_take` and
@@ -739,14 +739,14 @@ mode `Normal` and the sidebar on that session's row (the feature's row when the 
 `s`, `z`, `G`, `W`, `K`, `L`, `E`, `T`, `A`, `?`, `q`, `v`. Gone: `b`, `o`, `Tab`, the pane's own leader.
 `Ctrl+Q` is tmux's. The old view's leader commands that still matter moved to the dashboard's
 `Ctrl+Space` menu, for the selected session (`App::selection_view_state`, `src/app/session_tools.rs`): `f`
-final review, `d` diff viewer, `n` current plan, `m` Markdown, `l` past/unsent prompts, `N` TODO capture, `F`
+final review, `d` diff viewer, `m` Markdown, `l` past/unsent prompts, `N` TODO capture, `F`
 fresh-context session, `P` back to PR Triage, `z` complete the referenced TODO; the bookmark,
 picker, wizard and refresh entries stayed; `i`, `?`, `A` left the menu (they are plain keys). The session
 switcher (`w`), remote-control URL copy, scroll mode and text selection went with the view: the sidebar *is*
 the switcher, and tmux has copy mode.
 
 **Prompts, unsent (`src/app/fork_prompt_paste.rs`).** Every path that opened the composer seeded with text —
-TODO spawn (both kinds), plan-interview kickoff (both kinds), prompt-library
+TODO spawn (both kinds), prompt-library
 delivery, the PR-triage fix prompt, a feature's `startup_prompt`, the fresh-context handoff, `Ctrl+Space l` —
 calls `App::paste_prompt_unsent(pi, fi, si, text)`: it writes `.claude/latest-prompt.txt`, pastes with
 `tmux.paste_text` (bracketed paste, **no Enter**), selects the row, closes whatever dialog asked, and focuses

@@ -212,8 +212,6 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                     state.mode = preset.mode;
                     state.agent = preset.agent.clone();
                     state.review = preset.review;
-                    state.plan_mode = preset.plan_mode;
-                    state.quick_plan = preset.quick_plan;
                     state.enable_chrome = preset.enable_chrome;
                     if let Some(ref prefix) = preset.branch_prefix
                         && !prefix.is_empty()
@@ -294,12 +292,12 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
             }
             KeyCode::Tab | KeyCode::Char('l') => {
                 if let AppMode::CreatingFeature(state) = &mut app.mode {
-                    // For Claude: 0=agent 1=mode 2=review 3=plan 4=chrome
-                    // For others: 0=agent 1=mode 2=review 3=plan
+                    // For Claude: 0=agent 1=mode 2=review 3=chrome
+                    // For others: 0=agent 1=mode 2=review
                     let max_focus = if state.agent == AgentKind::Claude {
-                        4
-                    } else {
                         3
+                    } else {
+                        2
                     };
                     if state.mode_focus < max_focus {
                         state.mode_focus += 1;
@@ -316,9 +314,9 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
             KeyCode::Enter => {
                 if let AppMode::CreatingFeature(state) = &mut app.mode {
                     let max_focus = if state.agent == AgentKind::Claude {
-                        4
-                    } else {
                         3
+                    } else {
+                        2
                     };
                     if state.mode_focus < max_focus {
                         state.mode_focus += 1;
@@ -348,10 +346,7 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                         2 => {
                             state.review = !state.review;
                         }
-                        3 => {
-                            state.cycle_plan_choice(true);
-                        }
-                        4 if state.agent == AgentKind::Claude => {
+                        3 if state.agent == AgentKind::Claude => {
                             state.enable_chrome = !state.enable_chrome;
                         }
                         _ => {}
@@ -380,10 +375,7 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                         2 => {
                             state.review = !state.review;
                         }
-                        3 => {
-                            state.cycle_plan_choice(false);
-                        }
-                        4 if state.agent == AgentKind::Claude => {
+                        3 if state.agent == AgentKind::Claude => {
                             state.enable_chrome = !state.enable_chrome;
                         }
                         _ => {}

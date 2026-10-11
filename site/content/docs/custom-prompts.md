@@ -4,8 +4,8 @@ description = "Edit the exact prompts AIW sends for headless AI calls."
 weight = 70
 +++
 
-Behind the plan interview, the final-review diff helpers, the
-AI PR review, and the review-memory bootstrap/compaction, AIW makes one-shot
+Behind the final-review diff helpers, the AI PR review, and the
+review-memory bootstrap/compaction, AIW makes one-shot
 ("headless") AI calls with prompts it builds for you. Press `E` on the
 dashboard — or `Ctrl+Space`, then `E` from a session — to open the
 **prompt-override manager**. It lists every template with its effective

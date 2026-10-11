@@ -110,14 +110,6 @@ const MODE_LABEL: Record<Feature["mode"], string> = {
   supervibe: "supervibe",
 };
 
-export interface PausedPlan {
-  /** The existing feature an on-demand interview belongs to. */
-  featureId: string | null;
-  /** The project a creation-time interview's new feature will join. */
-  projectName: string | null;
-  featureName: string;
-}
-
 export interface SidebarTreeProps {
   projects: Project[];
   sidebar: SidebarSnapshot | undefined;
@@ -129,14 +121,12 @@ export interface SidebarTreeProps {
     | null;
   /** The feature whose deletion this window is running. */
   deletingFeatureId: string | null;
-  pausedPlan: PausedPlan | null;
   onSelectProject: (projectId: string) => void;
   onSelectFeature: (projectId: string, featureId: string) => void;
   onSelectSession: (target: SessionTarget, kind: string) => void;
   /** Open a feature's VS Code tab (its tracked editor windows). */
   onSelectEditors?: (projectId: string, featureId: string) => void;
   onToggleCollapsed: (target: CollapseTarget, collapsed: boolean) => void;
-  onResumePlan: () => void;
   onCreateFeature: (projectId: string) => void;
   /** Extra compact markers a workflow adds to a feature's main line. */
   renderFeatureExtra?: (feature: Feature) => ReactNode;
@@ -183,7 +173,6 @@ function ProjectNode({ project, ...props }: SidebarTreeProps & { project: Projec
   const collapsed = project.collapsed ?? false;
   const active = props.selection?.kind === "project" && props.selection.projectId === project.id;
   const repo = props.sidebar?.projects[project.id]?.repo_display ?? project.repo;
-  const paused = props.pausedPlan?.projectName === project.name ? props.pausedPlan : null;
   const metaId = `tree-project-${project.id}`;
   return (
     <div className="nav-group">
@@ -207,11 +196,6 @@ function ProjectNode({ project, ...props }: SidebarTreeProps & { project: Projec
         </button>
       </div>
       <div className="tree-project-meta" id={metaId} title={project.repo}>{repo}</div>
-      {paused && (
-        <button className="tree-chip tree-chip-warning tree-project-plan" onClick={props.onResumePlan}>
-          plan paused: {paused.featureName} · Resume
-        </button>
-      )}
       {project.features.length === 0 && (
         <button className="tree-empty-hint" onClick={() => props.onCreateFeature(project.id)}>
           No features yet. Add one
@@ -238,7 +222,6 @@ function FeatureNode({
     ? props.selection : null;
   const displayName = feature.nickname || feature.name;
   const stopped = stoppedSessionCount(feature);
-  const paused = props.pausedPlan?.featureId === feature.id ? props.pausedPlan : null;
   const metaId = `tree-feature-${feature.id}`;
   const select = () => props.onSelectFeature(project.id, feature.id);
 
@@ -255,8 +238,6 @@ function FeatureNode({
     title: `Mode: ${feature.mode}`,
   });
   if (feature.review) chips.push({ key: "review", text: "review", className: "tree-chip-review" });
-  if (feature.plan_mode) chips.push({ key: "plan", text: "plan", className: "tree-chip-info" });
-  if (paused) chips.push({ key: "paused", text: "plan paused · Resume", className: "tree-chip-warning tree-chip-action", onClick: props.onResumePlan, title: "Resume the minimized plan interview" });
   if (deleting) chips.push({ key: "deleting", text: "deleting…", className: "tree-chip-danger" });
   if (feature.pending_worktree_script) chips.push({ key: "script", text: "running worktree script…", className: "tree-chip-info" });
   if (derived) chips.push({ key: "age", text: derived.created_age, className: "tree-chip-age", title: feature.created_at ? `Created ${feature.created_at}` : undefined });

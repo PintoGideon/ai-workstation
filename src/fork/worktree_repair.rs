@@ -155,7 +155,6 @@ mod tests {
             is_worktree,
             VibeMode::Vibe,
             false,
-            false,
             AgentKind::Claude,
             false,
         )

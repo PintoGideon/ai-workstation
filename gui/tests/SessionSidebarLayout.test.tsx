@@ -194,7 +194,6 @@ describe("agent tab in the app", () => {
         case "get_snapshot": return snapshot();
         case "supported_harnesses": return [{ slug: "claude", display_name: "Claude" }];
         case "supported_modes": return [{ slug: "vibe", display_name: "Vibe", description: "" }];
-        case "plan_snapshot": return { active: null, precall: null };
         case "session_sidebar": return sidebarView();
         case "attach_terminal": return { key: "feature:claude", generation: 1, initial: { replay: "", alternate_screen: false, mouse_reporting: false } };
         case "terminal_history": return {

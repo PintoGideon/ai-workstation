@@ -127,47 +127,12 @@ fn handle_item_list(app: &mut App, key: KeyEvent) -> Result<()> {
     match category {
         ConfigCategory::CustomSessions => handle_sessions_list(app, key.code),
         ConfigCategory::FeaturePresets => handle_presets_list(app, key.code),
-        ConfigCategory::PlanQuestions => handle_plan_questions_list(app, key.code),
         ConfigCategory::LifecycleHooks => handle_hooks_list(app, key.code),
         ConfigCategory::Keybindings => handle_keybindings_list(app, key.code),
         ConfigCategory::AllowedAgents => handle_agents_list(app, key.code),
     }
 
     Ok(())
-}
-
-fn handle_plan_questions_list(app: &mut App, key: KeyCode) {
-    match key {
-        KeyCode::Esc => back_to_scope_picker(app),
-        KeyCode::Down | KeyCode::Char('j') => {
-            move_list_selection(app, |state| state.plan_questions.len(), 1)
-        }
-        KeyCode::Up | KeyCode::Char('k') => {
-            move_list_selection(app, |state| state.plan_questions.len(), -1)
-        }
-        KeyCode::Char('a') => app.config_wizard_start_edit(None),
-        KeyCode::Enter | KeyCode::Char('e') => {
-            let index = selected_index_if_nonempty(app, |state| state.plan_questions.len());
-            if let Some(index) = index {
-                app.config_wizard_start_edit(Some(index));
-            }
-        }
-        KeyCode::Char('d') => {
-            with_state(app, |state| {
-                if state.selected < state.plan_questions.len() {
-                    state.plan_questions.remove(state.selected);
-                    state.selected = adjust_selection(state.selected, state.plan_questions.len());
-                }
-            });
-        }
-        KeyCode::Char('b') => {
-            with_state(app, |state| {
-                state.skip_builtin_questions = Some(!state.skip_builtin_questions.unwrap_or(false));
-                state.error = None;
-            });
-        }
-        _ => {}
-    }
 }
 
 fn handle_sessions_list(app: &mut App, key: KeyCode) {
@@ -587,16 +552,15 @@ fn with_state(app: &mut App, f: impl FnOnce(&mut ConfigWizardState)) {
 }
 
 fn category_count() -> usize {
-    6
+    5
 }
 
 fn category_from_index(index: usize) -> ConfigCategory {
     match index {
         1 => ConfigCategory::FeaturePresets,
-        2 => ConfigCategory::PlanQuestions,
-        3 => ConfigCategory::LifecycleHooks,
-        4 => ConfigCategory::Keybindings,
-        5 => ConfigCategory::AllowedAgents,
+        2 => ConfigCategory::LifecycleHooks,
+        3 => ConfigCategory::Keybindings,
+        4 => ConfigCategory::AllowedAgents,
         _ => ConfigCategory::CustomSessions,
     }
 }
@@ -605,10 +569,9 @@ fn category_index(category: &ConfigCategory) -> usize {
     match category {
         ConfigCategory::CustomSessions => 0,
         ConfigCategory::FeaturePresets => 1,
-        ConfigCategory::PlanQuestions => 2,
-        ConfigCategory::LifecycleHooks => 3,
-        ConfigCategory::Keybindings => 4,
-        ConfigCategory::AllowedAgents => 5,
+        ConfigCategory::LifecycleHooks => 2,
+        ConfigCategory::Keybindings => 3,
+        ConfigCategory::AllowedAgents => 4,
     }
 }
 
@@ -670,8 +633,7 @@ fn adjust_selection(selected: usize, len: usize) -> usize {
 fn edit_field_count(category: &ConfigCategory) -> usize {
     match category {
         ConfigCategory::CustomSessions => 10,
-        ConfigCategory::FeaturePresets => 7,
-        ConfigCategory::PlanQuestions => 4,
+        ConfigCategory::FeaturePresets => 6,
         ConfigCategory::LifecycleHooks => 4,
         ConfigCategory::Keybindings => 2,
         ConfigCategory::AllowedAgents => 0,
@@ -755,7 +717,6 @@ fn field_value_index_for_focus(category: &ConfigCategory, field_focus: usize) ->
     match category {
         ConfigCategory::CustomSessions if field_focus < 9 => Some(field_focus),
         ConfigCategory::FeaturePresets if matches!(field_focus, 0 | 1) => Some(field_focus),
-        ConfigCategory::PlanQuestions if field_focus < 3 => Some(field_focus),
         ConfigCategory::LifecycleHooks => match field_focus {
             0 => Some(0),
             2 => Some(1),
@@ -786,12 +747,6 @@ fn field_label_for_focus(category: &ConfigCategory, field_focus: usize) -> &'sta
             1 => "Branch prefix",
             _ => "Field",
         },
-        ConfigCategory::PlanQuestions => match field_focus {
-            0 => "Question ID",
-            1 => "Question text",
-            2 => "Options",
-            _ => "Field",
-        },
         ConfigCategory::LifecycleHooks => match field_focus {
             0 => "Script",
             2 => "Prompt title",
@@ -814,12 +769,6 @@ fn handle_edit_space(state: &mut ConfigWizardState) -> bool {
         }
         ConfigCategory::FeaturePresets if state.field_focus >= 4 => {
             if let Some(value) = state.field_toggles.get_mut(state.field_focus - 4) {
-                *value = !*value;
-            }
-            true
-        }
-        ConfigCategory::PlanQuestions if state.field_focus == 3 => {
-            if let Some(value) = state.field_toggles.get_mut(0) {
                 *value = !*value;
             }
             true
@@ -928,8 +877,6 @@ mod tests {
             input_mode: false,
             sessions: Vec::new(),
             presets: Vec::new(),
-            plan_questions: Vec::new(),
-            skip_builtin_questions: None,
             hooks: LifecycleHooks::default(),
             keybindings: HashMap::new(),
             allowed_agents: None,
@@ -1067,35 +1014,6 @@ mod tests {
         commit_field_editor(&mut state);
 
         assert_eq!(state.field_values[1], "New title");
-    }
-
-    #[test]
-    fn plan_question_fields_map_to_wrapped_editors_and_optional_toggle() {
-        let mut state = test_state(
-            ConfigCategory::PlanQuestions,
-            1,
-            vec![
-                "ui-surface".into(),
-                "Where should this appear?".into(),
-                "Dashboard, Session view".into(),
-            ],
-        );
-        state.field_toggles = vec![true];
-
-        open_field_editor(&mut state);
-        assert_eq!(state.field_editor.as_ref().unwrap().label, "Question text");
-        state
-            .field_editor
-            .as_mut()
-            .unwrap()
-            .editor
-            .insert_str(" First?");
-        commit_field_editor(&mut state);
-        state.field_focus = 3;
-
-        assert!(handle_edit_space(&mut state));
-        assert_eq!(state.field_values[1], "Where should this appear? First?");
-        assert_eq!(state.field_toggles, vec![false]);
     }
 
     #[test]

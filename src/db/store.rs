@@ -243,10 +243,10 @@ pub fn load_versioned(conn: &Connection) -> Result<(ProjectStore, u64)> {
 }
 
 /// One `features` row in SELECT column order (see `load_features`): id, name,
-/// branch, workdir, is_worktree, tmux_session, mode, review, plan_mode, agent,
+/// branch, workdir, is_worktree, tmux_session, mode, review, agent,
 /// enable_chrome, status, summary, summary_updated_at, nickname, collapsed,
-/// created_at, last_accessed, ready, triage_source, selected_plan_path,
-/// review_source, issue_source.
+/// created_at, last_accessed, ready, triage_source, review_source,
+/// issue_source.
 type FeatureRow = (
     String,
     String,
@@ -256,7 +256,6 @@ type FeatureRow = (
     String,
     String,
     bool,
-    bool,
     String,
     bool,
     String,
@@ -267,7 +266,6 @@ type FeatureRow = (
     String,
     String,
     bool,
-    Option<String>,
     Option<String>,
     Option<String>,
     Option<String>,
@@ -280,10 +278,10 @@ fn load_features(
 ) -> Result<Vec<Feature>> {
     let mut stmt = conn.prepare(
         "SELECT id, name, branch, workdir, is_worktree, tmux_session,
-                mode, review, plan_mode, agent, enable_chrome, status,
+                mode, review, agent, enable_chrome, status,
                 summary, summary_updated_at, nickname, collapsed,
                 created_at, last_accessed, ready, triage_source,
-                selected_plan_path, review_source, issue_source
+                review_source, issue_source
          FROM features WHERE project_id = ?1
          ORDER BY sort_order ASC, rowid ASC",
     )?;
@@ -312,8 +310,6 @@ fn load_features(
                 row.get(18)?,
                 row.get(19)?,
                 row.get(20)?,
-                row.get(21)?,
-                row.get(22)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -328,7 +324,6 @@ fn load_features(
         tmux_session,
         mode_str,
         review,
-        plan_mode,
         agent_str,
         enable_chrome,
         status_str,
@@ -340,7 +335,6 @@ fn load_features(
         last_accessed,
         ready,
         triage_source_json,
-        selected_plan_path,
         review_source_json,
         issue_source_json,
     ) in rows
@@ -357,7 +351,6 @@ fn load_features(
             collapsed: feat_collapsed,
             mode: mode_from_str(&mode_str),
             review,
-            plan_mode,
             // FORK: a feature whose agent was the removed OpenCode harness
             // falls back to its project's preferred agent (itself already
             // mapped off OpenCode by `agent_from_str`).
@@ -375,7 +368,6 @@ fn load_features(
             summary,
             summary_updated_at: summary_updated_at_str.as_deref().map(dt_from_str),
             nickname,
-            selected_plan_path: selected_plan_path.map(PathBuf::from),
             // A malformed blob (hand-edited DB, or a row written by a future
             // schema) degrades to "not a triage feature" rather than failing
             // the whole store load.
@@ -608,12 +600,12 @@ fn do_save(conn: &Connection, store: &ProjectStore) -> Result<()> {
             conn.execute(
                 "INSERT INTO features (
                     id, project_id, name, branch, workdir, is_worktree,
-                    tmux_session, mode, review, plan_mode, agent, enable_chrome,
+                    tmux_session, mode, review, agent, enable_chrome,
                     status, summary, summary_updated_at, nickname, collapsed,
                     created_at, last_accessed, ready, sort_order, triage_source,
-                    selected_plan_path, review_source, issue_source
+                    review_source, issue_source
                 ) VALUES (
-                    ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25
+                    ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23
                 )",
                 params![
                     feature.id,
@@ -625,7 +617,6 @@ fn do_save(conn: &Connection, store: &ProjectStore) -> Result<()> {
                     feature.tmux_session,
                     mode_to_str(&feature.mode),
                     feature.review as i32,
-                    feature.plan_mode as i32,
                     agent_to_str(&feature.agent),
                     feature.enable_chrome as i32,
                     status_to_str(&feature.status),
@@ -641,10 +632,6 @@ fn do_save(conn: &Connection, store: &ProjectStore) -> Result<()> {
                         .triage_source
                         .as_ref()
                         .and_then(|link| serde_json::to_string(link).ok()),
-                    feature
-                        .selected_plan_path
-                        .as_ref()
-                        .map(|path| path.to_string_lossy()),
                     feature
                         .review_source
                         .as_ref()
@@ -796,7 +783,6 @@ mod tests {
             collapsed: false,
             mode: VibeMode::Vibe,
             review: true,
-            plan_mode: false,
             agent: crate::project::AgentKind::Claude,
             enable_chrome: false,
             pending_worktree_script: false,
@@ -807,9 +793,6 @@ mod tests {
             summary: Some("did some stuff".to_string()),
             summary_updated_at: Some(Utc::now()),
             nickname: Some("myf".to_string()),
-            selected_plan_path: Some(PathBuf::from(
-                "/tmp/repo/.worktrees/my-feature/docs/current-plan.md",
-            )),
             // A companion PR-triage feature: the link that survives a restart
             // and lets PR Triage find and reuse this feature for the same PR.
             triage_source: Some(crate::project::TriageSource {
@@ -865,13 +848,6 @@ mod tests {
         assert!(lf.ready);
         assert_eq!(lf.summary, Some("did some stuff".to_string()));
         assert_eq!(lf.nickname, Some("myf".to_string()));
-        assert_eq!(
-            lf.selected_plan_path,
-            Some(PathBuf::from(
-                "/tmp/repo/.worktrees/my-feature/docs/current-plan.md"
-            )),
-            "the feature's manual plan selection must survive a save/load round trip"
-        );
         assert_eq!(
             lf.triage_source,
             Some(crate::project::TriageSource {
@@ -1004,7 +980,6 @@ mod tests {
                     collapsed: true,
                     mode: VibeMode::default(),
                     review: false,
-                    plan_mode: false,
                     agent: crate::project::AgentKind::Claude,
                     enable_chrome: false,
                     pending_worktree_script: false,
@@ -1015,7 +990,6 @@ mod tests {
                     summary: None,
                     summary_updated_at: None,
                     nickname: None,
-                    selected_plan_path: None,
                     triage_source: None,
                     review_source: None,
                     issue_source: None,
@@ -1031,7 +1005,6 @@ mod tests {
                     collapsed: true,
                     mode: VibeMode::default(),
                     review: false,
-                    plan_mode: false,
                     agent: crate::project::AgentKind::Claude,
                     enable_chrome: false,
                     pending_worktree_script: true, // should be excluded
@@ -1042,7 +1015,6 @@ mod tests {
                     summary: None,
                     summary_updated_at: None,
                     nickname: None,
-                    selected_plan_path: None,
                     triage_source: None,
                     review_source: None,
                     issue_source: None,
@@ -1196,7 +1168,6 @@ mod tests {
             "/tmp/legacy-repo".into(),
             false,
             VibeMode::Vibe,
-            false,
             false,
             AgentKind::Claude,
             false,

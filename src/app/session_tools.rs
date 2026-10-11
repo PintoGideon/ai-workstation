@@ -62,7 +62,7 @@ impl App {
     }
 
     /// Back to the dashboard from a dialog that was about a session.
-    pub(crate) fn exit_view_without_resuming_plan_interview(&mut self) {
+    pub(crate) fn exit_view_to_dashboard(&mut self) {
         self.mode = AppMode::Normal;
     }
 
@@ -357,54 +357,6 @@ impl App {
         Ok(())
     }
 
-    /// `Ctrl+Space n`: this feature's effective plan, or choose one from
-    /// Markdown files contained by its worktree when neither the
-    /// conventional nor persisted path is currently valid.
-    pub fn open_current_plan_for_selection(&mut self) -> Result<()> {
-        let Some(view) = self.selection_view_state() else {
-            self.push_toast_warning("Select a feature or session first");
-            return Ok(());
-        };
-
-        let Some((feature_id, workdir, effective_plan)) =
-            self.store.projects.iter().find_map(|project| {
-                project
-                    .features
-                    .iter()
-                    .find(|feature| feature.tmux_session == view.session)
-                    .map(|feature| {
-                        (
-                            feature.id.clone(),
-                            feature.workdir.clone(),
-                            crate::app::plan::resolve_effective_plan(feature),
-                        )
-                    })
-            })
-        else {
-            self.push_toast_warning("Could not resolve the current feature");
-            return Ok(());
-        };
-
-        if let Some(plan) = effective_plan {
-            return self.open_markdown_viewer_path(
-                plan.path().to_path_buf(),
-                workdir,
-                None,
-                view,
-                None,
-                true,
-            );
-        }
-
-        self.mode = AppMode::MarkdownLoading(crate::app::MarkdownLoadingState {
-            title: "Finding worktree plans...".into(),
-            from_view: Some(view.clone()),
-            operation: crate::app::MarkdownLoadingOperation::DiscoverPlan { view, feature_id },
-        });
-        self.message = None;
-        Ok(())
-    }
-
     pub fn open_markdown_file_picker_from_viewer(&mut self) -> Result<()> {
         let viewer = match std::mem::replace(&mut self.mode, AppMode::Normal) {
             AppMode::MarkdownViewer(viewer) => viewer,
@@ -436,7 +388,6 @@ impl App {
         repo_root: Option<PathBuf>,
         view: ViewState,
         return_to_picker: Option<crate::app::MarkdownFilePickerState>,
-        current_plan: bool,
     ) -> Result<()> {
         self.mode = AppMode::MarkdownLoading(crate::app::MarkdownLoadingState {
             title: format!("Loading {}...", path.display()),
@@ -447,7 +398,6 @@ impl App {
                 repo_root,
                 view,
                 return_to_picker,
-                current_plan,
             },
         });
         self.message = None;
@@ -474,25 +424,14 @@ impl App {
             crate::app::MarkdownLoadingOperation::DiscoverFromViewer { viewer } => {
                 self.complete_markdown_discovery_from_viewer(viewer);
             }
-            crate::app::MarkdownLoadingOperation::DiscoverPlan { view, feature_id } => {
-                self.complete_plan_markdown_discovery(view, feature_id);
-            }
             crate::app::MarkdownLoadingOperation::ReadPath {
                 path,
                 workdir,
                 repo_root,
                 view,
                 return_to_picker,
-                current_plan,
             } => {
-                self.complete_markdown_read_path(
-                    path,
-                    workdir,
-                    repo_root,
-                    view,
-                    return_to_picker,
-                    current_plan,
-                );
+                self.complete_markdown_read_path(path, workdir, repo_root, view, return_to_picker);
             }
         }
     }
@@ -513,10 +452,6 @@ impl App {
             }
             crate::app::MarkdownLoadingOperation::DiscoverFromViewer { viewer } => {
                 AppMode::MarkdownViewer(viewer)
-            }
-            crate::app::MarkdownLoadingOperation::DiscoverPlan { view, .. } => {
-                self.workspace_select_window(&view.session, &view.window);
-                AppMode::Normal
             }
             crate::app::MarkdownLoadingOperation::ReadPath {
                 view,
@@ -550,14 +485,7 @@ impl App {
         }
 
         if files.len() == 1 {
-            self.complete_markdown_read_path(
-                files[0].clone(),
-                workdir,
-                repo_root,
-                view,
-                None,
-                false,
-            );
+            self.complete_markdown_read_path(files[0].clone(), workdir, repo_root, view, None);
             return;
         }
 
@@ -569,7 +497,6 @@ impl App {
             query: String::new(),
             workdir,
             repo_root,
-            purpose: crate::app::MarkdownFilePickerPurpose::Browse,
             from_view: Some(view),
         });
         self.message = None;
@@ -611,71 +538,9 @@ impl App {
             query: String::new(),
             workdir,
             repo_root,
-            purpose: crate::app::MarkdownFilePickerPurpose::Browse,
             from_view: Some(view),
         });
         self.message = None;
-    }
-
-    fn complete_plan_markdown_discovery(&mut self, view: ViewState, feature_id: String) {
-        let Some(workdir) = self
-            .store
-            .projects
-            .iter()
-            .flat_map(|project| &project.features)
-            .find(|feature| feature.id == feature_id)
-            .map(|feature| feature.workdir.clone())
-        else {
-            self.return_to_dashboard(&view);
-            self.push_toast_warning("Could not resolve the current feature");
-            return;
-        };
-
-        let mut files = crate::markdown::collect_markdown_view_paths(&workdir, None)
-            .into_iter()
-            .filter_map(|path| crate::app::plan::validate_selected_plan_path(&workdir, &path).ok())
-            .collect::<Vec<_>>();
-        files.sort();
-        files.dedup();
-
-        if files.is_empty() {
-            self.return_to_dashboard(&view);
-            self.push_toast_warning("No Markdown plan is available in this worktree");
-            return;
-        }
-
-        self.mode = AppMode::MarkdownFilePicker(crate::app::MarkdownFilePickerState {
-            files,
-            selected: 0,
-            plan_only: false,
-            search_active: false,
-            query: String::new(),
-            workdir,
-            repo_root: None,
-            purpose: crate::app::MarkdownFilePickerPurpose::SelectPlan { feature_id },
-            from_view: Some(view),
-        });
-        self.message = None;
-    }
-
-    pub(crate) fn persist_selected_plan_path(
-        &mut self,
-        feature_id: &str,
-        workdir: &Path,
-        candidate: &Path,
-    ) -> Result<PathBuf> {
-        let canonical = crate::app::plan::validate_selected_plan_path(workdir, candidate)
-            .map_err(|error| anyhow::anyhow!("invalid selected plan: {error:?}"))?;
-        let feature = self
-            .store
-            .projects
-            .iter_mut()
-            .flat_map(|project| &mut project.features)
-            .find(|feature| feature.id == feature_id)
-            .ok_or_else(|| anyhow::anyhow!("feature no longer exists"))?;
-        feature.selected_plan_path = Some(canonical.clone());
-        self.save()?;
-        Ok(canonical)
     }
 
     fn complete_markdown_read_path(
@@ -685,7 +550,6 @@ impl App {
         repo_root: Option<PathBuf>,
         view: ViewState,
         return_to_picker: Option<crate::app::MarkdownFilePickerState>,
-        current_plan: bool,
     ) {
         let content = match std::fs::read_to_string(&path) {
             Ok(content) => content,
@@ -707,17 +571,14 @@ impl App {
             rendered_lines: Vec::new(),
             return_to_picker,
             from_view: Some(view),
-            current_plan,
         });
         self.message = None;
     }
 
-    /// Explicit viewer refresh: edits are re-read in place. If the current
-    /// plan was moved or deleted, close the stale snapshot, clear a matching
-    /// manual selection, and return to the originating agent session.
+    /// Explicit viewer refresh: edits are re-read in place.
     pub fn refresh_markdown_viewer(&mut self) -> Result<()> {
-        let (path, current_plan) = match &self.mode {
-            AppMode::MarkdownViewer(state) => (state.source_path.clone(), state.current_plan),
+        let path = match &self.mode {
+            AppMode::MarkdownViewer(state) => state.source_path.clone(),
             _ => return Ok(()),
         };
 
@@ -729,30 +590,6 @@ impl App {
                     state.rendered_lines.clear();
                 }
                 self.push_toast_success("Markdown refreshed");
-            }
-            Err(error) if current_plan => {
-                let from_view = match std::mem::replace(&mut self.mode, AppMode::Normal) {
-                    AppMode::MarkdownViewer(state) => state.from_view,
-                    other => {
-                        self.mode = other;
-                        return Ok(());
-                    }
-                };
-                if let Some(view) = from_view {
-                    if let Some(feature) = self
-                        .store
-                        .projects
-                        .iter_mut()
-                        .flat_map(|project| &mut project.features)
-                        .find(|feature| feature.tmux_session == view.session)
-                        && feature.selected_plan_path.as_deref() == Some(path.as_path())
-                    {
-                        feature.selected_plan_path = None;
-                        self.save()?;
-                    }
-                    self.return_to_dashboard(&view);
-                }
-                self.push_toast_warning(format!("Current plan is no longer available: {error}"));
             }
             Err(error) => {
                 self.push_toast_error(format!("Could not refresh Markdown: {error}"));

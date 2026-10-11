@@ -162,13 +162,6 @@ fn draw_edit_item(frame: &mut Frame, state: &mut ConfigWizardState, theme: &Them
                 " New Preset "
             }
         }
-        ConfigCategory::PlanQuestions => {
-            if state.editing_index.is_some() {
-                " Edit Plan Question "
-            } else {
-                " New Plan Question "
-            }
-        }
         ConfigCategory::LifecycleHooks => " Edit Hook ",
         ConfigCategory::Keybindings => {
             if state.editing_index.is_some() {
@@ -474,7 +467,6 @@ fn category_title(category: &ConfigCategory) -> &'static str {
     match category {
         ConfigCategory::CustomSessions => "Custom Sessions",
         ConfigCategory::FeaturePresets => "Feature Presets",
-        ConfigCategory::PlanQuestions => "Plan Questions",
         ConfigCategory::LifecycleHooks => "Lifecycle Hooks",
         ConfigCategory::Keybindings => "Keybindings",
         ConfigCategory::AllowedAgents => "Allowed Harnesses",
@@ -516,40 +508,6 @@ fn item_list_lines(state: &ConfigWizardState, theme: &Theme) -> Vec<Line<'static
                     })
                     .collect()
             }
-        }
-        ConfigCategory::PlanQuestions => {
-            let mut lines = vec![Line::from(Span::styled(
-                format!(
-                    " Built-in questions: {} (press 'b' to toggle)",
-                    if state.skip_builtin_questions.unwrap_or(false) {
-                        "disabled"
-                    } else {
-                        "enabled"
-                    }
-                ),
-                Style::default().fg(theme.info.to_color()),
-            ))];
-            if state.plan_questions.is_empty() {
-                lines.push(Line::from(Span::styled(
-                    " (no configured questions - press 'a' to add)",
-                    Style::default().fg(theme.text_muted.to_color()),
-                )));
-            } else {
-                lines.extend(
-                    state
-                        .plan_questions
-                        .iter()
-                        .enumerate()
-                        .map(|(index, question)| {
-                            selection_line(
-                                &format!("{} — {}", question.id, question.text),
-                                state.selected == index,
-                                theme,
-                            )
-                        }),
-                );
-            }
-            lines
         }
         ConfigCategory::LifecycleHooks => vec![
             selection_line(
@@ -618,9 +576,6 @@ fn item_list_hints(category: &ConfigCategory) -> &'static str {
         ConfigCategory::Keybindings => {
             "Enter/e edit key  d reset override  Ctrl+S save  Esc back  Ctrl+Q close"
         }
-        ConfigCategory::PlanQuestions => {
-            "a add  e edit  d delete  b toggle built-ins  Ctrl+S save  Esc back  Ctrl+Q close"
-        }
         _ => "a add  e edit  d delete  Ctrl+S save  Esc back  Ctrl+Q close",
     }
 }
@@ -639,7 +594,6 @@ fn edit_help_lines(state: &ConfigWizardState, theme: &Theme) -> Vec<Line<'static
     let (title, detail, example) = match state.category {
         ConfigCategory::CustomSessions => custom_session_field_help(state.field_focus),
         ConfigCategory::FeaturePresets => feature_preset_field_help(state.field_focus),
-        ConfigCategory::PlanQuestions => plan_question_field_help(state.field_focus),
         ConfigCategory::LifecycleHooks => lifecycle_hook_field_help(state.field_focus),
         ConfigCategory::Keybindings => keybinding_field_help(state.field_focus),
         ConfigCategory::AllowedAgents => (
@@ -761,16 +715,11 @@ fn feature_preset_field_help(field_focus: usize) -> (&'static str, &'static str,
             "Use Enter to toggle.",
         ),
         5 => (
-            "Plan mode",
-            "Enable plan mode for the feature by default.",
-            "Use Enter to toggle.",
-        ),
-        6 => (
             "Chrome",
             "Pass the chrome flag for supported harnesses.",
             "Use Enter to toggle.",
         ),
-        7 => (
+        6 => (
             "Save",
             "Validate this preset and open the config diff preview.",
             "Press Enter on Save to continue.",
@@ -807,41 +756,6 @@ fn lifecycle_hook_field_help(field_focus: usize) -> (&'static str, &'static str,
             "Press Enter on Save to continue.",
         ),
         _ => ("Hook", "Configure a lifecycle command.", ""),
-    }
-}
-
-fn plan_question_field_help(field_focus: usize) -> (&'static str, &'static str, &'static str) {
-    match field_focus {
-        0 => (
-            "Question ID",
-            "Stable merge key. A project question with the same ID replaces the global question.",
-            "Example: ui-surface",
-        ),
-        1 => (
-            "Question text",
-            "The prompt shown during the guided plan interview.",
-            "Example: Where should this feature appear in the UI?",
-        ),
-        2 => (
-            "Options",
-            "Optional comma-separated choices. Leave blank for a free-text answer.",
-            "Example: Dashboard, Session view, Both",
-        ),
-        3 => (
-            "Optional",
-            "Optional questions may be skipped during the interview.",
-            "Press Space to toggle.",
-        ),
-        4 => (
-            "Save",
-            "Validate this question and open the config diff preview.",
-            "Press Enter on Save to continue.",
-        ),
-        _ => (
-            "Plan question",
-            "Configure a guided interview question.",
-            "",
-        ),
     }
 }
 
@@ -971,52 +885,13 @@ fn edit_lines(state: &ConfigWizardState, theme: &Theme) -> Vec<Line<'static>> {
                     theme,
                 ),
                 toggle_field_line(
-                    "Plan mode",
+                    "Chrome",
                     state.field_toggles.get(1).copied().unwrap_or(false),
                     state.field_focus == 5,
                     theme,
                 ),
-                toggle_field_line(
-                    "Chrome",
-                    state.field_toggles.get(2).copied().unwrap_or(false),
-                    state.field_focus == 6,
-                    theme,
-                ),
             ];
-            lines.push(button_line("Save", state.field_focus == 7, theme));
-            lines
-        }
-        ConfigCategory::PlanQuestions => {
-            let mut lines = vec![
-                text_field_line(
-                    "Question ID",
-                    state.field_values.first().map(String::as_str).unwrap_or(""),
-                    state.field_focus == 0,
-                    state.input_mode && state.field_focus == 0,
-                    theme,
-                ),
-                text_field_line(
-                    "Question text",
-                    state.field_values.get(1).map(String::as_str).unwrap_or(""),
-                    state.field_focus == 1,
-                    state.input_mode && state.field_focus == 1,
-                    theme,
-                ),
-                text_field_line(
-                    "Options",
-                    state.field_values.get(2).map(String::as_str).unwrap_or(""),
-                    state.field_focus == 2,
-                    state.input_mode && state.field_focus == 2,
-                    theme,
-                ),
-                toggle_field_line(
-                    "Optional",
-                    state.field_toggles.first().copied().unwrap_or(true),
-                    state.field_focus == 3,
-                    theme,
-                ),
-            ];
-            lines.push(button_line("Save", state.field_focus == 4, theme));
+            lines.push(button_line("Save", state.field_focus == 6, theme));
             lines
         }
         ConfigCategory::LifecycleHooks => {

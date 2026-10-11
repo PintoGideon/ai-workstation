@@ -5,7 +5,7 @@ import type { SessionTarget } from "./api";
 // draws beside an embedded agent pane, built by the same shared assembly.
 
 export type SidebarSectionKind =
-  | "status" | "usage" | "context" | "plan" | "issue" | "pr_triage"
+  | "status" | "usage" | "context" | "issue" | "pr_triage"
   | "work" | "summary" | "prompt" | "todos" | "active_todo";
 
 export type SidebarTone =
@@ -34,7 +34,6 @@ export interface SidebarContextMeter {
 }
 
 export type SidebarAction =
-  | { kind: "open_plan" }
   | { kind: "reuse_prompt"; prompt: string }
   | { kind: "pr_triage" }
   | { kind: "complete_todo"; todo_id: string }
@@ -56,18 +55,8 @@ export interface SessionSidebarView {
   notes: string[];
 }
 
-export interface SessionPlanView {
-  path: string;
-  markdown: string;
-  truncated: boolean;
-}
-
 export function sessionSidebar(target: SessionTarget): Promise<SessionSidebarView> {
   return invoke("session_sidebar", { target });
-}
-
-export function sessionSidebarPlan(target: SessionTarget): Promise<SessionPlanView> {
-  return invoke("session_sidebar_plan", { target });
 }
 
 export function sessionSidebarCompleteTodo(target: SessionTarget, todoId: string): Promise<string> {

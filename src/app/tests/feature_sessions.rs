@@ -435,8 +435,6 @@ fn app_in_creating_feature_mode(
         mode_index: 0,
         mode_focus: 0,
         review: false,
-        plan_mode: false,
-        quick_plan: false,
         create_terminal: true,
         session_name: "Claude 1".to_string(),
         source_index: 0,
@@ -831,7 +829,6 @@ fn restore_claude_session_only_affects_the_targeted_session() {
         collapsed: false,
         mode: VibeMode::default(),
         review: false,
-        plan_mode: false,
         agent: AgentKind::Claude,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -842,7 +839,6 @@ fn restore_claude_session_only_affects_the_targeted_session() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        selected_plan_path: None,
         triage_source: None,
         review_source: None,
         issue_source: None,
@@ -967,8 +963,6 @@ fn finish_feature_launch_vibeless_injects_custom_diff_review_hook_on_worktree_cr
         is_worktree: true,
         mode: VibeMode::Vibeless,
         review: false,
-        plan_mode: false,
-        quick_plan: false,
         agent: AgentKind::Claude,
         create_terminal: false,
         session_name: "Claude 1".to_string(),
@@ -1159,7 +1153,6 @@ fn open_session_picker_selects_project_preferred_agent_by_default() {
         collapsed: false,
         mode: VibeMode::default(),
         review: false,
-        plan_mode: false,
         agent: AgentKind::Claude,
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1170,7 +1163,6 @@ fn open_session_picker_selects_project_preferred_agent_by_default() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        selected_plan_path: None,
         triage_source: None,
         review_source: None,
         issue_source: None,
@@ -1221,7 +1213,7 @@ fn create_feature_final_enter_opens_session_name_step() {
     if let AppMode::CreatingFeature(state) = &mut app.mode {
         state.step = CreateFeatureStep::Mode;
         state.agent = AgentKind::Codex;
-        state.mode_focus = 4;
+        state.mode_focus = 2;
     }
 
     crate::handlers::handle_create_feature_key(&mut app, KeyCode::Enter).unwrap();
@@ -1305,8 +1297,6 @@ fn create_feature_session_name_enter_creates_and_starts_feature() {
         mode_index: 0,
         mode_focus: 5,
         review: false,
-        plan_mode: false,
-        quick_plan: false,
         create_terminal: false,
         session_name: "Pairing Claude".to_string(),
         source_index: 0,
@@ -1619,7 +1609,6 @@ fn feature_add_session_named_uses_custom_label_and_default_window() {
         false,
         VibeMode::default(),
         false,
-        false,
         AgentKind::Claude,
         false,
     );
@@ -1660,7 +1649,6 @@ fn reload_extension_config_uses_project_repo_for_worktree_feature() {
         collapsed: false,
         mode: VibeMode::default(),
         review: false,
-        plan_mode: false,
         agent: AgentKind::default(),
         enable_chrome: false,
         pending_worktree_script: false,
@@ -1671,7 +1659,6 @@ fn reload_extension_config_uses_project_repo_for_worktree_feature() {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        selected_plan_path: None,
         triage_source: None,
         review_source: None,
         issue_source: None,
@@ -2699,7 +2686,6 @@ fn store_with_single_claude_session() -> ProjectStore {
         collapsed: false,
         mode: VibeMode::default(),
         review: false,
-        plan_mode: false,
         agent: AgentKind::default(),
         enable_chrome: false,
         pending_worktree_script: false,
@@ -2710,7 +2696,6 @@ fn store_with_single_claude_session() -> ProjectStore {
         summary: None,
         summary_updated_at: None,
         nickname: None,
-        selected_plan_path: None,
         triage_source: None,
         review_source: None,
         issue_source: None,

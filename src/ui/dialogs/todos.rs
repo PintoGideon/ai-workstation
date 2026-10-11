@@ -724,16 +724,14 @@ fn draw_launch_step(
     theme: &Theme,
 ) {
     let pct_y = match step {
-        // Three options, each with a detail line, plus header and footer.
-        TodoLaunchStep::Choice { .. } => 56,
-        TodoLaunchStep::Destination { .. } => 46,
+        // Two options, each with a detail line, plus header and footer.
+        TodoLaunchStep::Choice { .. } => 46,
     };
     let area = centered_rect(64, pct_y, frame.area());
     crate::ui::draw_modal_overlay(frame, area, theme);
 
     let title = match step {
         TodoLaunchStep::Choice { .. } => " Start work on this TODO ",
-        TodoLaunchStep::Destination { .. } => " Where should this plan land? ",
     };
     let block = Block::default()
         .title(title)
@@ -769,59 +767,11 @@ fn draw_launch_step(
                 lines.extend(detail_lines(action.detail(), inner.width, theme));
             }
         }
-        TodoLaunchStep::Destination {
-            host_feature_name,
-            can_create_worktree,
-            selected,
-            ..
-        } => {
-            lines.push(option_line(
-                format!("Here, in \"{host_feature_name}\""),
-                *selected == 0,
-                theme.primary.to_color(),
-                theme,
-            ));
-            lines.extend(detail_lines(
-                "Plans into this feature and starts an agent on it. Nothing new is checked out.",
-                inner.width,
-                theme,
-            ));
-
-            let new_accent = if *can_create_worktree {
-                theme.primary.to_color()
-            } else {
-                theme.text_muted.to_color()
-            };
-            lines.push(option_line(
-                "In a new feature and worktree".to_string(),
-                *selected == 1,
-                new_accent,
-                theme,
-            ));
-            // A blocked option says why here rather than only on Enter: the
-            // reason is a property of the project, not of the keypress.
-            let detail = if *can_create_worktree {
-                "Creates the branch first, then plans into it and starts its agent."
-            } else {
-                "Unavailable: this project is not a git repository."
-            };
-            let mut detail_rows = detail_lines(detail, inner.width, theme);
-            if !*can_create_worktree {
-                // A blocked option's reason is a warning, not an aside.
-                for line in &mut detail_rows {
-                    for span in &mut line.spans {
-                        span.style = span.style.fg(theme.warning.to_color());
-                    }
-                }
-            }
-            lines.extend(detail_rows);
-        }
     }
 
     lines.push(Line::from(""));
     let back = match step {
         TodoLaunchStep::Choice { .. } => " back to list",
-        TodoLaunchStep::Destination { .. } => " back",
     };
     lines.push(Line::from(vec![
         Span::styled(" j/k", Style::default().fg(theme.warning.to_color())),

@@ -153,8 +153,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("G", "Open PR Triage (experimental)"),
         ("", "(on a project row: Review a PR instead)"),
         ("W", "Open AI Review for this feature (experimental)"),
-        ("P", "Run a plan interview for this feature"),
-        ("Q", "Run a Quick Plan interview for this feature"),
         ("T", "Theme picker"),
         (
             "t",
@@ -246,7 +244,6 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
     let leader_keybinds: Vec<(&str, &str)> = vec![
         ("f", "Final diff review of the selected feature"),
         ("d", "Diff viewer (all changes / commit)"),
-        ("n", "Open the current plan"),
         ("m", "Markdown file picker/viewer"),
         ("l", "Past and unsent prompts: paste one again (unsent)"),
         ("N", "Quick-capture a TODO for this worktree"),
@@ -263,105 +260,9 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("C", "Compact review memory"),
         ("r", "Refresh statuses + PR badges (runs gh)"),
     ];
+
     lines.extend(
         leader_keybinds
-            .iter()
-            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
-    );
-
-    lines.extend(section_header("  During a plan interview:", columns, theme)); // FORK: G11
-
-    let plan_interview_keybinds: Vec<(&str, &str)> = vec![
-        ("r / d", "Resume or discard a saved draft (on entry)"),
-        (
-            "Enter",
-            "Save answer and continue; at the AI prompt, review raw plan (no tokens)",
-        ),
-        ("Shift+Enter", "Insert a newline (free-text answers)"),
-        ("j/k / \u{2191}/\u{2193}", "Choose a select-option answer"),
-        (
-            "Backspace",
-            "Clear the picked option (back to nothing picked; lets you answer with custom text alone)",
-        ),
-        (
-            "e",
-            "Type your own answer to a select question (submitted with any picked option; Enter still submits)",
-        ),
-        ("Ctrl+B", "Return to the previous question"),
-        ("Ctrl+S", "Skip an optional question"),
-        ("Ctrl+R", "Restore the previous interview's answer (re-run)"),
-        (
-            "a",
-            "Ask AI follow-ups at the optional AI prompt (uses tokens)",
-        ),
-        ("Ctrl+F", "Draft plan now from saved answers (uses tokens)"),
-        (
-            "Esc",
-            "Cancel (launch without plan, or leave plan unchanged)",
-        ),
-        (
-            "y / n",
-            "Open a still-running session with the kickoff prompt seeded but unsent, or leave it alone",
-        ),
-    ];
-
-    lines.extend(
-        plan_interview_keybinds
-            .iter()
-            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
-    ); // FORK: G11
-
-    lines.extend(section_header("  During plan review:", columns, theme)); // FORK: G11
-
-    let plan_review_keybinds: Vec<(&str, &str)> = vec![
-        ("j/k / PgUp/PgDn", "Scroll the rendered plan"),
-        ("e", "Edit raw plan markdown"),
-        (
-            "a",
-            "Expert review with an explicit frontier model, or re-open one already held (uses tokens for a new review)",
-        ),
-        (
-            "f",
-            "Give free-form feedback; the agent may inspect the repository read-only (uses tokens)",
-        ),
-        (
-            "i",
-            "Research focused questions in isolated read-only contexts, then merge findings (uses tokens)",
-        ),
-        ("r", "Regenerate the plan (uses tokens)"),
-        (
-            "Enter",
-            "Accept plan (on creation: launch feature and seed the kickoff prompt)",
-        ),
-        ("Ctrl+S", "Save edit and return to preview"),
-        ("Ctrl+S (feedback)", "Send feedback and revise the plan"),
-        (
-            "Ctrl+S (research)",
-            "Run isolated investigators and merge their findings",
-        ),
-        ("Esc", "Discard edit or confirm abort"),
-    ];
-
-    lines.extend(
-        plan_review_keybinds
-            .iter()
-            .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
-    ); // FORK: G11
-
-    lines.extend(section_header(
-        "  During an Expert review of the plan:",
-        columns,
-        theme,
-    )); // FORK: G11
-
-    let plan_critique_keybinds: Vec<(&str, &str)> = vec![
-        ("j/k / PgUp/PgDn", "Scroll the review"),
-        ("r", "Revise the plan with this feedback (uses tokens)"),
-        ("Esc / Enter", "Back to the plan, unchanged"),
-    ];
-
-    lines.extend(
-        plan_critique_keybinds
             .iter()
             .flat_map(|(key, desc)| bind_lines(key, desc, columns, theme)),
     ); // FORK: G11
@@ -379,7 +280,7 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("J / K", "Reorder up/down"),
         ("d", "Delete TODO (y/n confirm)"),
         ("I", "Start the next TODO in the visible lists"),
-        ("Enter", "Start work: agent now, or plan it first"),
+        ("Enter", "Start work on this TODO"),
         ("", "  (jumps straight to a linked session or feature)"),
         ("", "  (an in-progress TODO cannot launch another agent)"),
         ("p", "Show/hide the project TODO list"),

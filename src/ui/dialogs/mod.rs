@@ -16,8 +16,6 @@ mod help;
 mod hooks;
 mod issue_fixer;
 mod markdown;
-mod plan_interview;
-mod plan_interview_attach;
 mod pr_review;
 mod precall;
 mod project;
@@ -53,8 +51,6 @@ pub use hooks::{
 };
 pub use issue_fixer::{draw_issue_browser, draw_issue_duplicate_warning, draw_issue_setup};
 pub use markdown::{draw_markdown_loading, draw_markdown_viewer};
-pub use plan_interview::draw_plan_interview_dialog;
-pub use plan_interview_attach::draw_plan_interview_attach_doc_dialog;
 pub use pr_review::{
     PrReviewUsage, draw_compact_confirm, draw_pr_investigation_loading, draw_pr_number_prompt,
     draw_pr_picker, draw_pr_review, draw_pr_review_list, draw_pr_review_loading,

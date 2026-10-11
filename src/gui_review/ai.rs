@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::*;
 use crate::app::App;
-use crate::gui_plans::PrecallView;
+use crate::gui_contract::PrecallView;
 use crate::project::AgentKind;
 
 #[derive(Debug, Serialize)]

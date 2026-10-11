@@ -3,7 +3,7 @@ name: aiw:add-preset
 description: >
   Add a feature preset to this AIW workspace. Use when the user
   wants a named template that pre-configures agent harness, mode,
-  branch prefix, plan mode, review, and Chrome settings for new
+  branch prefix, review, and Chrome settings for new
   features — so they can create a feature with a single selection
   instead of filling out every field each time.
 allowed-tools: Bash(cat *) Bash(mkdir *) Edit(aiw.json) Bash(test *) Bash(rm .aiw/config.json)
@@ -28,7 +28,6 @@ Add or update an entry in the `feature_presets` array in
   "mode": "normal",
   "agent": "claude",
   "review": true,
-  "plan_mode": false,
   "enable_chrome": false
 }
 ```
@@ -40,7 +39,6 @@ Add or update an entry in the `feature_presets` array in
 | `mode` | no | `"normal"`, `"vibeless"` | `vibeless` = diff review on every edit |
 | `agent` | no | `"claude"`, `"codex"`, `"pi"`, `"gemini"`, `"cursor"` | Agent harness to use |
 | `review` | no | `true`, `false` | Enable final review pass when feature finishes |
-| `plan_mode` | no | `true`, `false` | Start with a shared PLAN.md task list |
 | `enable_chrome` | no | `true`, `false` | Allow agent to control a browser |
 
 ## Config path (read the legacy file too)

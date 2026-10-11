@@ -525,17 +525,11 @@ pub fn precall_target(gui: &mut GuiHandle) -> GuiResult<PrecallOverrideTarget> {
     let AppMode::PromptPrecall(pending) = &app.mode else {
         return Err(GuiError::conflict("There is no pending AI call to edit"));
     };
-    let (workdir, project_name) = match pending.prior_mode.as_ref() {
-        AppMode::PlanInterview(state) => (
-            Some(&state.workdir),
-            state
-                .pending_launch
-                .as_ref()
-                .map(|launch| &launch.project_name),
-        ),
-        AppMode::DiffViewer(state) => (Some(&state.workdir), None),
-        _ => (None, None),
-    };
+    let (workdir, project_name): (Option<&PathBuf>, Option<&String>) =
+        match pending.prior_mode.as_ref() {
+            AppMode::DiffViewer(state) => (Some(&state.workdir), None),
+            _ => (None, None),
+        };
     let feature = workdir.and_then(|workdir| {
         app.store.projects.iter().find_map(|project| {
             project
@@ -626,7 +620,6 @@ mod tests {
             workdir,
             true,
             VibeMode::default(),
-            false,
             false,
             AgentKind::Codex,
             false,
@@ -963,132 +956,5 @@ mod tests {
             load(&mut fx.gui, &ctx, None).unwrap_err().kind,
             GuiErrorKind::NotFound
         );
-    }
-
-    #[test]
-    fn precall_target_names_the_pending_prompt_and_its_feature() {
-        use crate::app::precall::{PendingPrecall, PrecallAction};
-        let mut fx = fixture();
-        assert_eq!(
-            precall_target(&mut fx.gui).unwrap_err().kind,
-            GuiErrorKind::Conflict
-        );
-        let workdir = fx.dir.path().join("worktree");
-        let app = fx.gui.app_for_workflow();
-        let state = crate::app::PlanInterviewState::for_feature(
-            "Feature".into(),
-            "feature".into(),
-            Vec::new(),
-            workdir,
-            AgentKind::Pi,
-        );
-        app.mode = AppMode::PromptPrecall(Box::new(PendingPrecall {
-            action: PrecallAction::PlanRound,
-            prompt_id: PromptId::PlanInterviewRound,
-            harness: AgentKind::Pi,
-            model: None,
-            preview: String::new(),
-            viewing: false,
-            scroll: 0,
-            prior_mode: Box::new(AppMode::PlanInterview(state)),
-        }));
-        let target = precall_target(&mut fx.gui).unwrap();
-        assert_eq!(target.prompt_id, "plan_interview.round");
-        assert_eq!(target.harness, AgentKind::Pi);
-        assert_eq!(target.context, fx.feature);
-        assert_eq!(target.context_note, None);
-        // Opening the manager leaves the pending call untouched.
-        load(&mut fx.gui, &target.context, Some(target.harness)).unwrap();
-        assert!(matches!(
-            fx.gui.app_for_workflow().mode,
-            AppMode::PromptPrecall(_)
-        ));
-    }
-    fn park_precall(fx: &mut Fixture, prior: AppMode) {
-        use crate::app::precall::{PendingPrecall, PrecallAction};
-        fx.gui.app_for_workflow().mode = AppMode::PromptPrecall(Box::new(PendingPrecall {
-            action: PrecallAction::PlanRound,
-            prompt_id: PromptId::PlanInterviewRound,
-            harness: AgentKind::Pi,
-            model: None,
-            preview: String::new(),
-            viewing: false,
-            scroll: 0,
-            prior_mode: Box::new(prior),
-        }));
-    }
-
-    fn creation_interview(project_name: &str, workdir: PathBuf) -> AppMode {
-        AppMode::PlanInterview(crate::app::PlanInterviewState::for_feature_creation(
-            crate::app::PreparedFeatureLaunch {
-                project_name: project_name.into(),
-                feature_name: None,
-                branch: "planned".into(),
-                workdir,
-                is_worktree: true,
-                mode: VibeMode::default(),
-                review: false,
-                plan_mode: true,
-                quick_plan: false,
-                agent: AgentKind::Pi,
-                create_terminal: false,
-                session_name: "Pi 1".into(),
-                enable_chrome: false,
-                hook_succeeded: None,
-                startup_prompt: None,
-                todo_origin: None,
-                issue_source: None,
-            },
-            Vec::new(),
-        ))
-    }
-
-    #[test]
-    fn precall_target_finds_a_creation_interviews_project_the_way_its_launch_does() {
-        let mut fx = fixture();
-        // A second project whose checkout is the new worktree's path must not
-        // win over the project the launch names.
-        let new_worktree = fx.dir.path().join("planned");
-        {
-            let app = fx.gui.app_for_workflow();
-            app.store.projects.push(Project::new(
-                "Other".into(),
-                new_worktree.clone(),
-                true,
-                AgentKind::Claude,
-            ));
-        }
-        park_precall(&mut fx, creation_interview("Project", new_worktree));
-        let target = precall_target(&mut fx.gui).unwrap();
-        assert_eq!(target.context, fx.project);
-        assert_eq!(target.context_note, None);
-    }
-
-    #[test]
-    fn precall_target_says_why_it_falls_back_to_global() {
-        let mut fx = fixture();
-        let planned = fx.dir.path().join("planned");
-        park_precall(&mut fx, creation_interview("Gone", planned));
-        let target = precall_target(&mut fx.gui).unwrap();
-        assert_eq!(target.context, OverrideContext::Global);
-        let note = target.context_note.unwrap();
-        assert!(
-            note.contains("\"Gone\"") && note.contains("Global"),
-            "{note}"
-        );
-
-        let elsewhere = fx.dir.path().join("elsewhere");
-        let state = crate::app::PlanInterviewState::for_feature(
-            "Feature".into(),
-            "feature".into(),
-            Vec::new(),
-            elsewhere.clone(),
-            AgentKind::Pi,
-        );
-        park_precall(&mut fx, AppMode::PlanInterview(state));
-        let target = precall_target(&mut fx.gui).unwrap();
-        assert_eq!(target.context, OverrideContext::Global);
-        let note = target.context_note.unwrap();
-        assert!(note.contains(&elsewhere.display().to_string()), "{note}");
     }
 }

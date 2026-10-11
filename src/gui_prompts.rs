@@ -270,7 +270,6 @@ mod tests {
             true,
             VibeMode::default(),
             false,
-            false,
             AgentKind::Claude,
             false,
         );

@@ -50,7 +50,6 @@ fn store(root: &Path, status: ProjectStatus) -> ProjectStore {
         true,
         VibeMode::default(),
         false,
-        false,
         AgentKind::default(),
         false,
     );

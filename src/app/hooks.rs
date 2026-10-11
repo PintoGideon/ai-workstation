@@ -51,7 +51,6 @@ impl App {
         workdir: &Path,
         mode: &VibeMode,
         review: bool,
-        plan_mode: bool,
         agent: &AgentKind,
         create_terminal: bool,
         session_name: String,
@@ -83,7 +82,6 @@ impl App {
                     true,
                     mode.clone(),
                     review,
-                    plan_mode,
                     agent.clone(),
                     enable_chrome,
                 );
@@ -100,7 +98,6 @@ impl App {
                 feature.is_worktree = true;
                 feature.mode = mode.clone();
                 feature.review = review;
-                feature.plan_mode = plan_mode;
                 feature.agent = agent.clone();
                 feature.enable_chrome = enable_chrome;
                 feature.pending_worktree_script = true;
@@ -129,8 +126,6 @@ impl App {
         branch: String,
         mode: VibeMode,
         review: bool,
-        plan_mode: bool,
-        quick_plan: bool,
         agent: AgentKind,
         create_terminal: bool,
         session_name: String,
@@ -145,7 +140,6 @@ impl App {
             &workdir,
             &mode,
             review,
-            plan_mode,
             &agent,
             create_terminal,
             session_name.clone(),
@@ -173,8 +167,6 @@ impl App {
             is_worktree,
             mode,
             review,
-            plan_mode,
-            quick_plan,
             agent,
             create_terminal,
             session_name,
@@ -359,8 +351,6 @@ impl App {
                 branch,
                 mode,
                 review,
-                plan_mode,
-                quick_plan,
                 agent,
                 create_terminal,
                 session_name,
@@ -377,8 +367,6 @@ impl App {
                     branch,
                     mode,
                     review,
-                    plan_mode,
-                    quick_plan,
                     agent,
                     create_terminal,
                     session_name,
@@ -426,8 +414,6 @@ impl App {
         branch: String,
         mode: VibeMode,
         review: bool,
-        plan_mode: bool,
-        quick_plan: bool,
         agent: AgentKind,
         create_terminal: bool,
         session_name: String,
@@ -468,7 +454,6 @@ impl App {
             &workdir,
             &mode,
             review,
-            plan_mode,
             &agent,
             create_terminal,
             session_name.clone(),
@@ -516,8 +501,6 @@ impl App {
             branch,
             mode,
             review,
-            plan_mode,
-            quick_plan,
             agent,
             create_terminal,
             session_name,
@@ -623,8 +606,6 @@ impl App {
             branch,
             mode,
             review,
-            plan_mode,
-            quick_plan,
             agent,
             create_terminal,
             session_name,
@@ -643,8 +624,6 @@ impl App {
                     s.branch.clone(),
                     s.mode.clone(),
                     s.review,
-                    s.plan_mode,
-                    s.quick_plan,
                     s.agent.clone(),
                     s.create_terminal,
                     s.session_name.clone(),
@@ -667,8 +646,6 @@ impl App {
             branch.clone(),
             mode,
             review,
-            plan_mode,
-            quick_plan,
             agent,
             create_terminal,
             session_name,
@@ -676,11 +653,6 @@ impl App {
             startup_prompt,
             true,
         )?;
-
-        if matches!(self.mode, AppMode::PlanInterview(_)) {
-            self.message = None;
-            return Ok(());
-        }
 
         if skipped {
             // FORK: the hook was killed after the timeout; the feature is up.
@@ -766,8 +738,6 @@ impl App {
                     hook.branch.clone(),
                     hook.mode.clone(),
                     hook.review,
-                    hook.plan_mode,
-                    hook.quick_plan,
                     hook.agent.clone(),
                     hook.create_terminal,
                     hook.session_name.clone(),
@@ -779,8 +749,6 @@ impl App {
                         "hooks",
                         format!("Failed to finalize '{}': {}", hook.branch, err),
                     );
-                } else if matches!(self.mode, AppMode::PlanInterview(_)) {
-                    self.message = None;
                 } else if hook.success.unwrap_or(false) {
                     self.message = Some(format!(
                         "Created and started feature '{}' (hook succeeded)",

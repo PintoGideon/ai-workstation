@@ -974,18 +974,10 @@ impl App {
         let Some(models) = models.filter(|models| !models.is_empty()) else {
             return true;
         };
-        match &mut self.mode {
-            AppMode::PlanInterview(state) => {
-                if let Some(pick) = &mut state.expert_model_pick {
-                    merge_codex_preset_rows(pick, models);
-                }
-            }
-            AppMode::AiReview(state) => {
-                if let Some(pick) = &mut state.model_pick {
-                    merge_codex_preset_rows(pick, models);
-                }
-            }
-            _ => {}
+        if let AppMode::AiReview(state) = &mut self.mode
+            && let Some(pick) = &mut state.model_pick
+        {
+            merge_codex_preset_rows(pick, models);
         }
         true
     }

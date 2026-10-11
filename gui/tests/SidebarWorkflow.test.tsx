@@ -57,7 +57,6 @@ function mount(handleCollapse: (args: Record<string, unknown>) => Promise<Worksp
       }
       case "supported_harnesses": return [{ slug: "claude", display_name: "Claude" }];
       case "supported_modes": return [{ slug: "vibe", display_name: "Vibe", description: "" }];
-      case "plan_snapshot": return { active: null, precall: null };
       default: throw new Error(`Unexpected command: ${command}`);
     }
   });

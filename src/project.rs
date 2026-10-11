@@ -479,8 +479,6 @@ pub struct Feature {
     #[serde(default)]
     pub review: bool,
     #[serde(default)]
-    pub plan_mode: bool,
-    #[serde(default)]
     pub agent: AgentKind,
     #[serde(default)]
     pub enable_chrome: bool,
@@ -499,8 +497,6 @@ pub struct Feature {
     pub nickname: Option<String>,
     /// User-selected plan file for this feature. The effective-plan resolver
     /// may prefer the worktree's conventional `AIW_PLAN.md` over this value.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub selected_plan_path: Option<PathBuf>,
     /// Set only on a **companion triage feature**: the isolated worktree PR
     /// Triage creates when the user picks the `New feature…` fix target. Git
     /// can't check out the PR's branch in two worktrees at once, so the
@@ -603,8 +599,6 @@ struct FeatureDe {
     #[serde(default)]
     review: bool,
     #[serde(default)]
-    plan_mode: bool,
-    #[serde(default)]
     agent: AgentKind,
     #[serde(default)]
     enable_chrome: bool,
@@ -619,8 +613,6 @@ struct FeatureDe {
     summary_updated_at: Option<DateTime<Utc>>,
     #[serde(default)]
     nickname: Option<String>,
-    #[serde(default)]
-    selected_plan_path: Option<PathBuf>,
     #[serde(default)]
     triage_source: Option<TriageSource>,
     #[serde(default)]
@@ -647,7 +639,6 @@ impl<'de> Deserialize<'de> for Feature {
             collapsed: feature.collapsed,
             mode,
             review: feature.review || legacy_review,
-            plan_mode: feature.plan_mode,
             agent: feature.agent,
             enable_chrome: feature.enable_chrome,
             pending_worktree_script: false,
@@ -658,7 +649,6 @@ impl<'de> Deserialize<'de> for Feature {
             summary: feature.summary,
             summary_updated_at: feature.summary_updated_at,
             nickname: feature.nickname,
-            selected_plan_path: feature.selected_plan_path,
             triage_source: feature.triage_source,
             review_source: feature.review_source,
             issue_source: feature.issue_source,
@@ -730,7 +720,6 @@ impl Feature {
         is_worktree: bool,
         mode: VibeMode,
         review: bool,
-        plan_mode: bool,
         agent: AgentKind,
         enable_chrome: bool,
     ) -> Self {
@@ -742,7 +731,6 @@ impl Feature {
             is_worktree,
             mode,
             review,
-            plan_mode,
             agent,
             enable_chrome,
             tmux_session,
@@ -758,7 +746,6 @@ impl Feature {
         is_worktree: bool,
         mode: VibeMode,
         review: bool,
-        plan_mode: bool,
         agent: AgentKind,
         enable_chrome: bool,
     ) -> Self {
@@ -770,7 +757,6 @@ impl Feature {
             is_worktree,
             mode,
             review,
-            plan_mode,
             agent,
             enable_chrome,
             tmux_session,
@@ -785,7 +771,6 @@ impl Feature {
         is_worktree: bool,
         mode: VibeMode,
         review: bool,
-        plan_mode: bool,
         agent: AgentKind,
         enable_chrome: bool,
         tmux_session: String,
@@ -802,7 +787,6 @@ impl Feature {
             collapsed: true,
             mode,
             review,
-            plan_mode,
             agent,
             enable_chrome,
             pending_worktree_script: false,
@@ -813,7 +797,6 @@ impl Feature {
             summary: None,
             summary_updated_at: None,
             nickname: None,
-            selected_plan_path: None,
             triage_source: None,
             review_source: None,
             issue_source: None,
@@ -1103,7 +1086,6 @@ fn merge_feature(target: &mut Feature, incoming: Feature) {
     target.collapsed = incoming.collapsed;
     target.mode = incoming.mode;
     target.review = incoming.review;
-    target.plan_mode = incoming.plan_mode;
     target.agent = incoming.agent;
     target.enable_chrome = incoming.enable_chrome;
     target.pending_worktree_script = incoming.pending_worktree_script;
@@ -1114,7 +1096,6 @@ fn merge_feature(target: &mut Feature, incoming: Feature) {
     target.summary = incoming.summary;
     target.summary_updated_at = incoming.summary_updated_at;
     target.nickname = incoming.nickname;
-    target.selected_plan_path = incoming.selected_plan_path;
 }
 
 fn merge_session_vec(
@@ -1412,7 +1393,6 @@ impl ProjectStore {
                             collapsed: true,
                             mode: VibeMode::default(),
                             review: false,
-                            plan_mode: false,
                             agent: AgentKind::default(),
                             enable_chrome: false,
                             pending_worktree_script: false,
@@ -1423,7 +1403,6 @@ impl ProjectStore {
                             summary: None,
                             summary_updated_at: None,
                             nickname: None,
-                            selected_plan_path: None,
                             triage_source: None,
                             review_source: None,
                             issue_source: None,
@@ -1786,7 +1765,6 @@ mod tests {
         let feature: Feature = serde_json::from_value(json).unwrap();
         assert!(feature.triage_source.is_none());
         assert!(feature.issue_source.is_none());
-        assert!(feature.selected_plan_path.is_none());
     }
 
     #[test]
@@ -1797,7 +1775,6 @@ mod tests {
             PathBuf::from("/tmp/wd"),
             true,
             VibeMode::Vibeless,
-            false,
             false,
             AgentKind::Codex,
             false,
@@ -1823,7 +1800,6 @@ mod tests {
             PathBuf::from("/tmp/wd"),
             true,
             VibeMode::Vibeless,
-            false,
             false,
             AgentKind::Codex,
             false,
@@ -1915,7 +1891,6 @@ mod tests {
             collapsed: true,
             mode: VibeMode::default(),
             review: false,
-            plan_mode: false,
             agent: AgentKind::default(),
             enable_chrome: false,
             pending_worktree_script: false,
@@ -1926,7 +1901,6 @@ mod tests {
             summary: None,
             summary_updated_at: None,
             nickname: None,
-            selected_plan_path: None,
             triage_source: None,
             review_source: None,
             issue_source: None,
@@ -1979,7 +1953,6 @@ mod tests {
                     collapsed: true,
                     mode: VibeMode::Vibeless,
                     review: false,
-                    plan_mode: false,
                     agent: AgentKind::Claude,
                     enable_chrome: false,
                     pending_worktree_script: false,
@@ -1990,7 +1963,6 @@ mod tests {
                     summary: None,
                     summary_updated_at: None,
                     nickname: None,
-                    selected_plan_path: None,
                     triage_source: None,
                     review_source: None,
                     issue_source: None,
@@ -2063,7 +2035,6 @@ mod tests {
                         collapsed: false,
                         mode: VibeMode::Vibe,
                         review: true,
-                        plan_mode: true,
                         agent: AgentKind::Codex,
                         enable_chrome: true,
                         pending_worktree_script: true,
@@ -2074,7 +2045,6 @@ mod tests {
                         summary: Some("summary".to_string()),
                         summary_updated_at: Some(Utc::now()),
                         nickname: Some("nick".to_string()),
-                        selected_plan_path: None,
                         triage_source: None,
                         review_source: None,
                         issue_source: None,
@@ -2090,7 +2060,6 @@ mod tests {
                         collapsed: true,
                         mode: VibeMode::SuperVibe,
                         review: false,
-                        plan_mode: false,
                         agent: AgentKind::Pi,
                         enable_chrome: false,
                         pending_worktree_script: false,
@@ -2101,7 +2070,6 @@ mod tests {
                         summary: None,
                         summary_updated_at: None,
                         nickname: None,
-                        selected_plan_path: None,
                         triage_source: None,
                         review_source: None,
                         issue_source: None,
@@ -2230,7 +2198,6 @@ mod tests {
             "/home/user/my-project".into(),
             false,
             VibeMode::Vibe,
-            false,
             false,
             AgentKind::Claude,
             false,

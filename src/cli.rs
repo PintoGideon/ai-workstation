@@ -329,7 +329,6 @@ Request JSON (all fields optional unless marked required):
     \"agent\":           \"claude\" | \"codex\" | \"pi\" | \"gemini\" | \"cursor\"   default \"claude\"
     \"mode\":            \"vibeless\" | \"vibe\" | \"supervibe\"       default \"vibeless\"
     \"review\":          bool    default false
-    \"plan_mode\":       bool    default false
     \"create_terminal\": bool    default false
     \"use_worktree\":    bool | null   null = project default
     \"enable_chrome\":   bool    default false
@@ -1678,30 +1677,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         }
 
         if app.pr_review_work.investigation_pending() && app.poll_pr_investigation_bg() {
-            force_redraw = true;
-        }
-
-        if app.plan_interview_ai_bg.is_some() && app.poll_plan_interview_ai_bg() {
-            force_redraw = true;
-        }
-
-        if app.plan_interview_synthesis_bg.is_some() && app.poll_plan_interview_synthesis_bg() {
-            force_redraw = true;
-        }
-
-        if app.plan_interview_critique_bg.is_some() && app.poll_plan_interview_critique_bg() {
-            force_redraw = true;
-        }
-
-        if app.plan_interview_directed_feedback_bg.is_some()
-            && app.poll_plan_interview_directed_feedback_bg()
-        {
-            force_redraw = true;
-        }
-
-        if app.plan_interview_investigation_bg.is_some()
-            && app.poll_plan_interview_investigation_bg()
-        {
             force_redraw = true;
         }
 

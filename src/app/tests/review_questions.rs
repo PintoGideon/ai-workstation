@@ -1080,8 +1080,16 @@ fn aiw_managed_blocks_do_not_count_as_local_changes_but_real_edits_do() {
         } else {
             fixture.ai(&mut app);
         }
-        // A tracked AGENTS.md gains AIW's Plan Mode block (Codex/Pi).
-        crate::app::setup::ensure_plan_mode_instructions(dir, &AgentKind::Codex, true);
+        // A tracked AGENTS.md gains an AIW-managed block (the kind an older
+        // AIW wrote for plan mode).
+        let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+        std::fs::write(
+            dir.join("AGENTS.md"),
+            format!(
+                "{agents}\n<!-- AIW:plan-instructions:begin -->\n\nPlan.\n\n<!-- AIW:plan-instructions:end -->\n"
+            ),
+        )
+        .unwrap();
         // An untracked file that is nothing but an AIW block.
         std::fs::write(
             dir.join("CLAUDE.local.md"),

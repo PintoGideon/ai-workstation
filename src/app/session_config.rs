@@ -3,8 +3,7 @@ use chrono::Utc;
 use std::collections::HashSet;
 
 use super::setup::{
-    cleanup_agent_injected_files, ensure_notification_hooks, ensure_plan_mode_instructions,
-    ensure_review_claude_md,
+    cleanup_agent_injected_files, ensure_notification_hooks, ensure_review_claude_md,
 };
 use super::*;
 use crate::project::{FeatureSession, ProjectStatus, SessionKind};
@@ -199,7 +198,6 @@ impl App {
         let workdir = feature.workdir.clone();
         let mode = feature.mode.clone();
         let review = feature.review;
-        let plan_mode = feature.plan_mode;
         let is_worktree = feature.is_worktree;
         let tmux_session = feature.tmux_session.clone();
         let old_agent = feature.agent.clone();
@@ -236,10 +234,8 @@ impl App {
         }
 
         cleanup_agent_injected_files(&workdir, &old_agent);
-        ensure_plan_mode_instructions(&workdir, &old_agent, false);
         ensure_notification_hooks(&workdir, &repo, &mode, &next_agent, is_worktree);
         ensure_review_claude_md(&workdir, review);
-        ensure_plan_mode_instructions(&workdir, &next_agent, plan_mode);
 
         if was_running {
             // Restarting what was already running under a different harness:

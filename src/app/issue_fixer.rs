@@ -95,8 +95,6 @@ pub(crate) struct IssueSetupState {
     pub feature_name: String,
     pub settings: FeatureSetupState,
     pub use_worktree: bool,
-    pub plan_mode: bool,
-    pub quick_plan: bool,
     pub create_terminal: bool,
     pub session_name: String,
     pub prompt: TextEditor,
@@ -129,12 +127,11 @@ pub(crate) enum IssueSetupRow {
     Review,
     Chrome,
     Worktree,
-    Plan,
     Prompt,
 }
 
 impl IssueSetupRow {
-    pub(crate) const ALL: [Self; 10] = [
+    pub(crate) const ALL: [Self; 9] = [
         Self::FeatureName,
         Self::Branch,
         Self::Preset,
@@ -143,7 +140,6 @@ impl IssueSetupRow {
         Self::Review,
         Self::Chrome,
         Self::Worktree,
-        Self::Plan,
         Self::Prompt,
     ];
 
@@ -157,7 +153,6 @@ impl IssueSetupRow {
             Self::Review => "Review mode",
             Self::Chrome => "Chrome",
             Self::Worktree => "Worktree",
-            Self::Plan => "Guided plan",
             Self::Prompt => "Prompt",
         }
     }
@@ -251,27 +246,6 @@ impl IssueSetupState {
                 let _ = self.settings.adjust(delta);
             }
             IssueSetupRow::Worktree => self.use_worktree = !self.use_worktree,
-            IssueSetupRow::Plan => {
-                let current = match (self.plan_mode, self.quick_plan) {
-                    (false, _) => 0,
-                    (true, false) => 1,
-                    (true, true) => 2,
-                };
-                match (current as isize + delta).rem_euclid(3) {
-                    0 => {
-                        self.plan_mode = false;
-                        self.quick_plan = false;
-                    }
-                    1 => {
-                        self.plan_mode = true;
-                        self.quick_plan = false;
-                    }
-                    _ => {
-                        self.plan_mode = true;
-                        self.quick_plan = true;
-                    }
-                }
-            }
             IssueSetupRow::FeatureName | IssueSetupRow::Branch | IssueSetupRow::Prompt => {}
         }
     }
@@ -584,8 +558,6 @@ impl App {
             feature_name: format!("fix-issue-{}", issue.number),
             settings,
             use_worktree: true,
-            plan_mode: false,
-            quick_plan: false,
             create_terminal: false,
             session_name: App::default_session_name_for_agent(&agent),
             prompt: TextEditor::new(prompt),
@@ -751,8 +723,6 @@ impl App {
         create.mode = state.mode();
         create.review = state.settings.review;
         create.enable_chrome = state.settings.enable_chrome;
-        create.plan_mode = state.plan_mode;
-        create.quick_plan = state.quick_plan;
         create.create_terminal = state.create_terminal;
         create.session_name = state.session_name;
         create.task_prompt = state.prompt.text().to_string();
@@ -1341,7 +1311,6 @@ mod tests {
             false,
             VibeMode::Vibeless,
             false,
-            false,
             AgentKind::Claude,
             false,
         );
@@ -1400,7 +1369,6 @@ mod tests {
                 repo.path().join(format!("feature-{index}")),
                 true,
                 VibeMode::Vibeless,
-                false,
                 false,
                 AgentKind::Claude,
                 false,
@@ -1473,7 +1441,7 @@ mod tests {
     }
 
     #[test]
-    fn issue_setup_preserves_prompt_edits_after_validation_and_into_plan_launch() {
+    fn issue_setup_preserves_prompt_edits_after_validation() {
         let repo = tempfile::tempdir().unwrap();
         let mut app = app_with_issue_browser(repo.path());
         app.issue_browser_open_setup();
@@ -1496,50 +1464,10 @@ mod tests {
                 if state.prompt.text() == edited_prompt
                     && state.error.as_deref() == Some("Feature name cannot be empty")
         ));
-
-        if let crate::app::AppMode::IssueSetup(state) = &mut app.mode {
-            state.feature_name = "issue-fix-display-name".to_string();
-            state.settings.branch = "issue/42-custom-branch".to_string();
-            state.settings.review = true;
-            state.settings.enable_chrome = true;
-            state.use_worktree = false;
-            state.plan_mode = true;
-            state.quick_plan = false;
-        }
-        app.issue_setup_confirm().unwrap();
-
-        let crate::app::AppMode::PlanInterview(interview) = &app.mode else {
-            panic!("accepted issue setup did not enter guided planning");
-        };
-        let prepared = interview.pending_launch.as_ref().unwrap();
-        assert_eq!(
-            prepared.feature_name.as_deref(),
-            Some("issue-fix-display-name")
-        );
-        assert_eq!(prepared.branch, "issue/42-custom-branch");
-        assert_eq!(prepared.agent, AgentKind::Claude);
-        assert!(prepared.review);
-        assert!(prepared.enable_chrome);
-        assert!(!prepared.is_worktree);
-        assert_eq!(
-            prepared.startup_prompt.as_deref(),
-            Some(edited_prompt.as_str())
-        );
-        assert_eq!(
-            prepared.issue_source,
-            Some(crate::project::IssueSource {
-                host: "github.com".to_string(),
-                owner: "acme".to_string(),
-                repository: "widget".to_string(),
-                number: 42,
-                comment_status: crate::project::IssueCommentStatus::Pending,
-            })
-        );
-        assert_eq!(interview.editor.text(), edited_prompt);
     }
 
     #[test]
-    fn duplicate_warning_preserves_edits_and_explicit_override_allows_second_launch() {
+    fn duplicate_warning_preserves_edits_when_cancelled() {
         let repo = tempfile::tempdir().unwrap();
         let mut app = app_with_issue_browser(repo.path());
         let mut existing = crate::project::Feature::new(
@@ -1548,7 +1476,6 @@ mod tests {
             repo.path().join("existing"),
             true,
             VibeMode::Vibeless,
-            false,
             false,
             AgentKind::Claude,
             false,
@@ -1566,7 +1493,6 @@ mod tests {
         if let crate::app::AppMode::IssueSetup(state) = &mut app.mode {
             state.prompt = TextEditor::new(edited_prompt.clone());
             state.use_worktree = false;
-            state.plan_mode = true;
         }
 
         app.issue_setup_confirm().unwrap();
@@ -1582,17 +1508,6 @@ mod tests {
         assert!(matches!(
             &app.mode,
             crate::app::AppMode::IssueSetup(state) if state.prompt.text() == edited_prompt
-        ));
-
-        app.issue_setup_confirm().unwrap();
-        app.issue_duplicate_override().unwrap();
-        assert!(matches!(
-            &app.mode,
-            crate::app::AppMode::PlanInterview(interview)
-                if interview
-                    .pending_launch
-                    .as_ref()
-                    .is_some_and(|prepared| prepared.issue_source.as_ref().is_some_and(|source| source.number == 42))
         ));
     }
 
@@ -1611,8 +1526,6 @@ mod tests {
             is_worktree: false,
             mode: VibeMode::Vibeless,
             review: false,
-            plan_mode: false,
-            quick_plan: false,
             agent: AgentKind::Claude,
             create_terminal: false,
             session_name: "Claude 1".to_string(),
@@ -1629,9 +1542,7 @@ mod tests {
             }),
         };
 
-        let error = app
-            .finish_feature_launch_without_interview(prepared)
-            .unwrap_err();
+        let error = app.finish_feature_launch(prepared).unwrap_err();
         assert!(error.to_string().contains("feature was not saved"));
         assert!(app.store.projects[0].features.is_empty());
     }
@@ -1681,7 +1592,6 @@ mod tests {
             true,
             VibeMode::Vibeless,
             false,
-            false,
             AgentKind::Claude,
             false,
         );
@@ -1698,7 +1608,6 @@ mod tests {
             repo.path().join("unrelated"),
             true,
             VibeMode::Vibeless,
-            false,
             false,
             AgentKind::Claude,
             false,
@@ -1720,8 +1629,6 @@ mod tests {
             is_worktree: true,
             mode: VibeMode::Vibeless,
             review: false,
-            plan_mode: false,
-            quick_plan: false,
             agent: AgentKind::Claude,
             create_terminal: false,
             session_name: "Claude 1".to_string(),
@@ -1732,8 +1639,7 @@ mod tests {
             issue_source: Some(issue_source(crate::project::IssueCommentStatus::Pending)),
         };
 
-        app.finish_feature_launch_without_interview(prepared)
-            .unwrap();
+        app.finish_feature_launch(prepared).unwrap();
 
         assert_eq!(app.store.projects[0].features.len(), 2);
         assert_eq!(app.store.projects[0].features[0].id, pending_id);

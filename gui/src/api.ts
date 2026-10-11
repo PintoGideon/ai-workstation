@@ -53,7 +53,6 @@ export interface Feature {
   collapsed?: boolean;
   nickname?: string | null;
   review?: boolean;
-  plan_mode?: boolean;
   pending_worktree_script?: boolean;
   ready?: boolean;
   created_at?: string;
@@ -191,7 +190,6 @@ export interface CreateFeatureRequest {
   agent: AgentSlug;
   mode: ModeSlug;
   review: boolean;
-  plan_mode: boolean;
   create_terminal: boolean;
   use_worktree: boolean | null;
   enable_chrome: boolean;
@@ -496,94 +494,11 @@ export function terminalSubmitPrompt(target: SessionTarget, text: string): Promi
   });
 }
 
-export interface PlanQuestionView {
-  id: string;
-  text: string;
-  optional: boolean;
-  options: string[] | null;
-}
-
-export interface PlanView {
-  interview_key: string;
-  feature_name: string;
-  /** Creation-time interviews only: the project the new feature will join. */
-  pending_project_name?: string | null;
-  kind: "full" | "quick";
-  phase: string;
-  step_key: string;
-  question_index: number;
-  question_count: number;
-  question: PlanQuestionView | null;
-  editor_text: string;
-  selected_option: number | null;
-  review_markdown: string | null;
-  critique: string | null;
-  attached_docs: string[];
-  kickoff_target: string | null;
-}
-
-export interface PlanStatus {
-  active: PlanView | null;
-  precall: PrecallView | null;
-  message: string | null;
-  hook_warning: string | null;
-  handoff: PlanHandoff | null;
-}
-
-export interface PlanHandoff {
-  target: SessionTarget;
-  draft_prompt: string;
-}
-
 export interface PrecallView {
   title: string;
   harness: string;
   preview: string;
   viewing: boolean;
-}
-
-export interface PlanInput {
-  text: string;
-  selected_option: number | null;
-}
-
-export type PlanAction =
-  | "resume" | "discard_draft" | "next" | "back" | "skip"
-  | "finish_early" | "opt_in_ai" | "begin_edit" | "save_edit"
-  | "cancel_edit" | "regenerate" | "request_critique"
-  | "close_critique" | "revise_from_critique" | "begin_feedback"
-  | "submit_feedback" | "cancel_feedback" | "begin_investigation"
-  | "submit_investigation" | "cancel_investigation" | "restore_prior"
-  | "attach_doc" | "remove_doc" | "accept" | "accept_approved" | "cancel"
-  | "kickoff_accept" | "kickoff_decline"
-  | "precall_confirm" | "precall_cancel" | "precall_toggle_view";
-
-export function planBegin(target: FeatureTarget, quick = false): Promise<PlanStatus> {
-  return invoke("plan_begin", { target, quick });
-}
-
-export function planBeginTodoHost(todoId: string, target: FeatureTarget): Promise<PlanStatus> {
-  return invoke("plan_begin_todo_host", { todoId, target });
-}
-
-export function planBeginCreation(request: CreateFeatureRequest, quick: boolean): Promise<PlanStatus> {
-  return invoke("plan_begin_creation", { request, quick });
-}
-
-export function planBeginTodoNew(todoId: string, request: CreateFeatureRequest): Promise<PlanStatus> {
-  return invoke("plan_begin_todo_new", { todoId, request });
-}
-
-export function planSnapshot(): Promise<PlanStatus> {
-  return invoke("plan_snapshot");
-}
-
-export function planAct(
-  expectedStep: string,
-  action: PlanAction,
-  input: PlanInput | null = null,
-): Promise<PlanStatus> {
-  return invoke("plan_act", { expectedStep, action, input });
 }
 
 export interface DiffOptions {

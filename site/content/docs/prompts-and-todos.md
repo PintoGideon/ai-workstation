@@ -45,7 +45,6 @@ Press `Enter` on a TODO to start work on it. AIW asks how:
 | --- | --- |
 | **Start an agent on this TODO** | Opens a session with the TODO in the composer, unsent — in this feature for a worktree TODO, or in a feature you pick for a project or global one. |
 | **Start an agent in a new feature** | Opens the ordinary create-feature wizard, pre-filled with a branch name from the TODO title. Once the feature exists, the TODO is linked to it and its agent is seeded with the TODO, unsent. |
-| **Plan this TODO first** | Runs the guided plan interview, with the TODO's title, notes, and scratchpad already filled in as the feature brief. |
 
 Press `I` to work the list rather than a particular item: AIW takes the
 highest-priority TODO nobody has started, opens an agent on it, and marks

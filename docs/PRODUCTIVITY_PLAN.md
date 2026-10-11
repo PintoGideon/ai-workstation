@@ -27,7 +27,7 @@ Sources (October 2026):
 
 ## What AIW already covers (don't rebuild)
 
-- **Starting work:** features from presets, batch create `B`, plan interview `P`, fork `F`, handoff (leader `F`).
+- **Starting work:** features from presets, batch create `B`, fork `F`, handoff (leader `F`).
 - **Lists and inputs:** TODOs `I`, needs-you queue `i`, dormant list `z`, prompt library `L`.
 - **Review and PRs:** diff viewer and final review (leader `d` / `f`), supervised edits (Claude), PR triage and AI
   review `G` / `W`.

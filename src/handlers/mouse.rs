@@ -12,7 +12,6 @@ const VIEW_MOUSE_SCROLL_LINES: usize = 3;
 const DEBUG_LOG_MOUSE_SCROLL_LINES: usize = 3;
 const MARKDOWN_MOUSE_SCROLL_LINES: usize = 3;
 const HELP_MOUSE_SCROLL_LINES: usize = 3;
-const PLAN_INTERVIEW_MOUSE_SCROLL_LINES: usize = 3;
 
 pub fn handle_mouse(app: &mut App, mouse: MouseEvent, visible_rows: u16) -> Result<()> {
     if app.review_questions().is_some_and(|q| q.open) {
@@ -105,12 +104,6 @@ fn handle_scroll_up(app: &mut App) {
         state.scroll_offset = state.scroll_offset.saturating_sub(HELP_MOUSE_SCROLL_LINES);
         return;
     }
-    if let AppMode::PlanInterview(state) = &mut app.mode {
-        if let Some(offset) = state.scroll_offset_mut() {
-            *offset = offset.saturating_sub(PLAN_INTERVIEW_MOUSE_SCROLL_LINES);
-        }
-        return;
-    }
     app.select_prev();
 }
 
@@ -148,12 +141,6 @@ fn handle_scroll_down(app: &mut App) {
         state.scroll_offset = state.scroll_offset.saturating_add(HELP_MOUSE_SCROLL_LINES);
         return;
     }
-    if let AppMode::PlanInterview(state) = &mut app.mode {
-        if let Some(offset) = state.scroll_offset_mut() {
-            *offset = offset.saturating_add(PLAN_INTERVIEW_MOUSE_SCROLL_LINES);
-        }
-        return;
-    }
     app.select_next();
 }
 
@@ -189,7 +176,6 @@ fn handle_click(app: &mut App, col: u16, row: u16, visible_rows: u16) -> Result<
             | AppMode::DeletingProject(_)
             | AppMode::DeletingFeature(_, _)
             | AppMode::BrowsingPath(_)
-            | AppMode::PlanInterviewAttachDoc(_)
             | AppMode::CommandPicker(_)
             | AppMode::Searching(_)
             | AppMode::ClaudeSessionPicker(_)
@@ -212,7 +198,6 @@ fn handle_click(app: &mut App, col: u16, row: u16, visible_rows: u16) -> Result<
             | AppMode::DiffReviewPrompt(_)
             | AppMode::RunningHook(_)
             | AppMode::ConfirmResourceStart(_)
-            | AppMode::PlanInterview(_)
     ) {
         return Ok(());
     }
@@ -288,7 +273,7 @@ fn handle_double_click(app: &mut App, item: &VisibleItem, col: u16) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{App, AppMode, DebugLogState, PlanInterviewPhase, PlanInterviewState};
+    use crate::app::{App, AppMode, DebugLogState};
     use crate::project::ProjectStore;
     use crate::traits::{MockTmuxOps, MockWorktreeOps};
     use crossterm::event::KeyModifiers;
@@ -338,93 +323,10 @@ mod tests {
         }
     }
 
-    fn plan_interview_app(phase: PlanInterviewPhase) -> App {
-        let mut app = test_app();
-        let mut state = PlanInterviewState::for_feature(
-            "feature".into(),
-            "feat-1".into(),
-            Vec::new(),
-            std::path::PathBuf::from("/tmp/does-not-matter"),
-            AgentKind::Claude,
-        );
-        state.synthesized_plan = Some("# Plan\n".into());
-        state.phase = phase;
-        app.mode = AppMode::PlanInterview(state);
-        app
-    }
-
-    fn scroll(app: &mut App, kind: MouseEventKind) {
-        handle_mouse(
-            app,
-            MouseEvent {
-                kind,
-                column: 0,
-                row: 0,
-                modifiers: KeyModifiers::NONE,
-            },
-            20,
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn mouse_scroll_moves_the_plan_review_pane() {
-        let mut app = plan_interview_app(PlanInterviewPhase::Review);
-
-        scroll(&mut app, MouseEventKind::ScrollDown);
-        scroll(&mut app, MouseEventKind::ScrollDown);
-        scroll(&mut app, MouseEventKind::ScrollUp);
-
-        match &app.mode {
-            AppMode::PlanInterview(state) => {
-                assert_eq!(
-                    state.review_scroll_offset,
-                    PLAN_INTERVIEW_MOUSE_SCROLL_LINES
-                );
-            }
-            _ => panic!("expected the interview to stay open"),
-        }
-    }
-
     /// The advisory review is a second markdown pane behind the same dialog, so
     /// the wheel has to reach its own offset rather than the plan's.
-    #[test]
-    fn mouse_scroll_moves_the_critique_pane_not_the_plan() {
-        let mut app = plan_interview_app(PlanInterviewPhase::Critique);
-
-        scroll(&mut app, MouseEventKind::ScrollDown);
-
-        match &app.mode {
-            AppMode::PlanInterview(state) => {
-                assert_eq!(
-                    state.critique_scroll_offset,
-                    PLAN_INTERVIEW_MOUSE_SCROLL_LINES
-                );
-                assert_eq!(state.review_scroll_offset, 0);
-            }
-            _ => panic!("expected the interview to stay open"),
-        }
-    }
-
     /// A phase with nothing to scroll must still swallow the wheel: falling
     /// through would move the dashboard selection hidden behind the dialog.
-    #[test]
-    fn mouse_scroll_is_swallowed_by_an_unscrollable_phase() {
-        let mut app = plan_interview_app(PlanInterviewPhase::Brief);
-        let before = format!("{:?}", app.selection);
-
-        scroll(&mut app, MouseEventKind::ScrollDown);
-
-        assert_eq!(format!("{:?}", app.selection), before);
-        match &app.mode {
-            AppMode::PlanInterview(state) => {
-                assert_eq!(state.review_scroll_offset, 0);
-                assert_eq!(state.edit_scroll_offset, 0);
-            }
-            _ => panic!("expected the interview to stay open"),
-        }
-    }
-
     #[test]
     fn mouse_scroll_up_clamps_debug_log_at_top() {
         let mut app = test_app();

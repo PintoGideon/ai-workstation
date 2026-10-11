@@ -38,7 +38,7 @@ pub fn ensure_excluded(checkout: &Path, patterns: &[&str]) -> std::io::Result<()
 
 /// Helper files AIW (and, before it, upstream AMF) writes into checkouts that
 /// must never be committed. Files users may intentionally commit
-/// (`aiw.json`, `amf.json`, `AIW_PLAN*.md`, `AGENTS.md`) are deliberately
+/// (`aiw.json`, `amf.json`, `AGENTS.md`) are deliberately
 /// absent.
 pub(crate) const AIW_HELPER_PATTERNS: &[&str] = &[
     // Worktrees created before AIW moved them out of the repo, and AIW's
@@ -276,7 +276,6 @@ mod tests {
         for visible in [
             "aiw.json",
             "amf.json",
-            "AIW_PLAN.md",
             "AGENTS.md",
             ".claude/settings.json",
             ".claude/skills/mine/SKILL.md",

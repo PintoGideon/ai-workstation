@@ -3,7 +3,7 @@
  * counterpart of the TUI's per-harness sidebar. Colours are `--sb-*` tokens
  * built on the shared palette, so the dark-theme and custom-theme work can
  * retune the panel by overriding tokens rather than rules. Section accents
- * follow the TUI's (`ui/pane.rs::sidebar_section_color`): Status and Plan
+ * follow the TUI's (`ui/pane.rs::sidebar_section_color`): Status
  * warn, Usage/Todos succeed, Work is primary, Summary/PR Triage inform, and
  * Context takes its band.
  */
@@ -15,7 +15,6 @@
   --sb-harness-pi: var(--accent);
   --sb-accent-status: var(--amber);
   --sb-accent-usage: var(--green);
-  --sb-accent-plan: var(--amber);
   --sb-accent-issue: var(--text-faint);
   --sb-accent-pr: #1d7fb8;
   --sb-accent-work: var(--accent);
@@ -126,7 +125,6 @@
 }
 .sb-status { --sb-section-accent: var(--sb-accent-status); }
 .sb-usage { --sb-section-accent: var(--sb-accent-usage); }
-.sb-plan { --sb-section-accent: var(--sb-accent-plan); }
 .sb-issue { --sb-section-accent: var(--sb-accent-issue); }
 .sb-pr_triage { --sb-section-accent: var(--sb-accent-pr); }
 .sb-work { --sb-section-accent: var(--sb-accent-work); }

@@ -202,7 +202,6 @@ async function openFeature(
       case "get_snapshot": return snapshot;
       case "supported_harnesses": return [{ slug: "claude", display_name: "Claude" }];
       case "supported_modes": return [{ slug: "vibeless", display_name: "Vibeless", description: "" }];
-      case "plan_snapshot": return { active: null, draft: null };
       default: throw new Error(`Unexpected command: ${command}`);
     }
   });
@@ -737,7 +736,6 @@ it("opens dormant features from navigation and hands Open to the feature page wi
       case "get_snapshot": return snapshot;
       case "supported_harnesses": return [{ slug: "claude", display_name: "Claude" }];
       case "supported_modes": return [{ slug: "vibeless", display_name: "Vibeless", description: "" }];
-      case "plan_snapshot": return { active: null, draft: null };
       case "dormancy_load": return {
         enabled: true, idle_minutes: 60, unattended_hours: 4, kill_editor_on_stop: true,
         checked_at: "2026-10-05T10:00:00Z", features: [{
