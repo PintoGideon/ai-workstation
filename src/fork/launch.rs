@@ -69,6 +69,29 @@ impl LaunchContext {
 }
 
 /// Where the per-session Claude settings files live.
+/// Variables a running Claude Code session sets for its own children: its
+/// session id, inbox socket and token, the "child session" flag, its job
+/// directory and pid. When aiw itself was started from inside a Claude Code
+/// session (a `!` command, an agent's Bash tool, an automation run), the
+/// agents and terminals it launches would otherwise inherit them, and a
+/// Claude started there believes it is a child of that session (it shows the
+/// parent's name and is flagged as a child). Found by the real-harness smoke
+/// run (DESIGN.md §19.11). User configuration such as `CLAUDE_CONFIG_DIR`,
+/// `ANTHROPIC_*` or provider switches is left alone.
+pub(crate) const INHERITED_SESSION_VARS: &[&str] = &[
+    "CLAUDECODE",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_SESSION_ATTENDED",
+    "CLAUDE_CODE_MESSAGING_SOCKET",
+    "CLAUDE_CODE_MESSAGING_TOKEN",
+    "CLAUDE_CODE_EXECPATH",
+    "CLAUDE_JOB_DIR",
+    "CLAUDE_PID",
+    "CLAUDE_EFFORT",
+];
+
 pub fn claude_settings_dir() -> PathBuf {
     crate::ipc::state_dir().join("claude-settings")
 }

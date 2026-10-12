@@ -680,10 +680,16 @@ impl TmuxManager {
 
     fn shell_env_parts(include_path: bool) -> Vec<String> {
         let runtime = Self::runtime();
-        let mut parts = vec![format!(
+        // FORK: §19.11 — a harness session's own identity must not leak from
+        // wherever aiw was started into the agents and terminals it launches.
+        let mut parts: Vec<String> = crate::fork::launch::INHERITED_SESSION_VARS
+            .iter()
+            .map(|var| format!("-u {var}"))
+            .collect();
+        parts.push(format!(
             "AIW_TMUX_BIN={}",
             Self::shell_quote(&runtime.binary.to_string_lossy())
-        )];
+        ));
 
         if let Some(exe) = Self::cli_binary() {
             parts.push(format!(
@@ -3168,6 +3174,31 @@ mod tests {
         assert!(prefix.contains("AIW_TMUX_WINDOW='codex'"));
         assert!(prefix.contains("AIW_FEATURE_SESSION_ID='session-123'"));
         assert!(prefix.contains("PATH="));
+    }
+
+    /// §19.11: started from inside a Claude Code session, aiw must not hand
+    /// that session's identity to the agents it launches.
+    #[test]
+    fn agent_launch_env_drops_an_enclosing_claude_sessions_identity() {
+        let prefix = TmuxManager::agent_launch_env("aiw-test", "claude", "session-123");
+        let out = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "{prefix} sh -c 'echo \"id=${{CLAUDE_CODE_SESSION_ID:-}} child=${{CLAUDE_CODE_CHILD_SESSION:-}} \
+                 sock=${{CLAUDE_CODE_MESSAGING_SOCKET:-}} aiw=${{AIW_FEATURE_SESSION_ID:-}} \
+                 cfg=${{CLAUDE_CONFIG_DIR:-}}\"'"
+            ))
+            .env("CLAUDE_CODE_SESSION_ID", "parent-session")
+            .env("CLAUDE_CODE_CHILD_SESSION", "1")
+            .env("CLAUDE_CODE_MESSAGING_SOCKET", "/run/parent.sock")
+            .env("CLAUDE_CONFIG_DIR", "/keep/me")
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            text.contains("id= child= sock= aiw=session-123 cfg=/keep/me"),
+            "{text}"
+        );
     }
 
     #[test]
