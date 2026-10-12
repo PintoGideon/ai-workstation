@@ -228,6 +228,11 @@ pub fn codex_launch_args(
 /// `--settings <file>`, optionally `--name <name>` (§19.2), and the context
 /// paragraph.
 pub fn only_settings_flag(args: &[String]) -> bool {
+    // A Vibeless launch states its mode first (§19.11).
+    let args = match args {
+        [flag, mode, rest @ ..] if flag == "--permission-mode" && mode == "default" => rest,
+        _ => args,
+    };
     let settings = args.len() >= 2 && args[0] == "--settings" && args[1].ends_with(".json");
     if !settings {
         return false;

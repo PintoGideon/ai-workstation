@@ -439,7 +439,13 @@ impl VibeMode {
 
     pub fn cli_flags(&self, opts: LaunchOpts) -> Vec<String> {
         let mut flags = match self {
-            VibeMode::Vibeless => vec![],
+            // FORK: §19.11 — say it explicitly. Without a flag Claude starts
+            // in its own default, which is auto mode on current Claude Code
+            // (2.1.x): its classifier then runs shell commands with no prompt,
+            // breaking "asks for approval for every change" (found by the
+            // real-harness smoke run). `default` is the mode Claude's UI
+            // calls Manual.
+            VibeMode::Vibeless => vec!["--permission-mode".into(), "default".into()],
             VibeMode::Vibe => {
                 vec!["--permission-mode".into(), "acceptEdits".into()]
             }
@@ -2532,9 +2538,12 @@ mod tests {
     fn vibe_mode_vibeless_flags() {
         assert_eq!(
             VibeMode::Vibeless.cli_flags(opts(false)),
-            Vec::<String>::new()
+            vec!["--permission-mode", "default"]
         );
-        assert_eq!(VibeMode::Vibeless.cli_flags(opts(true)), vec!["--chrome"]);
+        assert_eq!(
+            VibeMode::Vibeless.cli_flags(opts(true)),
+            vec!["--permission-mode", "default", "--chrome"]
+        );
     }
 
     #[test]
