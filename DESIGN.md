@@ -625,7 +625,8 @@ hooks it needed are not wired.
 
 > **Note (2026-10-11).** Written against the composer. With the cockpit (§18) the unsent seed is pasted into
 > each agent's pane with `paste_text` and no Enter (`App::paste_prompt_unsent`); the GUI collects it with
-> `take_unsent_prompt`. Everything else here stands. Not built yet.
+> `take_unsent_prompt`. Everything else here stands. **Built 2026-10-11: see §19.3** for how it maps onto the
+> cockpit and what changed from this design.
 
 **Ask.** "Give me the option to start several sessions for the same prompt, either all in one worktree or one
 worktree each." Not a split view, not a comparison tool: the launch step only. Today the `n` dialog picks one
@@ -919,3 +920,63 @@ claude registers itself in a fake roster, answers `agents --json` from it plus `
 resume keeping the name, both fork targets, a Codex fork, external lines appearing and clearing, the `E` list,
 and a roster-only wait turning an AIW row ⛔ and back.
 
+### 19.3 One prompt, several agents (proposal 1, builds §17)
+
+**Dialog.** On the New Feature dialog's harness list `Space` ticks harnesses (`CreateFeatureState::ticked`, tick
+order, first = primary; `agent` follows it via `sync_primary`). One tick or none is an ordinary feature. With two
+or more, the Mode step's last `Enter` (`advance_past_mode`) applies `fork::fan_out::fan_out_mode` — a Vibeless set
+with Codex becomes Vibe and the reason is shown — then goes to the new `CreateFeatureStep::FanOut` (only when a new
+branch gets a new worktree; the repo dir and an existing worktree can only be shared) and then to
+`CreateFeatureStep::Prompt`. A single agent goes Mode → SessionName → Prompt, so the prompt step is reachable for
+every feature. §17 named a dead `TaskPrompt` step and a `prompt_analysis` field; both were removed with steering,
+so `Prompt` is new: a multi-line field (`Alt+Enter` / `Ctrl+J` newline, pasted text keeps its newlines), `Ctrl+L`
+opens the prompt library inline (`App::prompt_templates_for_repo`: user, global and project templates), `Ctrl+T`
+ticks "send when ready", `Ctrl+U` clears, `Enter` creates. Feature presets gain `agents` and `fan_out`.
+
+**Launch.** `App::create_feature_from_dialog` (`app/fork_fan_out.rs`) sets a `FanOutRun` and calls the ordinary
+`create_feature` for the primary. `finish_feature_launch` now wraps an inner function and calls
+`fan_out_feature_launched` on success. Shared: once the feature's tmux session runs, each extra agent is added with
+`create_agent_session_labeled_identified` (labels `fork::fan_out::shared_labels`: `Claude 1`, `Codex 1`,
+`Claude 2`…), so `max_agent_autostart_sessions` does not hold them back. Worktree-each: every sibling branch
+(`sibling_branches`: `<branch>-claude`, `<branch>-codex`, `-claude-2` for a repeat) is validated before the first
+worktree exists; the next sibling's dialog state is built and `create_feature` runs again when the previous
+feature's launch finishes, so worktree hooks, their prompts and their async completion work per sibling exactly as
+for one feature. A sibling refused late (a name taken meanwhile) leaves its own dialog open; `Enter` continues the
+run, `Esc` stops it (`fan_out_cancelled` lists what was not created). Siblings share a group id stored in a new
+FORK_SCHEMA table `aiw_fanout_members(feature_id, group_id, base_branch, agent, position)`. Step 2's names stay
+unique: siblings have different feature names, and a shared feature's labels differ.
+
+**Prompts.** §17's compose drafts are gone, so every task prompt — fan-out or not — that has a cockpit to watch, or
+comes from a dialog run, becomes a `PendingPrompt` (`queue_startup_prompt` replaces the immediate paste in
+`finish_feature_launch`; without a cockpit and outside a dialog run the GUI handoff stays). It is stored in a new
+FORK_SCHEMA table `aiw_pending_prompts(session_id, text, send, created_at)`, so a restart keeps it. Ready signal:
+a new `session-start` hook-event kind, wired as Claude's `SessionStart` in `--settings` (`CLAUDE_MANAGED_EVENTS`
+gained `SessionStart` for the legacy writer) and as Codex's `SessionStart` in `.codex/hooks.json`; it marks the
+prompt ready after `READY_SETTLE` (1.5 s, so the TUI has enabled bracketed paste). Fallback, for an untrusted Codex
+hook file or an older harness: after `fan_out_ready_fallback_secs` (default 15) with no hook, the prompt goes once
+the pane has run something other than a plain shell for 3 s (`session_reconcile::agent_panes`, checked at most
+once a second). Delivery (`pending_prompts_tick`, every loop turn) removes the prompt from memory and the database
+before pasting, so it is pasted at most once; with send on, one `Enter` follows `ENTER_DELAY` (0.5 s) later. Only
+the primary of a dialog launch takes the selection and the agent pane's focus, and only when no dialog is open;
+automation never does. The row shows `⏸ prompt` while one waits.
+
+**Sidebar and tiles.** The first sibling in list order draws a header line `⇶ <base> · claude / codex` with the
+group's rolled-up ⛔ count (`App::fan_out_header`; `workspace_item_height` counts the line). `v` on any sibling runs
+`aiw grid <first> --with <second> …` (`cockpit::grid_group_pane_command`; `grid --with` resolves each name to a
+feature and tiles its first agent, `grid::Scope::Group`).
+
+**Automation.** `aiw automation create-feature` takes `agents`, `fan_out` (`shared` | `worktree_each`, default
+`worktree_each` when the feature gets a worktree), `prompt` or `prompt_file` (read by the CLI, relative to its
+working directory) and `send`; `agent` stays as the one-element form. The response gains `features`: branch, agent,
+workdir, tmux session, id and agent sessions per created feature. The desktop GUI's create-feature call is
+unchanged (it ignores the new fields).
+
+**Tests.** `fork::fan_out` (branches, labels, mode fallback, header, layout spelling, prompt normalising, pending
+readiness), `db::fan_out`, `fork::grid` (group selection), `app::tests::fork_fan_out` (18: dialog transitions,
+worktree-each and shared launches with a lenient tmux mock, unique names, a late refusal, hook-ready and fallback
+delivery exactly once, send-on-ready's single Enter, restart survival, deletion, the library picker, presets, `v`
+on a sibling, automation in both layouts and a refusal). E2E (`scripts/dev/e2e/fan_out.sh`, 27 checks): the fake
+Codex now fires `SessionStart`; a worktree-each fan-out from the dialog with the prompt pasted unsent into both
+agents exactly once and neither running it, the group header and `v` group tiles; a shared fan-out with send when
+ready, each agent running the prompt exactly once; and `aiw automation create-feature` with `prompt_file` and
+`send`, with no prompt left waiting at the end.

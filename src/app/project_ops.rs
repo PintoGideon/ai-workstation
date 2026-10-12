@@ -134,6 +134,7 @@ impl App {
 
     pub fn cancel_create(&mut self) {
         self.mode = AppMode::Normal;
+        self.fan_out_cancelled(); // FORK: §19.3
     }
 
     pub fn show_error(&mut self, error: anyhow::Error) {

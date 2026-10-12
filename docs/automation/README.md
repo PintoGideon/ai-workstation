@@ -64,6 +64,10 @@ Fields:
 - `use_worktree`: whether to create a git worktree or reuse the project repo
 - `hook_choice`: optional answer for prompted `on_worktree_created` hooks
 - `dry_run`: validate and preview without changing AIW state
+- `agents`: several harnesses for one prompt, first = primary (a fan-out); empty means `agent` alone
+- `fan_out`: `"worktree_each"` (sibling features `<branch>-<agent>`, grouped in the sidebar) or `"shared"` (one feature, a window per agent); defaults to `worktree_each` when the feature gets a worktree, else `shared`
+- `prompt` / `prompt_file`: the task prompt each agent gets once its pane is ready (the CLI reads `prompt_file`, relative to its working directory)
+- `send`: press Enter after pasting the prompt; off, it is pasted unsent
 
 If a repo has a prompted `on_worktree_created` hook, `--dry-run` returns a `worktree_hook_prompt` object with the hook title and valid options. An agent can use that response to pick a `hook_choice` before making the real call.
 
@@ -94,6 +98,28 @@ Typical success response:
     "options": ["node", "rust"]
   },
   "message": "Created and started feature 'automation-feature'"
+}
+```
+
+A fan-out answers with one entry per created feature in `features`:
+
+```bash
+echo '{"project_name": "my-repo", "branch": "auth-fix", "agents": ["claude", "codex"],
+       "fan_out": "worktree_each", "use_worktree": true, "mode": "vibe",
+       "prompt": "Fix the login redirect", "send": true}' | aiw automation create-feature
+```
+
+```json
+{
+  "ok": true,
+  "branch": "auth-fix",
+  "message": "Created 2 sibling features for 'auth-fix': auth-fix-claude, auth-fix-codex",
+  "features": [
+    {"branch": "auth-fix-claude", "agent": "claude", "tmux_session": "aiw-my-repo-auth-fix-claude",
+     "workdir": "…/my-repo-auth-fix-claude", "feature_id": "…", "sessions": [["Claude 1", "…"]]},
+    {"branch": "auth-fix-codex", "agent": "codex", "tmux_session": "aiw-my-repo-auth-fix-codex",
+     "workdir": "…/my-repo-auth-fix-codex", "feature_id": "…", "sessions": [["Codex 1", "…"]]}
+  ]
 }
 ```
 

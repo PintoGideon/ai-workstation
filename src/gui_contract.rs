@@ -4130,6 +4130,11 @@ mod tests {
                 enable_chrome: false,
                 hook_choice: None,
                 dry_run: false,
+                agents: Vec::new(),
+                fan_out: None,
+                prompt: None,
+                prompt_file: None,
+                send: false,
             },
             todo.id,
         )

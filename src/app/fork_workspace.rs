@@ -234,12 +234,16 @@ impl App {
             VisibleItem::Feature(pi, fi) => {
                 // FORK: §19.2 — external Claude sessions in the checkout.
                 let feature = &self.store.projects[*pi].features[*fi];
+                // FORK: §19.3 — the fan-out group header above its first
+                // sibling.
+                let header = usize::from(self.fan_out_heads_group(*pi, *fi));
                 if feature.collapsed {
-                    1
+                    1 + header
                 } else {
-                    1 + super::fork_identity::external_line_count(
-                        self.external_sessions_for_feature(&feature.id).len(),
-                    )
+                    1 + header
+                        + super::fork_identity::external_line_count(
+                            self.external_sessions_for_feature(&feature.id).len(),
+                        )
                 }
             }
             VisibleItem::Session(pi, fi, si) => {

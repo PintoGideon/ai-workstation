@@ -55,6 +55,20 @@ pub struct CreateFeatureRequest {
     pub enable_chrome: bool,
     pub hook_choice: Option<String>,
     pub dry_run: bool,
+    /// FORK: §19.3 — several harnesses, first = primary. Empty means
+    /// `agent` alone (the one-element form).
+    pub agents: Vec<AgentKind>,
+    /// FORK: §19.3 — `"shared"` (a window per agent) or `"worktree_each"`
+    /// (sibling features `<branch>-<agent>`). Defaults to `worktree_each`
+    /// when the feature gets a worktree, else `shared`.
+    pub fan_out: Option<crate::fork::fan_out::FanOutLayout>,
+    /// FORK: §19.3 — the task prompt every agent receives once its pane is
+    /// ready, pasted unsent unless `send` is true.
+    pub prompt: Option<String>,
+    /// FORK: §19.3 — read `prompt` from this file (the CLI reads it).
+    pub prompt_file: Option<PathBuf>,
+    /// FORK: §19.3 — press Enter after the paste, once per agent.
+    pub send: bool,
 }
 
 impl CreateFeatureRequest {
@@ -71,8 +85,34 @@ impl CreateFeatureRequest {
             "enable_chrome": self.enable_chrome,
             "hook_choice": self.hook_choice,
             "dry_run": self.dry_run,
+            "agents": self.agents,
+            "fan_out": self.fan_out,
+            "prompt": self.prompt,
+            "send": self.send,
         })
     }
+
+    /// FORK: §19.3 — the harnesses to start, primary first.
+    pub fn agent_list(&self) -> Vec<AgentKind> {
+        if self.agents.is_empty() {
+            vec![self.agent.clone()]
+        } else {
+            self.agents.clone()
+        }
+    }
+}
+
+/// FORK: §19.3 — one feature a fan-out created.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct FanOutFeature {
+    pub branch: String,
+    pub agent: AgentKind,
+    pub workdir: PathBuf,
+    pub tmux_session: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub feature_id: Option<String>,
+    /// The agent sessions in it (label, session id).
+    pub sessions: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -193,6 +233,10 @@ pub struct CreateFeatureResponse {
     pub project_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub feature_id: Option<String>,
+    /// FORK: §19.3 — every feature a fan-out created (or would create, for a
+    /// dry run), in order. Empty for a single-agent request.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub features: Vec<FanOutFeature>,
 }
 
 impl CreateFeatureResponse {
@@ -230,6 +274,7 @@ impl CreateFeatureResponse {
             message,
             project_id,
             feature_id,
+            features: Vec::new(),
         }
     }
 }

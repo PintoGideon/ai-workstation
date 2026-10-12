@@ -226,6 +226,10 @@ impl App {
     /// `v`: `aiw grid` for the selected feature (or project) in the agent
     /// pane; Alt+q there brings the selected agent back.
     pub fn cockpit_show_grid(&mut self) {
+        // FORK: §19.3 — a fan-out sibling tiles its whole group.
+        if self.cockpit_show_group_grid() {
+            return;
+        }
         let (name, project) = match self.selection {
             Selection::Session(pi, fi, _) | Selection::Feature(pi, fi) => {
                 let Some(feature) = self.store.projects.get(pi).and_then(|p| p.features.get(fi))
@@ -271,6 +275,38 @@ impl App {
         // quiet until the selection moves.
         self.fork_cockpit.last_target = Some(live);
         self.message = Some("Tiles in the agent pane — Alt+q there closes them".into());
+    }
+
+    /// FORK: §19.3 — tile the first agent of each of `features`
+    /// (`project/feature` names), titled after `label`.
+    pub(crate) fn cockpit_show_grid_for(&mut self, label: &str, features: &[String]) {
+        if self.desired_live_target().is_none() {
+            self.message = Some(format!(
+                "Tiles: no running agent sessions in {label} — start it first (c)"
+            ));
+            return;
+        }
+        self.workspace_commit_now();
+        let live = self.fork_workspace.live.clone();
+        let (after, after_title) = self.cockpit_pane_for(live.as_ref());
+        let (tmux_bin, _) = crate::tmux::TmuxManager::runtime_binary_and_socket();
+        let command = cockpit::grid_group_pane_command(
+            &self.fork_cockpit.aiw,
+            features,
+            &tmux_bin.to_string_lossy(),
+            &self.fork_cockpit.socket,
+            &after_title,
+            &after,
+        );
+        self.cockpit_send(Request::Respawn {
+            command,
+            title: format!("tiles: ⇶ {label} — Alt+q closes"),
+        });
+        self.fork_cockpit.last_target = Some(live);
+        self.message = Some(format!(
+            "Tiles: {} siblings of '{label}' — Alt+q there closes them",
+            features.len()
+        ));
     }
 }
 

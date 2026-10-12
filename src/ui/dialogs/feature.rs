@@ -36,6 +36,13 @@ pub fn draw_create_feature_dialog(
         CreateFeatureStep::SessionName => {
             draw_create_feature_session_name(frame, state, theme);
         }
+        // FORK: §19.3
+        CreateFeatureStep::FanOut => {
+            super::fan_out::draw_fan_out_layout(frame, state, theme);
+        }
+        CreateFeatureStep::Prompt => {
+            super::fan_out::draw_feature_prompt(frame, state, theme);
+        }
         _ => {
             draw_create_feature_branch_mode(frame, state, allowed_agents, usage, theme);
         }
@@ -556,6 +563,16 @@ fn draw_create_feature_branch_mode(
     for (i, agent) in allowed_agents.iter().enumerate() {
         let is_selected = i == state.agent_index;
         let marker = if is_selected { ">" } else { " " };
+        // FORK: §19.3 — Space ticks harnesses; two or more fan out.
+        let tick_pos = state.ticked.iter().position(|a| a == agent);
+        let tick = match tick_pos {
+            Some(_) => "[x] ",
+            None => "[ ] ",
+        };
+        let role = match tick_pos {
+            Some(0) if state.ticked.len() > 1 => "  (primary)",
+            _ => "",
+        };
         let style = if agent_active && is_selected {
             Style::default()
                 .fg(theme.primary.to_color())
@@ -566,7 +583,7 @@ fn draw_create_feature_branch_mode(
             Style::default().fg(theme.text_muted.to_color())
         };
         agent_lines.push(Line::from(Span::styled(
-            format!("   {} {}", marker, agent.display_name()),
+            format!("   {} {}{}{}", marker, tick, agent.display_name(), role),
             style,
         )));
         if let Some(summary) = &agent_summaries[i] {
@@ -689,8 +706,10 @@ fn draw_create_feature_branch_mode(
                 Style::default().fg(theme.warning.to_color()),
             ),
             Span::raw(" select  "),
+            Span::styled("Space", Style::default().fg(theme.warning.to_color())),
+            Span::raw(" tick agents  "),
             Span::styled("h/l", Style::default().fg(theme.warning.to_color())),
-            Span::raw(" prev/next field  "),
+            Span::raw(" field  "),
             Span::styled("Enter", Style::default().fg(theme.warning.to_color())),
             Span::raw(" confirm"),
         ]))

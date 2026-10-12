@@ -51,6 +51,12 @@ pub const EVENTS: &[(&str, &[Step])] = &[
     ),
     ("PreToolUse", &[("tool-start.sh", &[])]),
     ("PostToolUse", &[("tool-stop.sh", &[])]),
+    // §19.3: the agent is up — a prompt waiting for it is pasted. Without
+    // this hook (not yet trusted) the prompt goes after a fallback delay.
+    (
+        "SessionStart",
+        &[("hook-event.sh", &["session-start", "codex"])],
+    ),
 ];
 
 fn timeout_for(event: &str) -> u64 {

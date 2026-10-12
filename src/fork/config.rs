@@ -43,6 +43,10 @@ pub struct AiwConfig {
     /// AIW session waiting on input that its hooks missed (§19.2). On by
     /// default.
     pub claude_agents_roster: bool,
+    /// Seconds a fan-out or task prompt waits for its agent's `SessionStart`
+    /// hook before it is pasted anyway, once the pane runs the agent rather
+    /// than a shell (§19.3). Covers an untrusted Codex hook file.
+    pub fan_out_ready_fallback_secs: u64,
 }
 
 impl Default for AiwConfig {
@@ -56,6 +60,7 @@ impl Default for AiwConfig {
             claude_hooks_via_settings_flag: true,
             sidebar_width: crate::fork::cockpit::DEFAULT_SIDEBAR_WIDTH,
             claude_agents_roster: true,
+            fan_out_ready_fallback_secs: crate::fork::fan_out::DEFAULT_FALLBACK_SECS,
         }
     }
 }

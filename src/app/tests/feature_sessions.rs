@@ -445,6 +445,11 @@ fn app_in_creating_feature_mode(
         enable_chrome: false,
         preset_index: 0,
         task_prompt: String::new(),
+        ticked: Vec::new(),
+        fan_out: Default::default(),
+        send_prompt: false,
+        prompt_picker: None,
+        mode_note: None,
     };
     let mut app = App::new_for_test(
         store,
@@ -1281,8 +1286,19 @@ fn create_feature_session_name_enter_creates_and_starts_feature() {
         enable_chrome: false,
         preset_index: 0,
         task_prompt: String::new(),
+        ticked: Vec::new(),
+        fan_out: Default::default(),
+        send_prompt: false,
+        prompt_picker: None,
+        mode_note: None,
     });
 
+    crate::handlers::handle_create_feature_key(&mut app, KeyCode::Enter).unwrap();
+    // FORK: §19.3 — the task prompt step comes after the session name.
+    assert!(matches!(
+        &app.mode,
+        AppMode::CreatingFeature(state) if state.step == CreateFeatureStep::Prompt
+    ));
     crate::handlers::handle_create_feature_key(&mut app, KeyCode::Enter).unwrap();
 
     assert!(matches!(app.mode, AppMode::Normal));
@@ -1304,6 +1320,7 @@ fn create_feature_session_name_enter_surfaces_validation_error() {
     }
 
     crate::handlers::handle_create_feature_key(&mut app, KeyCode::Enter).unwrap();
+    crate::handlers::handle_create_feature_key(&mut app, KeyCode::Enter).unwrap(); // FORK: §19.3
 
     match &app.mode {
         AppMode::CreatingFeature(state) => {

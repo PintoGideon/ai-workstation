@@ -69,6 +69,10 @@ enum Commands {
         /// Treat NAME as a project name even if a feature has that name.
         #[arg(long, short = 'p')]
         project: bool,
+        /// More features to tile beside NAME, one agent each (a fan-out
+        /// group). Repeatable.
+        #[arg(long = "with", value_name = "FEATURE")]
+        with: Vec<String>,
     },
     /// Report on what AIW is putting on this machine. Read-only: it never
     /// stops a session, kills a process, or writes to the database.
@@ -335,10 +339,18 @@ Request JSON (all fields optional unless marked required):
     \"enable_chrome\":   bool    default false
     \"hook_choice\":     string | null  option for an on_worktree_created hook
     \"dry_run\":         bool    default false; validate only
+    \"agents\":          [agent, ...]  several harnesses, first = primary (fan-out)
+    \"fan_out\":         \"shared\" | \"worktree_each\" | null   null = worktree_each with a worktree, else shared
+    \"prompt\":          string | null  task prompt each agent gets once its pane is ready
+    \"prompt_file\":     string | null  read the prompt from this file (relative to here)
+    \"send\":            bool    default false; press Enter after pasting the prompt
   }
 
 Example:
   {\"project_name\": \"my-repo\", \"branch\": \"feature-1\", \"agent\": \"codex\"}
+Fan-out:
+  {\"project_name\": \"my-repo\", \"branch\": \"auth-fix\", \"agents\": [\"claude\", \"codex\"],
+   \"fan_out\": \"worktree_each\", \"prompt\": \"Fix the login redirect\", \"send\": true}
 
 Reads the file given by --file, or stdin when omitted or `-`.
 See docs/automation/README.md for responses.";
@@ -595,6 +607,7 @@ pub fn run() -> Result<()> {
         list,
         all,
         project,
+        with,
     }) = cli.command
     {
         return crate::fork::grid::run(crate::fork::grid::GridOptions {
@@ -602,6 +615,7 @@ pub fn run() -> Result<()> {
             list,
             all,
             project,
+            with,
         });
     }
 
@@ -1138,6 +1152,16 @@ fn run_automation_command(command: AutomationCommands) -> Result<()> {
                 serde_json::from_str(&payload).context("Invalid create_feature JSON payload")?;
             if dry_run {
                 request.dry_run = true;
+            }
+            // FORK: §19.3 — the app may not see this process's working
+            // directory, so the prompt file is read here.
+            if request.prompt.is_none()
+                && let Some(path) = request.prompt_file.take()
+            {
+                request.prompt =
+                    Some(std::fs::read_to_string(&path).with_context(|| {
+                        format!("could not read prompt_file {}", path.display())
+                    })?);
             }
 
             let socket = ipc::socket_path();
@@ -1911,6 +1935,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         force_redraw |= app.workspace_tick();
         // FORK(cockpit): the agent pane and the zoom follow (DESIGN.md §18).
         force_redraw |= app.cockpit_tick();
+        // FORK: §19.3 — prompts waiting for their agent's pane.
+        force_redraw |= app.pending_prompts_tick();
 
         let current_redraw_signature = app.redraw_signature();
         let state_changed = current_redraw_signature != loop_state_signature;

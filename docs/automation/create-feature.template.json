@@ -7,5 +7,10 @@
   "use_worktree": true,
   "enable_chrome": false,
   "hook_choice": null,
-  "dry_run": false
+  "dry_run": false,
+  "agents": [],
+  "fan_out": null,
+  "prompt": null,
+  "prompt_file": null,
+  "send": false
 }

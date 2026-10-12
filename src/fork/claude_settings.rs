@@ -201,6 +201,8 @@ pub fn hook_entries(inputs: &HookInputs<'_>) -> Vec<(&'static str, Value)> {
         ("CwdChanged", "cwd-changed"),
         ("PermissionDenied", "permission-denied"),
         ("SessionEnd", "session-end"),
+        // §19.3: a prompt waiting for this agent is pasted once it is up.
+        ("SessionStart", "session-start"),
     ] {
         entries.push((
             event,
@@ -263,8 +265,14 @@ mod tests {
                 "TaskCompleted",
                 "CwdChanged",
                 "PermissionDenied",
-                "SessionEnd"
+                "SessionEnd",
+                "SessionStart"
             ]
+        );
+        assert_eq!(
+            hooks_object(hook_entries(&inputs(&VibeMode::Vibe, None)))["SessionStart"][0]["hooks"]
+                [0]["args"][0],
+            "session-start"
         );
         let hooks = hooks_object(entries);
         assert_eq!(hooks["Stop"][0]["hooks"].as_array().unwrap().len(), 5);

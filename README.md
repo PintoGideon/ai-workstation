@@ -25,6 +25,9 @@ on disk, and what was removed in favour of the harnesses' own features.
 
 - Runs several coding-agent sessions side by side from one dashboard, each in
   its own tmux window on AIW's private tmux server.
+- Starts one prompt on several agents at once, in one shared worktree or one
+  worktree each, grouped in the sidebar and tiled with `v`. The prompt is
+  delivered when each agent is ready, unsent unless you ask.
 - Keeps concurrent features isolated with git branches and worktrees created
   outside the repository.
 - Shows the selected agent's real terminal beside the sidebar. Typing is
@@ -99,8 +102,10 @@ For a container, see the [Docker guide](docs/docker-no-tmux.md).
    ones it finds. Press `c` to confirm. `A` reopens the screen later; there,
    `Enter` ticks a row and `c` saves.
 3. Press `N` to add a project: a name and a directory.
-4. Press `n` to create a feature: a name, worktree or not, harness, mode and
-   the Chrome flag for Claude. The feature starts when the dialog closes.
+4. Press `n` to create a feature: a name, worktree or not, harness, mode, the
+   Chrome flag for Claude and an optional task prompt. `Space` on the harness
+   list ticks more agents for the same prompt. The feature starts when the
+   dialog closes.
 5. Move onto the agent's row; the right pane shows it. `Enter` or `Ctrl+Q`
    puts the keyboard there. `Ctrl+Q` brings it back.
 6. Press `s` on the feature to add another agent, a terminal, an editor, a
@@ -133,7 +138,7 @@ Pi receives no mode flags.
 | `f` | Fork the selected Claude or Codex conversation: a new window in the same feature, or a new worktree |
 | `E` | Claude sessions started outside AIW in your projects, with the command to attach |
 | `c` / `x` | Start a feature or stopped session / stop a session or feature |
-| `v` | Tile the feature's agents in the right pane; `Alt+q` there comes back |
+| `v` | Tile the feature's agents (a fan-out group: every sibling) in the right pane; `Alt+q` there comes back |
 | `i` | List everything that needs you: questions first, then finished work |
 | `a` / `X` | Allow / deny the permission the selected agent is waiting on |
 | `e` | Queue a follow-up, delivered when the agent's turn ends |

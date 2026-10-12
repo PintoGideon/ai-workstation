@@ -126,11 +126,13 @@ expanded. The directory may be a git repository or a plain folder.
 
 **Create a feature.** Select the project and press `n`. The dialog asks for a
 name, whether to use a worktree, which harness, which mode, and whether to
-enable Chrome for Claude. Names are checked against git's branch rules as you
-type. If the project's config has feature presets, the dialog offers them.
-The feature starts as soon as the dialog closes, unless the machine is past
-its agent or memory limit, in which case it is created stopped with a toast
-saying why.
+enable Chrome for Claude, then the session name and an optional task prompt.
+Names are checked against git's branch rules as you type. If the project's
+config has feature presets, the dialog offers them. The feature starts as soon
+as the dialog closes, unless the machine is past its agent or memory limit, in
+which case it is created stopped with a toast saying why. A task prompt waits
+until the agent has started and is then pasted into its pane unsent, unless
+you ticked "send when ready".
 
 **Watch the agent.** Move the sidebar cursor onto the agent and the right
 pane shows it after a short pause. Press `Enter` to put the keyboard in the
@@ -175,10 +177,22 @@ a TODO list once per feature, and any custom sessions the project config
 defines. A second agent in the same feature shares the same checkout; use a
 second feature with its own worktree when you want isolation.
 
-**Give two agents the same prompt.** Prompts aiw prepares are pasted into
-the agent's pane unsent, so you read them where the agent will and press
-`Enter` yourself. Save a prompt as a template with `L`, or copy the last one
-with `Ctrl+Space` then `l`, and paste it into the other session.
+**Give several agents the same prompt.** On the dialog's harness list, press
+`Space` on each harness you want; the first one ticked is the primary. With
+two or more ticked, the dialog asks where they work. "One worktree each"
+creates sibling features named `<name>-claude`, `<name>-codex` from the same
+base, and the sidebar groups them under a `⇶ name · claude / codex` header
+with one ⛔ count for the group. "One worktree, shared" creates one feature
+with a window per agent, `Claude 1` and `Codex 1`. The repo directory and an
+existing worktree can only be shared. Then type or paste the task prompt;
+`Ctrl+L` inserts a template from the prompt library and `Alt+Enter` adds a
+line. Each agent gets the prompt once its pane is ready, which aiw learns from
+the agent's own session-start hook. It is pasted unsent so you can read it
+first; tick `Ctrl+T` "send when ready" and it is sent instead. A row waiting
+for its prompt shows `⏸ prompt`. If Codex is in a Vibeless set, every agent
+runs in Vibe, since Codex has no per-edit approval, and the dialog says so.
+`v` on any sibling tiles the whole group. Presets in `aiw.json` can tick
+several agents and choose the layout too.
 
 **Switch and resume.** `Enter` on a stopped session whose window vanished
 behind your back, after a reboot or a crash, offers to resume the saved
@@ -218,7 +232,7 @@ inside the app.
 | Key | Action |
 | --- | --- |
 | `N` | Create a project |
-| `n` | Create a feature in the selected project |
+| `n` | Create a feature in the selected project. On its harness list, `Space` ticks several agents for one prompt (a fan-out); the last step takes an optional task prompt (`Ctrl+L` library, `Ctrl+T` send when ready, `Alt+Enter` newline) |
 | `B` | Create several features at once: a project path, a count, a name prefix, one harness and mode for all |
 | `F` | Fork the selected feature onto a new branch, with its own harness and mode, optionally carrying context |
 | `g` | On a project row, browse its open GitHub issues and start a feature from one |
@@ -238,7 +252,7 @@ inside the app.
 | `E` | List Claude sessions started outside aiw in your projects' checkouts. `Enter` copies the `claude attach` command for a background one |
 | `c` | Start the selected feature or stopped session; relaunch an exited agent in its window |
 | `x` | Stop the selected session or feature. The row stays |
-| `v` | Tile the feature's agents in the right pane; `Alt+q` there comes back |
+| `v` | Tile the feature's agents in the right pane; on a fan-out sibling, the first agent of every sibling. `Alt+q` there comes back |
 | `i` | List everything that needs you: questions first, then finished work |
 | `a` / `X` | Allow or deny the permission the selected agent is waiting on |
 | `e` | Queue a follow-up for the selected agent |
@@ -487,6 +501,7 @@ written back, so a config from an older version keeps loading.
 | `agent_context_prompt` | `true` | Tell each agent its project, feature, branch and worktree at launch |
 | `claude_hooks_via_settings_flag` | `true` | Pass Claude's hooks with `--settings` instead of writing the repo's settings file |
 | `claude_agents_roster` | `true` | Read `claude agents --json` every ten seconds to show Claude sessions outside aiw and catch a session waiting on input that its hooks missed |
+| `fan_out_ready_fallback_secs` | `15` | How long a task prompt waits for its agent's session-start hook before it is pasted anyway, once the pane runs the agent |
 | `max_concurrent_agents` | `4` | Warn before starting an agent past this many running harnesses; 0 disables |
 | `low_memory_warn_mb` | `1536` | Warn before starting an agent with less free memory than this; 0 disables |
 | `max_agent_autostart_sessions` | `1` | How many saved agent sessions a feature start relaunches; the rest open at a shell |
@@ -514,7 +529,8 @@ written back, so a config from an older version keeps loading.
 {
   "allowed_agents": ["claude", "codex"],
   "feature_presets": [
-    { "name": "quick fix", "branch_prefix": "fix/", "agent": "claude", "mode": "vibe", "enable_chrome": false }
+    { "name": "quick fix", "branch_prefix": "fix/", "agent": "claude", "mode": "vibe", "enable_chrome": false },
+    { "name": "duel", "agents": ["claude", "codex"], "fan_out": "worktree_each", "mode": "vibe" }
   ],
   "custom_sessions": [
     { "name": "dev", "description": "Vite dev server", "command": "npm run dev",
@@ -604,11 +620,11 @@ to writing that file. Codex gets its notify hook per launch rather than in
 | Command | What it does |
 | --- | --- |
 | `aiw` | Open the cockpit, or attach to the one already running |
-| `aiw grid <feature>` | Tile a feature's agents as live tmux panes in this terminal. Use `project/feature` when the name is ambiguous, `-p` to treat the name as a project, `--all` to include terminals, `--list` to print what would be shown. `Alt+q` closes it |
+| `aiw grid <feature>` | Tile a feature's agents as live tmux panes in this terminal. Use `project/feature` when the name is ambiguous, `-p` to treat the name as a project, `--with <feature>` (repeatable) to tile the first agent of several features side by side, `--all` to include terminals, `--list` to print what would be shown. `Alt+q` closes it |
 | `aiw doctor [--json]` | Read-only health report: agents against the limit, editor windows, memory and swap, orphaned `aiw-` tmux sessions and worktrees, editors left running for stopped features, projects still configured by an old `amf.json`, the hook mode, and a line confirming no network use. Changes nothing, exits 0 |
 | `aiw fonts [--all] [--font …] [--terminal …]` | Print the detected terminal, colour depth and icon settings and a font config snippet |
 | `aiw automation create-project` | Register a directory as a project from a JSON request |
-| `aiw automation create-feature` | Create a feature in an existing project from JSON: project name, branch, agent, mode, worktree yes or no, an optional hook choice, and a dry-run flag |
+| `aiw automation create-feature` | Create a feature in an existing project from JSON: project name, branch, agent, mode, worktree yes or no, an optional hook choice, and a dry-run flag. `agents` with `fan_out` (`shared` or `worktree_each`) starts several agents; `prompt` or `prompt_file` gives each one a task prompt once it is ready, and `send` sends it instead of pasting it unsent. The answer lists every feature created |
 | `aiw automation create-batch-features` | Create one project with many parallel feature worktrees |
 | `aiw automation queue --session <id> "text"` | Queue a follow-up for a session; the id is in the doctor's JSON output |
 | `aiw --help` | Everything else |

@@ -834,7 +834,8 @@ impl App {
                 }
                 CREATE_FEATURE_ACTION => {
                     match serde_json::from_value::<CreateFeatureRequest>(raw.clone()) {
-                        Ok(request) => match self.create_feature_from_request(&request) {
+                        // FORK: §19.3 — agents / fan_out / prompt / send.
+                        Ok(request) => match self.create_feature_from_request_fan_out(&request) {
                             Ok(response) => {
                                 self.log_info(
                                     "automation",

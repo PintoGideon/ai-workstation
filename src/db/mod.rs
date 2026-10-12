@@ -1,5 +1,6 @@
 mod debug_log;
 pub mod editors;
+pub(crate) mod fan_out; // FORK: pending prompts and fan-out groups (src/fork/fan_out.rs)
 mod followups; // FORK: queued follow-ups (src/app/fork_followups.rs)
 mod hook_approvals; // FORK: repo lifecycle hook approvals (src/fork/hook_approval.rs)
 mod migrations;

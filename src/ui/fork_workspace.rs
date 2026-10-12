@@ -252,7 +252,33 @@ fn sidebar_item_lines(
             } else {
                 vec![Span::styled(badge.age(now), dim)]
             };
-            let mut lines = vec![fit_line(with_right(left, right, row_width), row_width)];
+            let mut lines = Vec::new();
+            // FORK: §19.3 — a fan-out group's header, with how many of its
+            // siblings need you.
+            if !compact && let Some((header, needs_you)) = app.fan_out_header(*pi, *fi, now) {
+                let right = if needs_you > 0 {
+                    vec![Span::styled(
+                        format!("{}{needs_you}", BadgeKind::NeedsYou.glyph()),
+                        Style::default()
+                            .fg(BadgeKind::NeedsYou.tone(theme))
+                            .add_modifier(Modifier::BOLD),
+                    )]
+                } else {
+                    Vec::new()
+                };
+                lines.push(fit_line(
+                    with_right(
+                        vec![Span::styled(
+                            format!(" {header}"),
+                            Style::default().fg(theme.feature_title.to_color()),
+                        )],
+                        right,
+                        row_width,
+                    ),
+                    row_width,
+                ));
+            }
+            lines.push(fit_line(with_right(left, right, row_width), row_width));
             if !feature.collapsed && !compact {
                 lines.extend(external_lines(
                     &app.external_sessions_for_feature(&feature.id),
@@ -297,6 +323,13 @@ fn sidebar_item_lines(
                     right.push(Span::raw(" "));
                 }
                 right.push(Span::styled(badge.age(now), dim));
+            }
+            // FORK: §19.3 — a task prompt is waiting for this agent's pane.
+            if !compact && app.pending_prompt_for(&session.id).is_some() {
+                if !right.is_empty() {
+                    right.push(Span::raw(" "));
+                }
+                right.push(Span::styled("⏸ prompt", dim));
             }
             let mut lines = vec![fit_line(with_right(left, right, row_width), row_width)];
             if !compact && (selected || badge.kind.needs_you()) {

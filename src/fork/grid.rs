@@ -45,6 +45,9 @@ pub struct GridOptions {
     pub all: bool,
     /// Treat `name` as a project name even if a feature has the same name.
     pub project: bool,
+    /// FORK: §19.3 — more features to tile with `name` (a fan-out group):
+    /// the first agent of each, like a project.
+    pub with: Vec<String>,
 }
 
 /// A session of the store that could be shown in the grid.
@@ -66,8 +69,17 @@ impl Candidate {
 /// What a name resolved to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Scope {
-    Feature { project: String, feature: String },
-    Project { project: String },
+    Feature {
+        project: String,
+        feature: String,
+    },
+    Project {
+        project: String,
+    },
+    /// FORK: §19.3 — several features side by side (a fan-out group).
+    Group {
+        features: Vec<String>,
+    },
 }
 
 impl Scope {
@@ -75,6 +87,7 @@ impl Scope {
         match self {
             Scope::Feature { project, feature } => format!("feature {project}/{feature}"),
             Scope::Project { project } => format!("project {project}"),
+            Scope::Group { features } => format!("features {}", features.join(", ")),
         }
     }
 }
@@ -270,6 +283,35 @@ pub fn select(
             known.join("\n")
         ))
     }
+}
+
+/// FORK: §19.3 — resolve every name in `names` to a feature and tile the
+/// first agent of each (a fan-out group).
+pub fn select_group(
+    store: &ProjectStore,
+    names: &[String],
+    all: bool,
+) -> Result<Selection, String> {
+    let mut features = Vec::new();
+    let mut groups = Vec::new();
+    for name in names {
+        let selection = select(store, name, false, all)?;
+        match selection.scope {
+            Scope::Feature { project, feature } => {
+                features.push(format!("{project}/{feature}"));
+                groups.extend(selection.groups.into_iter().filter(|g| !g.is_empty()));
+            }
+            _ => {
+                return Err(format!(
+                    "\"{name}\" is not a feature; --with takes features"
+                ));
+            }
+        }
+    }
+    Ok(Selection {
+        scope: Scope::Group { features },
+        groups,
+    })
 }
 
 /// Keep the candidates whose window is running: every one for a feature, the
@@ -573,7 +615,14 @@ fn load_store() -> Result<ProjectStore> {
 /// Entry point of `aiw grid`.
 pub fn run(options: GridOptions) -> Result<()> {
     let store = load_store()?;
-    let selection = match select(&store, &options.name, options.project, options.all) {
+    let selection = if options.with.is_empty() {
+        select(&store, &options.name, options.project, options.all)
+    } else {
+        let mut names = vec![options.name.clone()];
+        names.extend(options.with.iter().cloned());
+        select_group(&store, &names, options.all)
+    };
+    let selection = match selection {
         Ok(selection) => selection,
         Err(message) => bail!("{message}"),
     };
@@ -773,6 +822,25 @@ mod tests {
             .enumerate()
             .map(|(i, c)| (c.tmux_session.clone(), c.window.clone(), i as u32))
             .collect()
+    }
+
+    #[test]
+    fn a_group_tiles_the_first_agent_of_each_named_feature() {
+        let names = vec!["RS/hx-12".to_string(), "RS/hx-13".to_string()];
+        let selection = select_group(&store(), &names, false).unwrap();
+        assert_eq!(
+            selection.scope,
+            Scope::Group {
+                features: vec!["RS/hx-12".into(), "RS/hx-13".into()]
+            }
+        );
+        let targets = live_targets(&selection, &live_for(&selection));
+        let sessions: Vec<_> = targets
+            .iter()
+            .map(|t| t.candidate.tmux_session.clone())
+            .collect();
+        assert_eq!(sessions, ["aiw-hx-12", "aiw-hx-13"], "one pane each");
+        assert!(select_group(&store(), &["RS".to_string()], false).is_err());
     }
 
     #[test]

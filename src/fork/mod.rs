@@ -39,6 +39,7 @@ pub(crate) mod claude_settings; // Claude hooks + status line via --settings (DE
 pub mod codex_hooks; // Codex `.codex/hooks.json` (DESIGN.md §16)
 pub mod cursor;
 pub mod extra_agents;
+pub mod fan_out; // one prompt, several agents (DESIGN.md §17, §19.3)
 pub mod gemini;
 
 // G4/G5 — work-safety fixes (DESIGN.md §7).

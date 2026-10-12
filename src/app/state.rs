@@ -1821,8 +1821,21 @@ pub enum CreateFeatureStep {
     Branch,
     Worktree,
     Mode,
+    /// FORK: §19.3 — shared worktree or one each (only with several agents).
+    FanOut,
     SessionName,
+    /// FORK: §19.3 — the task prompt every agent receives, unsent unless
+    /// "send when ready" is ticked.
+    Prompt,
     ConfirmSuperVibe,
+}
+
+/// FORK: §19.3 — the prompt library inside the Prompt step (`Ctrl+L`).
+#[derive(Debug, Clone, Default)]
+pub struct FeaturePromptPicker {
+    /// `(name, body)` of every template the library would show.
+    pub entries: Vec<(String, String)>,
+    pub selected: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1867,6 +1880,17 @@ pub struct CreateFeatureState {
     pub enable_chrome: bool,
     pub preset_index: usize,
     pub task_prompt: String,
+    /// FORK: §19.3 — harnesses ticked with Space, in tick order; the first is
+    /// the primary. Empty means the single highlighted harness (`agent`).
+    pub ticked: Vec<AgentKind>,
+    /// FORK: §19.3 — how several agents are laid out.
+    pub fan_out: crate::fork::fan_out::FanOutLayout,
+    /// FORK: §19.3 — press Enter for every agent once its pane is ready.
+    pub send_prompt: bool,
+    /// FORK: §19.3 — the open `Ctrl+L` picker in the Prompt step.
+    pub prompt_picker: Option<FeaturePromptPicker>,
+    /// FORK: §19.3 — why the mode changed (Codex in a Vibeless set).
+    pub mode_note: Option<String>,
 }
 
 impl CreateFeatureState {
@@ -1913,6 +1937,99 @@ impl CreateFeatureState {
             enable_chrome: false,
             preset_index: 0,
             task_prompt: String::new(),
+            ticked: Vec::new(),
+            fan_out: crate::fork::fan_out::FanOutLayout::default(),
+            send_prompt: false,
+            prompt_picker: None,
+            mode_note: None,
+        }
+    }
+
+    /// FORK: §19.3 — the harnesses this feature starts, primary first.
+    pub fn selected_agents(&self) -> Vec<AgentKind> {
+        if self.ticked.is_empty() {
+            vec![self.agent.clone()]
+        } else {
+            self.ticked.clone()
+        }
+    }
+
+    /// FORK: §19.3 — more than one agent is ticked.
+    pub fn is_fan_out(&self) -> bool {
+        self.ticked.len() > 1
+    }
+
+    /// FORK: §19.3 — sibling worktrees need a new branch in a new worktree;
+    /// the repo dir and an existing worktree can only be shared.
+    pub fn worktree_each_possible(&self) -> bool {
+        let existing = self.source_index == 1 && !self.worktrees.is_empty();
+        !existing && self.use_worktree
+    }
+
+    /// FORK: §19.3 — the layout the launch will use.
+    pub fn effective_fan_out(&self) -> crate::fork::fan_out::FanOutLayout {
+        if self.worktree_each_possible() {
+            self.fan_out
+        } else {
+            crate::fork::fan_out::FanOutLayout::Shared
+        }
+    }
+
+    /// FORK: §19.3 — Space on the highlighted harness.
+    pub fn toggle_tick(&mut self) {
+        let Some(agent) = self.allowed_agents.get(self.agent_index).cloned() else {
+            return;
+        };
+        if let Some(pos) = self.ticked.iter().position(|a| *a == agent) {
+            self.ticked.remove(pos);
+        } else {
+            self.ticked.push(agent);
+        }
+        self.sync_primary();
+    }
+
+    /// FORK: §19.3 — `agent` follows the first ticked harness, else the
+    /// highlighted one.
+    pub fn sync_primary(&mut self) {
+        if let Some(first) = self.ticked.first() {
+            self.agent = first.clone();
+        } else if let Some(agent) = self.allowed_agents.get(self.agent_index) {
+            self.agent = agent.clone();
+        }
+    }
+
+    /// FORK: §19.3 — where the Mode step goes next (after SuperVibe is
+    /// confirmed, if it was picked): the layout choice, the prompt, or the
+    /// session name.
+    pub fn advance_past_mode(&mut self) {
+        if self.is_fan_out() {
+            let (mode, note) =
+                crate::fork::fan_out::fan_out_mode(&self.selected_agents(), &self.mode);
+            if let Some(index) = VibeMode::ALL.iter().position(|m| *m == mode) {
+                self.mode_index = index;
+            }
+            self.mode = mode;
+            self.mode_note = note;
+            self.step = if self.worktree_each_possible() {
+                CreateFeatureStep::FanOut
+            } else {
+                CreateFeatureStep::Prompt
+            };
+        } else {
+            self.mode_note = None;
+            self.session_name = crate::app::App::default_session_name_for_agent(&self.agent);
+            self.step = CreateFeatureStep::SessionName;
+        }
+    }
+
+    /// FORK: §19.3 — the step `Esc` returns to from the Prompt step.
+    pub fn step_before_prompt(&self) -> CreateFeatureStep {
+        if !self.is_fan_out() {
+            CreateFeatureStep::SessionName
+        } else if self.worktree_each_possible() {
+            CreateFeatureStep::FanOut
+        } else {
+            CreateFeatureStep::Mode
         }
     }
 

@@ -18,6 +18,7 @@ pub(crate) mod editor_ops;
 pub(crate) mod feature_ops;
 pub(crate) mod feature_setup;
 pub mod fork_cockpit; // FORK: the cockpit sidebar (DESIGN.md §18)
+pub(crate) mod fork_fan_out; // FORK: one prompt, several agents (DESIGN.md §17, §19.3)
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7, DESIGN.md §16)
 pub(crate) mod fork_hook_events; // FORK: richer row events from hooks (DESIGN.md §19.1)
 pub(crate) mod fork_identity; // FORK: harness names, forks, Claude's roster (DESIGN.md §19.2)
@@ -696,6 +697,8 @@ pub struct App {
     /// FORK: harness names, pending conversation forks and Claude's own
     /// session roster (DESIGN.md §19.2).
     pub(crate) session_identity: fork_identity::IdentityRuntime,
+    /// FORK: §19.3 — dialog fan-outs, prompts waiting for their pane, groups.
+    pub(crate) fan_out: fork_fan_out::FanOutRuntime,
     /// FORK: ids for queued items when no database is open (negative).
     pub(crate) followup_memory_id: i64,
     pub ipc_tool_sessions: std::collections::HashSet<String>,
@@ -1129,6 +1132,7 @@ impl App {
             subagent_counts: HashMap::new(),      // FORK: P5
             hook_events: HashMap::new(),          // FORK: §19.1
             session_identity: Default::default(), // FORK: §19.2
+            fan_out: Default::default(),          // FORK: §19.3
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
@@ -1213,6 +1217,7 @@ impl App {
         // is retried on the explicit refresh (`R`) instead.
         app.load_followups(); // FORK: P7
         app.load_session_names(); // FORK: §19.2
+        app.load_fan_out_state(); // FORK: §19.3
 
         Ok(app)
     }
@@ -1346,6 +1351,7 @@ impl App {
             subagent_counts: HashMap::new(),      // FORK: P5
             hook_events: HashMap::new(),          // FORK: §19.1
             session_identity: Default::default(), // FORK: §19.2
+            fan_out: Default::default(),          // FORK: §19.3
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),

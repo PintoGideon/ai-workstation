@@ -24,6 +24,28 @@ pub enum PromptExportTarget {
 }
 
 impl App {
+    /// FORK: §19.3 — `(name, body)` of every template the library would show
+    /// for `repo` (user, global, project), for the New Feature prompt step.
+    pub(crate) fn prompt_templates_for_repo(&mut self, repo: &Path) -> Vec<(String, String)> {
+        if let Some(db) = &self.db
+            && let Ok(fresh) = db.load_prompt_templates()
+        {
+            self.store.prompt_templates = fresh;
+        }
+        let global = if !self.store_path.as_os_str().is_empty() {
+            crate::extension::load_global_extension_config().prompt_templates
+        } else {
+            self.config.extension.prompt_templates.clone()
+        };
+        let project = load_project_prompt_templates(repo);
+        merge_prompt_library_entries(&self.store.prompt_templates, &global, &project, &[])
+            .into_iter()
+            .map(|entry| (entry.template.name, entry.template.body))
+            .collect()
+    }
+}
+
+impl App {
     // ── Picker: open / navigate / filter ─────────────────────────
 
     /// Build the merged, source-tagged template list and enter the

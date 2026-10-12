@@ -101,6 +101,13 @@ pub struct FeaturePreset {
     pub mode: VibeMode,
     pub agent: AgentKind,
     pub enable_chrome: bool,
+    /// FORK: §19.3 — start several harnesses (first = primary). Empty means
+    /// `agent` alone.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub agents: Vec<AgentKind>,
+    /// FORK: §19.3 — how several agents are laid out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fan_out: Option<crate::fork::fan_out::FanOutLayout>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -111,6 +118,8 @@ struct FeaturePresetDe {
     mode: StoredVibeMode,
     agent: AgentKind,
     enable_chrome: bool,
+    agents: Vec<AgentKind>,
+    fan_out: Option<crate::fork::fan_out::FanOutLayout>,
 }
 
 impl<'de> Deserialize<'de> for FeaturePreset {
@@ -126,6 +135,8 @@ impl<'de> Deserialize<'de> for FeaturePreset {
             mode,
             agent: preset.agent,
             enable_chrome: preset.enable_chrome,
+            agents: preset.agents,
+            fan_out: preset.fan_out,
         })
     }
 }
@@ -164,7 +175,10 @@ impl ExtensionConfig {
     pub fn allowed_feature_presets(&self) -> Vec<FeaturePreset> {
         self.feature_presets
             .iter()
-            .filter(|preset| self.allows_agent(&preset.agent))
+            .filter(|preset| {
+                self.allows_agent(&preset.agent)
+                    && preset.agents.iter().all(|agent| self.allows_agent(agent))
+            })
             .cloned()
             .collect()
     }

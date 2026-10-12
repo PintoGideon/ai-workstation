@@ -42,6 +42,8 @@ pub const KINDS: &[&str] = &[
     "cwd-changed",
     "permission-denied",
     "session-end",
+    // §19.3: the agent is up, so a waiting prompt can be pasted.
+    "session-start",
 ];
 
 /// Payload keys `aiw hook-event` forwards from the harness's hook JSON. Arrays
@@ -159,6 +161,9 @@ pub enum HookEvent {
         tool: String,
     },
     SessionEnd,
+    /// The harness started (or resumed) a session: its pane is about to take
+    /// input (§19.3).
+    SessionStart,
 }
 
 fn text(raw: &Value, key: &str) -> Option<String> {
@@ -228,6 +233,7 @@ impl HookEvent {
                 tool: short(&text(raw, "tool_name").unwrap_or_else(|| "tool".into())),
             },
             "session-end" => HookEvent::SessionEnd,
+            "session-start" => HookEvent::SessionStart,
             _ => return None,
         })
     }
@@ -307,6 +313,8 @@ impl HookEventState {
                 *self = HookEventState::default();
                 true
             }
+            // Nothing to show: the app hands it to the pending prompts.
+            HookEvent::SessionStart => false,
         }
     }
 
@@ -388,6 +396,7 @@ mod tests {
             json!({"kind": "cwd-changed", "cwd": "/a"}),
             json!({"kind": "permission-denied"}),
             json!({"kind": "session-end"}),
+            json!({"kind": "session-start", "source": "startup"}),
         ];
         assert_eq!(samples.len(), KINDS.len());
         for (sample, kind) in samples.iter().zip(KINDS) {

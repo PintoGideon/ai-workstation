@@ -74,6 +74,11 @@ fn create_feature_automation_dry_run_returns_plan_without_mutating_store() {
         enable_chrome: false,
         hook_choice: None,
         dry_run: true,
+        agents: Vec::new(),
+        fan_out: None,
+        prompt: None,
+        prompt_file: None,
+        send: false,
     };
 
     let response = app.create_feature_from_request(&request).unwrap();
@@ -127,6 +132,11 @@ fn create_feature_automation_dry_run_surfaces_hook_prompt_options() {
         enable_chrome: false,
         hook_choice: None,
         dry_run: true,
+        agents: Vec::new(),
+        fan_out: None,
+        prompt: None,
+        prompt_file: None,
+        send: false,
     };
 
     let response = app.create_feature_from_request(&request).unwrap();
@@ -158,6 +168,11 @@ fn create_feature_automation_rejects_codex_vibeless_mode() {
         enable_chrome: false,
         hook_choice: None,
         dry_run: true,
+        agents: Vec::new(),
+        fan_out: None,
+        prompt: None,
+        prompt_file: None,
+        send: false,
     };
 
     let err = app.create_feature_from_request(&request).unwrap_err();
@@ -266,6 +281,11 @@ fn create_feature_automation_creates_and_starts_feature() {
         enable_chrome: false,
         hook_choice: None,
         dry_run: false,
+        agents: Vec::new(),
+        fan_out: None,
+        prompt: None,
+        prompt_file: None,
+        send: false,
     };
 
     let response = app.create_feature_from_request(&request).unwrap();

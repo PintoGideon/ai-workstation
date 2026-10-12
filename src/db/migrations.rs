@@ -1232,7 +1232,10 @@ const MIGRATION_047: &str = "CREATE TABLE screenshot_scopes (scope_id TEXT PRIMA
 pub(super) const FORK_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS aiw_hook_approvals (repo TEXT NOT NULL, hook TEXT NOT NULL, sha256 TEXT NOT NULL, command TEXT NOT NULL, approved_at TEXT NOT NULL, PRIMARY KEY (repo, hook, sha256));
 CREATE TABLE IF NOT EXISTS aiw_followups (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, position INTEGER NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_aiw_followups_session ON aiw_followups(session_id, position);
-CREATE TABLE IF NOT EXISTS aiw_session_names (session_id TEXT PRIMARY KEY, name TEXT NOT NULL);";
+CREATE TABLE IF NOT EXISTS aiw_session_names (session_id TEXT PRIMARY KEY, name TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS aiw_pending_prompts (session_id TEXT PRIMARY KEY, text TEXT NOT NULL, send INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS aiw_fanout_members (feature_id TEXT PRIMARY KEY, group_id TEXT NOT NULL, base_branch TEXT NOT NULL, agent TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS idx_aiw_fanout_group ON aiw_fanout_members(group_id, position);";
 
 #[cfg(test)]
 mod tests {

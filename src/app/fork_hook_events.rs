@@ -59,6 +59,10 @@ impl App {
             self.log_debug("hook-event", format!("{event:?} matched no session"));
             return true;
         };
+        // §19.3: the agent is up — a prompt waiting for it can go.
+        if matches!(event, HookEvent::SessionStart) {
+            self.fan_out_session_ready(&session_id);
+        }
         let session_end = matches!(event, HookEvent::SessionEnd);
         self.log_debug("hook-event", format!("{session_id}: {event:?}"));
         let turn_ended = self

@@ -43,7 +43,9 @@ pub use dialog::{
 pub use diff::{handle_diff_picker_key, handle_diff_viewer_key, handle_diff_viewer_wheel};
 pub use diff_review::handle_diff_review_key;
 pub use dormant::handle_dormant_key;
+#[cfg(test)]
 pub use feature_creation::handle_create_feature_key;
+pub use feature_creation::handle_create_feature_key_event;
 pub use fork::handle_fork_feature_key;
 pub use harness::handle_harness_setup_key;
 pub use hooks::{handle_deleting_feature_key, handle_hook_prompt_key, handle_running_hook_key};
@@ -90,7 +92,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<()> {
         }
         AppMode::CreatingProject(_) => handle_create_project_key(app, key),
         AppMode::BrowsingPath(_) => handle_browse_path_key(app, key),
-        AppMode::CreatingFeature(_) => handle_create_feature_key(app, key.code),
+        AppMode::CreatingFeature(_) => handle_create_feature_key_event(app, key), // FORK: §19.3
         AppMode::CreatingBatchFeatures(_) => handle_create_batch_features_key(app, key.code),
         AppMode::DeletingProject(_) => handle_delete_project_key(app, key.code),
         AppMode::DeletingFeature(_, _) => handle_delete_feature_key(app, key.code),

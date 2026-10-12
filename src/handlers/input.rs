@@ -30,6 +30,12 @@ pub fn handle_paste(app: &mut App, text: &str) -> Result<()> {
                     CreateFeatureStep::SessionName => {
                         state.session_name.push_str(text);
                     }
+                    // FORK: §19.3 — a pasted prompt keeps its newlines.
+                    CreateFeatureStep::Prompt if state.prompt_picker.is_none() => {
+                        state
+                            .task_prompt
+                            .push_str(&text.replace("\r\n", "\n").replace('\r', "\n"));
+                    }
                     _ => {}
                 }
             }

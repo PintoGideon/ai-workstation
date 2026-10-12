@@ -5,6 +5,7 @@ mod automation;
 mod editor_lifecycle;
 mod feature_sessions;
 mod fork_agents; // FORK: Gemini/Cursor
+mod fork_fan_out; // FORK: one prompt, several agents (§19.3)
 mod fork_identity; // FORK: names, forks, Claude roster (§19.2)
 mod fork_session_reconcile; // FORK
 mod hooks_setup;

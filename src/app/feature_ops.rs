@@ -442,6 +442,26 @@ impl App {
         prepared: PreparedFeatureLaunch,
         resource_approved: bool,
     ) -> Result<()> {
+        // FORK: §19.3 — a dialog fan-out continues with its next agent or
+        // sibling once this feature is launched.
+        let project_name = prepared.project_name.clone();
+        let feature_name = prepared
+            .feature_name
+            .clone()
+            .unwrap_or_else(|| prepared.branch.clone());
+        let result = self.finish_feature_launch_inner(prepared, resource_approved);
+        match &result {
+            Ok(()) => self.fan_out_feature_launched(&project_name, &feature_name),
+            Err(_) => self.fan_out.run = None,
+        }
+        result
+    }
+
+    fn finish_feature_launch_inner(
+        &mut self,
+        prepared: PreparedFeatureLaunch,
+        resource_approved: bool,
+    ) -> Result<()> {
         // The feature row and its issue association are one store write. Keep
         // a snapshot so a failed write cannot leave a phantom in-memory row
         // that a retry would mistake for a successful creation.
@@ -657,6 +677,11 @@ impl App {
                     return self.finish_todo_spawn_in_new_feature(&origin, pi, fi, prompt);
                 }
                 if let Some(prompt) = prepared.startup_prompt {
+                    // FORK: §19.3 — waits for the agent's pane to be ready
+                    // (its SessionStart hook), then is pasted unsent.
+                    if self.queue_startup_prompt(pi, fi, &prompt) {
+                        return Ok(());
+                    }
                     // FORK(cockpit): pasted unsent into the agent's pane
                     // (DESIGN.md §18); never sent on its own.
                     self.selection = Selection::Feature(pi, fi);
@@ -1800,6 +1825,7 @@ impl App {
         if let Some(removed) = self.store.remove_feature(&project_name, &feature_name) {
             self.forget_deleted_feature_sessions(&removed); // FORK: queues, settings files
             self.forget_feature_identities(&removed); // FORK: §19.2
+            self.forget_fan_out_feature(&removed); // FORK: §19.3
         }
         self.save()?;
 
@@ -1964,6 +1990,7 @@ impl App {
                     {
                         self.forget_deleted_feature_sessions(&removed); // FORK
                         self.forget_feature_identities(&removed); // FORK: §19.2
+                        self.forget_fan_out_feature(&removed); // FORK: §19.3
                     }
                     let _ = self.save();
                     self.message = Some(format!("Deleted feature '{}'", deletion.feature_name));

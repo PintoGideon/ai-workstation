@@ -496,7 +496,8 @@ EVENTS = {
                      "tool_stop": "postToolUse", "ask": None, "stop": "stop", "end": "sessionEnd"},
     # Codex's hooks.json carries UserPromptSubmit / PreToolUse / PostToolUse
     # (§19.1); notify still ends the turn.
-    "codex": {"start": None, "prompt": "UserPromptSubmit", "tool_start": "PreToolUse",
+    # §19.3: Codex's SessionStart hook says the agent is up.
+    "codex": {"start": "SessionStart", "prompt": "UserPromptSubmit", "tool_start": "PreToolUse",
               "tool_stop": "PostToolUse", "ask": None, "stop": "turn-complete", "end": None},
     "pi": {},
 }

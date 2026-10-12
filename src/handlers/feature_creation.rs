@@ -1,7 +1,8 @@
 use anyhow::Result;
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::app::{App, AppMode, CreateFeatureStep};
+use crate::app::{App, AppMode, CreateFeatureStep, FeaturePromptPicker};
+use crate::fork::fan_out::FanOutLayout;
 use crate::project::{AgentKind, VibeMode, normalized_feature_name};
 
 fn branch_error(app: &App) -> Option<String> {
@@ -212,6 +213,20 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                     state.mode = preset.mode;
                     state.agent = preset.agent.clone();
                     state.enable_chrome = preset.enable_chrome;
+                    // FORK: §19.3 — a preset can start several agents.
+                    state.ticked = preset
+                        .agents
+                        .iter()
+                        .filter(|a| state.allowed_agents.contains(a))
+                        .cloned()
+                        .collect();
+                    if state.ticked.len() < 2 {
+                        state.ticked.clear();
+                    }
+                    if let Some(layout) = preset.fan_out {
+                        state.fan_out = layout;
+                    }
+                    state.sync_primary();
                     if let Some(ref prefix) = preset.branch_prefix
                         && !prefix.is_empty()
                     {
@@ -324,10 +339,19 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                         if is_supervibe {
                             state.step = CreateFeatureStep::ConfirmSuperVibe;
                         } else {
-                            state.session_name = App::default_session_name_for_agent(&state.agent);
-                            state.step = CreateFeatureStep::SessionName;
+                            // FORK: §19.3 — layout / prompt / session name.
+                            state.advance_past_mode();
                         }
                     }
+                }
+            }
+            // FORK: §19.3 — Space ticks the highlighted harness; ticking a
+            // second one makes this a fan-out.
+            KeyCode::Char(' ') => {
+                if let AppMode::CreatingFeature(state) = &mut app.mode
+                    && state.mode_focus == 0
+                {
+                    state.toggle_tick();
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
@@ -337,6 +361,7 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                             state.agent_index =
                                 (state.agent_index + 1) % state.allowed_agents.len();
                             state.agent = state.allowed_agents[state.agent_index].clone();
+                            state.sync_primary(); // FORK: §19.3
                         }
                         1 => {
                             state.mode_index = (state.mode_index + 1) % VibeMode::ALL.len();
@@ -359,6 +384,7 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                                 state.agent_index - 1
                             };
                             state.agent = state.allowed_agents[state.agent_index].clone();
+                            state.sync_primary(); // FORK: §19.3
                         }
                         1 => {
                             state.mode_index = if state.mode_index == 0 {
@@ -384,16 +410,13 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                 }
             }
             KeyCode::Enter => {
-                let previous_message = app.message.clone();
-                app.create_feature()?;
-                if matches!(
-                    app.mode,
-                    AppMode::CreatingFeature(ref state)
-                        if state.step == CreateFeatureStep::SessionName
-                ) && app.message != previous_message
-                    && let Some(message) = app.message.clone()
-                {
-                    app.push_toast_warning(message);
+                // FORK: §19.3 — the prompt step comes last.
+                if let AppMode::CreatingFeature(state) = &mut app.mode {
+                    if state.session_name.trim().is_empty() {
+                        app.push_toast_warning("Session name cannot be empty");
+                    } else {
+                        state.step = CreateFeatureStep::Prompt;
+                    }
                 }
             }
             KeyCode::Backspace => {
@@ -408,11 +431,34 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
             }
             _ => {}
         },
+        // FORK: §19.3 — shared worktree or one each.
+        CreateFeatureStep::FanOut => match key {
+            KeyCode::Esc => {
+                if let AppMode::CreatingFeature(state) = &mut app.mode {
+                    state.step = CreateFeatureStep::Mode;
+                }
+            }
+            KeyCode::Down | KeyCode::Up | KeyCode::Char('j') | KeyCode::Char('k') => {
+                if let AppMode::CreatingFeature(state) = &mut app.mode {
+                    state.fan_out = match state.fan_out {
+                        FanOutLayout::Shared => FanOutLayout::WorktreeEach,
+                        FanOutLayout::WorktreeEach => FanOutLayout::Shared,
+                    };
+                }
+            }
+            KeyCode::Enter | KeyCode::Tab | KeyCode::Char('l') => {
+                if let AppMode::CreatingFeature(state) = &mut app.mode {
+                    state.step = CreateFeatureStep::Prompt;
+                }
+            }
+            _ => {}
+        },
+        // Keys with modifiers are handled in `handle_create_feature_key_event`.
+        CreateFeatureStep::Prompt => handle_prompt_step(app, KeyEvent::from(key))?,
         CreateFeatureStep::ConfirmSuperVibe => match key {
             KeyCode::Enter | KeyCode::Char('y') => {
                 if let AppMode::CreatingFeature(state) = &mut app.mode {
-                    state.session_name = App::default_session_name_for_agent(&state.agent);
-                    state.step = CreateFeatureStep::SessionName;
+                    state.advance_past_mode(); // FORK: §19.3
                 }
             }
             KeyCode::Char('n') | KeyCode::Esc => {
@@ -422,6 +468,126 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
             }
             _ => {}
         },
+    }
+    Ok(())
+}
+
+/// FORK: §19.3 — the dialog's key handler with modifiers: the Prompt step
+/// takes `Ctrl+L` (library), `Ctrl+T` (send when ready) and `Alt+Enter`
+/// (newline); every other step only needs the key code.
+pub fn handle_create_feature_key_event(app: &mut App, key: KeyEvent) -> Result<()> {
+    let on_prompt = matches!(
+        &app.mode,
+        AppMode::CreatingFeature(state) if state.step == CreateFeatureStep::Prompt
+    );
+    if on_prompt {
+        handle_prompt_step(app, key)
+    } else {
+        handle_create_feature_key(app, key.code)
+    }
+}
+
+fn handle_prompt_step(app: &mut App, key: KeyEvent) -> Result<()> {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let alt = key.modifiers.contains(KeyModifiers::ALT);
+
+    // The library picker, while open, takes every key.
+    let picker_open = matches!(
+        &app.mode,
+        AppMode::CreatingFeature(state) if state.prompt_picker.is_some()
+    );
+    if picker_open {
+        if let AppMode::CreatingFeature(state) = &mut app.mode
+            && let Some(picker) = state.prompt_picker.as_mut()
+        {
+            let len = picker.entries.len();
+            match key.code {
+                KeyCode::Esc => state.prompt_picker = None,
+                KeyCode::Down | KeyCode::Char('j') if len > 0 => {
+                    picker.selected = (picker.selected + 1) % len;
+                }
+                KeyCode::Up | KeyCode::Char('k') if len > 0 => {
+                    picker.selected = picker.selected.checked_sub(1).unwrap_or(len - 1);
+                }
+                KeyCode::Enter => {
+                    if let Some((_, body)) = picker.entries.get(picker.selected).cloned() {
+                        if !state.task_prompt.is_empty() && !state.task_prompt.ends_with('\n') {
+                            state.task_prompt.push('\n');
+                        }
+                        state.task_prompt.push_str(&body);
+                    }
+                    state.prompt_picker = None;
+                }
+                _ => {}
+            }
+        }
+        return Ok(());
+    }
+
+    match key.code {
+        KeyCode::Esc => {
+            if let AppMode::CreatingFeature(state) = &mut app.mode {
+                state.step = state.step_before_prompt();
+            }
+        }
+        KeyCode::Char('l') | KeyCode::Char('L') if ctrl => {
+            let repo = match &app.mode {
+                AppMode::CreatingFeature(state) => state.project_repo.clone(),
+                _ => return Ok(()),
+            };
+            let entries = app.prompt_templates_for_repo(&repo);
+            if entries.is_empty() {
+                app.push_toast_info(
+                    "The prompt library is empty — L on the dashboard adds templates",
+                );
+            } else if let AppMode::CreatingFeature(state) = &mut app.mode {
+                state.prompt_picker = Some(FeaturePromptPicker {
+                    entries,
+                    selected: 0,
+                });
+            }
+        }
+        KeyCode::Char('t') | KeyCode::Char('T') if ctrl => {
+            if let AppMode::CreatingFeature(state) = &mut app.mode {
+                state.send_prompt = !state.send_prompt;
+            }
+        }
+        KeyCode::Char('u') | KeyCode::Char('U') if ctrl => {
+            if let AppMode::CreatingFeature(state) = &mut app.mode {
+                state.task_prompt.clear();
+            }
+        }
+        KeyCode::Char('j') | KeyCode::Char('J') if ctrl => {
+            if let AppMode::CreatingFeature(state) = &mut app.mode {
+                state.task_prompt.push('\n');
+            }
+        }
+        KeyCode::Enter if alt || key.modifiers.contains(KeyModifiers::SHIFT) => {
+            if let AppMode::CreatingFeature(state) = &mut app.mode {
+                state.task_prompt.push('\n');
+            }
+        }
+        KeyCode::Enter => {
+            let previous_message = app.message.clone();
+            app.create_feature_from_dialog()?;
+            if matches!(app.mode, AppMode::CreatingFeature(_))
+                && app.message != previous_message
+                && let Some(message) = app.message.clone()
+            {
+                app.push_toast_warning(message);
+            }
+        }
+        KeyCode::Backspace => {
+            if let AppMode::CreatingFeature(state) = &mut app.mode {
+                state.task_prompt.pop();
+            }
+        }
+        KeyCode::Char(c) if !ctrl => {
+            if let AppMode::CreatingFeature(state) = &mut app.mode {
+                state.task_prompt.push(c);
+            }
+        }
+        _ => {}
     }
     Ok(())
 }

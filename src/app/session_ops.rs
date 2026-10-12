@@ -1736,6 +1736,7 @@ impl App {
         self.clear_followups(&session_id);
         crate::fork::launch::remove_claude_settings(&session_id);
         self.forget_session_identity(&session_id); // FORK: §19.2
+        self.forget_fan_out_session(&session_id); // FORK: §19.3
 
         // Run the custom session cleanup after a successful removal.
         if is_custom {

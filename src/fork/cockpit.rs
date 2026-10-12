@@ -327,6 +327,31 @@ pub fn grid_pane_command(
     )
 }
 
+/// FORK: §19.3 — the agent-pane command that tiles several features (a
+/// fan-out group): `aiw grid <first> --with <second> …`.
+pub fn grid_group_pane_command(
+    aiw: &str,
+    features: &[String],
+    tmux_bin: &str,
+    cockpit_socket: &Path,
+    after_title: &str,
+    after: &str,
+) -> String {
+    let mut args = String::new();
+    for (i, feature) in features.iter().enumerate() {
+        if i > 0 {
+            args.push_str(" --with");
+        }
+        args.push(' ');
+        args.push_str(&shell_quote(feature));
+    }
+    format!(
+        "env -u TMUX {} grid{args}; {}; {after}",
+        shell_quote(aiw),
+        title_command(tmux_bin, cockpit_socket, after_title)
+    )
+}
+
 /// One thing the sidebar asks of the cockpit server.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {

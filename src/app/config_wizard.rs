@@ -241,6 +241,17 @@ impl App {
                                 .unwrap_or(0),
                         ),
                         enable_chrome: *state.field_toggles.first().unwrap_or(&false),
+                        // FORK: §19.3 — the wizard has no fields for these;
+                        // an edited preset keeps what aiw.json gave it.
+                        agents: state
+                            .editing_index
+                            .and_then(|i| state.presets.get(i))
+                            .map(|p| p.agents.clone())
+                            .unwrap_or_default(),
+                        fan_out: state
+                            .editing_index
+                            .and_then(|i| state.presets.get(i))
+                            .and_then(|p| p.fan_out),
                     };
 
                     upsert_or_push(&mut state.presets, state.editing_index, preset);

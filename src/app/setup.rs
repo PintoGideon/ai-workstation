@@ -75,6 +75,8 @@ const CLAUDE_MANAGED_EVENTS: &[&str] = &[
     "TaskCompleted",
     "CwdChanged",
     "PermissionDenied",
+    // FORK: DESIGN.md §19.3
+    "SessionStart",
 ];
 const CLAUDE_MANAGED_SCRIPT_NAMES: &[&str] = &[
     "notify.sh",

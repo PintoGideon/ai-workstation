@@ -140,7 +140,11 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("s", "Add session (picker)"),
         ("S", "Pick session to resume"),
         ("N", "Create new project"),
-        ("n", "Create new feature"),
+        // FORK: §19.3
+        (
+            "n",
+            "Create new feature (Space ticks more agents: one prompt, several agents)",
+        ),
         ("g", "Browse GitHub issues for the selected project"),
         ("B", "Create batch features"),
         ("O", "Open AIW settings project"),
@@ -154,7 +158,7 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         // FORK: tiles in the agent pane (DESIGN.md §18).
         (
             "v",
-            "Tile this feature's agents in the agent pane (aiw grid; Alt+q there closes)",
+            "Tile this feature's agents (a fan-out group: every sibling) in the agent pane; Alt+q there closes",
         ),
         ("x", "Stop feature / session (session stays listed)"),
         ("r", "Rename session/feature"),
