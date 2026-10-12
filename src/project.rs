@@ -1489,14 +1489,81 @@ pub fn aiw_config_dir() -> PathBuf {
 /// the 2024 edition and process-global, so it would race across the parallel
 /// test threads. A `OnceLock` needs no ordering guarantee — the first resolver
 /// call in the process wins and every later one agrees.
+///
+/// The root is process-global, so nothing drops it: an exit handler removes
+/// it when the test binary exits normally (a failing test still exits
+/// normally: libtest catches the panic), and every run first sweeps the
+/// roots of earlier runs whose process is gone (a crash, a `kill -9`, an
+/// abort). Without both, every `cargo test` left one directory behind and
+/// `/tmp` filled up (2,204 of them, 2026-10-11).
 #[cfg(test)]
 pub(crate) fn test_sandbox_root() -> &'static PathBuf {
     static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
     ROOT.get_or_init(|| {
-        let root = std::env::temp_dir().join(format!("aiw-test-home-{}", std::process::id()));
+        let parent = std::env::temp_dir();
+        sweep_dead_test_homes(&parent);
+        let root = parent.join(format!("{TEST_HOME_PREFIX}{}", std::process::id()));
         let _ = std::fs::create_dir_all(&root);
+        // SAFETY: registering a plain `extern "C"` function with no captured
+        // state; it only touches the filesystem.
+        unsafe {
+            libc::atexit(remove_own_test_home);
+        }
         root
     })
+}
+
+#[cfg(test)]
+const TEST_HOME_PREFIX: &str = "aiw-test-home-";
+
+#[cfg(test)]
+extern "C" fn remove_own_test_home() {
+    let root = std::env::temp_dir().join(format!("{TEST_HOME_PREFIX}{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// Remove `aiw-test-home-<pid>` directories under `parent` whose process no
+/// longer exists. A process that exists but belongs to another user counts as
+/// alive (`EPERM`), so a shared `/tmp` is never swept for someone else.
+#[cfg(test)]
+pub(crate) fn sweep_dead_test_homes(parent: &Path) -> usize {
+    let Ok(entries) = std::fs::read_dir(parent) else {
+        return 0;
+    };
+    let own = std::process::id();
+    let mut removed = 0;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(pid) = name
+            .to_str()
+            .and_then(|n| n.strip_prefix(TEST_HOME_PREFIX))
+            .and_then(|p| p.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        if pid == own || test_home_pid_alive(pid) {
+            continue;
+        }
+        if std::fs::remove_dir_all(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
+#[cfg(test)]
+fn test_home_pid_alive(pid: u32) -> bool {
+    let Ok(pid) = libc::pid_t::try_from(pid) else {
+        return false;
+    };
+    if pid <= 0 {
+        return false;
+    }
+    // SAFETY: signal 0 checks existence and permission without delivering.
+    if unsafe { libc::kill(pid, 0) } == 0 {
+        return true;
+    }
+    std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
 /// Directory for generated Claude hook executables:
@@ -2503,6 +2570,46 @@ mod tests {
         .unwrap();
 
         assert_eq!(feature.mode, VibeMode::Vibeless);
+    }
+
+    #[test]
+    fn the_test_home_sweep_removes_only_roots_of_dead_processes() {
+        let parent = tempfile::tempdir().unwrap();
+        // A pid that certainly existed and is now gone: a child we waited on.
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let dead = child.id();
+        child.wait().unwrap();
+        let own = std::process::id();
+        for name in [
+            format!("{TEST_HOME_PREFIX}{dead}"),
+            format!("{TEST_HOME_PREFIX}{own}"),
+            format!("{TEST_HOME_PREFIX}not-a-pid"),
+            "unrelated-dir".to_string(),
+        ] {
+            std::fs::create_dir_all(parent.path().join(&name).join(".config")).unwrap();
+        }
+
+        assert_eq!(super::sweep_dead_test_homes(parent.path()), 1);
+
+        assert!(
+            !parent
+                .path()
+                .join(format!("{TEST_HOME_PREFIX}{dead}"))
+                .exists()
+        );
+        assert!(
+            parent
+                .path()
+                .join(format!("{TEST_HOME_PREFIX}{own}"))
+                .exists()
+        );
+        assert!(
+            parent
+                .path()
+                .join(format!("{TEST_HOME_PREFIX}not-a-pid"))
+                .exists()
+        );
+        assert!(parent.path().join("unrelated-dir").exists());
     }
 
     #[test]
