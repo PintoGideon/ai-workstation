@@ -732,33 +732,6 @@ fn run_notify_fallbacks(
     }
 }
 
-/// FORK: run the first-run AMF migration (`crate::fork::migrate`). A failure
-/// stops AIW before it creates its own config folder, so the next start
-/// retries instead of starting empty.
-fn run_first_run_migration() -> Result<()> {
-    match crate::fork::migrate::migrate_on_first_run() {
-        Ok(crate::fork::migrate::Outcome::Migrated(record)) => {
-            crate::debug::log_to_file(
-                crate::debug::LogLevel::Info,
-                "migrate",
-                &format!(
-                    "copied AMF setup from {} ({} projects, {} features); copied: {}; skipped: {}",
-                    record.from.display(),
-                    record.projects,
-                    record.features,
-                    record.copied.join(", "),
-                    record.skipped.join(", ")
-                ),
-            );
-            Ok(())
-        }
-        Ok(crate::fork::migrate::Outcome::NotNeeded) => Ok(()),
-        Err(err) => Err(err.context(
-            "AI Workstation could not copy your AMF setup on its first run; nothing was changed",
-        )),
-    }
-}
-
 /// FORK: what `aiw -V` prints.
 pub(crate) fn version_line() -> String {
     match option_env!("AIW_GIT_SHA") {
@@ -790,29 +763,6 @@ pub fn run() -> Result<()> {
 
     if let Some(Commands::Doctor { json }) = cli.command {
         return run_doctor(json);
-    }
-
-    // FORK: on the first run, copy an existing AMF setup into AIW's own
-    // folders (never touching AMF's). Hook-time commands (`notify` and
-    // friends) only run inside sessions AIW started, so they skip this.
-    if !matches!(
-        cli.command,
-        Some(
-            Commands::Fonts { .. }
-                | Commands::Notify { .. }
-                | Commands::HookPayload { .. }
-                | Commands::HookField { .. }
-                | Commands::NotifyWait { .. }
-                | Commands::PermissionRequest { .. } // FORK: hook commands skip it too
-                | Commands::StatusLine
-                | Commands::StopHook { .. }
-                | Commands::Subagent { .. }
-                | Commands::HookEvent { .. }
-                | Commands::WorktreeHook { .. }
-                | Commands::SessionContext { .. }
-        )
-    ) {
-        run_first_run_migration()?;
     }
 
     // FORK: hook commands (DESIGN.md §16); never fail the agent's turn.
@@ -1089,18 +1039,11 @@ pub fn run() -> Result<()> {
     })?;
 
     let result = panic::catch_unwind(AssertUnwindSafe(|| -> Result<()> {
-        cleanup_global_hooks();
         app::App::cleanup_stale_thinking_files();
 
         let db_path = project::db_path();
         let mut app = App::new(db_path)?;
         app.log_startup();
-        // FORK: tell the user once that their AMF setup was copied.
-        if let Some(notice) = crate::fork::migrate::take_pending_notice(&project::aiw_config_dir())
-        {
-            app.log_info("migrate", notice.clone());
-            app.push_toast_for(notice, app::ToastKind::Success, Duration::from_secs(20));
-        }
         // FORK: followed theme, then the one-time icon check.
         appearance.apply(&mut app);
         // FORK: the cockpit link (DESIGN.md §18): the agent pane follows the
@@ -1602,94 +1545,6 @@ fn run_automation_command(command: AutomationCommands) -> Result<()> {
             );
             Ok(())
         }
-    }
-}
-
-/// Merges AIW thinking-detection hooks into ~/.claude/settings.json.
-///
-/// Uses Claude Code's PreToolUse / Stop hooks to touch / remove a
-/// sentinel file at `<state dir>/thinking/<AIW_SESSION>` so the dashboard
-/// can show a throbber without polling tmux pane content.
-///
-/// The function is idempotent: it only appends entries when they are
-/// not already present, and silently skips on any I/O error.
-/// Removes any AIW-managed hook entries that were previously
-/// injected into the global ~/.claude/settings.json.
-/// Hook management now happens in the per-worktree local
-/// settings via `ensure_notification_hooks`.
-fn cleanup_global_hooks() {
-    let home = match std::env::var("HOME") {
-        Ok(h) => h,
-        Err(_) => return,
-    };
-    let settings_path = std::path::PathBuf::from(&home)
-        .join(".claude")
-        .join("settings.json");
-    // FORK: these are hooks old upstream AMF builds installed *globally*;
-    // AIW never installs global hooks, so only the AMF-era names are listed.
-    let extra_cmds = [format!("{home}/.config/amf/notify.sh")];
-    let extra: Vec<&str> = extra_cmds.iter().map(|s| s.as_str()).collect();
-    cleanup_hooks_at(&settings_path, &extra);
-}
-
-/// Inner logic for `cleanup_global_hooks`, factored out for
-/// testability.  `extra_cmds` are host-specific command
-/// strings (e.g. absolute paths) to remove in addition to
-/// the static AIW commands.
-pub fn cleanup_hooks_at(settings_path: &std::path::Path, extra_cmds: &[&str]) {
-    use serde_json::Value;
-
-    let mut root: Value = match std::fs::read_to_string(settings_path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-    {
-        Some(v) => v,
-        None => return,
-    };
-
-    let Some(hooks_obj) = root.get_mut("hooks").and_then(|h| h.as_object_mut()) else {
-        return;
-    };
-
-    // Static commands old upstream AMF builds injected globally (legacy
-    // cleanup, kept verbatim so it still matches what they wrote).
-    let static_cmds: &[&str] = &[
-        "[ -n \"$AMF_SESSION\" ] && mkdir -p /tmp/amf-thinking && touch \"/tmp/amf-thinking/$AMF_SESSION\" || true",
-        "[ -n \"$AMF_SESSION\" ] && rm -f \"/tmp/amf-thinking/$AMF_SESSION\" || true",
-        "/tmp/debug-hook.sh",
-    ];
-
-    let mut changed = false;
-    for event_arr in hooks_obj.values_mut() {
-        let Some(arr) = event_arr.as_array_mut() else {
-            continue;
-        };
-        let before = arr.len();
-        arr.retain(|entry| {
-            !entry["hooks"].as_array().is_some_and(|hs| {
-                hs.iter().any(|h| {
-                    h["command"].as_str().is_some_and(|c| {
-                        static_cmds.contains(&c)
-                            || extra_cmds.contains(&c)
-                            || app::setup::is_aiw_claude_hook_command(c, &[])
-                    })
-                })
-            })
-        });
-        if arr.len() != before {
-            changed = true;
-        }
-    }
-
-    // Drop empty event arrays.
-    hooks_obj.retain(|_, v| v.as_array().is_none_or(|a| !a.is_empty()));
-
-    if !changed {
-        return;
-    }
-
-    if let Ok(serialized) = serde_json::to_string_pretty(&root) {
-        let _ = std::fs::write(settings_path, serialized + "\n");
     }
 }
 
@@ -2392,9 +2247,7 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        cleanup_hooks_at, run_notify_fallbacks, startup_loading_pending, startup_sidebar_can_warm,
-    };
+    use super::{run_notify_fallbacks, startup_loading_pending, startup_sidebar_can_warm};
     use std::collections::BTreeSet;
     use std::fs;
     use tempfile::TempDir;
@@ -2474,17 +2327,6 @@ mod tests {
         }
     }
 
-    fn write_settings(dir: &TempDir, json: &str) -> std::path::PathBuf {
-        let path = dir.path().join("settings.json");
-        fs::write(&path, json).unwrap();
-        path
-    }
-
-    fn read_settings(path: &std::path::Path) -> serde_json::Value {
-        let s = fs::read_to_string(path).unwrap();
-        serde_json::from_str(&s).unwrap()
-    }
-
     #[test]
     fn background_startup_work_does_not_hold_loading_screen() {
         assert!(!startup_loading_pending(false, false, false));
@@ -2516,151 +2358,6 @@ mod tests {
         assert_eq!(
             <super::Cli as clap::CommandFactory>::command().get_name(),
             "aiw"
-        );
-    }
-
-    #[test]
-    fn removes_static_legacy_amf_thinking_commands() {
-        let dir = TempDir::new().unwrap();
-        let path = write_settings(
-            &dir,
-            r#"{
-            "hooks": {
-                "PreToolUse": [{"matcher":"","hooks":[
-                    {"type":"command","command":"[ -n \"$AMF_SESSION\" ] && mkdir -p /tmp/amf-thinking && touch \"/tmp/amf-thinking/$AMF_SESSION\" || true"}
-                ]}],
-                "Stop": [{"matcher":"","hooks":[
-                    {"type":"command","command":"[ -n \"$AMF_SESSION\" ] && rm -f \"/tmp/amf-thinking/$AMF_SESSION\" || true"}
-                ]}]
-            }
-        }"#,
-        );
-
-        cleanup_hooks_at(&path, &[]);
-
-        let s = read_settings(&path);
-        assert!(
-            s["hooks"].get("PreToolUse").is_none(),
-            "PreToolUse should be gone"
-        );
-        assert!(s["hooks"].get("Stop").is_none(), "Stop should be gone");
-    }
-
-    #[test]
-    fn removes_extra_cmd_path() {
-        let dir = TempDir::new().unwrap();
-        let path = write_settings(
-            &dir,
-            r#"{
-            "hooks": {
-                "Stop": [{"matcher":"","hooks":[
-                    {"type":"command","command":"/home/user/.config/amf/notify.sh"}
-                ]}]
-            }
-        }"#,
-        );
-
-        cleanup_hooks_at(&path, &["/home/user/.config/amf/notify.sh"]);
-
-        let s = read_settings(&path);
-        assert!(
-            s["hooks"].get("Stop").is_none(),
-            "Stop entry for notify.sh should be removed"
-        );
-    }
-
-    #[test]
-    fn removes_unquoted_macos_aiw_hook() {
-        let dir = TempDir::new().unwrap();
-        let path = write_settings(
-            &dir,
-            r#"{
-            "hooks": {
-                "PostToolUse": [{"matcher":"","hooks":[
-                    {"type":"command","command":"/Users/me/Library/Application Support/ai_workstation/tool-stop.sh"}
-                ]}]
-            }
-        }"#,
-        );
-
-        cleanup_hooks_at(&path, &[]);
-
-        let s = read_settings(&path);
-        assert!(
-            s["hooks"].get("PostToolUse").is_none(),
-            "stale global macOS PostToolUse hook should be removed"
-        );
-    }
-
-    #[test]
-    fn preserves_non_aiw_hooks() {
-        let dir = TempDir::new().unwrap();
-        let path = write_settings(
-            &dir,
-            r#"{
-            "hooks": {
-                "Stop": [
-                    {"matcher":"","hooks":[{"type":"command","command":"/my/custom/hook.sh"}]},
-                    {"matcher":"","hooks":[{"type":"command","command":"[ -n \"$AMF_SESSION\" ] && rm -f \"/tmp/amf-thinking/$AMF_SESSION\" || true"}]}
-                ]
-            }
-        }"#,
-        );
-
-        cleanup_hooks_at(&path, &[]);
-
-        let s = read_settings(&path);
-        let stop = s["hooks"]["Stop"].as_array().unwrap();
-        assert_eq!(stop.len(), 1, "only the legacy AMF entry should be removed");
-        assert_eq!(
-            stop[0]["hooks"][0]["command"].as_str().unwrap(),
-            "/my/custom/hook.sh"
-        );
-    }
-
-    #[test]
-    fn idempotent_when_nothing_to_remove() {
-        let dir = TempDir::new().unwrap();
-        let json = r#"{"hooks":{"Stop":[{"matcher":"","hooks":[{"type":"command","command":"/my/hook.sh"}]}]}}"#;
-        let path = write_settings(&dir, json);
-
-        cleanup_hooks_at(&path, &[]);
-        let after = fs::read_to_string(&path).unwrap();
-
-        // File should be unchanged (function returns early without writing).
-        let v1: serde_json::Value = serde_json::from_str(json).unwrap();
-        let v2: serde_json::Value = serde_json::from_str(&after).unwrap();
-        assert_eq!(v1, v2);
-    }
-
-    #[test]
-    fn no_op_when_file_missing() {
-        let dir = TempDir::new().unwrap();
-        let path = dir.path().join("nonexistent.json");
-        // Should not panic.
-        cleanup_hooks_at(&path, &[]);
-    }
-
-    #[test]
-    fn removes_debug_hook() {
-        let dir = TempDir::new().unwrap();
-        let path = write_settings(
-            &dir,
-            r#"{
-            "hooks": {
-                "Stop": [{"matcher":"","hooks":[
-                    {"type":"command","command":"/tmp/debug-hook.sh"}
-                ]}]
-            }
-        }"#,
-        );
-
-        cleanup_hooks_at(&path, &[]);
-
-        let s = read_settings(&path);
-        assert!(
-            s["hooks"].get("Stop").is_none(),
-            "debug-hook.sh entry should be removed"
         );
     }
 }

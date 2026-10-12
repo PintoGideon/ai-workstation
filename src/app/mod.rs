@@ -275,7 +275,6 @@ pub struct AppConfig {
     pub nerd_font: bool,
     pub leader_timeout_seconds: u64,
     pub tmux_control_mode: bool,
-    pub diff_review_viewer: DiffReviewViewer,
     pub diff_viewer_layout: DiffViewerLayout,
     pub diff_review_popup_hold_secs: f64,
     pub zai: Option<ZaiPlanConfig>,
@@ -407,23 +406,6 @@ fn default_context_critical_percent() -> u8 {
     crate::context_tracking::DEFAULT_CONTEXT_CRITICAL_PERCENT
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-pub enum DiffReviewViewer {
-    // The native AIW diff viewer is the only supported reviewer. The legacy
-    // vimdiff/neovim popup (`nvim`/`legacy`) has been retired; those values
-    // are still accepted and map to the AIW viewer so old configs keep loading.
-    #[default]
-    // FORK: upstream AMF stored this as "amf".
-    #[serde(
-        rename = "aiw",
-        alias = "amf",
-        alias = "custom",
-        alias = "nvim",
-        alias = "legacy"
-    )]
-    Aiw,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct ProjectsConfig {
@@ -443,7 +425,6 @@ impl Default for AppConfig {
             // Control mode stays available as an opt-in (config /
             // AIW_TMUX_INPUT_TRANSPORT / AIW_EXPERIMENTAL_PERSISTENT_TMUX_INPUT).
             tmux_control_mode: false,
-            diff_review_viewer: DiffReviewViewer::default(),
             diff_viewer_layout: DiffViewerLayout::Unified,
             diff_review_popup_hold_secs: 1.5,
             zai: None,
@@ -1907,10 +1888,6 @@ impl App {
             .default_preferred_agent
             .clone()
             .unwrap_or_default()
-    }
-
-    pub(crate) fn use_custom_diff_review_viewer(&self) -> bool {
-        matches!(self.config.diff_review_viewer, DiffReviewViewer::Aiw)
     }
 
     pub(crate) fn ensure_agent_mode_supported(

@@ -119,12 +119,6 @@ fn app_config_waiting_stale_minutes_is_configurable_and_zero_disables() {
 }
 
 #[test]
-fn app_config_default_diff_review_viewer_is_aiw() {
-    let config = AppConfig::default();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
-}
-
-#[test]
 fn app_config_context_defaults_match_the_hardcoded_fallbacks() {
     let config = AppConfig::default();
     assert_eq!(config.context_window_override, None);
@@ -246,47 +240,9 @@ fn migrate_app_config_is_noop_when_current() {
 }
 
 #[test]
-fn app_config_missing_diff_review_viewer_uses_aiw_default() {
-    let config: AppConfig = serde_json::from_str(r#"{"nerd_font":false}"#).unwrap();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
-}
-
-#[test]
 fn app_config_missing_diff_viewer_layout_uses_unified_default() {
     let config: AppConfig = serde_json::from_str(r#"{"nerd_font":false}"#).unwrap();
     assert_eq!(config.diff_viewer_layout, DiffViewerLayout::Unified);
-}
-
-#[test]
-fn app_config_diff_review_viewer_deserializes_aiw() {
-    let config: AppConfig = serde_json::from_str(r#"{"diff_review_viewer":"aiw"}"#).unwrap();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
-}
-
-/// FORK: a `config.json` copied from AMF says `"amf"` here.
-#[test]
-fn app_config_diff_review_viewer_legacy_amf_maps_to_aiw() {
-    let config: AppConfig = serde_json::from_str(r#"{"diff_review_viewer":"amf"}"#).unwrap();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
-}
-
-#[test]
-fn app_config_diff_review_viewer_nvim_maps_to_aiw() {
-    // The legacy vimdiff viewer was retired; old configs still load.
-    let config: AppConfig = serde_json::from_str(r#"{"diff_review_viewer":"nvim"}"#).unwrap();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
-}
-
-#[test]
-fn app_config_diff_review_viewer_accepts_custom_alias() {
-    let config: AppConfig = serde_json::from_str(r#"{"diff_review_viewer":"custom"}"#).unwrap();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
-}
-
-#[test]
-fn app_config_diff_review_viewer_accepts_legacy_alias() {
-    let config: AppConfig = serde_json::from_str(r#"{"diff_review_viewer":"legacy"}"#).unwrap();
-    assert_eq!(config.diff_review_viewer, DiffReviewViewer::Aiw);
 }
 
 #[test]

@@ -1260,8 +1260,8 @@ impl App {
 
         let cwd_path = PathBuf::from(&cwd);
 
-        let is_structured_diff_review = notification_type == "change-reason"
-            || (notification_type == "diff-review" && self.use_custom_diff_review_viewer());
+        let is_structured_diff_review =
+            notification_type == "change-reason" || notification_type == "diff-review";
 
         // change-reason/diff-review while viewing the requesting feature
         // -> enter diff review mode immediately. From the dashboard or a
@@ -1567,13 +1567,10 @@ impl App {
                         input.project_name.as_deref(),
                         input.feature_name.as_deref(),
                     ),
-                    "diff-review" => {
-                        self.use_custom_diff_review_viewer()
-                            && !self.feature_agent_is_codex(
-                                input.project_name.as_deref(),
-                                input.feature_name.as_deref(),
-                            )
-                    }
+                    "diff-review" => !self.feature_agent_is_codex(
+                        input.project_name.as_deref(),
+                        input.feature_name.as_deref(),
+                    ),
                     _ => false,
                 };
                 // A session wait is one standing fact, so a re-report that
@@ -1672,8 +1669,8 @@ impl App {
             }
         };
 
-        let is_structured_diff_review = input.notification_type == "change-reason"
-            || (input.notification_type == "diff-review" && self.use_custom_diff_review_viewer());
+        let is_structured_diff_review =
+            input.notification_type == "change-reason" || input.notification_type == "diff-review";
 
         if input.notification_type != "diff-review"
             && input.notification_type != "input-request"
@@ -1695,19 +1692,6 @@ impl App {
                     .iter()
                     .position(|f| &f.name == feat_name);
                 if let Some(fi) = fi {
-                    if input.notification_type == "diff-review"
-                        && !self.use_custom_diff_review_viewer()
-                    {
-                        self.respond_to_notification(
-                            input.request_id.as_deref(),
-                            input.reply_socket.as_deref(),
-                            input.proceed_signal.as_deref(),
-                            serde_json::json!({
-                                "type": "review-response",
-                                "decision": "proceed"
-                            }),
-                        );
-                    }
                     self.selection = Selection::Feature(pi, fi);
                     if !is_structured_diff_review {
                         self.pending_inputs.remove(idx);

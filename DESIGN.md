@@ -187,17 +187,9 @@ hook scripts in `~/.config/ai_workstation/hooks`), state in `~/.local/state/ai_w
 on macOS), repo files `aiw.json` / `.aiw/`, injected skills `aiw-*`, theme `classic`.
 We no longer merge upstream; useful commits are cherry-picked by hand ([FORK.md](FORK.md)).
 
-**Data migrated by copy.** On the first start with no `~/.config/ai_workstation`, an existing upstream setup
-(`~/.config/amf`) is *copied* in (`src/fork/migrate.rs`): settings, ports, themes, parsers, and the
-database (copied while unchanged, WAL folded into the copy, integrity-checked). Upstream's folders, hooks and tmux
-socket are never touched, so it keeps running side by side. A one-time toast reports the copy.
-
-**Legacy names still accepted** (read only, never written): repo config `amf.json` → `.amf/config.json` when a repo
-has no `aiw.json`; theme `amf`; diff viewer `amf`; plan file `AMF_PLAN.md`; upstream hook paths (`~/.amf/hooks`,
-`<config root>/amf/…`) and `amf-codex-notify.sh` are recognised and replaced; `amf-*` tmux session names of migrated
-features; git-exclude patterns keep hiding upstream's helper files. Migrated features keep their stored `amf-*`
-session names; they show as stopped (their tmux sessions live on upstream's socket) and are restarted or resumed
-from AIW under the same name on AIW's socket.
+**Upstream data.** Early builds copied an existing `~/.config/amf` setup on first start and accepted upstream's
+legacy names (`amf.json`, `.amf/config.json`, `amf-*` tmux sessions, `~/.amf/hooks`, theme `amf`). That shim was
+removed on 2026-10-12: no upstream install remains, and `aiw.json` is the only project config AIW reads.
 
 ## 12. G11 — UI revamp (performance first)
 

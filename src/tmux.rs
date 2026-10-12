@@ -2117,9 +2117,8 @@ impl TmuxManager {
         )?))
     }
 
-    /// List the managed feature sessions on AIW's tmux server: `aiw-*`, plus
-    /// `amf-*` for features migrated from AMF that keep their stored names
-    /// (see [`crate::project::is_managed_tmux_session`]).
+    /// List the managed feature sessions on AIW's tmux server (`aiw-*`, see
+    /// [`crate::project::is_managed_tmux_session`]).
     pub fn list_sessions() -> Result<Vec<String>> {
         let output = Self::command()
             .args(["list-sessions", "-F", "#{session_name}"])

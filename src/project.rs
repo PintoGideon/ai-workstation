@@ -1585,8 +1585,7 @@ fn test_home_pid_alive(pid: u32) -> bool {
 /// Directory for generated Claude hook executables:
 /// `~/.config/ai_workstation/hooks`.
 ///
-/// FORK: AMF kept these in `~/.amf/hooks`. AIW keeps them inside its config
-/// folder, but always under `~/.config` rather than the platform config
+/// FORK: kept inside AIW's config folder, but always under `~/.config` rather than the platform config
 /// directory, because macOS resolves that under `~/Library/Application
 /// Support` and some Claude versions still route command hooks through a
 /// shell even when they use exec-form arguments (a space in the path breaks).
@@ -1608,32 +1607,13 @@ pub fn aiw_claude_hooks_dir() -> PathBuf {
 }
 
 /// FORK: whether `name` is a feature session AIW manages on its tmux
-/// server. New features are named `aiw-…`; features migrated from AMF keep
-/// their stored `amf-…` names (renaming would orphan their saved state), and
-/// get recreated under that name on AIW's socket when restarted.
+/// server (`aiw-…`).
 pub fn is_managed_tmux_session(name: &str) -> bool {
-    name.starts_with("aiw-") || name.starts_with("amf-")
+    name.starts_with("aiw-")
 }
 
 /// FORK: the folder name AIW uses under the config root and the state root.
 pub const AIW_DIR_NAME: &str = "ai_workstation";
-
-/// FORK: the folder name upstream AMF uses under the same roots. Read only
-/// by the first-run migration (`crate::fork::migrate`) and the legacy-path
-/// recognisers; AIW never writes there.
-pub const LEGACY_AMF_DIR_NAME: &str = "amf";
-
-/// FORK: where an AMF install on this machine keeps its config and
-/// database — resolved exactly as AMF resolves it, so the first-run
-/// migration finds it. Never written to.
-pub fn legacy_amf_config_dir() -> PathBuf {
-    #[cfg(test)]
-    return test_sandbox_root()
-        .join(".config")
-        .join(LEGACY_AMF_DIR_NAME);
-    #[cfg(not(test))]
-    config_dir_named(dirs::config_dir(), dirs::home_dir(), LEGACY_AMF_DIR_NAME)
-}
 
 fn aiw_config_dir_with(xdg_config_dir: Option<PathBuf>, home_dir: Option<PathBuf>) -> PathBuf {
     config_dir_named(xdg_config_dir, home_dir, AIW_DIR_NAME)
@@ -1757,9 +1737,8 @@ mod tests {
 
         // The `ai_workstation/hooks` shape is what `is_aiw_claude_hook_command`
         // matches on, so the sandbox has to preserve it rather than use a flat
-        // path. The legacy AMF folder resolves inside the sandbox too.
+        // path.
         assert!(super::aiw_claude_hooks_dir().ends_with(".config/ai_workstation/hooks"));
-        assert!(super::legacy_amf_config_dir().starts_with(sandbox));
         assert!(crate::ipc::state_dir().starts_with(sandbox));
     }
 

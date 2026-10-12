@@ -236,8 +236,7 @@ impl App {
     /// Whether a notification is a per-edit approval request AIW answers
     /// with its own diff viewer (rather than a plain attention ping).
     pub(crate) fn is_structured_edit_review(&self, notification_type: &str) -> bool {
-        notification_type == "change-reason"
-            || (notification_type == "diff-review" && self.use_custom_diff_review_viewer())
+        notification_type == "change-reason" || notification_type == "diff-review"
     }
 }
 

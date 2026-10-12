@@ -893,13 +893,6 @@ fn main() {
         // starts a thread.
         unsafe { login_path::adopt_login_shell_path() };
     }
-    // FORK: first run copies an existing AMF setup into AIW's own folders
-    // (AMF's are never touched); the TUI shows the one-time notice. Before
-    // anything below reads config, which would create AIW's folder empty.
-    if let Err(err) = ai_workstation::fork::migrate::migrate_on_first_run() {
-        eprintln!("AI Workstation could not copy your AMF setup on its first run: {err:#}");
-        std::process::exit(1);
-    }
     // After the PATH adoption above, which the `aiw` lookup reads.
     ai_workstation::gui_contract::use_cli_for_session_hooks();
     ai_workstation::gui_contract::use_configured_tmux_server();

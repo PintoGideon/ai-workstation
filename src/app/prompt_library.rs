@@ -926,8 +926,8 @@ impl App {
     }
 }
 
-/// Read the `prompt_templates` declared in the project config (`aiw.json`,
-/// or a legacy AMF `amf.json` / `.amf/config.json`). Returns an empty list when the file
+/// Read the `prompt_templates` declared in the project config (`aiw.json`).
+/// Returns an empty list when the file
 /// is absent or unparseable, mirroring the tolerant loading in
 /// `merge_project_extension_config`.
 fn load_project_prompt_templates(repo: &Path) -> Vec<PromptTemplate> {
@@ -1227,12 +1227,8 @@ mod tests {
     #[test]
     fn project_export_replaces_same_name_and_preserves_other_keys() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let amf = tmp.path().join(".amf");
-        std::fs::create_dir_all(&amf).unwrap();
-        // Seeded at a *legacy AMF* path, so this also pins the copy-forward:
-        // the export reads it and writes `aiw.json`, leaving AMF's file alone.
         std::fs::write(
-            amf.join("config.json"),
+            tmp.path().join("aiw.json"),
             r#"{ "allowed_agents": ["claude"], "prompt_templates": [
                 { "name": "Review", "body": "old body" }
             ] }"#,
@@ -1245,8 +1241,6 @@ mod tests {
 
         let contents = std::fs::read_to_string(tmp.path().join("aiw.json")).unwrap();
         let value: serde_json::Value = serde_json::from_str(&contents).unwrap();
-        // FORK: AMF's file is left untouched; `aiw.json` now wins on read.
-        assert!(amf.join("config.json").exists());
         // Unrelated key preserved.
         assert_eq!(value["allowed_agents"][0], "claude");
         // Same-name entry replaced (not duplicated).

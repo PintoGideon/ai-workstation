@@ -293,11 +293,6 @@ That file is tracked and committed like any other project config. It
 holds custom sessions, feature presets, lifecycle hooks, keybindings,
 plan questions, and prompt templates.
 
-(A repo set up with upstream AMF keeps its config in `amf.json`, or in
-the older `.amf/config.json`. AIW still reads those when there is no
-`aiw.json`, and writes `aiw.json` the first time it saves config; the AMF
-files are left untouched.)
-
 This file is regenerated if deleted.
 ";
 
@@ -328,38 +323,19 @@ pub fn project_config_path(dir: &Path) -> PathBuf {
     dir.join("aiw.json")
 }
 
-/// FORK: AMF's project config files, newest first: `{dir}/amf.json`, then
-/// the older `{dir}/.amf/config.json`. Read when a repo has no `aiw.json`
-/// (a repo set up with upstream AMF); never written or removed by AIW, so
-/// AMF can keep using the same checkout.
-pub fn legacy_project_config_paths(dir: &Path) -> [PathBuf; 2] {
-    [dir.join("amf.json"), dir.join(".amf").join("config.json")]
-}
-
-/// The config file to read for `dir`: `aiw.json`, else the first legacy AMF
-/// config that exists. `None` when there is none, so callers can
-/// distinguish "no config" from "empty config".
+/// The config file to read for `dir`: `aiw.json` when it exists. `None`
+/// when there is none, so callers can distinguish "no config" from "empty
+/// config".
 pub fn resolve_project_config_path(dir: &Path) -> Option<PathBuf> {
     let current = project_config_path(dir);
-    if current.exists() {
-        return Some(current);
-    }
-    legacy_project_config_paths(dir)
-        .into_iter()
-        .find(|legacy| legacy.exists())
+    current.exists().then_some(current)
 }
 
 /// Write `json` to `{dir}/aiw.json`.
 ///
 /// The new config is written to a sibling temp file and renamed into
 /// place, so `aiw.json` either does not exist or holds a complete config
-/// — never a truncated one. That matters because reads prefer `aiw.json`
-/// whenever it exists: a half-written file would shadow an intact legacy
-/// AMF config instead of falling back to it.
-///
-/// FORK: legacy AMF configs (`amf.json`, `.amf/config.json`) are left as
-/// they are. They may be committed and still in use by AMF on the same
-/// checkout; once `aiw.json` exists AIW simply stops reading them.
+/// — never a truncated one.
 pub fn write_project_config(dir: &Path, json: &str) -> anyhow::Result<PathBuf> {
     let path = project_config_path(dir);
     if let Some(parent) = path.parent() {
@@ -679,43 +655,20 @@ mod tests {
     }
 
     #[test]
-    fn resolve_project_config_prefers_aiw_json_over_legacy_amf_configs() {
+    fn resolve_project_config_finds_aiw_json_only() {
         let tmp = TempDir::new().unwrap();
         assert_eq!(resolve_project_config_path(tmp.path()), None);
-        let [amf_json, amf_dir_config] = legacy_project_config_paths(tmp.path());
-
-        // The oldest AMF location alone is still found.
-        std::fs::create_dir_all(amf_dir_config.parent().unwrap()).unwrap();
-        std::fs::write(&amf_dir_config, "{}").unwrap();
-        assert_eq!(
-            resolve_project_config_path(tmp.path()),
-            Some(amf_dir_config.clone())
-        );
-
-        // `amf.json` beats `.amf/config.json`.
-        std::fs::write(&amf_json, "{}").unwrap();
-        assert_eq!(resolve_project_config_path(tmp.path()), Some(amf_json));
-
-        // With `aiw.json` present it wins over both.
         let current = project_config_path(tmp.path());
         std::fs::write(&current, "{}").unwrap();
         assert_eq!(resolve_project_config_path(tmp.path()), Some(current));
     }
 
     #[test]
-    fn write_project_config_writes_aiw_json_and_leaves_amf_configs_untouched() {
+    fn write_project_config_writes_aiw_json() {
         let tmp = TempDir::new().unwrap();
-        let [amf_json, amf_dir_config] = legacy_project_config_paths(tmp.path());
-        std::fs::create_dir_all(amf_dir_config.parent().unwrap()).unwrap();
-        let old = r#"{"allowed_agents":["claude"]}"#;
-        std::fs::write(&amf_json, old).unwrap();
-        std::fs::write(&amf_dir_config, old).unwrap();
-
         let written = write_project_config(tmp.path(), "{}").unwrap();
         assert_eq!(written, project_config_path(tmp.path()));
         assert!(written.exists());
-        assert_eq!(std::fs::read_to_string(&amf_json).unwrap(), old);
-        assert_eq!(std::fs::read_to_string(&amf_dir_config).unwrap(), old);
     }
 
     #[test]
@@ -729,16 +682,6 @@ mod tests {
             .filter(|name| name != "aiw.json")
             .collect();
         assert!(strays.is_empty(), "unexpected leftovers: {strays:?}");
-    }
-
-    #[test]
-    fn project_config_is_read_from_a_legacy_amf_json() {
-        let tmp = TempDir::new().unwrap();
-        let [amf_json, _] = legacy_project_config_paths(tmp.path());
-        std::fs::write(&amf_json, r#"{"allowed_agents":["codex"]}"#).unwrap();
-
-        let merged = merge_project_extension_config(&ExtensionConfig::default(), tmp.path());
-        assert_eq!(merged.allowed_agents, Some(vec![AgentKind::Codex]));
     }
 
     #[test]

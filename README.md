@@ -253,9 +253,6 @@ parser install clones a grammar only after telling you. Details in
 - Icons wrong? Set `"nerd_font": false`, or run `aiw fonts` for a terminal
   font snippet.
 - A harness missing from the new-feature dialog? Press `A`, tick it, press `c`.
-- Coming from agent-mainframe (`amf`)? The first launch copies its settings
-  and database into AIW's own folders and leaves AMF untouched; old features
-  show as stopped until started here. See [FORK.md](FORK.md).
 
 ## License
 

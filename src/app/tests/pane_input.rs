@@ -496,7 +496,6 @@ fn custom_diff_review_notification_queues_with_toast_from_normal_mode() {
     );
     let tmp = NamedTempFile::new().unwrap();
     app.store_path = tmp.path().to_path_buf();
-    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
     app.mode = AppMode::Normal;
 
     let notify_dir = workdir.path().join(".claude").join("notifications");
@@ -549,7 +548,6 @@ fn check_pending_diff_review_opens_pending_review_from_normal_mode() {
     let mut tmux = MockTmuxOps::new();
     tmux.expect_session_exists().returning(|_| true);
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
-    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
     app.mode = AppMode::Normal;
     app.selection = Selection::Feature(0, 0);
 

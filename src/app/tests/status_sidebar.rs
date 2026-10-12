@@ -1978,7 +1978,6 @@ fn ipc_diff_review_queues_from_aiw_session_when_cwd_does_not_match_feature() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
     app.return_to_dashboard(&ViewState::new(
         "my-project".to_string(),
         "my-feat".to_string(),
@@ -2036,7 +2035,6 @@ fn ipc_diff_review_queues_with_toast_from_normal_mode() {
         Box::new(MockTmuxOps::new()),
         Box::new(MockWorktreeOps::new()),
     );
-    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
     app.mode = AppMode::Normal;
 
     app.handle_ipc_message_value(serde_json::json!({

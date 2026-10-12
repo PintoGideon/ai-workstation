@@ -37,8 +37,7 @@ commands. A local source build avoids the unsigned-download Gatekeeper warning.
 | inside each project repo | `.aiw/`, `.claude/settings.local.json`, `.claude/skills/aiw-*`, `.codex/aiw-codex-notify.sh`, `.agents/skills/aiw-*`, `.gemini/`, `.cursor/hooks.json` — all added to `.git/info/exclude` | when features start |
 
 AIW never edits global agent config (`~/.claude/settings.json`, `~/.codex/config.toml`); Codex gets its `notify`
-hook per launch. Coming from the upstream tool? The first launch copies its setup; see the migration section of
-the README.
+hook per launch.
 
 **Remove everything** (after `d` on each feature and `q`):
 

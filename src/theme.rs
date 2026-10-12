@@ -13,9 +13,7 @@ pub enum ThemeName {
     Midnight,
     Paper,
     Porcelain,
-    /// FORK: upstream AMF's signature palette, renamed from `amf`; a config
-    /// that still says `"theme": "amf"` keeps loading it.
-    #[serde(alias = "amf")]
+    /// FORK: upstream's signature palette, renamed from `amf`.
     Classic,
     Dracula,
     Nord,
@@ -199,7 +197,7 @@ impl std::str::FromStr for ThemeName {
             "midnight" => Ok(ThemeName::Midnight),
             "paper" => Ok(ThemeName::Paper),
             "porcelain" => Ok(ThemeName::Porcelain),
-            "classic" | "amf" => Ok(ThemeName::Classic), // FORK: "amf" = legacy name
+            "classic" => Ok(ThemeName::Classic),
             "dracula" => Ok(ThemeName::Dracula),
             "nord" => Ok(ThemeName::Nord),
             "catppuccin-latte" | "catppuccin_latte" => Ok(ThemeName::CatppuccinLatte),
@@ -1287,21 +1285,6 @@ fn gruvbox_material_foreground(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// FORK: the palette AMF called `amf` is now `classic`; old configs that
-    /// name it still load it.
-    #[test]
-    fn legacy_amf_theme_name_loads_the_classic_palette() {
-        assert_eq!("amf".parse::<ThemeName>().unwrap(), ThemeName::Classic);
-        assert_eq!(
-            serde_json::from_str::<ThemeName>(r#""amf""#).unwrap(),
-            ThemeName::Classic
-        );
-        assert_eq!(
-            serde_json::to_string(&ThemeName::Classic).unwrap(),
-            r#""classic""#
-        );
-    }
 
     #[test]
     fn test_theme_names_round_trip() {

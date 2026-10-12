@@ -347,7 +347,7 @@ mod tests {
         )
         .unwrap();
         std::fs::write(
-            dir.path().join("worktree/amf.json"),
+            dir.path().join("worktree/aiw.json"),
             r#"{"prompt_templates":[{"name":"Same","body":"worktree"}]}"#,
         )
         .unwrap();

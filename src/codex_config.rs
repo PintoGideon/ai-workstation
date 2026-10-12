@@ -104,9 +104,7 @@ fn build_notify_override(notify: Option<&toml::Value>, hook_path: &Path) -> toml
 }
 
 /// AIW's own notify hooks: the per-worktree `.codex/aiw-codex-notify.sh` and
-/// `<config dir>/codex-notify.sh`. FORK: upstream AMF's equivalents
-/// (`.codex/amf-codex-notify.sh`, `<config root>/amf/codex-notify.sh`, which
-/// older AMF versions added to `~/.codex/config.toml`) count too.
+/// `<config dir>/codex-notify.sh`.
 fn is_aiw_notify_hook(entry: &str) -> bool {
     let path = Path::new(entry);
     let name = path
@@ -118,12 +116,8 @@ fn is_aiw_notify_hook(entry: &str) -> bool {
         .and_then(|p| p.file_name())
         .and_then(|n| n.to_str())
         .unwrap_or_default();
-    matches!(name, "aiw-codex-notify.sh" | "amf-codex-notify.sh")
-        || (name == "codex-notify.sh"
-            && matches!(
-                parent,
-                crate::project::AIW_DIR_NAME | crate::project::LEGACY_AMF_DIR_NAME
-            ))
+    name == "aiw-codex-notify.sh"
+        || (name == "codex-notify.sh" && parent == crate::project::AIW_DIR_NAME)
 }
 
 fn parse_notify_entries(value: Option<&toml::Value>) -> Option<Vec<String>> {
@@ -332,8 +326,7 @@ mod tests {
             .join("aiw-codex-notify.sh");
         fs::write(
             &config_path,
-            // FORK: upstream AMF's global and per-worktree hooks are dropped too.
-            "notify = [\"/home/u/.config/ai_workstation/codex-notify.sh\", \"/old/wt/.codex/aiw-codex-notify.sh\", \"/home/u/.config/amf/codex-notify.sh\", \"/old/wt/.codex/amf-codex-notify.sh\"]\n",
+            "notify = [\"/home/u/.config/ai_workstation/codex-notify.sh\", \"/old/wt/.codex/aiw-codex-notify.sh\"]\n",
         )
         .unwrap();
         let args = launch_override_args_for(&config_path, &hook_path, dir.path(), &VibeMode::Vibe);

@@ -720,10 +720,8 @@ fn create_feature_second_non_worktree_sets_error() {
 #[test]
 fn create_feature_disallowed_agent_sets_error() {
     let repo = TempDir::new().unwrap();
-    let amf_dir = repo.path().join(".amf");
-    std::fs::create_dir_all(&amf_dir).unwrap();
     std::fs::write(
-        amf_dir.join("config.json"),
+        repo.path().join("aiw.json"),
         serde_json::to_string(&ExtensionConfig {
             allowed_agents: Some(vec![AgentKind::Claude]),
             ..Default::default()
@@ -766,10 +764,8 @@ fn create_feature_codex_vibeless_sets_error() {
 #[test]
 fn start_create_feature_defaults_to_first_allowed_agent() {
     let repo = TempDir::new().unwrap();
-    let amf_dir = repo.path().join(".amf");
-    std::fs::create_dir_all(&amf_dir).unwrap();
     std::fs::write(
-        amf_dir.join("config.json"),
+        repo.path().join("aiw.json"),
         serde_json::to_string(&ExtensionConfig {
             allowed_agents: Some(vec![AgentKind::Codex]),
             ..Default::default()
@@ -958,7 +954,6 @@ fn finish_feature_launch_vibeless_injects_custom_diff_review_hook_on_worktree_cr
     let tmp = NamedTempFile::new().unwrap();
     let mut app = App::new_for_test(store, Box::new(tmux), Box::new(MockWorktreeOps::new()));
     app.store_path = tmp.path().to_path_buf();
-    app.config.diff_review_viewer = DiffReviewViewer::Aiw;
 
     app.finish_feature_launch(PreparedFeatureLaunch {
         project_name: "my-project".to_string(),
@@ -1115,10 +1110,8 @@ fn create_feature_mouse_hover_over_review_updates_mode_focus() {
 #[test]
 fn open_session_picker_selects_project_preferred_agent_by_default() {
     let repo = TempDir::new().unwrap();
-    let amf_dir = repo.path().join(".amf");
-    std::fs::create_dir_all(&amf_dir).unwrap();
     std::fs::write(
-        amf_dir.join("config.json"),
+        repo.path().join("aiw.json"),
         serde_json::to_string(&ExtensionConfig {
             allowed_agents: Some(vec![AgentKind::Claude, AgentKind::Codex]),
             ..Default::default()
@@ -1352,10 +1345,8 @@ fn create_feature_session_name_enter_surfaces_validation_error() {
 #[test]
 fn session_picker_enter_opens_name_step_with_default_label() {
     let repo = TempDir::new().unwrap();
-    let amf_dir = repo.path().join(".amf");
-    std::fs::create_dir_all(&amf_dir).unwrap();
     std::fs::write(
-        amf_dir.join("config.json"),
+        repo.path().join("aiw.json"),
         serde_json::to_string(&ExtensionConfig {
             allowed_agents: Some(vec![AgentKind::Claude, AgentKind::Codex]),
             ..Default::default()
@@ -1623,10 +1614,8 @@ fn feature_add_session_named_uses_custom_label_and_default_window() {
 #[test]
 fn reload_extension_config_uses_project_repo_for_worktree_feature() {
     let repo = TempDir::new().unwrap();
-    let amf_dir = repo.path().join(".amf");
-    std::fs::create_dir_all(&amf_dir).unwrap();
     std::fs::write(
-        amf_dir.join("config.json"),
+        repo.path().join("aiw.json"),
         serde_json::to_string(&ExtensionConfig {
             allowed_agents: Some(vec![AgentKind::Claude]),
             ..Default::default()

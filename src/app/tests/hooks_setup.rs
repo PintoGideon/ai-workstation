@@ -737,48 +737,6 @@ fn cleanup_recognizes_quoted_temp_xdg_config_managed_claude_hooks() {
     );
 }
 
-/// FORK: a worktree set up by upstream AMF carries hooks pointing at
-/// `~/.amf/hooks/…` and `<config root>/amf/…`. Restarting the feature in AIW
-/// must replace them with AIW's own hooks, not run both sets.
-#[test]
-fn upstream_amf_hooks_are_replaced_by_aiw_hooks() {
-    let workdir = TempDir::new().unwrap();
-    let claude_dir = workdir.path().join(".claude");
-    std::fs::create_dir_all(&claude_dir).unwrap();
-    std::fs::write(
-        claude_dir.join("settings.local.json"),
-        r#"{
-          "hooks": {
-            "Stop": [{
-              "matcher": "",
-              "hooks": [
-                {"type": "command", "command": "/home/me/.amf/hooks/thinking-stop.sh"},
-                {"type": "command", "command": "'/home/me/.config/amf/thinking-stop.sh'"}
-              ]
-            }]
-          }
-        }"#,
-    )
-    .unwrap();
-
-    call_ensure_hooks(&workdir, VibeMode::Vibe);
-
-    let s = read_settings(&workdir);
-    let cmds = hook_commands_for(&s, "Stop");
-    assert!(
-        cmds.iter()
-            .all(|cmd| !cmd.contains("/.amf/hooks/") && !cmd.contains("/.config/amf/")),
-        "AMF hooks should be replaced, got: {cmds:?}"
-    );
-    assert_eq!(
-        cmds.iter()
-            .filter(|cmd| cmd.ends_with("/ai_workstation/hooks/thinking-stop.sh"))
-            .count(),
-        1,
-        "exactly one AIW thinking-stop hook: {cmds:?}"
-    );
-}
-
 #[test]
 fn cleanup_recognizes_arbitrary_xdg_config_home_managed_claude_hooks() {
     // Regression test: XDG_CONFIG_HOME is not required to end in `config` —

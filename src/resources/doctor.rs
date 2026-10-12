@@ -12,7 +12,6 @@ use serde::Serialize;
 
 use crate::app::AppConfig;
 use crate::db::editors::LaunchedEditor;
-use crate::extension::{legacy_project_config_paths, project_config_path};
 use crate::project::{ProjectStatus, ProjectStore};
 use crate::resources::limits::{ActiveHarness, LiveHarnesses, active_harness_sessions};
 use crate::resources::mem::MemorySnapshot;
@@ -149,7 +148,6 @@ pub fn diagnose(inputs: &Inputs<'_>) -> Report {
     findings.push(check_orphan_sessions(inputs));
     findings.push(check_orphan_worktrees(inputs));
     findings.push(check_stale_editors(inputs));
-    findings.push(check_legacy_project_config(inputs));
     findings.push(check_network());
     findings.push(check_harness_hooks(inputs)); // FORK: DESIGN.md §16
     Report { findings }
@@ -353,14 +351,14 @@ fn check_orphan_sessions(inputs: &Inputs<'_>) -> Finding {
         return Finding::new(
             "tmux-sessions",
             Severity::Ok,
-            "no orphaned aiw-* (or migrated amf-*) tmux sessions",
+            "no orphaned aiw-* tmux sessions",
         );
     }
     Finding::new(
         "tmux-sessions",
         Severity::Warn,
         format!(
-            "{} aiw-*/amf-* tmux session(s) with no matching feature",
+            "{} aiw-* tmux session(s) with no matching feature",
             orphans.len()
         ),
     )
@@ -454,81 +452,6 @@ fn check_stale_editors(inputs: &Inputs<'_>) -> Finding {
     .with_advice(
         "language servers under these are usually the biggest consumers on the machine; \
          close the window, or set kill_editor_on_stop",
-    )
-}
-
-/// Whether this is WSL. The kernel release carries the marker on both WSL1 and
-/// WSL2, and `/proc/sys/kernel/osrelease` is readable without spawning anything.
-/// Report project directories still configured only by upstream AMF's
-/// `amf.json` (or its older `.amf/config.json`), so it is visible which repos
-/// AIW reads through the legacy path.
-///
-/// FORK: two states. A repo with only an AMF config is fully working — AIW
-/// reads it until the repo has its own `aiw.json` (the first config write
-/// creates one). A repo with both is fine too: AIW reads `aiw.json` and
-/// leaves AMF's file alone for AMF, so it is listed for information only.
-fn check_legacy_project_config(inputs: &Inputs<'_>) -> Finding {
-    // Project repos only, not feature workdirs. A worktree's config is the
-    // *tracked* file as its branch has it, so it cannot be changed on its own
-    // — it arrives when the branch merges. Listing every worktree would bury
-    // the one actionable line under a page of copies of it.
-    let mut seen: HashSet<&Path> = HashSet::new();
-    let dirs: Vec<&Path> = inputs
-        .store
-        .projects
-        .iter()
-        .map(|project| project.repo.as_path())
-        .filter(|repo| seen.insert(repo))
-        .collect();
-
-    let mut legacy_only: Vec<String> = Vec::new();
-    let mut shadowed: Vec<String> = Vec::new();
-    for dir in dirs {
-        let has_aiw_json = project_config_path(dir).exists();
-        for legacy in legacy_project_config_paths(dir) {
-            if !legacy.exists() {
-                continue;
-            }
-            if has_aiw_json {
-                shadowed.push(format!(
-                    "{} (aiw.json is used; this AMF file is left for AMF)",
-                    legacy.display()
-                ));
-            } else {
-                legacy_only.push(legacy.display().to_string());
-                // Only the first existing legacy file is read.
-                break;
-            }
-        }
-    }
-
-    if legacy_only.is_empty() {
-        let finding = Finding::new(
-            "config-path",
-            Severity::Ok,
-            "every project with a config has its own aiw.json",
-        );
-        return if shadowed.is_empty() {
-            finding
-        } else {
-            finding.with_detail(shadowed)
-        };
-    }
-
-    let total = legacy_only.len();
-    let mut detail = legacy_only;
-    detail.extend(shadowed);
-    Finding::new(
-        "config-path",
-        Severity::Notice,
-        format!(
-            "{total} project(s) configured only by an AMF config (amf.json / .amf/config.json)"
-        ),
-    )
-    .with_detail(detail)
-    .with_advice(
-        "AIW reads it until the repo has aiw.json; to give AIW its own copy: cp amf.json aiw.json \
-         (AMF keeps using amf.json)",
     )
 }
 
@@ -740,82 +663,6 @@ mod tests {
             proc_started_at: String::new(),
             started_at: Utc::now(),
         }
-    }
-
-    /// Build a fixture whose project repo and single feature workdir are
-    /// real directories, so the config-path check has something to stat.
-    fn fixture_rooted_at(repo: &Path, workdir: &Path) -> Fixture {
-        let mut fixture = Fixture::new();
-        let mut feat = feature("alpha", ProjectStatus::Active);
-        feat.workdir = workdir.to_path_buf();
-        fixture.store = store(vec![feat]);
-        fixture.store.projects[0].repo = repo.to_path_buf();
-        fixture
-    }
-
-    fn write_legacy_config(dir: &Path) {
-        let [legacy, _] = legacy_project_config_paths(dir);
-        std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
-        std::fs::write(legacy, "{}").unwrap();
-    }
-
-    #[test]
-    fn a_migrated_repo_reports_nothing_to_do() {
-        let repo = tempfile::TempDir::new().unwrap();
-        std::fs::write(project_config_path(repo.path()), "{}").unwrap();
-        let fixture = fixture_rooted_at(repo.path(), repo.path());
-
-        let report = fixture.run(&|_| false);
-        assert_eq!(finding(&report, "config-path").severity, Severity::Ok);
-    }
-
-    #[test]
-    fn flags_a_repo_configured_only_by_amf_json() {
-        let repo = tempfile::TempDir::new().unwrap();
-        write_legacy_config(repo.path());
-        let fixture = fixture_rooted_at(repo.path(), repo.path());
-
-        let report = fixture.run(&|_| false);
-        let found = finding(&report, "config-path");
-        assert_eq!(found.severity, Severity::Notice);
-        assert_eq!(found.detail.len(), 1, "repo dir reported once, not twice");
-        assert!(found.detail[0].ends_with("amf.json"));
-        // Nothing is broken, so the advice says so rather than alarming.
-        assert!(
-            found
-                .advice
-                .as_ref()
-                .unwrap()
-                .contains("cp amf.json aiw.json")
-        );
-    }
-
-    #[test]
-    fn an_amf_json_next_to_aiw_json_is_informational() {
-        let repo = tempfile::TempDir::new().unwrap();
-        write_legacy_config(repo.path());
-        std::fs::write(project_config_path(repo.path()), "{}").unwrap();
-        let fixture = fixture_rooted_at(repo.path(), repo.path());
-
-        let report = fixture.run(&|_| false);
-        let found = finding(&report, "config-path");
-        assert_eq!(found.severity, Severity::Ok);
-        assert!(found.detail[0].contains("left for AMF"));
-    }
-
-    #[test]
-    fn a_worktrees_own_copy_is_not_reported_as_needing_migration() {
-        // The worktree's file is whatever its branch has checked out; it
-        // migrates when that branch does, so naming it here would be
-        // advice the user cannot act on — once per worktree.
-        let repo = tempfile::TempDir::new().unwrap();
-        let worktree = tempfile::TempDir::new().unwrap();
-        write_legacy_config(worktree.path());
-        std::fs::write(project_config_path(repo.path()), "{}").unwrap();
-        let fixture = fixture_rooted_at(repo.path(), worktree.path());
-
-        let report = fixture.run(&|_| false);
-        assert_eq!(finding(&report, "config-path").severity, Severity::Ok);
     }
 
     #[test]

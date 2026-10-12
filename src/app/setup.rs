@@ -253,10 +253,6 @@ pub(crate) fn is_aiw_claude_hook_command(command: &str, managed_commands: &[Stri
     // *previous* run's config root is the immediate parent directory's name.
     // Treat only known helper names under such a directory as managed so
     // unrelated user hooks with the same basename are preserved.
-    //
-    // FORK: hooks written by upstream AMF (`<config root>/amf/…` and
-    // `~/.amf/hooks/…`) are recognised too, so restarting a migrated feature
-    // replaces AMF's entries instead of running both sets side by side.
     let Some((parent, name)) = normalized.rsplit_once('/') else {
         return false;
     };
@@ -268,14 +264,11 @@ pub(crate) fn is_aiw_claude_hook_command(command: &str, managed_commands: &[Stri
     };
     let parent_name = dir_name(parent);
     let grandparent_name = parent.parent().and_then(dir_name);
-    let is_config_dir = matches!(
-        parent_name.as_deref(),
-        Some(crate::project::AIW_DIR_NAME | crate::project::LEGACY_AMF_DIR_NAME)
-    );
+    let is_config_dir = parent_name.as_deref() == Some(crate::project::AIW_DIR_NAME);
     let is_safe_hook_dir = parent_name.as_deref() == Some("hooks")
         && matches!(
             grandparent_name.as_deref(),
-            Some(crate::project::AIW_DIR_NAME | ".amf")
+            Some(crate::project::AIW_DIR_NAME)
         );
     CLAUDE_MANAGED_SCRIPT_NAMES.contains(&name) && (is_config_dir || is_safe_hook_dir)
 }

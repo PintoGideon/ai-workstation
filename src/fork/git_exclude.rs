@@ -38,7 +38,7 @@ pub fn ensure_excluded(checkout: &Path, patterns: &[&str]) -> std::io::Result<()
 
 /// Helper files AIW (and, before it, upstream AMF) writes into checkouts that
 /// must never be committed. Files users may intentionally commit
-/// (`aiw.json`, `amf.json`, `AGENTS.md`) are deliberately
+/// (`aiw.json`, `AGENTS.md`) are deliberately
 /// absent.
 pub(crate) const AIW_HELPER_PATTERNS: &[&str] = &[
     // Worktrees created before AIW moved them out of the repo, and AIW's
@@ -57,13 +57,6 @@ pub(crate) const AIW_HELPER_PATTERNS: &[&str] = &[
     // Codex
     ".codex/aiw-codex-notify.sh",
     ".agents/skills/aiw-*/",
-    // FORK: what upstream AMF wrote into the same checkouts, so worktrees
-    // shared with (or migrated from) AMF stay clean too.
-    ".amf/",
-    ".claude/amf-hook-state.json",
-    ".claude/skills/amf-*/",
-    ".codex/amf-codex-notify.sh",
-    ".agents/skills/amf-*/",
 ];
 
 /// Exclude every AIW helper file in `checkout`'s repository, logging (not
@@ -258,11 +251,6 @@ mod tests {
             ".worktrees/x/file",
             ".aiw/interview-docs/state.json",
             "CLAUDE.local.md",
-            // Upstream AMF's helper files stay hidden too.
-            ".amf/session-status/x.json",
-            ".claude/skills/amf-configure/SKILL.md",
-            ".codex/amf-codex-notify.sh",
-            ".agents/skills/amf-add-hook/SKILL.md",
         ] {
             assert!(
                 is_ignored(repo.path(), hidden),
@@ -271,7 +259,6 @@ mod tests {
         }
         for visible in [
             "aiw.json",
-            "amf.json",
             "AGENTS.md",
             ".claude/settings.json",
             ".claude/skills/mine/SKILL.md",

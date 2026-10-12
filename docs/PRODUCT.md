@@ -885,7 +885,6 @@ written back, so a config from an older version keeps loading.
 | `worktree_include` | `[".env*"]` | Ignored files to copy into a fresh worktree when the repo has no `.worktreeinclude` |
 | `diff_viewer_layout` | `unified` | `unified` or `split` for the diff viewer and the edit popup |
 | `diff_review_popup_hold_secs` | `1.5` | How long the edit popup ignores `Enter` after opening |
-| `diff_review_viewer` | `aiw` | Which viewer shows a held edit |
 | `tmux_control_mode` | `false` | Used by the desktop GUI's terminal only |
 | `projects.default_preferred_agent` | unset | The harness new features default to |
 | `zai` | unset | A z.ai plan name and its token limits, for the usage bars |
