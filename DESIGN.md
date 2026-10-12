@@ -1612,5 +1612,9 @@ Claude subagents with `isolation: worktree` (`EnterWorktree` covered the same ho
 real config for about a minute and left 11 empty tables in the real `aiw.db`, a `hook-event.sh` and a bumped hook
 stamp; the last two were restored). aiw's Claude hook scripts always live under `$HOME/.config/ai_workstation/hooks`,
 so back that folder up and restore it afterwards. Accepting Claude's bypass-permissions warning writes
-`skipDangerousModePermissionPrompt` into `~/.claude/settings.json`; remove it after a SuperVibe test.
+`skipDangerousModePermissionPrompt` into `~/.claude/settings.json`; remove it after a SuperVibe test. And Claude Code's
+own updater honours `XDG_DATA_HOME`: running under the sandboxed value it installed itself into the sandbox and
+re-pointed `~/.local/bin/claude` there, so deleting the sandbox broke the real `claude` command until the link was
+pointed back at `~/.local/share/claude/versions/<version>`. Check that link before removing a real-run sandbox (or
+leave `XDG_DATA_HOME` unset for the agents and only isolate aiw's worktree root).
 
