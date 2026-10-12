@@ -79,6 +79,7 @@ fn create_feature_automation_dry_run_returns_plan_without_mutating_store() {
         prompt: None,
         prompt_file: None,
         send: false,
+        layout: None,
     };
 
     let response = app.create_feature_from_request(&request).unwrap();
@@ -137,6 +138,7 @@ fn create_feature_automation_dry_run_surfaces_hook_prompt_options() {
         prompt: None,
         prompt_file: None,
         send: false,
+        layout: None,
     };
 
     let response = app.create_feature_from_request(&request).unwrap();
@@ -173,6 +175,7 @@ fn create_feature_automation_rejects_codex_vibeless_mode() {
         prompt: None,
         prompt_file: None,
         send: false,
+        layout: None,
     };
 
     let err = app.create_feature_from_request(&request).unwrap_err();
@@ -286,6 +289,7 @@ fn create_feature_automation_creates_and_starts_feature() {
         prompt: None,
         prompt_file: None,
         send: false,
+        layout: None,
     };
 
     let response = app.create_feature_from_request(&request).unwrap();

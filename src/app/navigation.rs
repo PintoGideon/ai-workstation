@@ -89,23 +89,17 @@ impl App {
         for (pi, project) in self.store.projects.iter().enumerate() {
             items.push(VisibleItem::Project(pi));
             if !project.collapsed {
-                let mut feature_indices: Vec<usize> = (0..project.features.len()).collect();
                 // FORK: creation order (oldest first), so a batch reads
-                // batch1, batch2, … and a new feature lands at the bottom.
-                feature_indices.sort_by(|&a, &b| {
-                    project.features[a]
-                        .is_worktree
-                        .cmp(&project.features[b].is_worktree)
-                        .then_with(|| {
-                            project.features[a]
-                                .created_at
-                                .cmp(&project.features[b].created_at)
-                        })
-                });
-                for fi in feature_indices {
+                // batch1, batch2, … and a new feature lands at the bottom;
+                // §19.4 — then each user group, a collapsed one as one row.
+                use crate::fork::organize::FeatureSlot;
+                for (fi, slot) in self.project_feature_slots(pi) {
+                    if slot == FeatureSlot::Hidden {
+                        continue;
+                    }
                     let feature = &project.features[fi];
                     items.push(VisibleItem::Feature(pi, fi));
-                    if !feature.collapsed {
+                    if !feature.collapsed && slot != FeatureSlot::CollapsedGroup {
                         for (si, session) in feature.sessions.iter().enumerate() {
                             if self.session_matches_filter(session) {
                                 items.push(VisibleItem::Session(pi, fi, si));

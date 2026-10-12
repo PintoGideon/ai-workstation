@@ -108,6 +108,9 @@ pub struct FeaturePreset {
     /// FORK: §19.3 — how several agents are laid out.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fan_out: Option<crate::fork::fan_out::FanOutLayout>,
+    /// FORK: §19.4 — the layout preset (by name) opened with the feature.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -120,6 +123,7 @@ struct FeaturePresetDe {
     enable_chrome: bool,
     agents: Vec<AgentKind>,
     fan_out: Option<crate::fork::fan_out::FanOutLayout>,
+    layout: Option<String>,
 }
 
 impl<'de> Deserialize<'de> for FeaturePreset {
@@ -137,6 +141,7 @@ impl<'de> Deserialize<'de> for FeaturePreset {
             enable_chrome: preset.enable_chrome,
             agents: preset.agents,
             fan_out: preset.fan_out,
+            layout: preset.layout,
         })
     }
 }
@@ -161,6 +166,9 @@ pub struct ExtensionConfig {
     /// The library view can export user templates here. Phase 3 surfaces
     /// these in the picker with a `Global` / `Project` source badge.
     pub prompt_templates: Vec<PromptTemplate>,
+    /// FORK: §19.4 — named sets of extra sessions opened with a feature.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub layout_presets: Vec<crate::fork::organize::LayoutPreset>,
 }
 
 impl ExtensionConfig {
@@ -170,6 +178,11 @@ impl ExtensionConfig {
 
     pub fn allows_agent(&self, agent: &AgentKind) -> bool {
         self.allowed_agents().contains(agent)
+    }
+
+    /// FORK: §19.4 — a layout preset by name.
+    pub fn layout_preset(&self, name: &str) -> Option<&crate::fork::organize::LayoutPreset> {
+        self.layout_presets.iter().find(|p| p.name == name)
     }
 
     pub fn allowed_feature_presets(&self) -> Vec<FeaturePreset> {
@@ -450,6 +463,14 @@ pub fn merge_project_extension_config_checked(
         }
     }
 
+    // FORK: §19.4 — layout presets by name (project wins).
+    let mut layout_presets = project.layout_presets.clone();
+    for entry in &base.layout_presets {
+        if !layout_presets.iter().any(|e| e.name == entry.name) {
+            layout_presets.push(entry.clone());
+        }
+    }
+
     // Merge lifecycle_hooks: project fields take priority.
     let on_start = project
         .lifecycle_hooks
@@ -486,6 +507,7 @@ pub fn merge_project_extension_config_checked(
             .clone()
             .or_else(|| base.allowed_agents.clone()),
         prompt_templates,
+        layout_presets,
     };
     merged.normalize_legacy_review_modes();
     (merged, error)
@@ -503,6 +525,63 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use tempfile::TempDir;
+
+    // FORK: §19.4 — layout presets merge by name (project wins) and a
+    // feature preset keeps its layout name.
+    #[test]
+    fn layout_presets_merge_by_name_and_presets_keep_their_layout() {
+        use crate::fork::organize::{LayoutPreset, LayoutSessionSpec};
+        let dir = TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("aiw.json"),
+            r#"{
+                "layout_presets": [
+                    { "name": "dev", "sessions": [ { "kind": "terminal", "command": "make dev" } ] }
+                ],
+                "feature_presets": [ { "name": "p", "agent": "claude", "layout": "dev" } ]
+            }"#,
+        )
+        .unwrap();
+        let spec = |kind: &str| LayoutSessionSpec {
+            kind: kind.into(),
+            ..Default::default()
+        };
+        let global = ExtensionConfig {
+            layout_presets: vec![
+                LayoutPreset {
+                    name: "dev".into(),
+                    description: None,
+                    sessions: vec![spec("nvim")],
+                },
+                LayoutPreset {
+                    name: "ops".into(),
+                    description: None,
+                    sessions: vec![spec("terminal")],
+                },
+            ],
+            ..Default::default()
+        };
+        let merged = merge_project_extension_config(&global, dir.path());
+        let names: Vec<&str> = merged
+            .layout_presets
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect();
+        assert_eq!(names, ["dev", "ops"]);
+        assert_eq!(
+            merged.layout_preset("dev").unwrap().sessions[0]
+                .command
+                .as_deref(),
+            Some("make dev"),
+            "the project's dev wins"
+        );
+        assert_eq!(merged.feature_presets[0].layout.as_deref(), Some("dev"));
+        // Saving keeps them; an empty list is not written.
+        let json = serde_json::to_value(&merged).unwrap();
+        assert_eq!(json["layout_presets"][1]["name"], "ops");
+        let empty = serde_json::to_value(ExtensionConfig::default()).unwrap();
+        assert!(empty.get("layout_presets").is_none());
+    }
 
     #[test]
     fn a_broken_aiw_json_is_reported_with_its_position_and_ignored() {

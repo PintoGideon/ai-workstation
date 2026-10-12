@@ -508,6 +508,13 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             &app.theme,
         );
     }
+    // FORK: §19.4
+    if let AppMode::FeatureGroups(state) = &app.mode {
+        super::dialogs::fork_organize::draw_feature_groups(frame, app, state);
+    }
+    if let AppMode::NoteEditor(state) = &app.mode {
+        super::dialogs::fork_organize::draw_note_editor(frame, state, &app.theme);
+    }
 
     if let AppMode::ThemePicker(state) = &app.mode {
         super::dialogs::draw_theme_picker(

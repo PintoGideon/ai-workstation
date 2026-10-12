@@ -112,6 +112,9 @@ pub struct SessionInfo {
     pub decision: Option<String>,
     /// `tasks 1/3 · 1 bg · compacted · cd api` from the newer hooks (§19.1).
     pub hooks: Option<String>,
+    /// FORK: §19.4 — the first line of the session's note, else the
+    /// feature's.
+    pub note: Option<String>,
 }
 
 /// The harness's name as the block says it.
@@ -365,7 +368,27 @@ impl App {
                 .collect();
                 (!parts.is_empty()).then(|| parts.join(" · "))
             }),
+            note: self
+                .session_note(&session.id)
+                .or_else(|| self.feature_note(&feature.id))
+                .and_then(crate::fork::organize::note_first_line)
+                .map(str::to_string),
         })
+    }
+
+    /// FORK: §19.4 — the info block's extra row: a note to show.
+    pub fn session_info_has_note(&self, target: (usize, usize, usize)) -> bool {
+        let (pi, fi, si) = target;
+        let Some(feature) = self.store.projects.get(pi).and_then(|p| p.features.get(fi)) else {
+            return false;
+        };
+        let session_note = feature
+            .sessions
+            .get(si)
+            .and_then(|s| self.session_note(&s.id));
+        session_note
+            .or_else(|| self.feature_note(&feature.id))
+            .is_some()
     }
 }
 

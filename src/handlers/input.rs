@@ -40,6 +40,24 @@ pub fn handle_paste(app: &mut App, text: &str) -> Result<()> {
                 }
             }
         }
+        // FORK: §19.4 — a pasted note keeps its newlines; a group name is
+        // one line.
+        AppMode::NoteEditor(_) => {
+            if let AppMode::NoteEditor(state) = &mut app.mode {
+                state
+                    .text
+                    .push_str(&text.replace("\r\n", "\n").replace('\r', "\n"));
+            }
+        }
+        AppMode::FeatureGroups(_) => {
+            if let AppMode::FeatureGroups(state) = &mut app.mode
+                && let Some((_, value)) = state.edit.as_mut()
+            {
+                for chunk in text.split(['\n', '\r']) {
+                    value.push_str(chunk);
+                }
+            }
+        }
         AppMode::RenamingSession(_) => {
             if let AppMode::RenamingSession(state) = &mut app.mode {
                 state.input.push_str(text);

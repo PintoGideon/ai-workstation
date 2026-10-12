@@ -106,9 +106,11 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
             Selection::Project(_) => {
                 app.toggle_collapse();
             }
-            Selection::Feature(_, _) => {
-                app.toggle_collapse();
-            }
+            // FORK: §19.4 — Enter on a collapsed group's row opens the group.
+            Selection::Feature(pi, fi) => match app.collapsed_group_at(*pi, *fi) {
+                Some(group) => app.toggle_feature_group(&group),
+                None => app.toggle_collapse(),
+            },
             Selection::Session(_, _, _) => {
                 if !app.open_stopped_session_dialog()? {
                     app.enter_view()?;
@@ -219,14 +221,15 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
                 }
             }
             Selection::Feature(pi, fi) => {
-                if let Some(feature) = app
-                    .store
-                    .projects
-                    .get(*pi)
-                    .and_then(|p| p.features.get(*fi))
-                    && !feature.collapsed
-                {
-                    app.toggle_collapse();
+                let (pi, fi) = (*pi, *fi);
+                if let Some(feature) = app.store.projects.get(pi).and_then(|p| p.features.get(fi)) {
+                    let folded = feature.collapsed || feature.sessions.is_empty();
+                    if !folded {
+                        app.toggle_collapse();
+                    } else if let Some(group) = app.expanded_group_of(pi, fi) {
+                        // FORK: §19.4 — h on a folded feature folds its group.
+                        app.toggle_feature_group(&group);
+                    }
                 }
             }
             Selection::Session(_, _, _) => {
@@ -242,7 +245,10 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
                 }
             }
             Selection::Feature(pi, fi) => {
-                if let Some(feature) = app
+                if let Some(group) = app.collapsed_group_at(*pi, *fi) {
+                    // FORK: §19.4 — l on a collapsed group's row opens it.
+                    app.toggle_feature_group(&group);
+                } else if let Some(feature) = app
                     .store
                     .projects
                     .get(*pi)
@@ -330,6 +336,18 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
         // FORK: §19.2 — Claude sessions outside AIW in the projects.
         KeyCode::Char('E') => {
             app.open_external_sessions();
+        }
+        // FORK: §19.4 — the project's feature groups, and the selected
+        // feature's group folded or opened.
+        KeyCode::Char('G') => {
+            app.open_feature_groups();
+        }
+        KeyCode::Char('C') => {
+            app.toggle_selected_feature_group();
+        }
+        // FORK: §19.4 — the note on the selected session or feature.
+        KeyCode::Char('#') => {
+            app.open_note_editor();
         }
         // `z` for zzz: features nobody is watching.
         KeyCode::Char('z') => {

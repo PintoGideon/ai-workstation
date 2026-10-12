@@ -12,5 +12,6 @@
   "fan_out": null,
   "prompt": null,
   "prompt_file": null,
-  "send": false
+  "send": false,
+  "layout": null
 }

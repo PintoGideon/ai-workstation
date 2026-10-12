@@ -234,9 +234,17 @@ impl App {
             VisibleItem::Feature(pi, fi) => {
                 // FORK: §19.2 — external Claude sessions in the checkout.
                 let feature = &self.store.projects[*pi].features[*fi];
+                // FORK: §19.4 — a collapsed group is one row; an expanded
+                // one has its header above its first feature.
+                let slot = self.feature_slot(*pi, *fi);
+                if slot == crate::fork::organize::FeatureSlot::CollapsedGroup {
+                    return 1;
+                }
+                let group_header =
+                    usize::from(slot == crate::fork::organize::FeatureSlot::GroupHead);
                 // FORK: §19.3 — the fan-out group header above its first
                 // sibling.
-                let header = usize::from(self.fan_out_heads_group(*pi, *fi));
+                let header = group_header + usize::from(self.fan_out_heads_group(*pi, *fi));
                 if feature.collapsed {
                     1 + header
                 } else {

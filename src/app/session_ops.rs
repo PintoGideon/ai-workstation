@@ -993,7 +993,7 @@ impl App {
         Ok(())
     }
 
-    fn add_terminal_session_for_picker(
+    pub(crate) fn add_terminal_session_for_picker(
         &mut self,
         pi: usize,
         fi: usize,
@@ -1036,7 +1036,7 @@ impl App {
         Ok(session_record.id)
     }
 
-    fn add_nvim_session_for_picker(
+    pub(crate) fn add_nvim_session_for_picker(
         &mut self,
         pi: usize,
         fi: usize,
@@ -1737,6 +1737,7 @@ impl App {
         crate::fork::launch::remove_claude_settings(&session_id);
         self.forget_session_identity(&session_id); // FORK: §19.2
         self.forget_fan_out_session(&session_id); // FORK: §19.3
+        self.forget_organize_session(&session_id); // FORK: §19.4
 
         // Run the custom session cleanup after a successful removal.
         if is_custom {

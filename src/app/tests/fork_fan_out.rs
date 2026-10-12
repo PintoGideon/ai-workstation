@@ -18,19 +18,20 @@ use crate::traits::{MockTmuxOps, MockWorktreeOps};
 
 /// Everything the lenient tmux saw.
 #[derive(Default)]
-struct Calls {
-    sessions: HashSet<String>,
-    launches: Vec<(String, String, String)>, // (harness, session, window)
-    pastes: Vec<(String, String, String)>,   // (session, window, text)
-    keys: Vec<(String, String, String)>,     // (session, window, key)
-    panes: Vec<crate::tmux::PaneCommand>,
+pub(super) struct Calls {
+    pub(super) sessions: HashSet<String>,
+    pub(super) launches: Vec<(String, String, String)>, // (harness, session, window)
+    pub(super) pastes: Vec<(String, String, String)>,   // (session, window, text)
+    pub(super) keys: Vec<(String, String, String)>,     // (session, window, key)
+    pub(super) panes: Vec<crate::tmux::PaneCommand>,
+    pub(super) shell: Vec<(String, String, String)>, // (session, window, command)
 }
 
-type Shared = Arc<Mutex<Calls>>;
+pub(super) type Shared = Arc<Mutex<Calls>>;
 
 /// A tmux mock that accepts every call, remembers sessions it created and
 /// records launches, pastes and keys.
-fn lenient_tmux(calls: Shared) -> MockTmuxOps {
+pub(super) fn lenient_tmux(calls: Shared) -> MockTmuxOps {
     let mut tmux = MockTmuxOps::new();
     tmux.expect_check_harness_available().returning(|_| Ok(()));
     let c = calls.clone();
@@ -73,7 +74,14 @@ fn lenient_tmux(calls: Shared) -> MockTmuxOps {
     tmux.expect_launch_pi().returning(|_, _, _| Ok(()));
     tmux.expect_launch_program()
         .returning(|_, _, _, _, _| Ok(()));
-    tmux.expect_run_shell_command().returning(|_, _, _| Ok(()));
+    let c = calls.clone();
+    tmux.expect_run_shell_command().returning(move |s, w, cmd| {
+        c.lock()
+            .unwrap()
+            .shell
+            .push((s.into(), w.into(), cmd.into()));
+        Ok(())
+    });
     tmux.expect_send_keys().returning(|_, _, _| Ok(()));
     tmux.expect_send_literal().returning(|_, _, _| Ok(()));
     let c = calls.clone();
@@ -97,7 +105,7 @@ fn lenient_tmux(calls: Shared) -> MockTmuxOps {
 }
 
 /// Worktrees become folders under `root`.
-fn folder_worktrees(root: PathBuf) -> MockWorktreeOps {
+pub(super) fn folder_worktrees(root: PathBuf) -> MockWorktreeOps {
     let mut wt = MockWorktreeOps::new();
     let r = root.clone();
     wt.expect_create().returning(move |_, name, _| {
@@ -110,9 +118,9 @@ fn folder_worktrees(root: PathBuf) -> MockWorktreeOps {
     wt
 }
 
-struct Fixture {
-    app: App,
-    calls: Shared,
+pub(super) struct Fixture {
+    pub(super) app: App,
+    pub(super) calls: Shared,
     _repo: TempDir,
     _wt: TempDir,
     _store: tempfile::NamedTempFile,
@@ -122,7 +130,7 @@ struct Fixture {
 /// An app with one empty git project that already has a feature in the
 /// repo dir (so new features default to worktrees), a lenient tmux and a
 /// real database.
-fn fixture() -> Fixture {
+pub(super) fn fixture() -> Fixture {
     let repo = TempDir::new().unwrap();
     let wt = TempDir::new().unwrap();
     let calls: Shared = Arc::default();
@@ -148,7 +156,7 @@ fn fixture() -> Fixture {
     }
 }
 
-fn key(app: &mut App, code: KeyCode) {
+pub(super) fn key(app: &mut App, code: KeyCode) {
     crate::handlers::handle_create_feature_key_event(app, KeyEvent::from(code)).unwrap();
 }
 
@@ -160,13 +168,13 @@ fn ctrl(app: &mut App, c: char) {
     .unwrap();
 }
 
-fn type_text(app: &mut App, text: &str) {
+pub(super) fn type_text(app: &mut App, text: &str) {
     for c in text.chars() {
         key(app, KeyCode::Char(c));
     }
 }
 
-fn step(app: &App) -> CreateFeatureStep {
+pub(super) fn step(app: &App) -> CreateFeatureStep {
     match &app.mode {
         AppMode::CreatingFeature(state) => state.step.clone(),
         other => panic!(
@@ -178,7 +186,7 @@ fn step(app: &App) -> CreateFeatureStep {
 
 /// Open `n`, name the branch, choose worktree yes/no, then stop on the
 /// harness list with Claude highlighted.
-fn open_dialog(app: &mut App, branch: &str, worktree: bool) {
+pub(super) fn open_dialog(app: &mut App, branch: &str, worktree: bool) {
     app.start_create_feature();
     let AppMode::CreatingFeature(state) = &mut app.mode else {
         panic!("dialog did not open");
@@ -195,7 +203,7 @@ fn open_dialog(app: &mut App, branch: &str, worktree: bool) {
 }
 
 /// Tick Claude and Codex on the harness list.
-fn tick_claude_and_codex(app: &mut App) {
+pub(super) fn tick_claude_and_codex(app: &mut App) {
     key(app, KeyCode::Char(' ')); // Claude
     key(app, KeyCode::Char('j')); // → Codex
     key(app, KeyCode::Char(' ')); // Codex
@@ -211,7 +219,7 @@ fn finish_mode(app: &mut App) {
     }
 }
 
-fn session_ids(app: &App, feature: &str) -> Vec<(String, SessionKind, String)> {
+pub(super) fn session_ids(app: &App, feature: &str) -> Vec<(String, SessionKind, String)> {
     app.store.projects[0]
         .features
         .iter()

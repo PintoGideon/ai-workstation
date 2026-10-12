@@ -135,6 +135,7 @@ impl App {
     pub fn cancel_create(&mut self) {
         self.mode = AppMode::Normal;
         self.fan_out_cancelled(); // FORK: §19.3
+        self.organize.pending_layout = None; // FORK: §19.4
     }
 
     pub fn show_error(&mut self, error: anyhow::Error) {
@@ -372,6 +373,10 @@ impl App {
             );
         }
 
+        // FORK: §19.4 — the project's groups and notes go with it.
+        if let Some(project) = self.store.find_project(&project_name).cloned() {
+            self.forget_organize_project(&project);
+        }
         self.store.remove_project(&project_name);
         self.save()?;
 

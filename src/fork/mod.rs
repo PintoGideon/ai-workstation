@@ -41,6 +41,7 @@ pub mod cursor;
 pub mod extra_agents;
 pub mod fan_out; // one prompt, several agents (DESIGN.md §17, §19.3)
 pub mod gemini;
+pub mod organize; // feature groups, notes and layout presets (DESIGN.md §19.4)
 
 // G4/G5 — work-safety fixes (DESIGN.md §7).
 pub(crate) mod bad_notifications; // quarantine unparsable notification files

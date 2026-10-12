@@ -27,6 +27,15 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
         // Enter on a running session or feature focuses the agent pane;
         // anything else (a stopped session's recovery dialog,
         // expand/collapse) is the dashboard's own Enter.
+        // FORK: §19.4 — Enter on a collapsed group's row opens the group.
+        KeyCode::Enter
+            if matches!(
+                app.selection,
+                Selection::Feature(pi, fi) if app.collapsed_group_at(pi, fi).is_some()
+            ) =>
+        {
+            Ok(false)
+        }
         KeyCode::Enter
             if matches!(
                 app.selection,

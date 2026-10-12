@@ -231,6 +231,20 @@ impl App {
             }
             return self.create_feature();
         }
+        // FORK: §19.4 — a Layout row choice is checked before anything is
+        // created, and opened as each feature launches.
+        let layout = match &self.mode {
+            AppMode::CreatingFeature(state) => state
+                .selected_layout()
+                .map(|name| (name, state.project_repo.clone())),
+            _ => None,
+        };
+        if let Some((name, repo)) = &layout
+            && let Err(message) = self.resolve_layout_named(repo, name)
+        {
+            self.push_toast_warning(message);
+            return Ok(());
+        }
         let (run, check_branches) = {
             let AppMode::CreatingFeature(state) = &mut self.mode else {
                 return Ok(());
@@ -309,6 +323,13 @@ impl App {
         }
         let worktree_each = run.layout == FanOutLayout::WorktreeEach && run.agents.len() > 1;
         let base = run.base_branch.clone();
+        match &layout {
+            Some((name, _)) => {
+                let count = if worktree_each { run.agents.len() } else { 1 };
+                self.queue_layout_for_launch(&run.project_name, name, count);
+            }
+            None => self.organize.pending_layout = None,
+        }
         self.fan_out.run = Some(run);
         let result = self.create_feature();
         // Refused before anything was launched (validation, a worktree that
@@ -327,6 +348,7 @@ impl App {
         }
         if result.is_err() {
             self.fan_out.run = None;
+            self.organize.pending_layout = None;
         }
         result
     }
@@ -781,7 +803,27 @@ impl App {
     /// list order (the sidebar draws the group header above it).
     pub fn fan_out_heads_group(&self, pi: usize, fi: usize) -> bool {
         let siblings = self.fan_out_siblings(pi, fi);
-        siblings.len() >= 2 && siblings.iter().min() == Some(&fi)
+        if siblings.len() < 2 {
+            return false;
+        }
+        if self.organize.groups.is_empty() {
+            return siblings.iter().min() == Some(&fi);
+        }
+        // §19.4 — with user groups the siblings can sit apart: the header
+        // goes above the first one drawn as a feature row (a collapsed
+        // group's row stands for the group, not the sibling).
+        use crate::fork::organize::FeatureSlot;
+        self.project_feature_slots(pi)
+            .into_iter()
+            .find(|(i, slot)| {
+                siblings.contains(i)
+                    && matches!(
+                        slot,
+                        FeatureSlot::Ungrouped | FeatureSlot::GroupHead | FeatureSlot::GroupMember
+                    )
+            })
+            .map(|(i, _)| i)
+            == Some(fi)
     }
 
     /// The header drawn above `(pi, fi)` when it is the first feature of its

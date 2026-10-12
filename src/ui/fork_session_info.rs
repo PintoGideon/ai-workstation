@@ -122,6 +122,16 @@ pub fn lines(info: &SessionInfo, theme: &Theme, width: usize) -> Vec<Line<'stati
         last.push(Span::styled("no follow-ups queued", dim));
     }
     out.push(fit_line(Line::from(last), width));
+    // FORK: §19.4 — the note, on its own row (the block grows by one).
+    if let Some(note) = &info.note {
+        out.push(fit_line(
+            Line::from(vec![
+                Span::styled("✎ ", Style::default().fg(theme.primary.to_color())),
+                Span::styled(note.clone(), text),
+            ]),
+            width,
+        ));
+    }
     out
 }
 
@@ -173,6 +183,7 @@ mod tests {
             queued: 2,
             decision: Some("✓ allowed Bash".into()),
             hooks: None,
+            note: None,
         };
         let lines = super::lines(&info, &theme, 30);
         let text: Vec<String> = lines
@@ -241,5 +252,22 @@ mod tests {
             })
             .collect();
         assert_eq!(text[5], "tasks 1/3 · compacted");
+        assert_eq!(text.len(), 6);
+        // FORK: §19.4 — a note adds a seventh row.
+        let noted = SessionInfo {
+            note: Some("waiting on the API review".into()),
+            ..hooked
+        };
+        let text: Vec<String> = super::lines(&noted, &theme, 60)
+            .iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect();
+        assert_eq!(text.len(), 7);
+        assert_eq!(text[6], "✎ waiting on the API review");
     }
 }

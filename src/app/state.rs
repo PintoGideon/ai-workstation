@@ -1222,6 +1222,10 @@ pub enum AppMode {
     ForkSession(crate::app::fork_identity::ForkSessionState),
     /// FORK: `E` — Claude sessions outside AIW in the projects (§19.2).
     ExternalSessions(crate::app::fork_identity::ExternalSessionsState),
+    /// FORK: §19.4 — `G`, the project's feature groups.
+    FeatureGroups(crate::app::fork_organize::FeatureGroupsState),
+    /// FORK: §19.4 — `#`, the note on a session or feature.
+    NoteEditor(crate::app::fork_organize::NoteEditorState),
     ThemePicker(ThemePickerState),
     SyntaxLanguagePicker(SyntaxLanguagePickerState),
     DebugLog(DebugLogState),
@@ -1891,6 +1895,10 @@ pub struct CreateFeatureState {
     pub prompt_picker: Option<FeaturePromptPicker>,
     /// FORK: §19.3 — why the mode changed (Codex in a Vibeless set).
     pub mode_note: Option<String>,
+    /// FORK: §19.4 — the layout presets the project defines, by name.
+    pub layout_presets: Vec<String>,
+    /// FORK: §19.4 — 0 = no layout, n = `layout_presets[n - 1]`.
+    pub layout_index: usize,
 }
 
 impl CreateFeatureState {
@@ -1942,7 +1950,47 @@ impl CreateFeatureState {
             send_prompt: false,
             prompt_picker: None,
             mode_note: None,
+            layout_presets: Vec::new(),
+            layout_index: 0,
         }
+    }
+
+    /// FORK: §19.4 — the layout preset chosen on the Layout row.
+    pub fn selected_layout(&self) -> Option<String> {
+        self.layout_index
+            .checked_sub(1)
+            .and_then(|i| self.layout_presets.get(i))
+            .cloned()
+    }
+
+    /// FORK: §19.4 — the Mode step's Layout row, when there is one: after
+    /// Chrome (Claude) or Mode.
+    pub fn layout_focus(&self) -> Option<usize> {
+        (!self.layout_presets.is_empty()).then_some(if self.agent == AgentKind::Claude {
+            3
+        } else {
+            2
+        })
+    }
+
+    /// The Mode step's last focus row.
+    pub fn max_mode_focus(&self) -> usize {
+        self.layout_focus()
+            .unwrap_or(if self.agent == AgentKind::Claude {
+                2
+            } else {
+                1
+            })
+    }
+
+    /// FORK: §19.4 — j/k on the Layout row.
+    pub fn cycle_layout(&mut self, forward: bool) {
+        let len = self.layout_presets.len() + 1;
+        self.layout_index = if forward {
+            (self.layout_index + 1) % len
+        } else {
+            self.layout_index.checked_sub(1).unwrap_or(len - 1)
+        };
     }
 
     /// FORK: §19.3 — the harnesses this feature starts, primary first.
@@ -2034,6 +2082,11 @@ impl CreateFeatureState {
     }
 
     pub fn focused_mode_description(&self) -> Option<&'static str> {
+        if Some(self.mode_focus) == self.layout_focus() {
+            return Some(
+                "Extra sessions opened once the feature runs (layout_presets in aiw.json): agents, terminals, nvim, custom sessions.",
+            );
+        }
         match self.mode_focus {
             0 | 1 => None,
             2 if self.agent == AgentKind::Claude => {

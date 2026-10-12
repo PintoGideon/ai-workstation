@@ -413,6 +413,7 @@ fn draw_create_feature_branch_mode(
     let area = centered_rect(60, 90, frame.area());
     crate::ui::draw_modal_overlay(frame, area, theme);
     let has_chrome_row = state.agent == AgentKind::Claude;
+    let has_layout_row = state.layout_focus().is_some(); // FORK: §19.4
 
     let title = format!(" New Feature ({}) ", state.project_name);
     let block = Block::default()
@@ -444,6 +445,7 @@ fn draw_create_feature_branch_mode(
         + 1 + 5 + 1 // [5..7] spacer, mode, spacer
         + 1 // [8] review checkbox
         + if has_chrome_row { 1 } else { 0 } // [10] chrome checkbox
+        + if has_layout_row { 1 } else { 0 } // layout preset row
         + 1 // [11] spacer before focused help
         + 1; // [13] hints
     let min_agent_block_height = 1 + allowed_agents.len() as u16;
@@ -469,8 +471,27 @@ fn draw_create_feature_branch_mode(
             Constraint::Length(1), // [9] spacer before focused help
             Constraint::Min(0),    // [10] focused option help
             Constraint::Length(1), // [11] hints
+            Constraint::Length(if has_layout_row { 1 } else { 0 }), // [12] layout row
         ])
         .split(inner);
+    // FORK: §19.4 — the Layout row sits under Chrome; the spacer, help and
+    // hints keep their indices so the code below them is unchanged.
+    let chunks: Vec<ratatui::layout::Rect> = {
+        let mut c = chunks.to_vec();
+        if has_layout_row {
+            let layout_row = ratatui::layout::Rect {
+                y: c[9].y,
+                height: 1,
+                ..c[9]
+            };
+            // Shift the spacer down by one and shrink the help area.
+            c[9].y += 1;
+            c[10].y = c[10].y.saturating_add(1);
+            c[10].height = c[10].height.saturating_sub(1);
+            c[12] = layout_row;
+        }
+        c
+    };
 
     let branch_active = state.step == CreateFeatureStep::Branch;
     let branch_has_error = state.branch_error.is_some();
@@ -671,6 +692,39 @@ fn draw_create_feature_branch_mode(
         ])];
         let chrome_widget = Paragraph::new(chrome_lines);
         frame.render_widget(chrome_widget, chunks[8]);
+    }
+
+    // FORK: §19.4 — the Layout row (chunks[12]).
+    if let Some(layout_focus) = state.layout_focus() {
+        let active = state.step == CreateFeatureStep::Mode && state.mode_focus == layout_focus;
+        let label_style = if active {
+            Style::default().fg(theme.primary.to_color())
+        } else {
+            Style::default().fg(theme.text_muted.to_color())
+        };
+        let value = state
+            .selected_layout()
+            .unwrap_or_else(|| "none".to_string());
+        let value_style = if active {
+            Style::default().fg(theme.text.to_color())
+        } else {
+            Style::default().fg(theme.text_muted.to_color())
+        };
+        let count = state.layout_presets.len();
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(" Layout: ", label_style),
+                Span::styled(format!("‹ {value} ›"), value_style),
+                Span::styled(
+                    format!(
+                        "  {count} preset{} · j/k change",
+                        if count == 1 { "" } else { "s" }
+                    ),
+                    Style::default().fg(theme.text_muted.to_color()),
+                ),
+            ])),
+            chunks[12],
+        );
     }
 
     if state.step == CreateFeatureStep::Mode

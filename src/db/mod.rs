@@ -4,6 +4,7 @@ pub(crate) mod fan_out; // FORK: pending prompts and fan-out groups (src/fork/fa
 mod followups; // FORK: queued follow-ups (src/app/fork_followups.rs)
 mod hook_approvals; // FORK: repo lifecycle hook approvals (src/fork/hook_approval.rs)
 mod migrations;
+mod organize; // FORK: feature groups and notes (src/fork/organize.rs)
 mod pr_terminal_state;
 pub mod prompt_templates;
 mod session_names; // FORK: harness session names (src/fork/session_identity.rs)

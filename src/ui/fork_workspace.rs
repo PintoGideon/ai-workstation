@@ -21,6 +21,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::app::{App, Selection, VisibleItem};
 use crate::context_tracking::ContextBand;
 use crate::fork::badges::{self, BadgeCounts, BadgeKind, SessionBadge};
+use crate::fork::organize::{FeatureGroup, FeatureSlot};
 use crate::theme::Theme;
 
 use super::fork_text::fit_line;
@@ -37,7 +38,11 @@ pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) -> bool {
     // The info block takes the bottom rows when the sidebar is tall enough
     // and a session is selected (or shown for a feature row).
     let target = app.session_info_target();
-    let info_rows = super::fork_session_info::rows(area.height, target.is_some());
+    let mut info_rows = super::fork_session_info::rows(area.height, target.is_some());
+    // FORK: §19.4 — one more row for a note.
+    if info_rows > 0 && target.is_some_and(|t| app.session_info_has_note(t)) {
+        info_rows += 1;
+    }
     let list_area = Rect::new(area.x, area.y, area.width, area.height - info_rows);
     draw_sidebar(frame, app, list_area, compact);
     if let Some(target) = target
@@ -221,6 +226,16 @@ fn sidebar_item_lines(
         }
         VisibleItem::Feature(pi, fi) => {
             let feature = &app.store.projects[*pi].features[*fi];
+            // FORK: §19.4 — the feature's user group, if any.
+            let slot = app.feature_slot(*pi, *fi);
+            let group = app.feature_group(*pi, *fi);
+            if slot == FeatureSlot::CollapsedGroup
+                && let Some(group) = group
+            {
+                return vec![group_line(
+                    app, *pi, group, true, selected, row_width, now, dim,
+                )];
+            }
             let badge = badges::feature_badge(app, *pi, *fi, now);
             let disclosure = if feature.sessions.is_empty() {
                 "  "
@@ -240,19 +255,33 @@ fn sidebar_item_lines(
                 .nickname
                 .clone()
                 .unwrap_or_else(|| feature.name.clone());
-            let left = vec![
-                Span::styled(" ", text),
+            let mut left = vec![
+                group_bar(group, text),
                 Span::styled(disclosure, text),
                 glyph_span(&badge, theme),
                 Span::styled(" ", text),
                 Span::styled(name, name_style),
             ];
+            // FORK: §19.4 — the feature has a note.
+            if app.feature_note(&feature.id).is_some() {
+                left.push(Span::styled(" ✎", dim));
+            }
             let right = if compact || matches!(badge.kind, BadgeKind::Idle | BadgeKind::Stopped) {
                 Vec::new()
             } else {
                 vec![Span::styled(badge.age(now), dim)]
             };
             let mut lines = Vec::new();
+            // FORK: §19.4 — an expanded group's header above its first
+            // feature.
+            if !compact
+                && slot == FeatureSlot::GroupHead
+                && let Some(group) = group
+            {
+                lines.push(group_line(
+                    app, *pi, group, false, false, row_width, now, dim,
+                ));
+            }
             // FORK: §19.3 — a fan-out group's header, with how many of its
             // siblings need you.
             if !compact && let Some((header, needs_you)) = app.fan_out_header(*pi, *fi, now) {
@@ -301,12 +330,17 @@ fn sidebar_item_lines(
             } else {
                 Style::default().fg(theme.text.to_color())
             };
-            let left = vec![
-                Span::styled("   ", text),
+            let mut left = vec![
+                group_bar(app.feature_group(*pi, *fi), text),
+                Span::styled("  ", text),
                 glyph_span(&badge, theme),
                 Span::styled(" ", text),
                 Span::styled(session.label.clone(), label_style),
             ];
+            // FORK: §19.4 — the session has a note.
+            if app.session_note(&session.id).is_some() {
+                left.push(Span::styled(" ✎", dim));
+            }
             let mut right = Vec::new();
             // P4: context use, toned by the configured thresholds.
             if !compact
@@ -349,6 +383,64 @@ fn sidebar_item_lines(
             lines
         }
     }
+}
+
+/// FORK: §19.4 — the first cell of a feature or session row: a bar in the
+/// group's colour when it is in a group, else a space.
+fn group_bar(group: Option<&FeatureGroup>, text: Style) -> Span<'static> {
+    match group {
+        Some(group) => Span::styled(
+            "▏",
+            Style::default().fg(super::dialogs::fork_organize::group_color(&group.color)),
+        ),
+        None => Span::styled(" ", text),
+    }
+}
+
+/// FORK: §19.4 — a group's header (`▾ ■ Backend`) or, collapsed, the row
+/// that stands for it (`▸ ■ Backend · 3 features`), with how many of its
+/// features need the user on the right.
+#[allow(clippy::too_many_arguments)]
+fn group_line(
+    app: &App,
+    pi: usize,
+    group: &FeatureGroup,
+    collapsed: bool,
+    selected: bool,
+    row_width: usize,
+    now: DateTime<Utc>,
+    dim: Style,
+) -> Line<'static> {
+    let theme = &app.theme;
+    let color = super::dialogs::fork_organize::group_color(&group.color);
+    let (count, needs_you) = app.group_rollup(pi, &group.id, now);
+    let name_style = if selected {
+        Style::default().fg(color).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(color)
+    };
+    let mut left = vec![
+        Span::styled(if collapsed { " ▸ " } else { " ▾ " }, dim),
+        Span::styled("■ ", Style::default().fg(color)),
+        Span::styled(group.name.clone(), name_style),
+    ];
+    if collapsed {
+        left.push(Span::styled(
+            format!(" · {count} feature{}", if count == 1 { "" } else { "s" }),
+            dim,
+        ));
+    }
+    let right = if needs_you > 0 {
+        vec![Span::styled(
+            format!("{}{needs_you}", BadgeKind::NeedsYou.glyph()),
+            Style::default()
+                .fg(BadgeKind::NeedsYou.tone(theme))
+                .add_modifier(Modifier::BOLD),
+        )]
+    } else {
+        Vec::new()
+    };
+    fit_line(with_right(left, right, row_width), row_width)
 }
 
 /// The context percentage's style: dim while normal, the warning / danger

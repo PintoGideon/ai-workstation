@@ -252,6 +252,11 @@ impl App {
                             .editing_index
                             .and_then(|i| state.presets.get(i))
                             .and_then(|p| p.fan_out),
+                        // FORK: §19.4 — likewise for the layout preset.
+                        layout: state
+                            .editing_index
+                            .and_then(|i| state.presets.get(i))
+                            .and_then(|p| p.layout.clone()),
                     };
 
                     upsert_or_push(&mut state.presets, state.editing_index, preset);
@@ -435,6 +440,11 @@ fn build_extension_config(state: &ConfigWizardState) -> ExtensionConfig {
         prompt_templates: loaded
             .as_ref()
             .map(|config| config.prompt_templates.clone())
+            .unwrap_or_default(),
+        // FORK: §19.4 — not edited in the wizard either; carried through.
+        layout_presets: loaded
+            .as_ref()
+            .map(|config| config.layout_presets.clone())
             .unwrap_or_default(),
     }
 }

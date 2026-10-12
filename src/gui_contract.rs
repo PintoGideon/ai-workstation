@@ -4135,6 +4135,7 @@ mod tests {
                 prompt: None,
                 prompt_file: None,
                 send: false,
+                layout: None,
             },
             todo.id,
         )

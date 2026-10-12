@@ -172,6 +172,16 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "Fork the session's conversation (same feature or new worktree)",
         ),
         ("E", "Claude sessions outside AIW in your projects"),
+        // FORK: §19.4
+        (
+            "G",
+            "Feature groups: move the feature into one, new / rename / colour / delete",
+        ),
+        (
+            "C",
+            "Fold / unfold the selected feature's group (h on a folded feature too)",
+        ),
+        ("#", "Note on the selected session or feature (found by /)"),
         ("y", "Toggle mark feature as ready"),
         // FORK: hook-driven productivity (DESIGN.md §16).
         (
@@ -186,7 +196,7 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("w", "Context window / warning settings"),
         ("i", "Needs attention: questions and finished work"),
         ("I", "On a TODOs row: start the next TODO"),
-        ("/", "Search and jump to item"),
+        ("/", "Search and jump to item (names, notes, group names)"),
         ("?", "Toggle this help"),
         ("q", "Quit the dashboard (the agents keep running)"),
     ];

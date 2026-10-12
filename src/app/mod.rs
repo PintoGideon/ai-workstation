@@ -23,6 +23,7 @@ pub(crate) mod fork_followups; // FORK: queued follow-ups (P7, DESIGN.md §16)
 pub(crate) mod fork_hook_events; // FORK: richer row events from hooks (DESIGN.md §19.1)
 pub(crate) mod fork_identity; // FORK: harness names, forks, Claude's roster (DESIGN.md §19.2)
 pub(crate) mod fork_launch; // FORK: launch-time arguments from the store (DESIGN.md §16)
+pub(crate) mod fork_organize; // FORK: groups, notes, layout presets (DESIGN.md §19.4)
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6, DESIGN.md §16)
 pub(crate) mod fork_prompt_paste; // FORK: prompts pasted unsent into the agent pane (DESIGN.md §18)
 mod fork_render_memo; // FORK: per-frame dialog values (DESIGN.md §12.3)
@@ -699,6 +700,8 @@ pub struct App {
     pub(crate) session_identity: fork_identity::IdentityRuntime,
     /// FORK: §19.3 — dialog fan-outs, prompts waiting for their pane, groups.
     pub(crate) fan_out: fork_fan_out::FanOutRuntime,
+    /// FORK: §19.4 — feature groups, notes and a pending layout preset.
+    pub(crate) organize: fork_organize::OrganizeRuntime,
     /// FORK: ids for queued items when no database is open (negative).
     pub(crate) followup_memory_id: i64,
     pub ipc_tool_sessions: std::collections::HashSet<String>,
@@ -1133,6 +1136,7 @@ impl App {
             hook_events: HashMap::new(),          // FORK: §19.1
             session_identity: Default::default(), // FORK: §19.2
             fan_out: Default::default(),          // FORK: §19.3
+            organize: Default::default(),         // FORK: §19.4
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
@@ -1218,6 +1222,7 @@ impl App {
         app.load_followups(); // FORK: P7
         app.load_session_names(); // FORK: §19.2
         app.load_fan_out_state(); // FORK: §19.3
+        app.load_organize_state(); // FORK: §19.4
 
         Ok(app)
     }
@@ -1352,6 +1357,7 @@ impl App {
             hook_events: HashMap::new(),          // FORK: §19.1
             session_identity: Default::default(), // FORK: §19.2
             fan_out: Default::default(),          // FORK: §19.3
+            organize: Default::default(),         // FORK: §19.4
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),

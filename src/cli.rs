@@ -344,6 +344,7 @@ Request JSON (all fields optional unless marked required):
     \"prompt\":          string | null  task prompt each agent gets once its pane is ready
     \"prompt_file\":     string | null  read the prompt from this file (relative to here)
     \"send\":            bool    default false; press Enter after pasting the prompt
+    \"layout\":          string | null  a layout_presets entry opened in each created feature
   }
 
 Example:

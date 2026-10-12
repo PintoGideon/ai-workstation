@@ -206,6 +206,7 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                     }
                     _ => None,
                 };
+                let mut missing_layout = None;
                 if let Some(preset) = preset
                     && let AppMode::CreatingFeature(state) = &mut app.mode
                 {
@@ -226,6 +227,20 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                     if let Some(layout) = preset.fan_out {
                         state.fan_out = layout;
                     }
+                    // FORK: §19.4 — the preset's layout preset, by name.
+                    if let Some(name) = preset.layout.as_deref() {
+                        match state.layout_presets.iter().position(|n| n == name) {
+                            Some(i) => state.layout_index = i + 1,
+                            None => {
+                                state.layout_index = 0;
+                                state.branch_error = None;
+                                missing_layout = Some(format!(
+                                    "Preset '{}' names layout '{name}', which is not in layout_presets",
+                                    preset.name
+                                ));
+                            }
+                        }
+                    }
                     state.sync_primary();
                     if let Some(ref prefix) = preset.branch_prefix
                         && !prefix.is_empty()
@@ -233,6 +248,9 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                         state.branch = format!("{}/", prefix);
                     }
                     state.step = CreateFeatureStep::Branch;
+                }
+                if let Some(message) = missing_layout {
+                    app.push_toast_warning(message);
                 }
             }
             _ => {}
@@ -306,13 +324,9 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
             }
             KeyCode::Tab | KeyCode::Char('l') => {
                 if let AppMode::CreatingFeature(state) = &mut app.mode {
-                    // For Claude: 0=agent 1=mode 2=review 3=chrome
-                    // For others: 0=agent 1=mode 2=review
-                    let max_focus = if state.agent == AgentKind::Claude {
-                        2
-                    } else {
-                        1
-                    };
+                    // For Claude: 0=agent 1=mode 2=chrome [3=layout]
+                    // For others: 0=agent 1=mode [2=layout]
+                    let max_focus = state.max_mode_focus();
                     if state.mode_focus < max_focus {
                         state.mode_focus += 1;
                     }
@@ -327,11 +341,7 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
             }
             KeyCode::Enter => {
                 if let AppMode::CreatingFeature(state) = &mut app.mode {
-                    let max_focus = if state.agent == AgentKind::Claude {
-                        2
-                    } else {
-                        1
-                    };
+                    let max_focus = state.max_mode_focus();
                     if state.mode_focus < max_focus {
                         state.mode_focus += 1;
                     } else {
@@ -367,6 +377,8 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                             state.mode_index = (state.mode_index + 1) % VibeMode::ALL.len();
                             state.mode = VibeMode::ALL[state.mode_index].clone();
                         }
+                        // FORK: §19.4 — the Layout row.
+                        f if Some(f) == state.layout_focus() => state.cycle_layout(true),
                         2 if state.agent == AgentKind::Claude => {
                             state.enable_chrome = !state.enable_chrome;
                         }
@@ -394,6 +406,7 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                             };
                             state.mode = VibeMode::ALL[state.mode_index].clone();
                         }
+                        f if Some(f) == state.layout_focus() => state.cycle_layout(false),
                         2 if state.agent == AgentKind::Claude => {
                             state.enable_chrome = !state.enable_chrome;
                         }

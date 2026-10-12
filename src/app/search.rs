@@ -39,6 +39,29 @@ impl App {
                         label: display_name.clone(),
                         context: format!("{} / {}", project.name, shorten_path(&feature.workdir)),
                     });
+                } else if let Some(note) = self.feature_note(&feature.id)
+                    && crate::fork::organize::note_matches(note, &query)
+                {
+                    // FORK: §19.4 — a note matches too; the result shows
+                    // the matching line.
+                    matches.push(SearchMatch {
+                        item: VisibleItem::Feature(pi, fi),
+                        label: display_name.clone(),
+                        context: format!(
+                            "✎ {}",
+                            crate::fork::organize::note_match_line(note, &query)
+                        ),
+                    });
+                } else if let Some(group) = self.feature_group(pi, fi)
+                    && !query.is_empty()
+                    && group.name.to_lowercase().contains(&query)
+                {
+                    // FORK: §19.4 — and so does the feature's group name.
+                    matches.push(SearchMatch {
+                        item: VisibleItem::Feature(pi, fi),
+                        label: display_name.clone(),
+                        context: format!("{} / group {}", project.name, group.name),
+                    });
                 }
 
                 for (si, session) in feature.sessions.iter().enumerate() {
@@ -47,6 +70,18 @@ impl App {
                             item: VisibleItem::Session(pi, fi, si),
                             label: session.label.clone(),
                             context: format!("{} / {}", project.name, display_name),
+                        });
+                    } else if let Some(note) = self.session_note(&session.id)
+                        && crate::fork::organize::note_matches(note, &query)
+                    {
+                        matches.push(SearchMatch {
+                            item: VisibleItem::Session(pi, fi, si),
+                            label: session.label.clone(),
+                            context: format!(
+                                "{} · ✎ {}",
+                                display_name,
+                                crate::fork::organize::note_match_line(note, &query)
+                            ),
                         });
                     }
                 }
@@ -72,11 +107,13 @@ impl App {
                 VisibleItem::Project(pi) => Selection::Project(pi),
                 VisibleItem::Feature(pi, fi) => {
                     self.store.projects[pi].collapsed = false;
+                    self.reveal_feature_group(pi, fi); // FORK: §19.4
                     Selection::Feature(pi, fi)
                 }
                 VisibleItem::Session(pi, fi, si) => {
                     self.store.projects[pi].collapsed = false;
                     self.store.projects[pi].features[fi].collapsed = false;
+                    self.reveal_feature_group(pi, fi); // FORK: §19.4
                     Selection::Session(pi, fi, si)
                 }
             };

@@ -69,6 +69,9 @@ pub struct CreateFeatureRequest {
     pub prompt_file: Option<PathBuf>,
     /// FORK: §19.3 — press Enter after the paste, once per agent.
     pub send: bool,
+    /// FORK: §19.4 — a `layout_presets` entry (by name) opened in each
+    /// created feature once it runs.
+    pub layout: Option<String>,
 }
 
 impl CreateFeatureRequest {
@@ -89,6 +92,7 @@ impl CreateFeatureRequest {
             "fan_out": self.fan_out,
             "prompt": self.prompt,
             "send": self.send,
+            "layout": self.layout,
         })
     }
 

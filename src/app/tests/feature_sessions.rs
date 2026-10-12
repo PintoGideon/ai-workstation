@@ -450,6 +450,8 @@ fn app_in_creating_feature_mode(
         send_prompt: false,
         prompt_picker: None,
         mode_note: None,
+        layout_presets: Vec::new(),
+        layout_index: 0,
     };
     let mut app = App::new_for_test(
         store,
@@ -1291,6 +1293,8 @@ fn create_feature_session_name_enter_creates_and_starts_feature() {
         send_prompt: false,
         prompt_picker: None,
         mode_note: None,
+        layout_presets: Vec::new(),
+        layout_index: 0,
     });
 
     crate::handlers::handle_create_feature_key(&mut app, KeyCode::Enter).unwrap();

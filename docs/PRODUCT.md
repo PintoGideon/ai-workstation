@@ -219,10 +219,10 @@ inside the app.
 | --- | --- |
 | `j` / `k`, arrows | Move through projects, features and sessions |
 | `Ctrl+j` / `Ctrl+k` | Jump to the next or previous feature |
-| `h` / `l`, left / right | Collapse or expand the selected project or feature |
-| `Enter` | Put the keyboard in the selected running session's pane. On a project or feature row, expand or collapse. On a vanished session, open the resume dialog |
+| `h` / `l`, left / right | Collapse or expand the selected project or feature. `h` on a folded feature in a group folds the group; `l` on a folded group's row opens it |
+| `Enter` | Put the keyboard in the selected running session's pane. On a project or feature row, expand or collapse; on a folded group's row, open the group. On a vanished session, open the resume dialog |
 | `Ctrl+Q` | Flip the keyboard between the sidebar and the agent pane |
-| `/` | Search and jump. Every letter is a search character; arrows or `Tab` pick a result, `Enter` jumps, `Esc` cancels |
+| `/` | Search and jump. Matches project, feature and session names, notes and group names. Every letter is a search character; arrows or `Tab` pick a result, `Enter` jumps (opening a folded group), `Esc` cancels |
 | `?` | Show the keybinding reference |
 | `q` | Quit the dashboard; the agents keep running. With `confirm_quit` on, the first press shows how many agents run and a second press within five seconds quits |
 | `Esc` | Take back a pending quit confirmation. Nothing else on the dashboard |
@@ -232,7 +232,7 @@ inside the app.
 | Key | Action |
 | --- | --- |
 | `N` | Create a project |
-| `n` | Create a feature in the selected project. On its harness list, `Space` ticks several agents for one prompt (a fan-out); the last step takes an optional task prompt (`Ctrl+L` library, `Ctrl+T` send when ready, `Alt+Enter` newline) |
+| `n` | Create a feature in the selected project. On its harness list, `Space` ticks several agents for one prompt (a fan-out); a Layout row (when the project defines `layout_presets`) opens extra sessions with the feature; the last step takes an optional task prompt (`Ctrl+L` library, `Ctrl+T` send when ready, `Alt+Enter` newline) |
 | `B` | Create several features at once: a project path, a count, a name prefix, one harness and mode for all |
 | `F` | Fork the selected feature onto a new branch, with its own harness and mode, optionally carrying context |
 | `g` | On a project row, browse its open GitHub issues and start a feature from one |
@@ -241,6 +241,9 @@ inside the app.
 | `r` | Rename the selected feature or session |
 | `d` | Delete the selected project, feature or session |
 | `O` | Open aiw's own config directory as a project, so an agent can edit your settings |
+| `G` | The project's feature groups: move the selected feature into one (or out), and create, rename, recolour, reorder and delete groups |
+| `C` | Fold or unfold the selected feature's group |
+| `#` | Write the note on the selected session or feature |
 
 **Sessions**
 
@@ -364,6 +367,54 @@ Claude says one of them waits on a permission, a dialog or input that its hooks
 did not report, the row turns ⛔ with the reason. The mark goes as soon as a
 hook shows the agent running again. Set `claude_agents_roster` to
 false to turn all of this off.
+
+**Groups.** `G` opens the project's groups. With a feature selected, `Enter`
+moves it into the highlighted group or back to "(no group)", and "+ New
+group…" creates a group and moves the feature in at once. `n` creates a group,
+`r` renames, `c` cycles its colour (six ANSI colours, so every theme shows
+them), `J` / `K` move it down or up, and `d` deletes it after a `y`; its
+features become ungrouped. Ungrouped features come first, then each group in
+order, with a `▾ ■ Backend` header above its first feature and a coloured bar
+beside each of its features and sessions. The header carries a ⛔ count when a
+feature in the group needs you. `C` folds the group into one row, `▸ ■ Backend ·
+3 features`, which keeps the ⛔ count; `Enter`, `l` or a search jump into it opens
+it again. A fan-out group (one prompt, several agents) can sit inside a user group and keeps its own
+`⇶` header under the group's. Groups and the fold state are saved in `aiw.db`.
+
+**Notes.** `#` writes a free-text note on the selected session, or on the
+feature when a feature row is selected. `Enter` saves, `Alt+Enter` adds a line,
+`Ctrl+U` clears and saving an empty note deletes it. A row with a note shows
+`✎`. The info block shows the first line of the session's note, or the
+feature's when the session has none, on one extra row. `/` matches note text
+and shows the matching line. Notes are saved in `aiw.db` and removed with
+their session or feature.
+
+**Layout presets.** A project's `aiw.json` (or the global `extension` block)
+can name sets of extra sessions to open with a feature:
+
+```json
+"layout_presets": [
+  { "name": "full", "description": "agent, watcher, server",
+    "sessions": [
+      { "kind": "terminal", "label": "watch", "command": "npm test -- --watch" },
+      { "kind": "custom", "name": "server" },
+      { "kind": "agent", "agent": "codex" },
+      { "kind": "nvim" }
+    ] }
+]
+```
+
+`kind` is `agent` (with `agent`), `terminal` (with an optional `command`, typed
+into the new shell), `nvim` or `custom` (with `name`, one of `custom_sessions`).
+`label` names the session. The New Feature dialog shows a Layout row when any
+preset exists; `j` / `k` pick one. A feature preset can name one with
+`"layout": "full"`, and `aiw automation create-feature` takes `"layout"`. The
+preset is checked before anything is created: an unknown kind, harness or
+custom session name stops the dialog (or the request) with a message naming
+the preset and the entry. Its sessions open once the feature runs, after its
+own agents; with one worktree per agent every sibling gets them. A session
+that cannot open (Neovim not installed, a failing `pre_check`) is reported and
+the rest still open.
 
 **Cost.** Claude's status line carries the dollar figure. For harnesses that
 report tokens but not cost, aiw multiplies by the prices in the
@@ -530,7 +581,14 @@ written back, so a config from an older version keeps loading.
   "allowed_agents": ["claude", "codex"],
   "feature_presets": [
     { "name": "quick fix", "branch_prefix": "fix/", "agent": "claude", "mode": "vibe", "enable_chrome": false },
-    { "name": "duel", "agents": ["claude", "codex"], "fan_out": "worktree_each", "mode": "vibe" }
+    { "name": "duel", "agents": ["claude", "codex"], "fan_out": "worktree_each", "mode": "vibe" },
+    { "name": "web", "agent": "claude", "mode": "vibe", "layout": "dev" }
+  ],
+  "layout_presets": [
+    { "name": "dev", "sessions": [
+      { "kind": "terminal", "label": "tests", "command": "npm test -- --watch" },
+      { "kind": "custom", "name": "dev" }
+    ] }
   ],
   "custom_sessions": [
     { "name": "dev", "description": "Vite dev server", "command": "npm run dev",
@@ -624,7 +682,7 @@ to writing that file. Codex gets its notify hook per launch rather than in
 | `aiw doctor [--json]` | Read-only health report: agents against the limit, editor windows, memory and swap, orphaned `aiw-` tmux sessions and worktrees, editors left running for stopped features, projects still configured by an old `amf.json`, the hook mode, and a line confirming no network use. Changes nothing, exits 0 |
 | `aiw fonts [--all] [--font …] [--terminal …]` | Print the detected terminal, colour depth and icon settings and a font config snippet |
 | `aiw automation create-project` | Register a directory as a project from a JSON request |
-| `aiw automation create-feature` | Create a feature in an existing project from JSON: project name, branch, agent, mode, worktree yes or no, an optional hook choice, and a dry-run flag. `agents` with `fan_out` (`shared` or `worktree_each`) starts several agents; `prompt` or `prompt_file` gives each one a task prompt once it is ready, and `send` sends it instead of pasting it unsent. The answer lists every feature created |
+| `aiw automation create-feature` | Create a feature in an existing project from JSON: project name, branch, agent, mode, worktree yes or no, an optional hook choice, and a dry-run flag. `agents` with `fan_out` (`shared` or `worktree_each`) starts several agents; `prompt` or `prompt_file` gives each one a task prompt once it is ready, and `send` sends it instead of pasting it unsent. `layout` opens a layout preset's sessions in each created feature. The answer lists every feature created |
 | `aiw automation create-batch-features` | Create one project with many parallel feature worktrees |
 | `aiw automation queue --session <id> "text"` | Queue a follow-up for a session; the id is in the doctor's JSON output |
 | `aiw --help` | Everything else |

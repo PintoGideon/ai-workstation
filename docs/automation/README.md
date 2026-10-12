@@ -68,6 +68,7 @@ Fields:
 - `fan_out`: `"worktree_each"` (sibling features `<branch>-<agent>`, grouped in the sidebar) or `"shared"` (one feature, a window per agent); defaults to `worktree_each` when the feature gets a worktree, else `shared`
 - `prompt` / `prompt_file`: the task prompt each agent gets once its pane is ready (the CLI reads `prompt_file`, relative to its working directory)
 - `send`: press Enter after pasting the prompt; off, it is pasted unsent
+- `layout`: a `layout_presets` entry (by name) whose sessions open in each created feature once it runs; an unknown name or a bad entry fails the request before anything is created
 
 If a repo has a prompted `on_worktree_created` hook, `--dry-run` returns a `worktree_hook_prompt` object with the hook title and valid options. An agent can use that response to pick a `hook_choice` before making the real call.
 

@@ -980,3 +980,61 @@ Codex now fires `SessionStart`; a worktree-each fan-out from the dialog with the
 agents exactly once and neither running it, the group header and `v` group tiles; a shared fan-out with send when
 ready, each agent running the prompt exactly once; and `aiw automation create-feature` with `prompt_file` and
 `send`, with no prompt left waiting at the end.
+
+### 19.4 Groups, notes and layout presets (proposal 10)
+
+**Model.** Pure rules in `src/fork/organize.rs`, App side in `src/app/fork_organize.rs` (`OrganizeRuntime` on App
+field `organize`: groups, memberships, notes, a pending layout), storage in `src/db/organize.rs`. Three new
+FORK_SCHEMA tables, no numbered migration: `aiw_feature_groups(id, project_id, name, color, position, collapsed)`,
+`aiw_feature_group_members(feature_id PK, group_id)` and `aiw_notes(kind, target_id, text, updated_at)` keyed by
+`(kind, target_id)` with kind `feature` or `session`. Deleting a session, feature or project removes its rows
+(`forget_organize_session` / `_feature` / `_project`, called beside the §19.2/§19.3 cleanups).
+
+**Groups without a new row kind.** A selectable group header would need a new `Selection` variant, which touches
+hundreds of match sites. Instead `order_features` puts ungrouped features first (the old repo-dir-then-creation
+order) and then each group by position, and `feature_slots` gives every feature a slot: `Ungrouped`, `GroupHead`
+(the header line is drawn above it, like the fan-out header, and counted by `workspace_item_height`),
+`GroupMember`, `CollapsedGroup` (the group's first feature, whose row is drawn as `▸ ■ name · N features` with the
+group's ⛔ count) or `Hidden`. `visible_items` skips hidden features and the sessions under a collapsed group's
+row, so selection, scrolling, mouse rows and `Ctrl+j/k` work unchanged. Collapsing moves a selection that would
+vanish to the group's row. `Enter` / `l` on that row open the group (the cockpit's Enter-focuses-the-pane rule
+steps aside for it), `h` on a folded member folds its group, and a search jump opens the group it lands in.
+`fan_out_heads_group` now puts the `⇶` header above the first sibling drawn as a feature row, so a fan-out pair
+inside a user group (or split across groups) still has one header. Colours are six named ANSI colours; a new group
+takes the first one the project's groups do not use.
+
+**Keys.** `G` the groups dialog (`Enter` move here / `n` new / `r` rename / `c` colour / `J` `K` order / `d` then
+`y` delete / `Esc`), `C` fold or unfold the selected feature's group, `#` the note editor (`Enter` save, `Alt+Enter`
+or `Ctrl+J` newline, `Ctrl+U` clear, `Esc` cancel). With a feature selected, "+ New group…" creates the group and
+moves the feature in at once.
+
+**Notes.** Normalised on save (trailing spaces and blank edge lines dropped; empty deletes). Rows with a note show
+`✎`; the info block grows one row for the first line of the session's note, else the feature's
+(`SessionInfo.note`, `App::session_info_has_note`); `/` matches note text and group names after names, showing the
+matching line.
+
+**Layout presets.** `ExtensionConfig.layout_presets` (merged by name, project wins) holds `LayoutPreset { name,
+description, sessions: [LayoutSessionSpec { kind, agent, name, label, command }] }` as plain strings, so a typo
+never breaks loading `aiw.json`; `resolve_layout` checks it against the project's custom sessions and enabled
+harnesses and returns an error naming the preset and the entry. The New Feature dialog gains a Layout row after
+Chrome (Claude) or Mode (`CreateFeatureState.layout_presets`, `layout_index`, `layout_focus`, `max_mode_focus`); a
+feature preset's `layout` selects one (a missing name is a toast). `create_feature_from_dialog` resolves the choice
+before anything is created and queues a `PendingLayout { project, preset, remaining }` (one per worktree-each
+sibling); `finish_feature_launch` calls `layout_feature_launched` after the fan-out continuation, and
+`apply_layout_to_feature` opens the sessions in order (agents through `create_agent_session_labeled_identified`,
+terminals with `add_terminal_session_for_picker` then `run_shell_command` for the command, Neovim, custom sessions
+with their `pre_check`), keeps the selection where it was, and reports any session that failed while the rest
+open. `aiw automation create-feature` accepts `layout` (`create_feature_from_request_organized` wraps the fan-out
+path: a bad layout fails the request first; per-feature problems go in the response message). The desktop GUI does
+not show groups, notes or layouts yet.
+
+**Tests.** `fork::organize` (order, slots, names, colours, notes, layout resolution and errors, lenient parsing),
+`db::organize`, `extension` (merge by name, preset `layout`), `handlers::fork_organize` (the editor's keys),
+`ui::fork_session_info` (the note row), `app::tests::fork_organize` (10: order and folding with navigation and
+restart survival; the dialog end to end; a fan-out pair inside a group with both headers drawn; notes through `#`
+with the info block, search, a jump that opens a folded group, deletion; a layout opened on launch; a bad layout
+refused before creation; a feature preset's layout; automation in every sibling and a refusal; project deletion).
+E2E (`scripts/dev/e2e/organize.sh`): groups in alpha with the fan-out pair inside one, a duplicate name refused,
+`C` fold saved and a search jump reopening it; notes on a feature and a session, the `✎` marks, the info-block line
+and `/` by note text; a project whose `aiw.json` has a layout preset — a broken preset refused before anything
+starts, then a feature opening claude, a terminal that ran its command and a custom session.

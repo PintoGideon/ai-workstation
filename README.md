@@ -137,6 +137,8 @@ Pi receives no mode flags.
 | `s` / `S` | Add a session / resume a saved Claude or Codex transcript |
 | `f` | Fork the selected Claude or Codex conversation: a new window in the same feature, or a new worktree |
 | `E` | Claude sessions started outside AIW in your projects, with the command to attach |
+| `G` / `C` | Feature groups: move the feature into one, create, rename, recolour, delete / fold or unfold its group |
+| `#` | Note on the selected session or feature, shown in the info block and found by `/` |
 | `c` / `x` | Start a feature or stopped session / stop a session or feature |
 | `v` | Tile the feature's agents (a fan-out group: every sibling) in the right pane; `Alt+q` there comes back |
 | `i` | List everything that needs you: questions first, then finished work |
