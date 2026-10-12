@@ -564,19 +564,38 @@ impl App {
                 kind: session_kind_for_agent(agent),
                 label: label_for_agent(agent),
                 disabled: None,
+                background: false,
             })
             .collect();
+        // FORK: §19.7 — Claude under its own supervisor, right after Claude.
+        if self.config.aiw.claude_background_sessions
+            && let Some(at) = builtin_sessions
+                .iter()
+                .position(|o| o.kind == SessionKind::Claude)
+        {
+            builtin_sessions.insert(
+                at + 1,
+                BuiltinSessionOption {
+                    kind: SessionKind::Claude,
+                    label: "Claude (background)".to_string(),
+                    disabled: None,
+                    background: true,
+                },
+            );
+        }
 
         builtin_sessions.extend(vec![
             BuiltinSessionOption {
                 kind: SessionKind::Terminal,
                 label: "Terminal".to_string(),
                 disabled: None,
+                background: false,
             },
             BuiltinSessionOption {
                 kind: SessionKind::Nvim,
                 label: "Neovim".to_string(),
                 disabled: None,
+                background: false,
             },
             BuiltinSessionOption {
                 kind: SessionKind::Vscode,
@@ -586,6 +605,7 @@ impl App {
                 } else {
                     Some("code not found in PATH".to_string())
                 },
+                background: false,
             },
         ]);
 
@@ -601,6 +621,7 @@ impl App {
                 kind: SessionKind::Todos,
                 label: "TODOs".to_string(),
                 disabled: None,
+                background: false,
             });
         }
 

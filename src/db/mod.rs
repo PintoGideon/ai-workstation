@@ -1,3 +1,4 @@
+pub(crate) mod background; // FORK: background Claude sessions (src/fork/background.rs)
 mod claude_worktrees; // FORK: Claude-created worktrees (src/fork/claude_worktrees.rs)
 mod debug_log;
 pub mod editors;

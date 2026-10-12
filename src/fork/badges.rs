@@ -124,6 +124,9 @@ pub struct SessionBadge {
     pub background: Option<String>,
     /// A recent one-off event: `compacted`, `model → sonnet`, `idle` (§19.1).
     pub event: Option<String>,
+    /// FORK: §19.7 — the session runs under Claude's supervisor
+    /// (`claude --bg`); its label starts with `bg`.
+    pub in_background: bool,
 }
 
 impl SessionBadge {
@@ -138,6 +141,7 @@ impl SessionBadge {
             tasks: None,
             background: None,
             event: None,
+            in_background: false,
         }
     }
 
@@ -209,7 +213,13 @@ impl SessionBadge {
                 parts.extend(self.background.clone());
                 parts.join(" · ")
             }
-            BadgeKind::Stopped => "stopped".into(),
+            // A background session says why: stopped (attach resumes it)
+            // or not listed by Claude any more (`c` resumes it).
+            BadgeKind::Stopped => self
+                .detail
+                .clone()
+                .filter(|_| self.in_background)
+                .unwrap_or_else(|| "stopped".into()),
             BadgeKind::Idle => {
                 let mut parts: Vec<String> = Vec::new();
                 parts.extend(self.detail.clone());
@@ -223,6 +233,9 @@ impl SessionBadge {
         };
         if self.queued > 0 && !matches!(self.kind, BadgeKind::Stopped | BadgeKind::Exited) {
             label.push_str(&format!(" · ⏭ {} queued", self.queued));
+        }
+        if self.in_background {
+            label = format!("bg · {label}");
         }
         label
     }
@@ -421,6 +434,57 @@ fn session_working(app: &App, feature: &Feature, session: &FeatureSession) -> bo
     app.thinking_features.contains(&feature.tmux_session) && !feature.sessions.iter().any(own)
 }
 
+/// FORK: §19.7 — the badge of a background Claude session.
+fn background_badge(
+    app: &App,
+    feature: &Feature,
+    session: &FeatureSession,
+    badge: &dyn Fn(BadgeKind, Option<String>) -> SessionBadge,
+) -> SessionBadge {
+    use crate::fork::background::BgState;
+    let state = app.background_state(&session.id);
+    // Hooks are faster than the roster: a turn that just started, or a
+    // question just asked, shows at once.
+    let hook_working = session_working(app, feature, session);
+    let hook_question = app.attention_for(&feature.tmux_session).filter(|record| {
+        signal_applies(feature, Some(&record.agent), session)
+            && matches!(
+                record.state,
+                AttentionState::Question | AttentionState::Waiting
+            )
+    });
+    let mut out = match state {
+        _ if hook_question.is_some() => {
+            let record = hook_question.expect("checked");
+            SessionBadge::new(BadgeKind::NeedsYou, record.since, attention_detail(record))
+        }
+        BgState::Blocked(why) => badge(BadgeKind::NeedsYou, Some(why)),
+        BgState::Failed(why) => badge(
+            BadgeKind::NeedsYou,
+            Some(if why.is_empty() {
+                "failed".to_string()
+            } else {
+                format!("failed: {why}")
+            }),
+        ),
+        BgState::Working => badge(BadgeKind::Working, None),
+        BgState::Starting => badge(BadgeKind::Working, Some("starting".into())),
+        _ if hook_working => badge(BadgeKind::Working, None),
+        BgState::Done => badge(
+            if app.finished_seen.contains(&session.id) {
+                BadgeKind::FinishedRead
+            } else {
+                BadgeKind::FinishedUnread
+            },
+            None,
+        ),
+        BgState::Stopped => badge(BadgeKind::Stopped, Some("stopped · Enter resumes".into())),
+        BgState::Gone => badge(BadgeKind::Stopped, Some("not running · c resumes".into())),
+    };
+    out.in_background = true;
+    out
+}
+
 /// The badge of one session.
 pub fn session_badge(
     app: &App,
@@ -453,6 +517,12 @@ pub fn session_badge(
 
     if !session.kind.is_tmux_backed() {
         return badge(BadgeKind::Idle, None);
+    }
+    // FORK: §19.7 — a background session lives outside the feature's tmux
+    // session: its state comes from Claude's roster and its own hooks, not
+    // from the feature running or a window existing.
+    if session.is_background() {
+        return decorate(background_badge(app, feature, session, &badge));
     }
     let feature_stopped = feature.status == ProjectStatus::Stopped;
     if feature_stopped || session.stopped {
@@ -526,7 +596,15 @@ pub fn feature_badge(app: &App, pi: usize, fi: usize, now: DateTime<Utc>) -> Ses
     let feature = &app.store.projects[pi].features[fi];
     let stopped = SessionBadge::new(BadgeKind::Stopped, feature.last_accessed, None);
     if feature.status == ProjectStatus::Stopped {
-        return stopped;
+        // FORK: §19.7 — background sessions run on without the feature's
+        // tmux session; the feature shows the most pressing of them.
+        let mut best = stopped;
+        for si in 0..feature.sessions.len() {
+            if feature.sessions[si].is_background() {
+                best = best.stronger(session_badge(app, pi, fi, si, now));
+            }
+        }
+        return best;
     }
     let mut best = SessionBadge::new(BadgeKind::Idle, feature.last_accessed, None);
     let mut any_agent = false;

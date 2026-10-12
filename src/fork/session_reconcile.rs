@@ -168,7 +168,12 @@ impl App {
                     continue;
                 }
                 for (si, session) in feature.sessions.iter().enumerate() {
-                    if !session.kind.is_tmux_backed() || session.created_at >= cutoff {
+                    // FORK: §19.7 — a background session has no window
+                    // unless attached; `app::fork_background` tracks it.
+                    if !session.kind.is_tmux_backed()
+                        || session.is_background()
+                        || session.created_at >= cutoff
+                    {
                         continue;
                     }
                     let key = (feature.tmux_session.clone(), session.tmux_window.clone());

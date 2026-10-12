@@ -154,6 +154,7 @@ impl App {
     /// Forget a deleted session's name and any pending fork.
     pub(crate) fn forget_session_identity(&mut self, session_id: &str) {
         self.forget_inbox(session_id); // §19.5
+        self.forget_background(session_id); // §19.7
         self.session_identity.pending_forks.remove(session_id);
         self.session_identity.roster_waiting.remove(session_id);
         if self.session_identity.names.forget(session_id)
@@ -315,13 +316,23 @@ impl App {
     /// Status-sweep step: start a roster read when one is due.
     pub fn claude_roster_tick(&mut self) {
         self.persist_session_names();
-        if !self.config.aiw.claude_agents_roster || self.session_identity.roster_bg.is_some() {
+        // FORK: §19.7 — background sessions take their state from the
+        // roster, so it is read (more often) while one exists.
+        let background = self.has_background_sessions();
+        if !(self.config.aiw.claude_agents_roster || background)
+            || self.session_identity.roster_bg.is_some()
+        {
             return;
         }
+        let interval = if background {
+            super::fork_background::ROSTER_INTERVAL
+        } else {
+            ROSTER_INTERVAL
+        };
         if self
             .session_identity
             .roster_last
-            .is_some_and(|at| at.elapsed() < ROSTER_INTERVAL)
+            .is_some_and(|at| at.elapsed() < interval)
         {
             return;
         }
@@ -331,7 +342,11 @@ impl App {
         self.session_identity.roster_last = Some(Instant::now());
         let (tx, rx) = std::sync::mpsc::channel();
         self.session_identity.roster_bg = Some(rx);
-        let cached = self.session_identity.roster_bin.clone();
+        let cached = self
+            .session_identity
+            .roster_bin
+            .clone()
+            .or_else(|| self.background.claude_bin.clone()); // §19.7: tests' fake claude
         let spawned = std::thread::Builder::new()
             .name("aiw-claude-roster".into())
             .spawn(move || {
@@ -445,6 +460,8 @@ impl App {
         }
         let changed = externals != self.session_identity.externals
             || waiting != self.session_identity.roster_waiting;
+        // FORK: §19.7 — background sessions' entries and conversation ids.
+        let changed = self.background_apply_roster(&roster) || changed;
         self.session_identity.roster = roster;
         self.session_identity.externals = externals;
         self.session_identity.roster_waiting = waiting;

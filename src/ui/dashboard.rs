@@ -512,6 +512,13 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     if let AppMode::ClaudeWorktrees(state) = &app.mode {
         super::dialogs::fork_claude_worktrees::draw_claude_worktrees(frame, app, state);
     }
+    // FORK: §19.7
+    if let AppMode::BackgroundPrompt(state) = &app.mode {
+        super::dialogs::fork_background::draw_background_prompt(frame, state, &app.theme);
+    }
+    if let AppMode::BackgroundRemove(state) = &app.mode {
+        super::dialogs::fork_background::draw_background_remove(frame, state, &app.theme);
+    }
     // FORK: §19.4
     if let AppMode::FeatureGroups(state) = &app.mode {
         super::dialogs::fork_organize::draw_feature_groups(frame, app, state);

@@ -347,10 +347,19 @@ pub enum TokenUsageSourceMatch {
 
 impl FeatureSession {
     /// Whether this session gets a live tmux window while its feature runs:
-    /// it has one at all (not a native TODOs overlay) and was not stopped
-    /// individually.
+    /// it has one at all (not a native TODOs overlay), was not stopped
+    /// individually, and is not a background Claude session (FORK: §19.7 —
+    /// that runs under Claude's supervisor; its window exists only while
+    /// attached).
     pub fn runs_with_feature(&self) -> bool {
-        self.kind.is_tmux_backed() && !self.stopped
+        self.kind.is_tmux_backed() && !self.stopped && !self.is_background()
+    }
+
+    /// FORK: §19.7 — a Claude session running under Claude's own supervisor
+    /// (`claude --bg`) rather than in a pane.
+    pub fn is_background(&self) -> bool {
+        self.kind == SessionKind::Claude
+            && crate::fork::background::is_background_window(&self.tmux_window)
     }
 
     pub fn set_token_usage_source_exact(&mut self, source: TokenUsageSource) {

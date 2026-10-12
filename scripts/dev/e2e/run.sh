@@ -112,7 +112,8 @@ keys j Enter j Enter Enter; sleep 2; hook_prompts
 wait_for "Created project 'batch'" 5 && wait_for 'batch2' 3; check "B: batch project with 2 Codex worktree features" $?
 grep -q 'developer_instructions' "$S/log/codex.args"; check "Codex launched (with AIW's developer instructions)" $?
 # a second agent in alpha-1: Codex beside Claude, same checkout
-select_row 'alpha-1' >/dev/null; keys s; wait_for 'Start Session' 3; keys j Enter; sleep 0.5
+# §19.7: "Claude (background)" sits right after Claude in the picker.
+select_row 'alpha-1' >/dev/null; keys s; wait_for 'Start Session' 3; keys j j Enter; sleep 0.5
 wait_for 'Name Session' 3 && keys Enter; sleep 1.5; hook_prompts; focus_sidebar
 aiw_tmux list-windows -t aiw-alpha-alpha-1 -F '#W' | grep -q codex; check "s: a Codex session added beside Claude in the same feature" $?
 
@@ -134,10 +135,10 @@ keys i; wait_for 'Needs Attention' 3; check "i: needs-you list" $?
 snap p1-needs-you-zoomed
 close_dialogs; sleep 0.6; [ "$(zoomed)" = 0 ]; check "closing the dialog un-zooms" $?
 
-select_row 'alpha-1' >/dev/null; keys s; wait_for 'Start Session' 3; keys j j j j j Enter; sleep 0.5
+select_row 'alpha-1' >/dev/null; keys s; wait_for 'Start Session' 3; keys j j j j j j Enter; sleep 0.5
 wait_for 'Name Session' 3 && keys Enter; sleep 1.5
 aiw_tmux list-windows -t aiw-alpha-alpha-1 -F '#W' | grep -q terminal; check "s: terminal session added" $?
-select_row 'alpha-1' >/dev/null; keys s; wait_for 'Start Session' 3; keys j j j j j j j j j Enter; sleep 0.5
+select_row 'alpha-1' >/dev/null; keys s; wait_for 'Start Session' 3; keys j j j j j j j j j j Enter; sleep 0.5
 wait_for 'Name Session' 3 && keys Enter; sleep 1.5
 aiw_tmux list-windows -t aiw-alpha-alpha-1 -F '#W' | grep -q logs; check "s: custom session from aiw.json added" $?
 select_row 'alpha-1' >/dev/null; keys s; wait_for 'Start Session' 3; keys Enter; sleep 0.5
@@ -279,7 +280,7 @@ close_dialogs
 # a fresh feature with two fake agents whose banners differ
 select_row 'alpha' >/dev/null; new_feature ws-1 y 0 1; sleep 2; hook_prompts
 wait_for "Created and started feature" 5 && aiw_tmux has-session -t aiw-alpha-ws-1 2>/dev/null; check "ws: feature with a Claude agent" $?
-select_row 'ws-1' >/dev/null; keys s; wait_for 'Start Session' 3; keys j Enter; sleep 0.5
+select_row 'ws-1' >/dev/null; keys s; wait_for 'Start Session' 3; keys j j Enter; sleep 0.5
 wait_for 'Name Session' 3 && keys Enter; sleep 1.5; hook_prompts; focus_sidebar
 aiw_tmux list-windows -t aiw-alpha-ws-1 -F '#W' | grep -q codex; check "ws: second agent (codex) added" $?
 cap | sed -n 2p | grep -qE '⛔ [0-9]+ · ● [0-9]+ · ✓ [0-9]+'; check "ws: header pills still count" $?
@@ -467,6 +468,9 @@ source "$HERE/messaging.sh"
 # §19.6: Claude's own worktrees through AIW's hook
 # shellcheck disable=SC1091
 source "$HERE/worktree_hooks.sh"
+# §19.7: background Claude sessions
+# shellcheck disable=SC1091
+source "$HERE/background.sh"
 
 aiw_quit; check "q: quit at the end" $?
 ! cockpit_alive && [ "$(view_sessions)" = 0 ]; check "q: cockpit server gone, no view sessions, agents still running" $?

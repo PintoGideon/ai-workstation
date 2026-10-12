@@ -177,6 +177,15 @@ a TODO list once per feature, and any custom sessions the project config
 defines. A second agent in the same feature shares the same checkout; use a
 second feature with its own worktree when you want isolation.
 
+**Run Claude in the background.** The picker's "Claude (background)" entry
+(right after Claude) adds a Claude session that runs under Claude Code's own
+supervisor (`claude --bg`) instead of in a pane: it keeps working when the
+terminal, the cockpit or aiw itself closes. You name it, give it a first
+prompt (or none, and it waits for you), and it starts. In the New Feature
+dialog, `b` on the harness list turns the highlighted Claude into
+"Claude (background)" for that feature. See "Background Claude sessions"
+below for what the row shows and how to attach.
+
 **Give several agents the same prompt.** On the dialog's harness list, press
 `Space` on each harness you want; the first one ticked is the primary. With
 two or more ticked, the dialog asks where they work. "One worktree each"
@@ -232,7 +241,7 @@ inside the app.
 | Key | Action |
 | --- | --- |
 | `N` | Create a project |
-| `n` | Create a feature in the selected project. On its harness list, `Space` ticks several agents for one prompt (a fan-out); a Layout row (when the project defines `layout_presets`) opens extra sessions with the feature; the last step takes an optional task prompt (`Ctrl+L` library, `Ctrl+T` send when ready, `Alt+Enter` newline) |
+| `n` | Create a feature in the selected project. On its harness list, `Space` ticks several agents for one prompt (a fan-out) and `b` makes a single Claude "Claude (background)" (`claude --bg`); a Layout row (when the project defines `layout_presets`) opens extra sessions with the feature; the last step takes an optional task prompt (`Ctrl+L` library, `Ctrl+T` send when ready, `Alt+Enter` newline) |
 | `B` | Create several features at once: a project path, a count, a name prefix, one harness and mode for all |
 | `F` | Fork the selected feature onto a new branch, with its own harness and mode, optionally carrying context |
 | `g` | On a project row, browse its open GitHub issues and start a feature from one |
@@ -249,7 +258,7 @@ inside the app.
 
 | Key | Action |
 | --- | --- |
-| `s` | Add a session: an agent, terminal, Neovim, VS Code, TODOs or a custom session |
+| `s` | Add a session: an agent, Claude (background), terminal, Neovim, VS Code, TODOs or a custom session |
 | `S` | Pick a saved Claude or Codex transcript to resume in the selected feature or session |
 | `f` | Fork the selected Claude or Codex conversation. Choose a new window in the same feature, or a new feature worktree from this branch; the fork continues the conversation under a new id and the original keeps its own |
 | `E` | List Claude sessions started outside aiw in your projects' checkouts. `Enter` copies the `claude attach` command for a background one |
@@ -261,6 +270,7 @@ inside the app.
 | `e` | Queue a follow-up for the selected agent |
 | `W` | List the worktrees Claude made for the selected feature (or, on a project row, the project) with its own `--worktree`, subagents or workflows. `t` opens a terminal there, `y` copies the path, `d` then `y` removes a clean one |
 | `@` | Send a message to an agent session. A Claude session gets it straight in its inbox as its next prompt; any other agent gets it when its current turn ends. The dialog shows which; `↑`/`↓` pick the target |
+| `Enter` / `c` / `x` / `d` on a background Claude row | Attach in the agent pane (`claude attach`; detaching sends it back) / restart it (`claude respawn`, or resume its conversation when Claude no longer lists it) / stop it (`claude stop`) / remove it (`claude rm`, asking first and showing Claude's refusal with the flag it suggests) |
 | `V` | Reopen a pending Vibeless edit approval |
 | `I` | On a TODOs row, start an agent on the next unstarted TODO |
 | `z` | List dormant features |
@@ -452,6 +462,32 @@ default. The hook only rides on the settings aiw passes at launch, so a
 `claude` you start yourself is unaffected. `claude_worktree_hooks: false`
 turns it off.
 
+**Background Claude sessions.** A session added as "Claude (background)"
+runs under Claude Code's supervisor (`claude --bg`) with the same settings,
+hooks, name, mode and context as an interactive Claude. It has no pane until
+you attach, so a feature whose only agent runs in the background gets no tmux
+session at all. Its row shows `bg ·` before the state Claude reports for it:
+`bg · working`, `bg · permission prompt` (it needs you), `bg · done`,
+`bg · stopped · Enter resumes`, or `bg · not running · c resumes` when Claude
+no longer lists it. Its hooks still reach aiw, so a question shows at once.
+The info block reads "Claude Code (background)" and its last row shows the
+short id, the state and the latest line of its output.
+
+- `Enter` attaches: aiw opens `claude attach <id>` in a window of the feature
+  and focuses it in the agent pane; typing goes to the session. Detach in
+  Claude and the window closes itself; the session keeps running.
+- `x` stops it (`claude stop`); its conversation is kept, and attaching
+  resumes it.
+- `c` restarts it (`claude respawn`), or, when Claude no longer lists it,
+  resumes its conversation in a new background session.
+- `d` asks, then runs `claude rm`. When Claude refuses (uncommitted work,
+  unpushed commits), the dialog shows Claude's words and the flag Claude
+  suggests; a second `y` runs `rm` with that flag and discards the work.
+
+Stopping the feature leaves its background sessions running; deleting the
+row or the feature stops them in Claude. `claude_background_sessions: false`
+hides the option.
+
 **Layout presets.** A project's `aiw.json` (or the global `extension` block)
 can name sets of extra sessions to open with a feature:
 
@@ -618,6 +654,7 @@ written back, so a config from an older version keeps loading.
 | `fan_out_ready_fallback_secs` | `15` | How long a task prompt waits for its agent's session-start hook before it is pasted anyway, once the pane runs the agent |
 | `messaging_inbox` | `true` | Deliver `@` messages and `aiw automation message` straight into a Claude session's inbox. Off: every message goes through the follow-up queue |
 | `claude_worktree_hooks` | `true` | Pass Claude a worktree hook so the worktrees it makes itself (`--worktree`, subagents, workflows) are created in aiw's worktree folder with the included files and a port block, and listed under their feature |
+| `claude_background_sessions` | `true` | Offer "Claude (background)" (`claude --bg`, attached on demand) in the `s` picker and as `b` on the New Feature harness list. The default harness stays interactive |
 | `claude_cross_session_inbound` | `"accept"` | Claude's rule for messages from your other sessions and aiw: `accept`, `hold` (approve each in the pane), `refuse`, or `default` to leave Claude's own rule. `accept` is not applied to SuperVibe sessions |
 | `max_concurrent_agents` | `4` | Warn before starting an agent past this many running harnesses; 0 disables |
 | `low_memory_warn_mb` | `1536` | Warn before starting an agent with less free memory than this; 0 disables |

@@ -155,6 +155,8 @@ pub struct RenameSessionState {
 #[derive(Clone)]
 pub enum NewSessionTarget {
     Builtin(SessionKind),
+    /// FORK: §19.7 — a Claude session under Claude's supervisor.
+    ClaudeBackground,
     // Boxed: CustomSessionConfig is ~10 fields and would dominate the enum size.
     Custom(Box<CustomSessionConfig>),
 }
@@ -1224,6 +1226,10 @@ pub enum AppMode {
     ExternalSessions(crate::app::fork_identity::ExternalSessionsState),
     /// FORK: §19.6 — the `W` list of worktrees Claude created.
     ClaudeWorktrees(crate::app::fork_claude_worktrees::ClaudeWorktreesState),
+    /// FORK: §19.7 — the first prompt of a background Claude session (`s`).
+    BackgroundPrompt(crate::app::fork_background::BackgroundPromptState),
+    /// FORK: §19.7 — `d` on a background session: `claude rm`.
+    BackgroundRemove(crate::app::fork_background::BackgroundRemoveState),
     /// FORK: §19.4 — `G`, the project's feature groups.
     FeatureGroups(crate::app::fork_organize::FeatureGroupsState),
     /// FORK: §19.4 — `#`, the note on a session or feature.
@@ -1534,6 +1540,8 @@ pub struct BuiltinSessionOption {
     pub kind: crate::project::SessionKind,
     pub label: String,
     pub disabled: Option<String>,
+    /// FORK: §19.7 — "Claude (background)": runs under `claude --bg`.
+    pub background: bool,
 }
 
 /// The dormant-features overlay: features that are idle *and* unattended, with
@@ -1903,6 +1911,11 @@ pub struct CreateFeatureState {
     pub layout_presets: Vec<String>,
     /// FORK: §19.4 — 0 = no layout, n = `layout_presets[n - 1]`.
     pub layout_index: usize,
+    /// FORK: §19.7 — the "Run in the background" row is offered
+    /// (`claude_background_sessions`).
+    pub background_offered: bool,
+    /// FORK: §19.7 — run the Claude session under `claude --bg`.
+    pub background: bool,
 }
 
 impl CreateFeatureState {
@@ -1956,7 +1969,21 @@ impl CreateFeatureState {
             mode_note: None,
             layout_presets: Vec::new(),
             layout_index: 0,
+            background_offered: false,
+            background: false,
         }
+    }
+
+    /// FORK: §19.7 — `b` on the harness list can make the highlighted
+    /// Claude "Claude (background)": offered, Claude, and not a fan-out.
+    pub fn background_available(&self) -> bool {
+        self.background_offered && self.agent == AgentKind::Claude && self.ticked.len() <= 1
+    }
+
+    /// FORK: §19.7 — whether the feature's Claude session runs in the
+    /// background (`claude --bg`).
+    pub fn background_selected(&self) -> bool {
+        self.background && self.background_available()
     }
 
     /// FORK: §19.4 — the layout preset chosen on the Layout row.
@@ -2090,6 +2117,13 @@ impl CreateFeatureState {
             return Some(
                 "Extra sessions opened once the feature runs (layout_presets in aiw.json): agents, terminals, nvim, custom sessions.",
             );
+        }
+        if self.mode_focus == 0 && self.background_available() {
+            return Some(if self.background {
+                "b: back to an interactive Claude pane. Claude (background) runs under claude --bg: it keeps working when AIW or the terminal closes; Enter on its row attaches."
+            } else {
+                "b: Claude (background) — runs under Claude's own supervisor (claude --bg) and keeps working when AIW or the terminal closes; Enter on its row attaches."
+            });
         }
         match self.mode_focus {
             0 | 1 => None,

@@ -725,6 +725,25 @@ pub fn handle_session_picker_key(app: &mut App, key: KeyCode) -> Result<()> {
                         }
                         return Ok(());
                     }
+                    // FORK: §19.7 — a background Claude session is named,
+                    // then given its first prompt.
+                    if builtin.background {
+                        let n = app
+                            .store
+                            .projects
+                            .get(state.pi)
+                            .and_then(|p| p.features.get(state.fi))
+                            .map(|f| f.sessions.iter().filter(|s| s.is_background()).count())
+                            .unwrap_or(0);
+                        app.mode = AppMode::NamingNewSession(NewSessionNameState {
+                            project_idx: state.pi,
+                            feature_idx: state.fi,
+                            target: NewSessionTarget::ClaudeBackground,
+                            input: format!("Claude bg {}", n + 1),
+                            return_to: state.clone(),
+                        });
+                        return Ok(());
+                    }
                     let input = app
                         .store
                         .projects
@@ -781,6 +800,9 @@ pub fn handle_new_session_name_key(app: &mut App, key: KeyCode) -> Result<()> {
             }
 
             match state.target {
+                NewSessionTarget::ClaudeBackground => {
+                    app.open_background_prompt(state.project_idx, state.feature_idx, label);
+                }
                 NewSessionTarget::Builtin(kind) => {
                     match app.add_builtin_session_with_label(
                         state.project_idx,

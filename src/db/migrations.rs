@@ -1237,6 +1237,9 @@ const MIGRATION_047: &str = "CREATE TABLE screenshot_scopes (scope_id TEXT PRIMA
 // `aiw_claude_worktrees`: worktrees Claude created through AIW's
 // `WorktreeCreate` hook (`src/fork/claude_worktrees.rs`, DESIGN.md §19.6); a
 // hook process creates it too (`db::claude_worktrees::TABLE_DDL`).
+// `aiw_background_sessions`: the short id `claude --bg` printed for each
+// background Claude session, and its conversation id (`src/fork/background.rs`,
+// DESIGN.md §19.7).
 pub(super) const FORK_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS aiw_hook_approvals (repo TEXT NOT NULL, hook TEXT NOT NULL, sha256 TEXT NOT NULL, command TEXT NOT NULL, approved_at TEXT NOT NULL, PRIMARY KEY (repo, hook, sha256));
 CREATE TABLE IF NOT EXISTS aiw_followups (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, position INTEGER NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_aiw_followups_session ON aiw_followups(session_id, position);
@@ -1248,7 +1251,8 @@ CREATE TABLE IF NOT EXISTS aiw_feature_groups (id TEXT PRIMARY KEY, project_id T
 CREATE TABLE IF NOT EXISTS aiw_feature_group_members (feature_id TEXT PRIMARY KEY, group_id TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS aiw_notes (kind TEXT NOT NULL, target_id TEXT NOT NULL, text TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (kind, target_id));
 CREATE TABLE IF NOT EXISTS aiw_inbox_addresses (session_id TEXT PRIMARY KEY, socket TEXT NOT NULL, conversation_id TEXT, updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS aiw_claude_worktrees (id TEXT PRIMARY KEY, repo TEXT NOT NULL, path TEXT NOT NULL UNIQUE, branch TEXT NOT NULL, base TEXT NOT NULL, name TEXT NOT NULL, origin TEXT NOT NULL, parent_session_id TEXT, claude_session_id TEXT, requested_cwd TEXT NOT NULL, port_start INTEGER, port_count INTEGER, created_at TEXT NOT NULL);";
+CREATE TABLE IF NOT EXISTS aiw_claude_worktrees (id TEXT PRIMARY KEY, repo TEXT NOT NULL, path TEXT NOT NULL UNIQUE, branch TEXT NOT NULL, base TEXT NOT NULL, name TEXT NOT NULL, origin TEXT NOT NULL, parent_session_id TEXT, claude_session_id TEXT, requested_cwd TEXT NOT NULL, port_start INTEGER, port_count INTEGER, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS aiw_background_sessions (session_id TEXT PRIMARY KEY, bg_id TEXT, conversation_id TEXT, updated_at TEXT NOT NULL);";
 
 #[cfg(test)]
 mod tests {

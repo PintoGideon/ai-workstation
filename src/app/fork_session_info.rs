@@ -115,6 +115,9 @@ pub struct SessionInfo {
     /// FORK: §19.4 — the first line of the session's note, else the
     /// feature's.
     pub note: Option<String>,
+    /// FORK: §19.7 — `bg 7c5dcf5d · working · <last log line>` for a
+    /// background Claude session.
+    pub background: Option<String>,
 }
 
 /// The harness's name as the block says it.
@@ -341,7 +344,11 @@ impl App {
         Some(SessionInfo {
             label: session.label.clone(),
             title,
-            harness: harness_name(&session.kind).to_string(),
+            harness: if session.is_background() {
+                "Claude Code (background)".to_string()
+            } else {
+                harness_name(&session.kind).to_string()
+            },
             // FORK: §19.2 — the `--name` the harness knows this session by.
             harness_name: self.session_harness_name(&session.id).map(str::to_string),
             model,
@@ -373,6 +380,9 @@ impl App {
                 .or_else(|| self.feature_note(&feature.id))
                 .and_then(crate::fork::organize::note_first_line)
                 .map(str::to_string),
+            background: session
+                .is_background()
+                .then(|| self.background_info_line(&session.id)),
         })
     }
 

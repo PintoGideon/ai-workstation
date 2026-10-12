@@ -51,6 +51,20 @@ to `$AIW_E2E_LOG/<name>.hooks` so a driver can assert on them.
 the driver writes for sessions "outside AIW". `claude --resume <id>
 --fork-session` and `codex fork <id>` start a new conversation id and log
 `forked_from` in `<name>.forks`.
+
+§19.7: background sessions. `claude --bg [flags] [prompt]` starts a detached
+worker (this script again, with `--aiw-e2e-bg-worker <id>`) the way Claude's
+supervisor does: from a scrubbed environment plus the `env` block of the
+`--settings` file (so AIW's hooks only work if AIW put its variables there),
+prints `backgrounded <id>` and the command block, and returns. The worker runs
+the prompt as a turn, then takes lines from `$AIW_E2E_LOG/bg/<id>.in`; its
+output is `bg/<id>.out` and its state `bg/<id>.json`, which `claude agents
+--json` lists as a background entry (state working / blocked / done /
+stopped). `claude attach <id>` resumes a stopped one, shows its output and
+feeds typed lines to it (`/detach` or EOF returns); `claude logs <id>`,
+`stop`, `respawn`, `rm` (refused over a dirty checkout unless
+`--force-remove-worktree` is passed) and `--resume <conversation> --bg` do
+what Claude's do. Every management call is logged in `claude.bg`.
 """
 
 import json
@@ -121,6 +135,33 @@ if NAME == "claude" and ARGS[:2] == ["agents", "--json"]:
             entries.extend(json.load(fh))
     except (OSError, ValueError):
         pass
+    # §19.7: background sessions, listed whether or not their worker runs.
+    bg_dir = os.path.join(LOG_DIR, "bg")
+    try:
+        names = sorted(os.listdir(bg_dir))
+    except OSError:
+        names = []
+    for fname in names:
+        if not fname.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(bg_dir, fname), encoding="utf-8") as fh:
+                rec = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        entry = {"cwd": rec.get("cwd", ""), "kind": "background", "startedAt": rec.get("startedAt"),
+                 "id": rec.get("id"), "sessionId": rec.get("sessionId"), "state": rec.get("state")}
+        if rec.get("name"):
+            entry["name"] = rec["name"]
+        alive = rec.get("pid") and pid_alive(rec["pid"])
+        if alive:
+            entry["pid"] = rec["pid"]
+            entry["status"] = {"working": "busy", "blocked": "waiting"}.get(rec.get("state"), "idle")
+            if rec.get("state") == "blocked":
+                entry["waitingFor"] = rec.get("waitingFor") or "input needed"
+        elif entry["state"] not in ("stopped", "failed"):
+            entry["state"] = "stopped"
+        entries.append(entry)
     log("agents", {"ts": time.time(), "count": len(entries)})
     out(json.dumps(entries))
     sys.exit(0)
@@ -134,6 +175,7 @@ settings_file = None
 session_name = None
 fork_session = False
 codex_fork_id = None
+BG_WORKER = None
 it = iter(range(len(ARGS)))
 i = 0
 while i < len(ARGS):
@@ -157,6 +199,10 @@ while i < len(ARGS):
     if a == "--fork-session":
         fork_session = True
         i += 1
+        continue
+    if a == "--aiw-e2e-bg-worker" and i + 1 < len(ARGS):
+        BG_WORKER = ARGS[i + 1]
+        i += 2
         continue
     if a == "--settings" and i + 1 < len(ARGS):
         settings_file = ARGS[i + 1]
@@ -912,8 +958,280 @@ def main():
             normal_turn(line)
 
 
+# ---------------------------------------------------------------- §19.7 background sessions
+BG_DIR = os.path.join(LOG_DIR, "bg")
+# What AIW's launch puts in the environment of a pane; a background session's
+# process gets these only from the settings file's `env` block.
+AIW_IDENTITY = ("AIW_ACTIVE", "AIW_SESSION", "AIW_TMUX_SESSION", "AIW_TMUX_WINDOW",
+                "AIW_FEATURE_SESSION_ID", "AIW_BIN", "AIW_TMUX_BIN", "AIW_TMUX_SOCKET")
+FLAGS_WITH_VALUES = {"--resume", "-r", "--name", "-n", "--settings", "--permission-mode",
+                     "--append-system-prompt", "--model", "--effort", "--add-dir", "-c",
+                     "--mcp-config", "--agent", "--session-id", "--aiw-e2e-bg-worker"}
+
+
+def bg_path(bg_id, ext):
+    return os.path.join(BG_DIR, f"{bg_id}.{ext}")
+
+
+def bg_load(bg_id):
+    return read_json(bg_path(bg_id, "json"))
+
+
+def bg_save(rec):
+    os.makedirs(BG_DIR, exist_ok=True)
+    tmp = bg_path(rec["id"], f"json.{os.getpid()}")
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(rec, fh)
+    os.replace(tmp, bg_path(rec["id"], "json"))
+
+
+def bg_log(op, **fields):
+    log("bg", dict({"ts": time.time(), "op": op}, **fields))
+
+
+def bg_positional():
+    """The prompt: the arguments that are neither flags nor flag values."""
+    words, i = [], 0
+    while i < len(ARGS):
+        a = ARGS[i]
+        if a == "--":
+            words.extend(ARGS[i + 1:])
+            break
+        if a in FLAGS_WITH_VALUES:
+            i += 2
+            continue
+        if a.startswith("-"):
+            i += 1
+            continue
+        words.append(a)
+        i += 1
+    return " ".join(words).strip()
+
+
+def bg_spawn(rec):
+    env = {k: v for k, v in os.environ.items() if k not in AIW_IDENTITY}
+    settings = read_json(rec.get("settings") or "") or {}
+    for k, v in (settings.get("env") or {}).items():
+        env[str(k)] = str(v)
+    os.makedirs(BG_DIR, exist_ok=True)
+    out_fh = open(bg_path(rec["id"], "out"), "a", encoding="utf-8")
+    argv = [os.path.abspath(sys.argv[0]), "--aiw-e2e-bg-worker", rec["id"], "--resume", rec["sessionId"]]
+    if rec.get("settings"):
+        argv += ["--settings", rec["settings"]]
+    if rec.get("name"):
+        argv += ["--name", rec["name"]]
+    proc = subprocess.Popen(argv, cwd=rec["cwd"], env=env, stdin=subprocess.DEVNULL, stdout=out_fh,
+                            stderr=subprocess.STDOUT, start_new_session=True)
+    rec["pid"] = proc.pid
+    rec["state"] = "working"
+    rec.pop("waitingFor", None)
+    bg_save(rec)
+    return rec
+
+
+def bg_kill(rec):
+    pid = rec.get("pid")
+    if pid and pid_alive(pid):
+        try:
+            os.kill(pid, 15)
+        except OSError:
+            pass
+        for _ in range(50):
+            if not pid_alive(pid):
+                break
+            time.sleep(0.02)
+    rec["pid"] = None
+
+
+def bg_dispatch():
+    """`claude --bg`: start (or continue) a background session and return."""
+    os.makedirs(BG_DIR, exist_ok=True)
+    prompt = bg_positional()
+    existing = None
+    if resume_id:
+        for fname in os.listdir(BG_DIR):
+            if fname.endswith(".json"):
+                rec = read_json(os.path.join(BG_DIR, fname)) or {}
+                if rec.get("sessionId") == resume_id:
+                    existing = rec
+    if existing and not (existing.get("pid") and pid_alive(existing["pid"])):
+        rec = existing
+        note = None
+    else:
+        rec = {"id": uuid.uuid4().hex[:8], "sessionId": resume_id or str(uuid.uuid4()),
+               "startedAt": int(time.time() * 1000)}
+        note = (f"note: session {existing['id']} is already running in the background, so this "
+                f"started a copy as {rec['id']}.") if existing else None
+    rec.update({"cwd": CWD, "name": session_name or rec.get("name"),
+                "settings": settings_file or rec.get("settings"), "prompt": prompt or None})
+    bg_save(rec)
+    bg_spawn(rec)
+    bg_log("dispatch", id=rec["id"], session=rec["sessionId"], prompt=prompt, name=session_name,
+           resume=resume_id, args=ARGS)
+    if note:
+        out(note)
+    out(f"backgrounded {rec['id']}")
+    out("  claude agents          list sessions")
+    out(f"  claude attach {rec['id']}  open in this terminal")
+    out(f"  claude logs {rec['id']}    show recent output")
+    out(f"  claude stop {rec['id']}    stop this session")
+    return 0
+
+
+def bg_set(rec, state, waiting=None):
+    rec["state"] = state
+    if waiting:
+        rec["waitingFor"] = waiting
+    else:
+        rec.pop("waitingFor", None)
+    bg_save(rec)
+
+
+def bg_worker_main(bg_id):
+    rec = bg_load(bg_id) or {"id": bg_id, "sessionId": SESSION_ID, "cwd": CWD}
+    rec["pid"] = os.getpid()
+    start_inbox()
+    banner()
+    ev("start", {"source": "startup"})
+    prompt = rec.pop("prompt", None)
+    bg_save(rec)
+    if prompt:
+        bg_set(rec, "working")
+        normal_turn(prompt)
+        rec["turns"] = rec.get("turns", 0) + 1
+        bg_set(rec, "done")
+    elif rec.get("turns"):
+        # Respawned or resumed: the conversation is where it was.
+        bg_set(rec, "done")
+    else:
+        # An unstarted first prompt: Claude lists it as blocked.
+        bg_set(rec, "blocked", "input needed")
+    inbox = bg_path(bg_id, "in")
+    offset = os.path.getsize(inbox) if os.path.exists(inbox) else 0
+    while True:
+        try:
+            with open(inbox, encoding="utf-8") as fh:
+                fh.seek(offset)
+                lines = fh.readlines()
+                offset = fh.tell()
+        except OSError:
+            lines = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if line == "/ask":
+                out("⏺ Bash(rm -rf build/)")
+                out("Do you want to proceed?")
+                ev("ask", ask_extra())
+                bg_set(rec, "blocked", "permission prompt")
+            elif line in ("/exit", "/quit"):
+                ev("end", {"reason": "exit"})
+                bg_set(rec, "stopped")
+                return 0
+            else:
+                bg_set(rec, "working")
+                normal_turn(line)
+                rec["turns"] = rec.get("turns", 0) + 1
+                bg_set(rec, "done")
+        time.sleep(0.2)
+
+
+def bg_manage():
+    """`claude attach|logs|stop|respawn|rm <id>`."""
+    verb = ARGS[0]
+    bg_id = ARGS[1] if len(ARGS) > 1 else ""
+    rec = bg_load(bg_id)
+    bg_log(verb, id=bg_id, args=ARGS)
+    if rec is None:
+        sys.stderr.write(f"error: no background session {bg_id}\n")
+        return 1
+    alive = rec.get("pid") and pid_alive(rec["pid"])
+    if verb == "logs":
+        try:
+            with open(bg_path(bg_id, "out"), encoding="utf-8") as fh:
+                for line in fh.readlines()[-20:]:
+                    sys.stdout.write(line)
+        except OSError:
+            pass
+        return 0
+    if verb == "stop":
+        bg_kill(rec)
+        bg_set(rec, "stopped")
+        out(f"stopped {bg_id}")
+        return 0
+    if verb == "respawn":
+        bg_kill(rec)
+        bg_spawn(rec)
+        out(f"respawned {bg_id}")
+        return 0
+    if verb == "rm":
+        dirty = subprocess.run(["git", "-C", rec.get("cwd", "."), "status", "--porcelain"],
+                               capture_output=True, text=True).stdout.strip()
+        if dirty and "--force-remove-worktree" not in ARGS:
+            first = dirty.splitlines()[0][3:]
+            sys.stderr.write(f"Not removing {bg_id}: the worktree has uncommitted changes, including {first}.\n"
+                             f"Deleting it would lose them. To discard them, run "
+                             f"'claude rm {bg_id} --force-remove-worktree wt-{bg_id}'\n")
+            return 1
+        bg_kill(rec)
+        for ext in ("json", "in"):
+            try:
+                os.remove(bg_path(bg_id, ext))
+            except OSError:
+                pass
+        out(f"removed {bg_id}")
+        return 0
+    if verb == "attach":
+        import threading
+        if not alive:
+            bg_spawn(rec)
+            out(f"(resumed {bg_id})")
+        out(f"attached to {bg_id} — type to talk to it; /detach sends it back to the background")
+        out_file = bg_path(bg_id, "out")
+        stop = threading.Event()
+
+        def tail():
+            pos = 0
+            try:
+                pos = max(0, os.path.getsize(out_file) - 2000)
+            except OSError:
+                pass
+            while not stop.is_set():
+                try:
+                    with open(out_file, encoding="utf-8", errors="replace") as fh:
+                        fh.seek(pos)
+                        chunk = fh.read()
+                        pos = fh.tell()
+                    if chunk:
+                        sys.stdout.write(chunk)
+                        sys.stdout.flush()
+                except OSError:
+                    pass
+                time.sleep(0.2)
+
+        threading.Thread(target=tail, daemon=True).start()
+        while True:
+            line = sys.stdin.readline()
+            if line == "" or line.strip() == "/detach":
+                stop.set()
+                out("detached")
+                bg_log("detach", id=bg_id)
+                return 0
+            with open(bg_path(bg_id, "in"), "a", encoding="utf-8") as fh:
+                fh.write(line if line.endswith("\n") else line + "\n")
+    sys.stderr.write(f"error: unknown command {verb}\n")
+    return 1
+
+
 if __name__ == "__main__":
     try:
+        if NAME == "claude" and BG_WORKER:
+            sys.exit(bg_worker_main(BG_WORKER))
+        if NAME == "claude" and ARGS[:1] and ARGS[0] in ("attach", "logs", "stop", "respawn", "rm"):
+            sys.exit(bg_manage())
+        if NAME == "claude" and "--bg" in ARGS:
+            sys.exit(bg_dispatch())
         sys.exit(main())
     except BrokenPipeError:
         sys.exit(0)

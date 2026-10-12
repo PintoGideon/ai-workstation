@@ -25,6 +25,9 @@ on disk, and what was removed in favour of the harnesses' own features.
 
 - Runs several coding-agent sessions side by side from one dashboard, each in
   its own tmux window on AIW's private tmux server.
+- Runs Claude in the background under Claude Code's own supervisor
+  (`claude --bg`) when you want it to outlive the terminal: the row shows its
+  state, `Enter` attaches, detaching sends it back.
 - Starts one prompt on several agents at once, in one shared worktree or one
   worktree each, grouped in the sidebar and tiled with `v`. The prompt is
   delivered when each agent is ready, unsent unless you ask.
@@ -136,7 +139,7 @@ Pi receives no mode flags.
 | `N` / `n` | Create a project / feature |
 | `B` / `F` | Create several features at once / fork a feature onto a new branch |
 | `g` | On a project row: browse GitHub issues and start a feature from one |
-| `s` / `S` | Add a session / resume a saved Claude or Codex transcript |
+| `s` / `S` | Add a session (including "Claude (background)", `claude --bg`) / resume a saved Claude or Codex transcript |
 | `f` | Fork the selected Claude or Codex conversation: a new window in the same feature, or a new worktree |
 | `E` | Claude sessions started outside AIW in your projects, with the command to attach |
 | `G` / `C` | Feature groups: move the feature into one, create, rename, recolour, delete / fold or unfold its group |
@@ -148,6 +151,7 @@ Pi receives no mode flags.
 | `e` | Queue a follow-up, delivered when the agent's turn ends |
 | `W` | Worktrees Claude made itself (`--worktree`, subagents), created in AIW's layout: terminal, copy path, remove |
 | `@` | Message an agent session: straight into a Claude session's inbox, otherwise at its next turn end |
+| `Enter` / `c` / `x` / `d` | On a background Claude row: attach / restart / stop / `claude rm` |
 | `V` | Reopen a pending Vibeless edit approval |
 | `I` | On a TODOs row: start an agent on the next TODO |
 | `z` | Dormant features: idle and unattended |

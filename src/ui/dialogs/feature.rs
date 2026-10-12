@@ -594,6 +594,12 @@ fn draw_create_feature_branch_mode(
             Some(0) if state.ticked.len() > 1 => "  (primary)",
             _ => "",
         };
+        // FORK: §19.7 — `b` made the highlighted Claude a background one.
+        let name = if is_selected && state.background_selected() {
+            format!("{} (background)", agent.display_name())
+        } else {
+            agent.display_name().to_string()
+        };
         let style = if agent_active && is_selected {
             Style::default()
                 .fg(theme.primary.to_color())
@@ -604,7 +610,7 @@ fn draw_create_feature_branch_mode(
             Style::default().fg(theme.text_muted.to_color())
         };
         agent_lines.push(Line::from(Span::styled(
-            format!("   {} {}{}{}", marker, tick, agent.display_name(), role),
+            format!("   {} {}{}{}", marker, tick, name, role),
             style,
         )));
         if let Some(summary) = &agent_summaries[i] {

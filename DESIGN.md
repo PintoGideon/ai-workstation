@@ -1179,3 +1179,92 @@ feature's HEAD with the `.env`, a port block, clean, recorded with its session a
 by `W`; `/wt` (EnterWorktree) gets `claude-e2e-enter`; WorktreeRemove refuses it dirty (Claude is told why), removes it
 clean with its branch and record, and the row goes; `W` → `t` opens a terminal in the worktree with `AIW_PORT`; `W` →
 `d` `y` removes; `aiw doctor` does not list a Claude worktree as an orphan.
+
+### 19.7 Background Claude sessions (proposal 4)
+
+**Ask.** A Claude session that keeps working when the terminal, the cockpit or AIW itself closes, attached only when
+you want to look. Claude Code has this natively: `claude --bg` hands the session to Claude's own supervisor daemon,
+`claude agents --json` lists it with a state, `claude attach <id>` opens it in a terminal, and `logs`, `stop`,
+`respawn`, `rm` manage it. AIW starts such sessions, shows them as rows, and attaches on demand; it does not run its
+own daemon.
+
+**What a background session is in the store.** An ordinary `SessionKind::Claude` session whose window name starts
+with `aiw-bg-` (`FeatureSession::is_background`). Chosen over a new `SessionKind` (265 match sites): the window name
+is persisted for free, `runs_with_feature()` excludes the session so a feature start never creates its window or
+launches an interactive Claude into it, and the exited sweep (`fork::session_reconcile`) skips it. The window exists
+only while you are attached. `aiw_background_sessions(session_id, bg_id, conversation_id)` keeps the short id
+`claude --bg` printed and, once learned from the roster or a hook, the conversation id (FORK_SCHEMA, no numbered
+migration).
+
+**Start.** Two routes, both opt-in behind `claude_background_sessions` (default true; the default harness stays
+interactive): the `s` picker's "Claude (background)" (right after Claude; then the name, default `Claude bg N`, then
+a first-prompt dialog — empty means it waits for you), and `b` on the New Feature dialog's harness list, which turns
+the highlighted Claude into "Claude (background)" for a single-agent feature (not a fan-out). The dialog route records
+`(project, feature)`; the feature's first start claims its first Claude session without a conversation
+(`claim_feature_background`) by renaming its window. A feature whose only tmux-backed sessions are background ones gets
+**no tmux session** at start (it would hold an idle shell); `c` on it restarts what Claude dropped. The task prompt of
+such a feature goes onto the `claude --bg` command line instead of the paste path (`background_take_startup_prompt`,
+and a fan-out pending prompt is taken over the same way).
+
+**Launch** (`App::background_tick`, every loop turn): a pending session runs `claude --bg <AIW's usual Claude flags>
+[prompt]` on a thread with a 30 s timeout — the same `--settings` file (hooks, status line, worktree hooks,
+`crossSessionInbound`), `--name` (§19.2), mode flags and context paragraph as an interactive launch. Two additions to
+that settings file (`fork::background::amend_settings_file`):
+- an `env` block with `AIW_ACTIVE`, `AIW_SESSION`, `AIW_TMUX_SESSION`, `AIW_TMUX_WINDOW`, `AIW_FEATURE_SESSION_ID`,
+  `AIW_BIN`, `AIW_TMUX_BIN`, `AIW_TMUX_SOCKET`, the `XDG_*` dirs and the feature's port block. Claude's supervisor,
+  not the shell that ran `claude --bg`, starts the process, so AIW's hook scripts (which identify the session from
+  these variables) must not rely on environment inheritance; `--settings` is documented as kept when backgrounding;
+- `"worktree": {"bgIsolation": "none"}`: Claude otherwise moves a background session into a fresh worktree before
+  its first edit unless it already runs in a linked worktree, and a feature in the repo dir is not one. The docs name
+  this setting for project settings; whether Claude honours it from `--settings` is for the real-harness pass to
+  confirm.
+The short id is read from the output (`started a copy as <id>` wins over `backgrounded <id>` wins over
+`claude attach <id>`, the formats in the installed 2.1.296 bundle). The process runner drains both pipes on threads
+and stops waiting a moment after the process exits, so a supervisor started by the first `--bg` that inherited a pipe
+cannot hang the launch.
+
+**State.** `claude agents --json` (the §19.2 roster) is read every 3 s while a background session exists (every 10 s
+otherwise), even with `claude_agents_roster` off. An entry is matched by short id, then conversation id, then name;
+its `state`/`status`/`waitingFor` map to `working`, `waiting: <why>`, `done`, `failed`, `stopped`; a session Claude no
+longer lists is `not running`. The session's own hooks overlay that: a question raised by a hook, or a turn a hook
+says is running, shows at once. The badge carries `bg ·` before its label (`bg · working 2m`, `bg · permission
+prompt`, `bg · stopped · Enter resumes`, `bg · not running · c resumes`); the feature rolls its background sessions up
+even while it has no tmux session. The info block says `Claude Code (background)` and leads its last row with
+`bg <id> · <state> · <last line of claude logs>` (logs read off the UI thread every 5 s for the selected session).
+
+**Attach** (`Enter` on the row). AIW creates the feature's tmux session if it has none (the port block reserved first)
+or a window `aiw-bg-claude…` in it, runs `claude attach <id>; <tmux> kill-window -t =<session>:<window>` there and
+focuses it in the cockpit's agent pane like any session window. Detaching in Claude ends `attach`, the window closes
+itself, the cockpit falls back to its placeholder, and a 2 s window check returns the row to "in the background". An
+attach of a stopped session resumes it (Claude's own behaviour). `Enter` on an attached row just focuses the pane.
+
+**Manage.** `x` → `claude stop <id>` (the conversation is kept). `c` → `claude respawn <id>` (running or stopped,
+conversation intact); when Claude no longer lists the session, `claude --resume <conversation> --bg` with no other
+flags (with flags Claude starts a copy under a new id); when it never started, a fresh `--bg`. `d` opens a
+confirmation; `y` runs `claude rm <id>`. A refusal (a dirty worktree, unpushed commits) is shown in Claude's words
+with the exact flag Claude printed (`--force-remove-worktree <wt>` / `--discard-unpushed <commit>@<wt>`), and a second
+`y` reruns `rm` with it; only then is the row removed. Removing the row any other way (deleting the feature) runs
+`claude stop` so nothing keeps running unseen; the conversation and Claude's list entry stay.
+
+**Not done.** Background Codex (Codex has no supervisor mode). Attaching to background sessions started outside AIW
+(they are the dimmed `↗` lines of §19.2; `E` copies their `claude attach`). A restart of AIW reattaches state from
+the roster by the stored short id; a session the roster no longer lists shows `not running` with `c` to resume.
+
+**Tests.** `fork::background` (window names, the short id from `--bg` output including the copy note, launch / resume
+/ verb / rm arguments, rm refusals and their flags vs the usage line, roster states, log tails without escapes, the
+attach command closing its window, the settings `env` and `bgIsolation` amendment, the runner reading both streams and
+not waiting for a daemon holding the pipe), `db::background` (round trip, update, delete), `app::fork_background`
+(the dialog claim, states from pending / roster / errors), `ui::fork_session_info` (the background line leads the last
+row), `app::tests::fork_background` (10 against a fake `claude` script: the picker names, prompts and launches with
+`--settings` / `--name` / the mode / the prompt, the settings `env` and `bgIsolation`, no tmux and a stored id; the
+New Feature `b` (off for a fan-out, back for one Claude) launches without a tmux session with the task prompt; roster
+states and hooks drive the badge and the stopped feature's roll-up; attach opens a self-closing window and detach
+returns the row; `x` / `c` / a refused then forced `rm`; a dropped session resumes its conversation; the selected
+session's logs reach the info block; a feature start skips background sessions; a background-only feature opens no
+tmux session; removing the row stops it in Claude). E2E (`scripts/dev/e2e/background.sh`; the fake `claude --bg`
+starts a detached worker from a scrubbed environment plus the settings `env`, like Claude's supervisor): the picker
+route with the prompt, `--settings` and `--name`, the stored id, no tmux window; the worker's hooks reach AIW only
+through the settings env and the row reads `bg · done`; the info block shows the id, state and latest output; `Enter`
+attaches in the agent pane, typing reaches the session, `/detach` closes the window; `x` stops, `c` respawns; `d` →
+`claude rm` refused over a dirty checkout with Claude's words, `y` again removes with the printed flag; the New
+Feature `b` route starts the feature's Claude with `--bg` and its task prompt and no tmux session.

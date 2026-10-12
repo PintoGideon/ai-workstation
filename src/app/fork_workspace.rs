@@ -96,7 +96,15 @@ impl App {
         let project = self.store.projects.get(pi)?;
         let feature = project.features.get(fi)?;
         let session = feature.sessions.get(si)?;
-        if !session.kind.is_tmux_backed() || feature.status == ProjectStatus::Stopped {
+        // FORK: §19.7 — a background session has a window only while it is
+        // attached; the feature's status does not say whether it runs.
+        let attached_background = session.is_background() && self.background_attached(&session.id);
+        if session.is_background() && !attached_background {
+            return None;
+        }
+        if !session.kind.is_tmux_backed()
+            || (feature.status == ProjectStatus::Stopped && !attached_background)
+        {
             return None;
         }
         // An agent that exited at its shell still has a window: show the

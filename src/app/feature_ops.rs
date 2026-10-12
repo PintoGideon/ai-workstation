@@ -233,6 +233,7 @@ impl App {
         state.allowed_agents = available;
         state.feature_presets = self.active_extension.allowed_feature_presets();
         state.layout_presets = self.layout_preset_names(); // FORK: §19.4
+        state.background_offered = self.config.aiw.claude_background_sessions; // FORK: §19.7
         self.mode = AppMode::CreatingFeature(state);
         self.message = None;
     }
@@ -265,6 +266,7 @@ impl App {
         // Extracted (not read via `state` below) so the borrow of `self.mode`
         // ends here: `self.save()` further down now takes `&mut self`.
         let agent = state.agent.clone();
+        let background = state.background_selected(); // FORK: §19.7
 
         if feature_name.as_deref().unwrap_or(&branch).trim().is_empty() {
             self.set_create_feature_branch_error("Feature name cannot be empty");
@@ -284,6 +286,13 @@ impl App {
         if let Err(err) = self.ensure_agent_mode_supported(&agent, &mode) {
             self.message = Some(format!("Error: {}", err));
             return Ok(());
+        }
+        // FORK: §19.7 — claimed by the feature's first start.
+        if background && agent == AgentKind::Claude {
+            self.background.pending_features.insert((
+                project_name.clone(),
+                feature_name.clone().unwrap_or_else(|| branch.clone()),
+            ));
         }
 
         let stored_is_git = {
@@ -685,6 +694,11 @@ impl App {
                     return self.finish_todo_spawn_in_new_feature(&origin, pi, fi, prompt);
                 }
                 if let Some(prompt) = prepared.startup_prompt {
+                    // FORK: §19.7 — a background agent takes it on its
+                    // `claude --bg` command line.
+                    if self.background_take_startup_prompt(pi, fi, &prompt) {
+                        return Ok(());
+                    }
                     // FORK: §19.3 — waits for the agent's pane to be ready
                     // (its SessionStart hook), then is pasted unsent.
                     if self.queue_startup_prompt(pi, fi, &prompt) {
@@ -988,8 +1002,40 @@ impl App {
             &launch_project_name,
             feature,
         );
+        // FORK: §19.7 — the dialog's "run in the background" takes the first
+        // Claude session.
+        super::fork_background::claim_feature_background(
+            &mut self.background,
+            &launch_project_name,
+            feature,
+        );
 
         if already_running {
+            return Ok(Started::Yes);
+        }
+        // FORK: §19.7 — nothing of this feature runs in tmux: its agents run
+        // under Claude's supervisor. No tmux session (it would only hold an
+        // idle shell); `c` (re)starts its background sessions instead.
+        if Self::feature_is_background_only(feature) {
+            let ids: Vec<(usize, String)> = feature
+                .sessions
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| s.is_background())
+                .map(|(si, s)| (si, s.id.clone()))
+                .collect();
+            for (si, session_id) in ids {
+                if !self.background.pending.contains_key(&session_id)
+                    && matches!(
+                        self.background_state(&session_id),
+                        crate::fork::background::BgState::Stopped
+                            | crate::fork::background::BgState::Gone
+                            | crate::fork::background::BgState::Failed(_)
+                    )
+                {
+                    self.restart_background_session(pi, fi, si);
+                }
+            }
             return Ok(Started::Yes);
         }
 

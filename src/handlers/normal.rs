@@ -10,6 +10,10 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
     if super::fork_workspace::handle_key(app, key)? {
         return Ok(());
     }
+    // FORK: §19.7 — Enter / c / x / d on a background Claude session.
+    if super::fork_background::handle_dashboard_key(app, key)? {
+        return Ok(());
+    }
     // FORK: `a` / `X` answer a permission request waiting on the selected row (P6).
     if super::fork_permissions::handle_dashboard_key(app, key)? {
         return Ok(());

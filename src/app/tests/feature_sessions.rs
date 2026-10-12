@@ -452,6 +452,8 @@ fn app_in_creating_feature_mode(
         mode_note: None,
         layout_presets: Vec::new(),
         layout_index: 0,
+        background_offered: false,
+        background: false,
     };
     let mut app = App::new_for_test(
         store,
@@ -1177,9 +1179,13 @@ fn open_session_picker_selects_project_preferred_agent_by_default() {
 
     match &app.mode {
         AppMode::SessionPicker(state) => {
-            assert_eq!(state.selected, 1);
+            // FORK: §19.7 — "Claude (background)" follows Claude.
+            assert_eq!(state.selected, 2);
             assert_eq!(state.builtin_sessions[0].kind, SessionKind::Claude);
-            assert_eq!(state.builtin_sessions[1].kind, SessionKind::Codex);
+            assert!(!state.builtin_sessions[0].background);
+            assert_eq!(state.builtin_sessions[1].kind, SessionKind::Claude);
+            assert!(state.builtin_sessions[1].background);
+            assert_eq!(state.builtin_sessions[2].kind, SessionKind::Codex);
         }
         _ => panic!("expected SessionPicker mode"),
     }
@@ -1295,6 +1301,8 @@ fn create_feature_session_name_enter_creates_and_starts_feature() {
         mode_note: None,
         layout_presets: Vec::new(),
         layout_index: 0,
+        background_offered: false,
+        background: false,
     });
 
     crate::handlers::handle_create_feature_key(&mut app, KeyCode::Enter).unwrap();

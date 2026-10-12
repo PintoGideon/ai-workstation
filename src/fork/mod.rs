@@ -34,6 +34,7 @@ pub(crate) mod theme_picker;
 pub(crate) mod themes;
 
 // G2 — Gemini CLI and Cursor agent (DESIGN.md §5).
+pub(crate) mod background; // background Claude sessions under Claude's supervisor (`claude --bg`, DESIGN.md §19.7)
 pub(crate) mod claude_roster; // `claude agents --json`: external sessions and waitingFor (DESIGN.md §19.2)
 pub(crate) mod claude_settings; // Claude hooks + status line via --settings (DESIGN.md §16.6)
 pub(crate) mod claude_worktrees; // Claude's own worktrees in AIW's layout via WorktreeCreate/Remove hooks (DESIGN.md §19.6)

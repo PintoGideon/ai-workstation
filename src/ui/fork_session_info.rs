@@ -100,7 +100,17 @@ pub fn lines(info: &SessionInfo, theme: &Theme, width: usize) -> Vec<Line<'stati
         width,
     ));
     let mut last: Vec<Span<'static>> = Vec::new();
+    // FORK: §19.7 — a background session's id, state and latest output.
+    if let Some(background) = &info.background {
+        last.push(Span::styled(
+            background.clone(),
+            Style::default().fg(theme.primary.to_color()),
+        ));
+    }
     if info.queued > 0 {
+        if !last.is_empty() {
+            last.push(Span::styled(" · ", dim));
+        }
         last.push(Span::styled(
             format!("⏭ {} queued", info.queued),
             Style::default().fg(theme.primary.to_color()),
@@ -184,6 +194,7 @@ mod tests {
             decision: Some("✓ allowed Bash".into()),
             hooks: None,
             note: None,
+            background: None,
         };
         let lines = super::lines(&info, &theme, 30);
         let text: Vec<String> = lines
@@ -269,5 +280,24 @@ mod tests {
             .collect();
         assert_eq!(text.len(), 7);
         assert_eq!(text[6], "✎ waiting on the API review");
+        // FORK: §19.7 — a background session leads its last row.
+        let background = SessionInfo {
+            background: Some("bg 7c5d · working · Reading src/a.rs".into()),
+            queued: 1,
+            ..noted
+        };
+        let text: Vec<String> = super::lines(&background, &theme, 80)
+            .iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect();
+        assert_eq!(
+            text[5],
+            "bg 7c5d · working · Reading src/a.rs · ⏭ 1 queued · tasks 1/3 · compacted"
+        );
     }
 }

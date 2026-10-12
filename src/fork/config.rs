@@ -61,6 +61,11 @@ pub struct AiwConfig {
     /// files and a port block, and listed under their feature (§19.6). On by
     /// default.
     pub claude_worktree_hooks: bool,
+    /// Offer "Claude (background)" — a Claude session that runs under
+    /// Claude's own supervisor (`claude --bg`) and is attached on demand —
+    /// in the add-session picker and the New Feature dialog (§19.7). On by
+    /// default; the default harness stays interactive either way.
+    pub claude_background_sessions: bool,
 }
 
 impl Default for AiwConfig {
@@ -78,6 +83,7 @@ impl Default for AiwConfig {
             messaging_inbox: true,
             claude_cross_session_inbound: crate::fork::messaging::InboundPolicy::Accept,
             claude_worktree_hooks: true,
+            claude_background_sessions: true,
         }
     }
 }

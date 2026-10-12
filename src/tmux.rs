@@ -604,6 +604,12 @@ impl TmuxManager {
         let _ = Self::cli_binary_override().set(path);
     }
 
+    /// FORK: §19.7 — the `aiw` the hook scripts run, for a background
+    /// session's settings `env` block.
+    pub(crate) fn cli_binary_path() -> Option<PathBuf> {
+        Self::cli_binary()
+    }
+
     fn cli_binary() -> Option<PathBuf> {
         match Self::cli_binary_override().get() {
             Some(path) => path.clone(),

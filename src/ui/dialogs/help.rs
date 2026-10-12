@@ -137,7 +137,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "Ctrl+Q",
             "Keyboard sidebar ⇄ agent pane (tmux; works from either side)",
         ),
-        ("s", "Add session (picker)"),
+        (
+            "s",
+            "Add session (picker; \"Claude (background)\" runs under claude --bg)",
+        ),
         ("S", "Pick session to resume"),
         ("N", "Create new project"),
         // FORK: §19.3
@@ -189,6 +192,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         (
             "@",
             "Message an agent session (Claude: its inbox; others: next turn end)",
+        ), // FORK: §19.7
+        (
+            "Enter / c / x / d",
+            "On a background Claude row: attach / restart (respawn) / stop / claude rm",
         ),
         ("y", "Toggle mark feature as ready"),
         // FORK: hook-driven productivity (DESIGN.md §16).

@@ -646,6 +646,19 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("Esc", key_style()),
             Span::raw(" close"),
         ]),
+        // FORK: §19.7
+        AppMode::BackgroundPrompt(_) => Line::from(vec![
+            Span::styled(" Enter", key_style()),
+            Span::raw(" start  "),
+            Span::styled("Esc", key_style()),
+            Span::raw(" cancel"),
+        ]),
+        AppMode::BackgroundRemove(_) => Line::from(vec![
+            Span::styled(" y", key_style()),
+            Span::raw(" remove  "),
+            Span::styled("n", key_style()),
+            Span::raw(" keep"),
+        ]),
         // FORK: §19.6
         AppMode::ClaudeWorktrees(state) if state.confirm_remove => Line::from(vec![
             Span::styled(" y", key_style()),

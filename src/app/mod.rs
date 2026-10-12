@@ -17,6 +17,7 @@ pub(crate) mod dormant;
 pub(crate) mod editor_ops;
 pub(crate) mod feature_ops;
 pub(crate) mod feature_setup;
+pub(crate) mod fork_background; // FORK: background Claude sessions under Claude's supervisor (DESIGN.md §19.7)
 pub(crate) mod fork_claude_worktrees; // FORK: worktrees Claude made through AIW's hook (DESIGN.md §19.6)
 pub mod fork_cockpit; // FORK: the cockpit sidebar (DESIGN.md §18)
 pub(crate) mod fork_fan_out; // FORK: one prompt, several agents (DESIGN.md §17, §19.3)
@@ -708,6 +709,8 @@ pub struct App {
     pub(crate) messaging: fork_messaging::MessagingRuntime,
     /// FORK: §19.6 — worktrees Claude created through AIW's `WorktreeCreate` hook.
     pub(crate) claude_worktrees: fork_claude_worktrees::ClaudeWorktreeRuntime,
+    /// FORK: §19.7 — background Claude sessions (`claude --bg`).
+    pub(crate) background: fork_background::BackgroundRuntime,
     /// FORK: ids for queued items when no database is open (negative).
     pub(crate) followup_memory_id: i64,
     pub ipc_tool_sessions: std::collections::HashSet<String>,
@@ -1149,6 +1152,7 @@ impl App {
             organize: Default::default(),         // FORK: §19.4
             messaging: Default::default(),        // FORK: §19.5
             claude_worktrees: Default::default(), // FORK: §19.6
+            background: Default::default(),       // FORK: §19.7
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
@@ -1237,6 +1241,7 @@ impl App {
         app.load_organize_state(); // FORK: §19.4
         app.load_inbox_addresses(); // FORK: §19.5
         app.load_claude_worktrees(); // FORK: §19.6
+        app.load_background_sessions(); // FORK: §19.7
 
         Ok(app)
     }
@@ -1374,6 +1379,7 @@ impl App {
             organize: Default::default(),         // FORK: §19.4
             messaging: Default::default(),        // FORK: §19.5
             claude_worktrees: Default::default(), // FORK: §19.6
+            background: Default::default(),       // FORK: §19.7
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),

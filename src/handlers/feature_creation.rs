@@ -364,6 +364,15 @@ pub fn handle_create_feature_key(app: &mut App, key: KeyCode) -> Result<()> {
                     state.toggle_tick();
                 }
             }
+            // FORK: §19.7 — `b` on the harness list: Claude (background).
+            KeyCode::Char('b') => {
+                if let AppMode::CreatingFeature(state) = &mut app.mode
+                    && state.mode_focus == 0
+                    && state.background_available()
+                {
+                    state.background = !state.background;
+                }
+            }
             KeyCode::Down | KeyCode::Char('j') => {
                 if let AppMode::CreatingFeature(state) = &mut app.mode {
                     match state.mode_focus {
