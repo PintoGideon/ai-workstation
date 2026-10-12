@@ -17,6 +17,7 @@ pub(crate) mod dormant;
 pub(crate) mod editor_ops;
 pub(crate) mod feature_ops;
 pub(crate) mod feature_setup;
+pub(crate) mod fork_claude_worktrees; // FORK: worktrees Claude made through AIW's hook (DESIGN.md §19.6)
 pub mod fork_cockpit; // FORK: the cockpit sidebar (DESIGN.md §18)
 pub(crate) mod fork_fan_out; // FORK: one prompt, several agents (DESIGN.md §17, §19.3)
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7, DESIGN.md §16)
@@ -705,6 +706,8 @@ pub struct App {
     pub(crate) organize: fork_organize::OrganizeRuntime,
     /// FORK: Claude inbox sockets (DESIGN.md §19.5).
     pub(crate) messaging: fork_messaging::MessagingRuntime,
+    /// FORK: §19.6 — worktrees Claude created through AIW's `WorktreeCreate` hook.
+    pub(crate) claude_worktrees: fork_claude_worktrees::ClaudeWorktreeRuntime,
     /// FORK: ids for queued items when no database is open (negative).
     pub(crate) followup_memory_id: i64,
     pub ipc_tool_sessions: std::collections::HashSet<String>,
@@ -1034,6 +1037,8 @@ impl App {
         );
         // FORK: §19.5 — what Claude does with messages from other sessions.
         crate::fork::messaging::set_inbound_policy(config.aiw.claude_cross_session_inbound);
+        // FORK: §19.6 — whether Claude's own worktrees go through AIW's hook.
+        crate::fork::claude_worktrees::set_enabled(config.aiw.claude_worktree_hooks);
         let zai_enabled = config.zai.is_some();
         let zai_monthly = config.zai.as_ref().and_then(|z| z.get_monthly_limit());
         let zai_weekly = config.zai.as_ref().and_then(|z| z.get_weekly_limit());
@@ -1143,6 +1148,7 @@ impl App {
             fan_out: Default::default(),          // FORK: §19.3
             organize: Default::default(),         // FORK: §19.4
             messaging: Default::default(),        // FORK: §19.5
+            claude_worktrees: Default::default(), // FORK: §19.6
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
@@ -1230,6 +1236,7 @@ impl App {
         app.load_fan_out_state(); // FORK: §19.3
         app.load_organize_state(); // FORK: §19.4
         app.load_inbox_addresses(); // FORK: §19.5
+        app.load_claude_worktrees(); // FORK: §19.6
 
         Ok(app)
     }
@@ -1366,6 +1373,7 @@ impl App {
             fan_out: Default::default(),          // FORK: §19.3
             organize: Default::default(),         // FORK: §19.4
             messaging: Default::default(),        // FORK: §19.5
+            claude_worktrees: Default::default(), // FORK: §19.6
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),

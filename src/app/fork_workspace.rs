@@ -227,6 +227,8 @@ impl App {
                 } else {
                     super::fork_identity::external_line_count(
                         self.external_sessions_for_project(&project.name).len(),
+                    ) + super::fork_claude_worktrees::line_count(
+                        self.claude_worktrees_for_project(&project.name).len(),
                     )
                 };
                 base + external
@@ -251,6 +253,9 @@ impl App {
                     1 + header
                         + super::fork_identity::external_line_count(
                             self.external_sessions_for_feature(&feature.id).len(),
+                        )
+                        + super::fork_claude_worktrees::line_count(
+                            self.claude_worktrees_for_feature(&feature.id).len(),
                         )
                 }
             }

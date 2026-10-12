@@ -221,6 +221,13 @@ fn sidebar_item_lines(
                     row_width,
                     dim,
                 ));
+                // FORK: §19.6 — Claude worktrees no feature claims.
+                lines.extend(claude_worktree_lines(
+                    &app.claude_worktrees_for_project(&project.name),
+                    "  ",
+                    row_width,
+                    dim,
+                ));
             }
             lines
         }
@@ -311,6 +318,13 @@ fn sidebar_item_lines(
             if !feature.collapsed && !compact {
                 lines.extend(external_lines(
                     &app.external_sessions_for_feature(&feature.id),
+                    "   ",
+                    row_width,
+                    dim,
+                ));
+                // FORK: §19.6 — worktrees Claude made for this feature.
+                lines.extend(claude_worktree_lines(
+                    &app.claude_worktrees_for_feature(&feature.id),
                     "   ",
                     row_width,
                     dim,
@@ -496,6 +510,40 @@ fn external_lines(
             ]),
             row_width,
         ));
+    }
+    lines
+}
+
+/// FORK: §19.6 — dimmed `⎇ <name> · <origin>` lines for the worktrees Claude
+/// made through AIW's hook: up to `MAX_LINES`, then `+N more (W)`.
+fn claude_worktree_lines(
+    worktrees: &[&crate::fork::claude_worktrees::ClaudeWorktree],
+    indent: &str,
+    row_width: usize,
+    dim: Style,
+) -> Vec<Line<'static>> {
+    use crate::app::fork_claude_worktrees::MAX_LINES;
+    let line = |text: String| {
+        fit_line(
+            Line::from(vec![
+                Span::raw(indent.to_string()),
+                Span::styled(text, dim.add_modifier(Modifier::ITALIC)),
+            ]),
+            row_width,
+        )
+    };
+    let shown = if worktrees.len() > MAX_LINES {
+        MAX_LINES
+    } else {
+        worktrees.len()
+    };
+    let mut lines: Vec<Line<'static>> = worktrees
+        .iter()
+        .take(shown)
+        .map(|wt| line(wt.row_text()))
+        .collect();
+    if worktrees.len() > MAX_LINES {
+        lines.push(line(format!("⎇ +{} more (W)", worktrees.len() - MAX_LINES)));
     }
     lines
 }
@@ -758,6 +806,57 @@ mod tests {
                 acc
             });
         assert_eq!(summed, total);
+    }
+
+    #[test]
+    fn claude_worktrees_show_under_their_feature_capped_with_a_more_line() {
+        use crate::fork::claude_worktrees::ClaudeWorktree;
+        let mut app = sidebar(40, 59);
+        let feature_id = app.store.projects[0].features[0].id.clone();
+        let project = app.store.projects[0].name.clone();
+        app.store.projects[0].collapsed = false;
+        app.store.projects[0].features[0].collapsed = false;
+        let wt = |n: usize| ClaudeWorktree {
+            id: format!("cwt-{n}"),
+            repo: "/r".into(),
+            path: format!("/w/claude-wt{n}").into(),
+            branch: format!("worktree-wt{n}"),
+            base: "abc".into(),
+            name: format!("wt{n}"),
+            origin: if n == 0 {
+                "worktree".into()
+            } else {
+                "subagent".into()
+            },
+            parent_session_id: None,
+            claude_session_id: None,
+            requested_cwd: "/r".into(),
+            port_start: None,
+            port_count: None,
+            created_at: String::new(),
+        };
+        for n in 0..5 {
+            app.claude_worktrees.items.push(wt(n));
+            app.claude_worktrees
+                .feature_of
+                .insert(format!("cwt-{n}"), feature_id.clone());
+            app.claude_worktrees
+                .project_of
+                .insert(format!("cwt-{n}"), project.clone());
+        }
+        app.selection = Selection::Feature(0, 0);
+        app.workspace_commit_now();
+        let rows = rows(&mut app, 40, 59);
+        let text = rows.join("\n");
+        assert!(text.contains("⎇ wt0 · worktree"), "{text}");
+        assert!(text.contains("⎇ wt2 · subagent"), "{text}");
+        assert!(!text.contains("⎇ wt3"), "only three are listed: {text}");
+        assert!(text.contains("⎇ +2 more (W)"), "{text}");
+        // The lines sit between the feature row and its first session.
+        let feature_name = app.store.projects[0].features[0].name.clone();
+        let feature_row = rows.iter().position(|r| r.contains(&feature_name)).unwrap();
+        let wt_row = rows.iter().position(|r| r.contains("⎇ wt0")).unwrap();
+        assert_eq!(wt_row, feature_row + 1, "{text}");
     }
 
     #[test]

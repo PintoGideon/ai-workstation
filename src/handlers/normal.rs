@@ -337,6 +337,10 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char('E') => {
             app.open_external_sessions();
         }
+        // FORK: §19.6 — the worktrees Claude made for this feature.
+        KeyCode::Char('W') => {
+            app.open_claude_worktrees();
+        }
         // FORK: §19.4 — the project's feature groups, and the selected
         // feature's group folded or opened.
         KeyCode::Char('G') => {

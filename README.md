@@ -29,7 +29,9 @@ on disk, and what was removed in favour of the harnesses' own features.
   worktree each, grouped in the sidebar and tiled with `v`. The prompt is
   delivered when each agent is ready, unsent unless you ask.
 - Keeps concurrent features isolated with git branches and worktrees created
-  outside the repository.
+  outside the repository. The worktrees Claude makes itself (`--worktree`,
+  subagents, workflows) are created the same way, with your `.env` and a port
+  block, and listed under their feature.
 - Shows the selected agent's real terminal beside the sidebar. Typing is
   native; `Ctrl+Q` flips the keyboard between the two.
 - Marks which agents need you, answers their permission prompts from the
@@ -144,6 +146,7 @@ Pi receives no mode flags.
 | `i` | List everything that needs you: questions first, then finished work |
 | `a` / `X` | Allow / deny the permission the selected agent is waiting on |
 | `e` | Queue a follow-up, delivered when the agent's turn ends |
+| `W` | Worktrees Claude made itself (`--worktree`, subagents), created in AIW's layout: terminal, copy path, remove |
 | `@` | Message an agent session: straight into a Claude session's inbox, otherwise at its next turn end |
 | `V` | Reopen a pending Vibeless edit approval |
 | `I` | On a TODOs row: start an agent on the next TODO |

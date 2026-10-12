@@ -55,6 +55,12 @@ pub struct AiwConfig {
     /// `accept` (default; not applied to SuperVibe sessions), `hold`,
     /// `refuse`, or `default` to leave Claude's own rule (§19.5).
     pub claude_cross_session_inbound: crate::fork::messaging::InboundPolicy,
+    /// Pass Claude a `WorktreeCreate` / `WorktreeRemove` hook so the
+    /// worktrees Claude makes itself (`--worktree`, subagent isolation,
+    /// workflows) are created in AIW's worktree folder with the included
+    /// files and a port block, and listed under their feature (§19.6). On by
+    /// default.
+    pub claude_worktree_hooks: bool,
 }
 
 impl Default for AiwConfig {
@@ -71,6 +77,7 @@ impl Default for AiwConfig {
             fan_out_ready_fallback_secs: crate::fork::fan_out::DEFAULT_FALLBACK_SECS,
             messaging_inbox: true,
             claude_cross_session_inbound: crate::fork::messaging::InboundPolicy::Accept,
+            claude_worktree_hooks: true,
         }
     }
 }

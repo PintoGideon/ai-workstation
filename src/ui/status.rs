@@ -646,6 +646,25 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("Esc", key_style()),
             Span::raw(" close"),
         ]),
+        // FORK: §19.6
+        AppMode::ClaudeWorktrees(state) if state.confirm_remove => Line::from(vec![
+            Span::styled(" y", key_style()),
+            Span::raw(" remove  "),
+            Span::styled("any key", key_style()),
+            Span::raw(" keep"),
+        ]),
+        AppMode::ClaudeWorktrees(_) => Line::from(vec![
+            Span::styled(" j/k", key_style()),
+            Span::raw(" move  "),
+            Span::styled("t", key_style()),
+            Span::raw(" terminal  "),
+            Span::styled("y", key_style()),
+            Span::raw(" copy path  "),
+            Span::styled("d", key_style()),
+            Span::raw(" remove  "),
+            Span::styled("Esc", key_style()),
+            Span::raw(" close"),
+        ]),
         // FORK: §19.4
         AppMode::FeatureGroups(state) if state.edit.is_some() => Line::from(vec![
             Span::styled(" Enter", key_style()),

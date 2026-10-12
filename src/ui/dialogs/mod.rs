@@ -8,6 +8,7 @@ mod dormant;
 mod editor_view;
 mod fan_out; // FORK: fan-out layout and task prompt steps (DESIGN.md §19.3)
 mod feature;
+pub(crate) mod fork_claude_worktrees; // FORK: `W` worktrees Claude made (DESIGN.md §19.6)
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7)
 pub(crate) mod fork_identity; // FORK: fork dialog, external sessions (DESIGN.md §19.2)
 pub(crate) mod fork_messaging; // FORK: `@` message dialog (DESIGN.md §19.5)

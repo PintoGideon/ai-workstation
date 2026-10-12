@@ -106,6 +106,18 @@ pub fn claude_settings_json(hooks_dir: &Path, ctx: &LaunchContext) -> Value {
         });
         settings["hooks"] = super::claude_settings::hooks_object(entries);
     }
+    // §19.6: Claude's own worktrees (`--worktree`, subagent isolation,
+    // workflows) are created in AIW's layout. Only ever through this
+    // per-launch file — never the repo's settings — so a `claude` you start
+    // yourself keeps Claude's default.
+    if super::claude_worktrees::enabled() {
+        if !settings["hooks"].is_object() {
+            settings["hooks"] = json!({});
+        }
+        for (event, entry) in super::claude_worktrees::hook_entries(hooks_dir) {
+            settings["hooks"][event] = Value::Array(vec![entry]);
+        }
+    }
     // §19.5: whether messages from your other sessions (and AIW's `@`) are
     // delivered, held for approval, or refused.
     if let Some(value) =
@@ -142,6 +154,9 @@ fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
 /// Write the session's settings file and return the `--settings` argument.
 fn write_claude_settings(ctx: &LaunchContext) -> Option<PathBuf> {
     let hooks_dir = crate::project::aiw_claude_hooks_dir();
+    if super::claude_worktrees::enabled() {
+        super::claude_worktrees::ensure_script(&hooks_dir);
+    }
     let settings = claude_settings_json(&hooks_dir, ctx);
     let path = claude_settings_path(&ctx.feature_session_id);
     let rendered = serde_json::to_string_pretty(&settings).ok()? + "\n";
@@ -257,10 +272,16 @@ mod tests {
                 .unwrap()
                 .ends_with("/hooks/status-line.sh")
         );
-        assert!(
-            written.get("hooks").is_none(),
-            "the legacy writer keeps the hooks in the repo file"
-        );
+        // The legacy writer keeps AIW's hooks in the repo file; only the
+        // §19.6 worktree hooks (never written there) ride along.
+        let mut events: Vec<&str> = written["hooks"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        events.sort_unstable();
+        assert_eq!(events, ["WorktreeCreate", "WorktreeRemove"]);
         // With the flag on, the hooks ride along.
         super::super::claude_settings::force_for_test(Some(true));
         let with_hooks = claude_settings_json(Path::new("/h"), &ctx());
@@ -331,6 +352,42 @@ mod tests {
             1
         );
         remove_claude_settings("fs-named");
+    }
+
+    #[test]
+    fn claudes_worktree_hooks_ride_along_unless_turned_off() {
+        // §19.6: with AIW's hooks in the file or in the repo, the worktree
+        // hooks always come through `--settings` (never the repo file).
+        for via_flag in [true, false] {
+            super::super::claude_settings::force_for_test(Some(via_flag));
+            super::super::claude_worktrees::force_for_test(Some(true));
+            let settings = claude_settings_json(Path::new("/h"), &ctx());
+            let create = &settings["hooks"]["WorktreeCreate"][0]["hooks"][0];
+            assert_eq!(create["command"], "/h/worktree-hook.sh");
+            assert_eq!(create["args"][0], "create");
+            assert_eq!(
+                settings["hooks"]["WorktreeRemove"][0]["hooks"][0]["args"][0],
+                "remove"
+            );
+            if via_flag {
+                assert!(settings["hooks"]["Stop"].is_array());
+            }
+            super::super::claude_worktrees::force_for_test(Some(false));
+            let off = claude_settings_json(Path::new("/h"), &ctx());
+            assert!(off["hooks"].get("WorktreeCreate").is_none());
+            assert!(off["hooks"].get("WorktreeRemove").is_none());
+        }
+        super::super::claude_settings::force_for_test(None);
+        super::super::claude_worktrees::force_for_test(None);
+        // A launch installs the script next to AIW's other hook scripts.
+        claude_launch_args(&ctx(), &AiwConfig::default(), Vec::new());
+        let script = crate::project::aiw_claude_hooks_dir()
+            .join(super::super::claude_worktrees::SCRIPT_NAME);
+        assert_eq!(
+            std::fs::read_to_string(&script).unwrap(),
+            super::super::claude_worktrees::SCRIPT
+        );
+        remove_claude_settings("fs-1");
     }
 
     #[test]

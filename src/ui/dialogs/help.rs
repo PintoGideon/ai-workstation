@@ -172,6 +172,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "Fork the session's conversation (same feature or new worktree)",
         ),
         ("E", "Claude sessions outside AIW in your projects"),
+        (
+            "W",
+            "Worktrees Claude made here (--worktree, subagents): terminal, remove",
+        ),
         // FORK: §19.4
         (
             "G",

@@ -1222,6 +1222,8 @@ pub enum AppMode {
     ForkSession(crate::app::fork_identity::ForkSessionState),
     /// FORK: `E` — Claude sessions outside AIW in the projects (§19.2).
     ExternalSessions(crate::app::fork_identity::ExternalSessionsState),
+    /// FORK: §19.6 — the `W` list of worktrees Claude created.
+    ClaudeWorktrees(crate::app::fork_claude_worktrees::ClaudeWorktreesState),
     /// FORK: §19.4 — `G`, the project's feature groups.
     FeatureGroups(crate::app::fork_organize::FeatureGroupsState),
     /// FORK: §19.4 — `#`, the note on a session or feature.

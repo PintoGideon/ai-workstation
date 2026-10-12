@@ -1,3 +1,4 @@
+mod claude_worktrees; // FORK: Claude-created worktrees (src/fork/claude_worktrees.rs)
 mod debug_log;
 pub mod editors;
 pub(crate) mod fan_out; // FORK: pending prompts and fan-out groups (src/fork/fan_out.rs)

@@ -464,6 +464,9 @@ source "$HERE/organize.sh"
 # §19.5: messages to agent sessions
 # shellcheck disable=SC1091
 source "$HERE/messaging.sh"
+# §19.6: Claude's own worktrees through AIW's hook
+# shellcheck disable=SC1091
+source "$HERE/worktree_hooks.sh"
 
 aiw_quit; check "q: quit at the end" $?
 ! cockpit_alive && [ "$(view_sessions)" = 0 ]; check "q: cockpit server gone, no view sessions, agents still running" $?

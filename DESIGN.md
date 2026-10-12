@@ -1098,3 +1098,84 @@ E2E (`scripts/dev/e2e/messaging.sh`): the fake claude binds a real inbox socket 
 stores the socket; `@` delivers into it once, authenticated and naming the conversation, with nothing queued;
 automation by name from `ci` delivers; an unknown target fails; a Codex target is shown as via the queue, the
 message is not typed into its idle pane, and its next turn end delivers it exactly once.
+
+### 19.6 Claude's own worktrees in AIW's layout (proposal 6)
+
+**Ask.** Claude Code makes worktrees by itself — `claude --worktree`, the `EnterWorktree` tool, a subagent with
+`isolation: worktree`, a workflow agent, background-session isolation — in `<repo>/.claude/worktrees/<name>`, which
+AIW never saw: no included files, no port block, nothing in the sidebar, a doctor orphan. Claude lets a
+`WorktreeCreate` hook replace its `git worktree add` entirely, so AIW provides one.
+
+**The contract** (read from the hooks reference, "WorktreeCreate" / "WorktreeRemove", and checked against the
+installed Claude 2.1.296). `WorktreeCreate` gets `name` (a slug, given or generated, e.g. `bold-oak-a3f2`; Claude
+names a subagent's `agent-<hex>`) plus the common fields (`session_id`, `transcript_path`, `cwd`, `hook_event_name`;
+`agent_id` / `agent_type` inside a subagent) on stdin. A command hook prints the worktree's absolute path as the last
+non-empty stdout line (ANSI stripped); failure or no path fails the create; the path must be normalized and must not
+pass through a symlink below the repository root. With a hook, Claude does not process `.worktreeinclude` and does
+not sweep the worktree. `WorktreeRemove` fires when Claude removes a hook-created worktree (exit from a worktree
+session, `ExitWorktree`, deleting a background session; not when a subagent finishes — those stay) with
+`worktree_path`; exit 0 counts as removed, a non-zero exit with the directory still there refuses. There is **no
+force field**; Claude never deletes a hook-created worktree's branch.
+
+**Wiring.** Both hooks run `<hooks dir>/worktree-hook.sh create|remove` (`aiw worktree-hook create|remove`, hidden),
+added to every Claude session's per-launch `--settings` file (`fork::launch::claude_settings_json`) whether AIW's other
+hooks go there or into the repo file — never into the repo's `.claude/settings.local.json`, so a `claude` you start
+yourself keeps Claude's default. The script is installed by the launch path itself (`claude_worktrees::ensure_script`),
+so `app/setup.rs` is untouched. Unlike AIW's other hook scripts it passes stdout and the exit status through and does
+not check `AIW_ACTIVE`. Timeouts: 120 s create, 60 s remove. Off with `claude_worktree_hooks: false`.
+
+**Create** (`fork::claude_worktrees::create`), in the hook process, never waiting on the dashboard:
+- the requesting checkout is `git rev-parse --show-toplevel` of the input `cwd`; the repository's main checkout is the
+  first entry of `git worktree list --porcelain`;
+- names follow Claude: directory `claude-<slug>` under AIW's worktree folder (`worktree_paths::new_worktree_path`),
+  branch `worktree-<slug>`; `-2`, `-3`, … up to 50 when either is taken; the slug keeps `[a-z0-9._-]`, collapses the
+  rest, never yields `..`;
+- the base is the requesting checkout's `HEAD` — a subagent works on the feature, not on `main` (Claude's own default
+  is `origin/HEAD`; `worktree.baseRef: head` is the equivalent);
+- `WorktreeManager::create_from` does the `git worktree add -b`, the `settings.local.json` merge and the included
+  files (`.worktreeinclude` / `worktree_include`) exactly as a new feature does;
+- a port block is reserved under `claude-worktree:<id>` and written to `<worktree>/.aiw/ports.env` (`.aiw/` is in
+  AIW's `info/exclude` patterns, so the worktree stays clean); AIW's terminals there source it;
+- the record goes into `aiw_claude_worktrees` through `AiwDb::open_for_hook` (the existing store only: no migrations,
+  a 5 s busy timeout, only this table created if missing); a missing store still yields a worktree, just unrecorded;
+- a `claude-worktree` message on AIW's socket is fire-and-forget; a dashboard that is not running reads the table at
+  its next start;
+- a name Claude already has in this repo (a resumed `--worktree` session) gets the same worktree back.
+All diagnostics go to stderr; stdout carries only the path.
+
+**Remove** (`claude_worktrees::remove`, shared by the hook and the dashboard): refused, with the `git status` entries,
+when the worktree has uncommitted or untracked files (ignored ones such as the copied `.env` and `ports.env` do not
+count); then `git worktree remove` (no `--force`), empty-folder pruning, the branch deleted with `-D` only when it
+has no commit beyond its recorded base (otherwise kept, and said so), the port block released, the record dropped.
+A path AIW has no record of is removed only if it is a linked git worktree (so Claude's own pre-hook worktrees
+still clean up); anything else is refused. A path already gone just clears the bookkeeping.
+
+**Dashboard** (`app::fork_claude_worktrees`). The table is read at start and on every hook message; a recorded
+worktree whose directory is gone is forgotten (ports released). Ownership is worked out once per load: the AIW
+session whose Claude asked (`AIW_FEATURE_SESSION_ID` in the hook's environment), else the deepest feature workdir
+containing the requesting checkout, else the project by repository. A worktree is drawn as a dimmed `⎇ <name> ·
+<origin>` line under its feature (`subagent <type>` or `worktree`), up to three then `⎇ +N more (W)`; one no feature
+claims is drawn under the project. Not a new row kind — like the outside sessions of §19.2. `W` lists the selected
+feature's (or, on a project row, the project's) Claude worktrees: `t` opens a terminal session `⎇ <name>` in the
+feature, `cd`s into the worktree and sources `ports.env`; `y` copies the path; `d` then `y` removes it under the
+rules above. `aiw doctor` no longer reports recorded Claude worktrees as orphans. Chosen over registering them as
+features: Claude owns the process living in them, and a feature implies AIW-managed tmux sessions.
+
+**Tests.** `fork::claude_worktrees` (slugs, Claude's names and collision suffixes, the create and remove inputs,
+origin labels, the settings entries and script, `ports.env`, summaries; against real git in temp repos: a create
+lands in AIW's folder from the feature's HEAD with the `.env` and a port block, clean, recorded with its session,
+reused by name, with no dashboard listening; collisions; no store; outside a repo; dirty refused then clean removed
+with its branch and ports; a branch with commits kept; a vanished worktree forgotten; a plain folder and the main
+checkout refused), `db::claude_worktrees` (round trip, `FORK_SCHEMA` and the hook DDL agree, the hook never creates
+the store, adds the table to an older one), `fork::launch` (both hooks ride `--settings` in both hook modes, off when
+the flag is off, the script installed), `ui::fork_workspace` (lines under the feature, capped with `+N more`),
+`app::tests::fork_claude_worktrees` (6: listed under the session's feature with a toast and one more sidebar row; the
+checkout finds the feature and a deleted feature falls back to the project; a worktree made while AIW was closed shows
+at start and a vanished one is forgotten; `W` refuses a dirty one with the reason and removes a clean one after `d` `y`;
+nothing to list; `t` opens the terminal with `cd` and `ports.env`). E2E (`scripts/dev/e2e/worktree_hooks.sh`): the fake
+claude runs the hook from its `--settings` exactly as Claude does; the settings carry both hooks and nothing lands in
+the repo file; a subagent worktree lands in AIW's folder as `claude-agent-e2e1` on `worktree-agent-e2e1` from the
+feature's HEAD with the `.env`, a port block, clean, recorded with its session and origin, drawn under `lay-1`, listed
+by `W`; `/wt` (EnterWorktree) gets `claude-e2e-enter`; WorktreeRemove refuses it dirty (Claude is told why), removes it
+clean with its branch and record, and the row goes; `W` → `t` opens a terminal in the worktree with `AIW_PORT`; `W` →
+`d` `y` removes; `aiw doctor` does not list a Claude worktree as an orphan.

@@ -508,6 +508,10 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             &app.theme,
         );
     }
+    // FORK: §19.6
+    if let AppMode::ClaudeWorktrees(state) = &app.mode {
+        super::dialogs::fork_claude_worktrees::draw_claude_worktrees(frame, app, state);
+    }
     // FORK: §19.4
     if let AppMode::FeatureGroups(state) = &app.mode {
         super::dialogs::fork_organize::draw_feature_groups(frame, app, state);

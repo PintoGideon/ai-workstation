@@ -8,6 +8,7 @@ pub(crate) mod diff_review;
 mod dormant;
 mod feature_creation;
 mod fork;
+mod fork_claude_worktrees; // FORK: `W` worktrees Claude made (DESIGN.md §19.6)
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7)
 mod fork_identity; // FORK: `f` fork dialog and `E` external sessions (DESIGN.md §19.2)
 mod fork_messaging; // FORK: `@` messages (DESIGN.md §19.5)
@@ -141,6 +142,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<()> {
         AppMode::ForkingFeature(_) => handle_fork_feature_key(app, key.code),
         AppMode::ForkSession(_) => fork_identity::handle_fork_session_key(app, key.code),
         AppMode::ExternalSessions(_) => fork_identity::handle_external_sessions_key(app, key.code),
+        AppMode::ClaudeWorktrees(_) => {
+            fork_claude_worktrees::handle_claude_worktrees_key(app, key.code)
+        }
         // FORK: §19.4
         AppMode::FeatureGroups(_) => fork_organize::handle_feature_groups_key(app, key),
         AppMode::NoteEditor(_) => fork_organize::handle_note_editor_key(app, key),

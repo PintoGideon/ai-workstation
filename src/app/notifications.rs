@@ -762,6 +762,10 @@ impl App {
         if self.handle_hook_event_message(&raw) {
             return;
         }
+        // FORK: §19.6 — Claude created or removed a worktree through the hook.
+        if self.handle_claude_worktree_message(&raw) {
+            return;
+        }
         if msg_type == crate::fork::ipc_reply::ABANDONED_TYPE {
             if let Some(id) = raw.get("request_id").and_then(|v| v.as_str()) {
                 self.handle_reply_abandoned(id);

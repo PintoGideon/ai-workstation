@@ -259,6 +259,7 @@ inside the app.
 | `i` | List everything that needs you: questions first, then finished work |
 | `a` / `X` | Allow or deny the permission the selected agent is waiting on |
 | `e` | Queue a follow-up for the selected agent |
+| `W` | List the worktrees Claude made for the selected feature (or, on a project row, the project) with its own `--worktree`, subagents or workflows. `t` opens a terminal there, `y` copies the path, `d` then `y` removes a clean one |
 | `@` | Send a message to an agent session. A Claude session gets it straight in its inbox as its next prompt; any other agent gets it when its current turn ends. The dialog shows which; `↑`/`↓` pick the target |
 | `V` | Reopen a pending Vibeless edit approval |
 | `I` | On a TODOs row, start an agent on the next unstarted TODO |
@@ -417,6 +418,39 @@ only reachable by your own user, and permission prompts still apply to whatever
 a message asks for. SuperVibe sessions keep Claude's own rule, which holds such
 messages for your approval, because a session that skips every permission
 prompt should not take instructions from another agent unasked.
+
+**Claude's own worktrees.** Claude Code makes worktrees by itself: when you
+start it with `--worktree`, when it moves into one, when a subagent runs with
+`isolation: worktree`, or when a workflow or background session isolates its
+edits. On its own it puts them in `<repo>/.claude/worktrees/`, without your
+`.env` and without a port block. Every Claude session aiw starts carries a
+worktree hook instead, so those worktrees are created the way aiw creates its
+own:
+
+- in aiw's worktree folder, next to the feature worktrees, as
+  `claude-<name>` on Claude's own branch name `worktree-<name>`;
+- branched from the feature's current commit, so a subagent works on the
+  feature rather than on `main`;
+- with the repository's included files copied (`.worktreeinclude` or the
+  `worktree_include` setting, which Claude itself skips when a hook makes the
+  worktree);
+- with their own block of ports, written to `.aiw/ports.env` inside the
+  worktree (git ignores it).
+
+Each one appears under its feature as a dimmed `⎇ <name> · subagent` or
+`⎇ <name> · worktree` line, up to three and then `+N more (W)`; a toast says
+when Claude made one. aiw records it even when the dashboard is closed and
+shows it at the next start. `W` lists them: `t` opens a terminal session in
+the feature that changes into the worktree with its ports exported, `y`
+copies the path, and `d` then `y` removes it. A removal, whether Claude asks
+for it when a worktree session ends or you press `d`, only happens when the
+worktree has no uncommitted or untracked files; otherwise Claude is told why
+and the worktree stays. The branch is deleted with it unless it holds commits,
+in which case it is kept so the work stays reachable. Worktrees a finished
+subagent leaves behind stay until you remove them, as with Claude's own
+default. The hook only rides on the settings aiw passes at launch, so a
+`claude` you start yourself is unaffected. `claude_worktree_hooks: false`
+turns it off.
 
 **Layout presets.** A project's `aiw.json` (or the global `extension` block)
 can name sets of extra sessions to open with a feature:
@@ -583,6 +617,7 @@ written back, so a config from an older version keeps loading.
 | `claude_agents_roster` | `true` | Read `claude agents --json` every ten seconds to show Claude sessions outside aiw and catch a session waiting on input that its hooks missed |
 | `fan_out_ready_fallback_secs` | `15` | How long a task prompt waits for its agent's session-start hook before it is pasted anyway, once the pane runs the agent |
 | `messaging_inbox` | `true` | Deliver `@` messages and `aiw automation message` straight into a Claude session's inbox. Off: every message goes through the follow-up queue |
+| `claude_worktree_hooks` | `true` | Pass Claude a worktree hook so the worktrees it makes itself (`--worktree`, subagents, workflows) are created in aiw's worktree folder with the included files and a port block, and listed under their feature |
 | `claude_cross_session_inbound` | `"accept"` | Claude's rule for messages from your other sessions and aiw: `accept`, `hold` (approve each in the pane), `refuse`, or `default` to leave Claude's own rule. `accept` is not applied to SuperVibe sessions |
 | `max_concurrent_agents` | `4` | Warn before starting an agent past this many running harnesses; 0 disables |
 | `low_memory_warn_mb` | `1536` | Warn before starting an agent with less free memory than this; 0 disables |
@@ -727,7 +762,7 @@ script can answer on the real call. Request templates and examples are in
 
 The hook subcommands that scripts call are hidden from the help: `notify`,
 `notify-wait`, `hook-payload`, `hook-field`, `permission-request`,
-`status-line`, `stop-hook`, `subagent`, `hook-event`, `session-context`, `set-status` and
+`status-line`, `stop-hook`, `subagent`, `hook-event`, `worktree-hook`, `session-context`, `set-status` and
 `sidebar`, which is the dashboard process the cockpit runs.
 
 One dashboard per config directory: a second `aiw` attaches to the same
@@ -741,7 +776,7 @@ the lock.
 | --- | --- | --- |
 | `~/.config/ai_workstation/` | `config.json`, the database `aiw.db`, port reservations, the instance lock, the hook scripts under `hooks/` | first launch |
 | `~/.local/state/ai_workstation/` on Linux, `/tmp/ai_workstation/` on macOS | the private tmux socket, the cockpit socket, the IPC socket, `debug.log`, per-session Claude settings files, thinking markers, quarantined bad notifications | first launch |
-| `~/.local/share/ai_workstation/worktrees/` on Linux, Library/Application Support on macOS | feature worktrees, unless `worktree_base_dir` says otherwise | when a feature starts |
+| `~/.local/share/ai_workstation/worktrees/` on Linux, Library/Application Support on macOS | feature worktrees, and the `claude-<name>` worktrees Claude makes through aiw's hook, unless `worktree_base_dir` says otherwise | when a feature starts, or when Claude makes a worktree |
 | inside each repository | `.aiw/`, `.claude/latest-prompt.txt`, `.claude/skills/aiw-*`, `.agents/skills/aiw-*`, `.codex/`, `.gemini/`, `.cursor/hooks.json` | when a feature starts |
 
 Every file aiw puts inside a repository is added to that repository's

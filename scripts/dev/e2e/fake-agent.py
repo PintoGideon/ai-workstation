@@ -678,6 +678,53 @@ def wide_lines():
             out(line)
 
 
+# §19.6: Claude's own worktrees. With a WorktreeCreate hook configured,
+# real Claude replaces its `git worktree add` with the hook: it pipes
+# {"name": …, common fields} to the hook, reads the worktree path from the
+# last non-empty stdout line (ANSI stripped), and fails the create when the
+# hook fails or prints no path. `/wt <name>` is a session moving into one
+# (EnterWorktree / --worktree), `/subwt <name>` a subagent with
+# `isolation: worktree` (the main session stays put), `/wtrm [path]` the
+# WorktreeRemove that follows ExitWorktree (default: the last one made).
+WORKTREES = {"last": None, "home": None}
+ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+
+def worktree_create(name, extra=None):
+    cmds = hook_commands("WorktreeCreate")
+    if not cmds:
+        log("worktrees", {"ts": time.time(), "op": "create", "name": name, "note": "no hook"})
+        return None, "no WorktreeCreate hook configured"
+    payload = base_payload("WorktreeCreate")
+    payload.update(extra or {})
+    payload["name"] = name
+    rec = run_hook(cmds[0], json.dumps(payload), "WorktreeCreate")
+    lines = [ln.strip() for ln in ANSI.sub("", rec.get("stdout") or "").splitlines() if ln.strip()]
+    path = lines[-1] if lines else None
+    ok = rec.get("code") == 0 and path and os.path.isabs(path) and os.path.isdir(path)
+    log("worktrees", {"ts": time.time(), "op": "create", "name": name, "path": path,
+                      "code": rec.get("code"), "stderr": rec.get("stderr", ""),
+                      "subagent": bool((extra or {}).get("agent_id"))})
+    if not ok:
+        tail = (rec.get("stderr") or "").strip().splitlines()
+        return None, tail[-1] if tail else "no path"
+    WORKTREES["last"] = path
+    return path, None
+
+
+def worktree_remove(path):
+    cmds = hook_commands("WorktreeRemove")
+    if not cmds:
+        return None
+    payload = base_payload("WorktreeRemove")
+    payload["worktree_path"] = path
+    rec = run_hook(cmds[0], json.dumps(payload), "WorktreeRemove")
+    removed = rec.get("code") == 0 or not os.path.exists(path)
+    log("worktrees", {"ts": time.time(), "op": "remove", "path": path, "code": rec.get("code"),
+                      "removed": removed, "stderr": rec.get("stderr", "")})
+    return rec
+
+
 def main():
     import atexit
     roster_write()
@@ -805,6 +852,34 @@ def main():
             ROSTER_STATE["waitingFor"] = None
             roster_write()
             out("(roster) idle")
+        elif cmd == "/wt":
+            global CWD
+            path, err = worktree_create(rest or "e2e-wt")
+            if path:
+                WORKTREES["home"] = CWD
+                CWD = path
+                out(f"[worktree] entered {path}")
+            else:
+                out(f"[worktree] failed: {err}")
+        elif cmd == "/subwt":
+            path, err = worktree_create(rest or "agent-e2e", {
+                "agent_id": "a" + uuid.uuid4().hex[:8], "agent_type": "general-purpose"})
+            out(f"[worktree] subagent {path}" if path else f"[worktree] failed: {err}")
+        elif cmd == "/wtrm":
+            target = rest or WORKTREES["last"]
+            if not target:
+                out("[worktree] nothing to remove")
+            else:
+                rec = worktree_remove(target)
+                if rec is None:
+                    out("[worktree] no WorktreeRemove hook configured")
+                elif rec.get("code") == 0:
+                    if CWD == target and WORKTREES["home"]:
+                        CWD = WORKTREES["home"]
+                    out(f"[worktree] removed {target}")
+                else:
+                    reason = (rec.get("stderr") or "").strip().splitlines()[-1:] or ["?"]
+                    out(f"[worktree] kept {target}: {reason[0]}")
         elif cmd == "/denied":
             fire_collect("PermissionDenied", {"tool_name": rest or "Bash", "reason": "auto mode"})
             out(f"⎿ denied {rest or 'Bash'}")

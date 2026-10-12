@@ -210,6 +210,15 @@ enum Commands {
         #[arg(long)]
         harness: String,
     },
+    /// Claude's WorktreeCreate / WorktreeRemove hook: create the worktree in
+    /// AIW's worktree folder and print its path, or remove a clean one
+    /// (DESIGN.md §19.6). Unlike the other hooks its output and exit status
+    /// matter to Claude.
+    #[command(name = "worktree-hook", hide = true)]
+    WorktreeHook {
+        /// create or remove.
+        action: String,
+    },
     /// Session-start hook: print the session's launch context as the
     /// harness's additional-context JSON (Gemini, Cursor).
     #[command(name = "session-context", hide = true)]
@@ -579,6 +588,7 @@ pub fn run() -> Result<()> {
                 | Commands::StopHook { .. }
                 | Commands::Subagent { .. }
                 | Commands::HookEvent { .. }
+                | Commands::WorktreeHook { .. }
                 | Commands::SessionContext { .. }
         )
     ) {
@@ -609,6 +619,10 @@ pub fn run() -> Result<()> {
     if let Some(Commands::SessionContext { harness }) = &cli.command {
         crate::fork::hook_cli::run_session_context(harness);
         return Ok(());
+    }
+    // FORK: §19.6 — Claude reads this hook's stdout and exit status.
+    if let Some(Commands::WorktreeHook { action }) = &cli.command {
+        std::process::exit(crate::fork::claude_worktrees::run_hook(action));
     }
 
     // FORK: `aiw fonts`
@@ -1116,7 +1130,19 @@ fn run_doctor(json: bool) -> Result<()> {
         .as_ref()
         .and_then(|db| db.all_launched_editors().ok())
         .unwrap_or_default();
-    let worktrees = doctor::worktrees_on_disk(&store);
+    let mut worktrees = doctor::worktrees_on_disk(&store);
+    // FORK: §19.6 — a worktree Claude made through AIW's hook is accounted
+    // for (listed under its feature with `W`), not an orphan.
+    let claude_made: std::collections::HashSet<std::path::PathBuf> = db
+        .as_ref()
+        .and_then(|db| db.all_claude_worktrees().ok())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|wt| std::fs::canonicalize(&wt.path).unwrap_or(wt.path))
+        .collect();
+    worktrees.retain(|path| {
+        !claude_made.contains(&std::fs::canonicalize(path).unwrap_or_else(|_| path.clone()))
+    });
 
     let report = doctor::diagnose(&doctor::Inputs {
         config: &config,
