@@ -107,7 +107,8 @@ wd_send "$WD_C" '/exit'
 wd_listed=1
 for i in $(seq 1 30); do
     keys i; sleep 0.6
-    if cap | grep -q 'Needs Attention' && cap | grep -q 'exited · ! recover'; then wd_listed=0; break; fi
+    # wd's own row: other features' exited agents from earlier parts are listed too
+    if cap | grep -q 'Needs Attention' && cap | grep -qE 'alpha / wd +- .*exited · ! recover'; then wd_listed=0; break; fi
     cap | grep -q 'Needs Attention' && keys Escape
     sleep 0.4
 done
