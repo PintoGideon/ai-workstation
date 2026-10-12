@@ -1516,15 +1516,24 @@ pub(crate) fn test_sandbox_root() -> &'static PathBuf {
 #[cfg(test)]
 const TEST_HOME_PREFIX: &str = "aiw-test-home-";
 
+/// Every per-process directory the test binary keeps under the temp dir: the
+/// home stand-in, the data-dir stand-in (`fork::worktree_paths`) and the
+/// private tmux socket's folder (`tmux::TmuxManager::isolated_test_socket`).
+#[cfg(test)]
+const TEST_DIR_PREFIXES: [&str; 3] = [TEST_HOME_PREFIX, "aiw-test-data-", "aiw-test-tmux-"];
+
 #[cfg(test)]
 extern "C" fn remove_own_test_home() {
-    let root = std::env::temp_dir().join(format!("{TEST_HOME_PREFIX}{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(root);
+    let temp = std::env::temp_dir();
+    for prefix in TEST_DIR_PREFIXES {
+        let _ = std::fs::remove_dir_all(temp.join(format!("{prefix}{}", std::process::id())));
+    }
 }
 
-/// Remove `aiw-test-home-<pid>` directories under `parent` whose process no
-/// longer exists. A process that exists but belongs to another user counts as
-/// alive (`EPERM`), so a shared `/tmp` is never swept for someone else.
+/// Remove `aiw-test-{home,data,tmux}-<pid>` directories under `parent`
+/// whose process no longer exists. A process that exists but belongs to
+/// another user counts as alive (`EPERM`), so a shared `/tmp` is never swept
+/// for someone else.
 #[cfg(test)]
 pub(crate) fn sweep_dead_test_homes(parent: &Path) -> usize {
     let Ok(entries) = std::fs::read_dir(parent) else {
@@ -1534,11 +1543,12 @@ pub(crate) fn sweep_dead_test_homes(parent: &Path) -> usize {
     let mut removed = 0;
     for entry in entries.flatten() {
         let name = entry.file_name();
-        let Some(pid) = name
-            .to_str()
-            .and_then(|n| n.strip_prefix(TEST_HOME_PREFIX))
-            .and_then(|p| p.parse::<u32>().ok())
-        else {
+        let Some(pid) = name.to_str().and_then(|n| {
+            TEST_DIR_PREFIXES
+                .iter()
+                .find_map(|prefix| n.strip_prefix(prefix))
+                .and_then(|p| p.parse::<u32>().ok())
+        }) else {
             continue;
         };
         if pid == own || test_home_pid_alive(pid) {
@@ -2573,7 +2583,7 @@ mod tests {
     }
 
     #[test]
-    fn the_test_home_sweep_removes_only_roots_of_dead_processes() {
+    fn the_test_dir_sweep_removes_only_roots_of_dead_processes() {
         let parent = tempfile::tempdir().unwrap();
         // A pid that certainly existed and is now gone: a child we waited on.
         let mut child = std::process::Command::new("true").spawn().unwrap();
@@ -2582,6 +2592,8 @@ mod tests {
         let own = std::process::id();
         for name in [
             format!("{TEST_HOME_PREFIX}{dead}"),
+            format!("aiw-test-data-{dead}"),
+            format!("aiw-test-tmux-{dead}"),
             format!("{TEST_HOME_PREFIX}{own}"),
             format!("{TEST_HOME_PREFIX}not-a-pid"),
             "unrelated-dir".to_string(),
@@ -2589,7 +2601,10 @@ mod tests {
             std::fs::create_dir_all(parent.path().join(&name).join(".config")).unwrap();
         }
 
-        assert_eq!(super::sweep_dead_test_homes(parent.path()), 1);
+        assert_eq!(super::sweep_dead_test_homes(parent.path()), 3);
+        for prefix in TEST_DIR_PREFIXES {
+            assert!(!parent.path().join(format!("{prefix}{dead}")).exists());
+        }
 
         assert!(
             !parent
