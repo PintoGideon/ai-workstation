@@ -367,6 +367,10 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char('!') => {
             app.open_watchdog_for_selection();
         }
+        // FORK: §19.9 — scheduled prompts and commands for the selection.
+        KeyCode::Char('t') => {
+            app.open_schedules_for_selection();
+        }
         // `z` for zzz: features nobody is watching.
         KeyCode::Char('z') => {
             app.open_dormant_view();

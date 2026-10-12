@@ -1366,3 +1366,95 @@ input line): a hung claude turns stuck after the window and `i` lists it; `!` �
 `--resume <conversation>`; `/exit` → listed, `!` → Restart resumes; `/ctx 92` → flagged, `!` → `/compact` typed once and
 the flag clears when the context drops; a follow-up queued for an idle codex is flagged and not typed, `!` → Deliver
 runs it exactly once and empties the queue.
+
+### 19.9 Scheduled and recurring prompts and commands (proposal 7)
+
+**Ask.** Agents and terminals that should do something on a clock — a nightly test run, a status summary every two
+hours, "check CI" at 09:00 on weekdays, a one-off reminder this afternoon — without typing into a busy agent, without
+answering a question for you, and without piling up runs when nobody is looking.
+
+**Model** (`fork::schedules`, pure; `db::schedules`; `app::fork_schedules`). A schedule belongs to a feature; a
+*prompt* schedule goes to an agent session — pinned (`session_id`), by label (`target`), or the feature's first agent
+at fire time — and a *shell* schedule runs its command in a named terminal of the feature (`target`, default
+`schedule`, created as a Terminal session when missing, without moving the selection). Fields: spec text (canonical),
+text, paused, `start_if_stopped`, `catch_up` (`once` | `none`), `end_at`, `max_runs`, `runs`, `last_fire`,
+`created_at`, `config_name` (for `aiw.json` ones), `queued_followup` (the follow-up id its last fire queued). Tables
+`aiw_schedules` and `aiw_schedule_runs` (history capped at 100 per schedule) via `FORK_SCHEMA`; no numbered or
+destructive migration.
+
+**The spec.** `every <n><unit>…` (s/m/h/d, words and spaces accepted; at least `schedule_min_interval_secs`, default
+60), `daily HH:MM`, `cron M H DOM MON DOW` (numbers, `*`, `a-b`, lists, steps `*/n` / `a-b/n` / `a/n`; 0 and 7 are
+Sunday; Vixie OR when both day fields are restricted; names, `L`, `W`, `#`, `?` and macros are refused with a message
+naming the supported subset), and `at YYYY-MM-DD HH:MM` / RFC 3339 / bare `HH:MM` (pinned to its next occurrence when
+saved). The next fire is computed from the wall clock every time, generic over `chrono::TimeZone` so tests use a
+fixed-rule test zone: `every` is `last_fire` (or `created_at`) plus the interval; wall-clock rules walk local days and
+resolve each candidate minute — a skipped local time runs at the first minute after the gap, a repeated one at the
+earlier instant (so it fires once). No stored "next" value, so DST and clock jumps need no bookkeeping.
+
+**The timer** rides on the app loop (`schedules_tick` beside `watchdog_tick` in `cli.rs`), looks every 2 s, and re-reads
+`aiw.json` schedules every 30 s. A fire is due when the next fire time is not in the future. Due before AIW started =
+missed: `catch_up: none` records `missed while aiw was not running`; `once` (default) fires once — `last_fire` becomes
+the fire's wall time, so many missed slots never become many runs. Schedules whose feature (or pinned session) is gone
+are dropped by the timer; session and feature deletion drop them at once (`forget_organize_session` / `_feature`).
+
+**Delivery** (prompt), deliberately the follow-up path:
+- idle at its prompt (running, not `session_working`, not waiting on the user) with nothing queued and no §19.3
+  pending prompt → pasted, Enter scheduled through §19.3's delayed-Enter map: `delivered`;
+- working, or something already queued → `queue_followup`, sent at its turn end by the Stop hook: `queued` (the
+  follow-up id is remembered);
+- the previous fire's follow-up still in the queue → `skipped: previous run still queued` (never stacks);
+- blocked on the user — a pending permission (P6), a question attention record that applies, a §19.2 roster wait,
+  or a held Vibeless edit (a pending input that is not a session wait) → `skipped: waiting on you` is recorded once
+  and the fire is *deferred*: retried every 30 s without new history lines;
+  it delivers (`… (after waiting on you)`) as soon as it can, and gives up (`gave up`) when the next slot comes due or,
+  for a one-shot, after an hour;
+- stopped / exited → `skipped: not running`, or with `start_if_stopped` and the resource gate open
+  (`check_start_preconditions`; never a dialog from a timer): the feature is started for that session or the session
+  relaunched resuming its conversation, and the prompt becomes a §19.3 pending prompt with send, delivered when the
+  agent reports ready: `started` (gate closed: `skipped: resource limits`);
+- a background Claude session (§19.7) → §19.5 `send_session_message`: inbox (`delivered (inbox)`) or queued.
+This is deliberately narrower than §19.8's `waiting_on_user`, which also counts the generic "Agent finished and is
+waiting for input" pending input that `sync.rs` leaves after every turn end and a harness's undifferentiated
+`Waiting` attention (Codex, Cursor): both mean the agent is at its prompt, which is when a scheduled prompt should go
+in. Counting them made every fire after the first one skip (found by the e2e). Shell: the feature must be running (else skipped or started as above); the terminal window is recreated if it is
+gone; the command is typed (`run_shell_command`) only when the pane is a plain shell with no children: `ran`;
+otherwise `skipped: busy (<command>)`. Failures record `failed: <why>` and raise a toast. Skips do not count towards
+`max_runs`; a one-shot is finished after its fire.
+
+**Surface.** `t` on the dashboard opens the list for the selected session (its pinned schedules and its feature's), the
+feature, or the project (all features, read-only for `n`): rows show ⏲ / ⏸ / ✓, the rule in words, the target, the
+text, the next run, the last outcome, and `waiting on you` while deferred; `n` new, `e`/`Enter` edit, `Space`/`p`
+pause/resume (a resumed schedule counts from now — no catch-up burst), `r` run now, `d` then `y` delete, `h` history.
+The editor (`Tab`/arrows between fields, `←→`/`Space` on choices, `Alt+Enter` for a line break) previews the rule
+(`every 30 min · first 14:30`) or the error as you type. Rows with an active schedule show `⏲`; the info block's last
+line gains `⏲ next 14:30 · every 30 min` (or `⏲ 2 schedules · next …`).
+
+**aiw.json.** `schedules: [{name, match, when, prompt | command, session | terminal, start_if_stopped, catch_up,
+end, max_runs}]` in a project's file or the global extension block (merged by name, project wins). Each entry is
+materialized per feature whose name or branch matches `match` (`*`/`?`), id `cfg:<feature>:<name>`; resyncs keep runs,
+`last_fire` and a dashboard pause, pick up changed fields (a changed rule counts from now), and drop entries that went
+away. One-shots are refused in the file. Invalid entries are logged once. Edit and delete are refused from the
+dashboard and automation ("defined in aiw.json").
+
+**Automation.** `aiw automation schedule add|list|pause|resume|delete|run|history` (IPC action `schedule` with an
+`op`); `--session` takes the §19.5 targets, `--feature` an id, name, branch or `project/feature`; ids accept a unique
+prefix. Config: `schedules` (true; off fires nothing), `schedule_min_interval_secs` (60).
+
+**Tests.** `fork::schedules` (21: every/daily/cron/at parsing and round trips, the cron subset and its refusals,
+normalizing a bare time and refusing the past, DST across both changes, a skipped time, a repeated time, month ends,
+Feb 29, weekdays, the OR rule, steps, missed vs due, pause/limits/end, one-shot finishing, outcomes, aiw.json
+validation and matching, globbing, end times, relative labels), `db::schedules` (round trip and update, delete with
+history, history cap), `app::tests::fork_schedules` (20 against `MockTmuxOps`: idle delivered once per fire and the
+next slot; working queued and never stacked; queued behind existing follow-ups; waiting-on-you deferral, quiet retries
+and delivery after; giving up at the next slot; not running vs `start_if_stopped` resuming `conv-1` with a pending
+prompt; catch-up none vs once (once, not per missed slot); a shell schedule opening its terminal, keeping the
+selection and reusing it; a busy terminal; a stopped feature; pause and resume-from-now; max runs and a past one-shot;
+save validation; deletion and orphan cleanup; aiw.json materialize / resync keeping the pause / removal; the dialog
+add and edit; the project view; automation add/list/pause/run/history/delete and errors; a failed paste),
+`handlers::fork_schedules` (editor typing, fields, toggles, save, Esc; list pause, history, delete confirm). E2E
+(`scripts/dev/e2e/schedules.sh`, aiw restarted with a 5 s shortest interval): an `every 6s` prompt reaches the idle
+fake claude once per fire and again at the next interval, pause stops it, the `t` list shows it and Space/`h` work,
+an open question (`/ask`, the Notification hook) makes the fire skip and the retry delivers after it is answered in
+the pane, a terminal opened just now is not mistaken for busy (tmux reports itself until the shell starts), run now delivers at once, a shell
+schedule opens `sched-term` and its output appears, a terminal running `sleep` is skipped as busy, and automation
+list / history / delete.

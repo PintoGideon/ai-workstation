@@ -107,6 +107,16 @@ pub fn lines(info: &SessionInfo, theme: &Theme, width: usize) -> Vec<Line<'stati
             Style::default().fg(theme.primary.to_color()),
         ));
     }
+    // FORK: §19.9 — the next scheduled fire.
+    if let Some(schedule) = &info.schedule {
+        if !last.is_empty() {
+            last.push(Span::styled(" · ", dim));
+        }
+        last.push(Span::styled(
+            schedule.clone(),
+            Style::default().fg(theme.primary.to_color()),
+        ));
+    }
     if info.queued > 0 {
         if !last.is_empty() {
             last.push(Span::styled(" · ", dim));
@@ -195,6 +205,7 @@ mod tests {
             hooks: None,
             note: None,
             background: None,
+            schedule: None,
         };
         let lines = super::lines(&info, &theme, 30);
         let text: Vec<String> = lines

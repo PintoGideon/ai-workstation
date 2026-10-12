@@ -81,6 +81,12 @@ pub struct AiwConfig {
     /// most once per session per hour, only when the resource gate allows,
     /// and logged (§19.8). Off by default.
     pub watchdog_auto_restart: bool,
+    /// Run scheduled prompts and commands (§19.9). On by default; off
+    /// keeps every schedule but fires none.
+    pub schedules: bool,
+    /// The shortest interval an `every` schedule may have, in seconds
+    /// (§19.9). Default 60.
+    pub schedule_min_interval_secs: u64,
 }
 
 impl Default for AiwConfig {
@@ -103,6 +109,8 @@ impl Default for AiwConfig {
             watchdog_stuck_minutes: crate::fork::watchdog::DEFAULT_STUCK_MINUTES,
             watchdog_queued_idle_secs: crate::fork::watchdog::DEFAULT_QUEUED_IDLE_SECS,
             watchdog_auto_restart: false,
+            schedules: true,
+            schedule_min_interval_secs: crate::fork::schedules::DEFAULT_MIN_INTERVAL_SECS,
         }
     }
 }

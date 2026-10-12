@@ -446,6 +446,11 @@ fn build_extension_config(state: &ConfigWizardState) -> ExtensionConfig {
             .as_ref()
             .map(|config| config.layout_presets.clone())
             .unwrap_or_default(),
+        // FORK: §19.9 — schedules are not edited in the wizard; carried through.
+        schedules: loaded
+            .as_ref()
+            .map(|config| config.schedules.clone())
+            .unwrap_or_default(),
     }
 }
 

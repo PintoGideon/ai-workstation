@@ -198,6 +198,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "Recover an agent: restart resuming, interrupt, /compact, replay, deliver queued",
         ), // FORK: §19.8
         (
+            "t",
+            "Schedules: recurring prompts to an agent or commands in a terminal (session / feature / project)",
+        ), // FORK: §19.9
+        (
             "Enter / c / x / d",
             "On a background Claude row: attach / restart (respawn) / stop / claude rm",
         ),

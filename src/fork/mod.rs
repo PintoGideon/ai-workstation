@@ -45,6 +45,7 @@ pub mod fan_out; // one prompt, several agents (DESIGN.md §17, §19.3)
 pub mod gemini;
 pub(crate) mod messaging;
 pub mod organize;
+pub mod schedules; // scheduled and recurring prompts and commands (DESIGN.md §19.9)
 pub(crate) mod watchdog; // flags exited, stuck, idle-with-queued and context-critical agents (DESIGN.md §19.8) // feature groups, notes and layout presets (DESIGN.md §19.4) // messages to agent sessions: Claude's inbox socket or the follow-up queue (DESIGN.md §19.5)
 
 // G4/G5 — work-safety fixes (DESIGN.md §7).

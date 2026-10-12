@@ -30,6 +30,7 @@ pub(crate) mod fork_organize; // FORK: groups, notes, layout presets (DESIGN.md 
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6, DESIGN.md §16)
 pub(crate) mod fork_prompt_paste; // FORK: prompts pasted unsent into the agent pane (DESIGN.md §18)
 mod fork_render_memo; // FORK: per-frame dialog values (DESIGN.md §12.3)
+pub(crate) mod fork_schedules; // FORK: scheduled and recurring prompts and commands (DESIGN.md §19.9)
 pub(crate) mod fork_session_info; // FORK: the session info block (DESIGN.md §18)
 pub(crate) mod fork_skills; // FORK: the skill catalogue (out of the compose box)
 pub(crate) mod fork_subagents; // FORK: subagent counts per session (P5, DESIGN.md §16)
@@ -714,6 +715,8 @@ pub struct App {
     pub(crate) background: fork_background::BackgroundRuntime,
     /// FORK: §19.8 — the watchdog: flags and recovery.
     pub(crate) watchdog: fork_watchdog::WatchdogRuntime,
+    /// FORK: §19.9 — scheduled prompts and commands.
+    pub(crate) schedules: fork_schedules::ScheduleRuntime,
     /// FORK: ids for queued items when no database is open (negative).
     pub(crate) followup_memory_id: i64,
     pub ipc_tool_sessions: std::collections::HashSet<String>,
@@ -1157,6 +1160,7 @@ impl App {
             claude_worktrees: Default::default(), // FORK: §19.6
             background: Default::default(),       // FORK: §19.7
             watchdog: fork_watchdog::WatchdogRuntime::production(), // FORK: §19.8
+            schedules: Default::default(),        // FORK: §19.9
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
@@ -1246,6 +1250,7 @@ impl App {
         app.load_inbox_addresses(); // FORK: §19.5
         app.load_claude_worktrees(); // FORK: §19.6
         app.load_background_sessions(); // FORK: §19.7
+        app.load_schedules(); // FORK: §19.9
 
         Ok(app)
     }
@@ -1385,6 +1390,7 @@ impl App {
             claude_worktrees: Default::default(), // FORK: §19.6
             background: Default::default(),       // FORK: §19.7
             watchdog: Default::default(),         // FORK: §19.8
+            schedules: Default::default(),        // FORK: §19.9
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),

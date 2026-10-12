@@ -10,6 +10,7 @@ mod migrations;
 mod organize; // FORK: feature groups and notes (src/fork/organize.rs)
 mod pr_terminal_state;
 pub mod prompt_templates;
+mod schedules; // FORK: scheduled prompts and commands (src/fork/schedules.rs)
 mod session_names; // FORK: harness session names (src/fork/session_identity.rs)
 mod session_status;
 pub mod store;

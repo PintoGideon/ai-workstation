@@ -169,6 +169,9 @@ pub struct ExtensionConfig {
     /// FORK: §19.4 — named sets of extra sessions opened with a feature.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub layout_presets: Vec<crate::fork::organize::LayoutPreset>,
+    /// FORK: §19.9 — recurring prompts and commands for matching features.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub schedules: Vec<crate::fork::schedules::ScheduleConfig>,
 }
 
 impl ExtensionConfig {
@@ -471,6 +474,14 @@ pub fn merge_project_extension_config_checked(
         }
     }
 
+    // FORK: §19.9 — schedules by name (project wins).
+    let mut schedules = project.schedules.clone();
+    for entry in &base.schedules {
+        if !schedules.iter().any(|e| e.name == entry.name) {
+            schedules.push(entry.clone());
+        }
+    }
+
     // Merge lifecycle_hooks: project fields take priority.
     let on_start = project
         .lifecycle_hooks
@@ -508,6 +519,7 @@ pub fn merge_project_extension_config_checked(
             .or_else(|| base.allowed_agents.clone()),
         prompt_templates,
         layout_presets,
+        schedules,
     };
     merged.normalize_legacy_review_modes();
     (merged, error)

@@ -659,6 +659,37 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("n", key_style()),
             Span::raw(" keep"),
         ]),
+        // FORK: §19.9
+        AppMode::Schedules(state) if state.confirm_delete => Line::from(vec![
+            Span::styled(" y", key_style()),
+            Span::raw(" delete  "),
+            Span::styled("any key", key_style()),
+            Span::raw(" keep"),
+        ]),
+        AppMode::Schedules(_) => Line::from(vec![
+            Span::styled(" n", key_style()),
+            Span::raw(" new  "),
+            Span::styled("e", key_style()),
+            Span::raw(" edit  "),
+            Span::styled("Space", key_style()),
+            Span::raw(" pause  "),
+            Span::styled("r", key_style()),
+            Span::raw(" run now  "),
+            Span::styled("h", key_style()),
+            Span::raw(" history  "),
+            Span::styled("Esc", key_style()),
+            Span::raw(" close"),
+        ]),
+        AppMode::ScheduleEditor(_) => Line::from(vec![
+            Span::styled(" Enter", key_style()),
+            Span::raw(" save  "),
+            Span::styled("Tab", key_style()),
+            Span::raw(" next field  "),
+            Span::styled("←→", key_style()),
+            Span::raw(" change  "),
+            Span::styled("Esc", key_style()),
+            Span::raw(" back"),
+        ]),
         // FORK: §19.8
         AppMode::Watchdog(_) => Line::from(vec![
             Span::styled(" j/k", key_style()),

@@ -447,6 +447,13 @@ enum AutomationCommands {
         #[arg(long, default_value_t = 10000)]
         timeout_ms: u64,
     },
+    // FORK: scheduled prompts and commands (DESIGN.md §19.9).
+    /// Scheduled and recurring prompts (to an agent) and commands (in a
+    /// terminal): add, list, pause, resume, delete, run, history. Prints JSON.
+    Schedule {
+        #[command(subcommand)]
+        command: ScheduleCommands,
+    },
     // FORK: queued follow-ups (P7, DESIGN.md §16).
     /// Queue a follow-up for an agent session; it is delivered when the agent
     /// finishes its current turn (never typed into a busy agent).
@@ -460,6 +467,186 @@ enum AutomationCommands {
         #[arg(long, default_value_t = 10000)]
         timeout_ms: u64,
     },
+}
+
+// FORK: §19.9
+#[derive(Subcommand, Debug)]
+enum ScheduleCommands {
+    /// Add a schedule. A prompt goes to an agent session (`--session`, or
+    /// `--feature` with `--target <label>`, default its first agent); a
+    /// command runs in a terminal of the feature (`--target`, default
+    /// `schedule`, created when missing).
+    Add {
+        /// An agent session: id, Claude name, `<feature>/<label>`, or a
+        /// unique label.
+        #[arg(long)]
+        session: Option<String>,
+        /// A feature: id, name, branch, or `project/feature`.
+        #[arg(long)]
+        feature: Option<String>,
+        /// The project, when the feature name is not unique.
+        #[arg(long)]
+        project: Option<String>,
+        /// When: `every 30m`, `daily 09:00`, `cron 0 9 * * 1-5`, `at 2026-10-12 15:00`.
+        #[arg(long = "when", alias = "spec")]
+        when: String,
+        /// The prompt to deliver.
+        #[arg(long)]
+        prompt: Option<String>,
+        /// The shell command to run.
+        #[arg(long)]
+        command: Option<String>,
+        /// Prompt: the session label; command: the terminal's name.
+        #[arg(long)]
+        target: Option<String>,
+        /// Start the session or feature when it is stopped (resource limits permitting).
+        #[arg(long, default_value_t = false)]
+        start_if_stopped: bool,
+        /// Fires missed while AIW was not running: `once` (default) or `none`.
+        #[arg(long)]
+        catch_up: Option<String>,
+        /// Stop after this time (`2026-10-31 18:00`, local).
+        #[arg(long)]
+        end: Option<String>,
+        /// Stop after this many runs.
+        #[arg(long)]
+        max_runs: Option<u32>,
+        /// Add it paused.
+        #[arg(long, default_value_t = false)]
+        paused: bool,
+        #[arg(long, default_value_t = 10000)]
+        timeout_ms: u64,
+    },
+    /// List schedules (all, or of a session, feature or project).
+    List {
+        #[arg(long)]
+        session: Option<String>,
+        #[arg(long)]
+        feature: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long, default_value_t = 10000)]
+        timeout_ms: u64,
+    },
+    /// Pause a schedule (by id or a unique id prefix).
+    Pause {
+        #[arg(long)]
+        id: String,
+        #[arg(long, default_value_t = 10000)]
+        timeout_ms: u64,
+    },
+    /// Resume a paused schedule.
+    Resume {
+        #[arg(long)]
+        id: String,
+        #[arg(long, default_value_t = 10000)]
+        timeout_ms: u64,
+    },
+    /// Delete a schedule (aiw.json schedules are refused).
+    Delete {
+        #[arg(long)]
+        id: String,
+        #[arg(long, default_value_t = 10000)]
+        timeout_ms: u64,
+    },
+    /// Run a schedule now.
+    Run {
+        #[arg(long)]
+        id: String,
+        #[arg(long, default_value_t = 10000)]
+        timeout_ms: u64,
+    },
+    /// A schedule's run history, newest first.
+    History {
+        #[arg(long)]
+        id: String,
+        #[arg(long, default_value_t = 10000)]
+        timeout_ms: u64,
+    },
+}
+
+/// FORK: §19.9 — the IPC request for `aiw automation schedule …`.
+fn schedule_request(command: ScheduleCommands) -> (serde_json::Value, u64) {
+    let mut request = serde_json::json!({
+        "type": automation::AUTOMATION_REQUEST_TYPE,
+        "action": crate::fork::schedules::SCHEDULE_ACTION,
+    });
+    let mut set = |key: &str, value: Option<serde_json::Value>| {
+        if let Some(value) = value {
+            request[key] = value;
+        }
+    };
+    let s = |v: Option<String>| v.map(serde_json::Value::String);
+    let timeout = match command {
+        ScheduleCommands::Add {
+            session,
+            feature,
+            project,
+            when,
+            prompt,
+            command,
+            target,
+            start_if_stopped,
+            catch_up,
+            end,
+            max_runs,
+            paused,
+            timeout_ms,
+        } => {
+            set("op", s(Some("add".into())));
+            set("session", s(session));
+            set("feature", s(feature));
+            set("project", s(project));
+            set("spec", s(Some(when)));
+            set("prompt", s(prompt));
+            set("command", s(command));
+            set("target", s(target));
+            set("start_if_stopped", Some(start_if_stopped.into()));
+            set("catch_up", s(catch_up));
+            set("end", s(end));
+            set("max_runs", max_runs.map(serde_json::Value::from));
+            set("paused", Some(paused.into()));
+            timeout_ms
+        }
+        ScheduleCommands::List {
+            session,
+            feature,
+            project,
+            timeout_ms,
+        } => {
+            set("op", s(Some("list".into())));
+            set("session", s(session));
+            set("feature", s(feature));
+            set("project", s(project));
+            timeout_ms
+        }
+        ScheduleCommands::Pause { id, timeout_ms } => {
+            set("op", s(Some("pause".into())));
+            set("id", s(Some(id)));
+            timeout_ms
+        }
+        ScheduleCommands::Resume { id, timeout_ms } => {
+            set("op", s(Some("resume".into())));
+            set("id", s(Some(id)));
+            timeout_ms
+        }
+        ScheduleCommands::Delete { id, timeout_ms } => {
+            set("op", s(Some("delete".into())));
+            set("id", s(Some(id)));
+            timeout_ms
+        }
+        ScheduleCommands::Run { id, timeout_ms } => {
+            set("op", s(Some("run".into())));
+            set("id", s(Some(id)));
+            timeout_ms
+        }
+        ScheduleCommands::History { id, timeout_ms } => {
+            set("op", s(Some("history".into())));
+            set("id", s(Some(id)));
+            timeout_ms
+        }
+    };
+    (request, timeout)
 }
 
 /// Best-effort delivery fallbacks for when the IPC socket is unavailable —
@@ -1275,6 +1462,20 @@ fn run_automation_command(command: AutomationCommands) -> Result<()> {
             );
             Ok(())
         }
+        // FORK: §19.9
+        AutomationCommands::Schedule { command } => {
+            let (request, timeout_ms) = schedule_request(command);
+            let reply = ipc::send_wait(
+                &ipc::socket_path(),
+                &serde_json::to_string(&request)?,
+                Duration::from_millis(timeout_ms),
+            )?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&reply).unwrap_or_else(|_| "{}".to_string())
+            );
+            Ok(())
+        }
         // FORK: P7
         AutomationCommands::Queue {
             session,
@@ -2021,6 +2222,7 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         force_redraw |= app.background_tick();
         // FORK: §19.8 — the watchdog: exited, stuck, idle-with-queued agents.
         force_redraw |= app.watchdog_tick();
+        force_redraw |= app.schedules_tick(); // FORK: §19.9
 
         let current_redraw_signature = app.redraw_signature();
         let state_changed = current_redraw_signature != loop_state_signature;

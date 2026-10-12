@@ -1238,6 +1238,10 @@ pub enum AppMode {
     MessageSession(crate::app::fork_messaging::MessageDialogState),
     /// FORK: `!` — the watchdog's recovery actions for a session (§19.8).
     Watchdog(crate::app::fork_watchdog::WatchdogDialogState),
+    /// FORK: `t` — scheduled prompts and commands (§19.9).
+    Schedules(crate::app::fork_schedules::ScheduleListState),
+    /// FORK: §19.9 — adding or editing a schedule.
+    ScheduleEditor(Box<crate::app::fork_schedules::ScheduleEditorState>),
     ThemePicker(ThemePickerState),
     SyntaxLanguagePicker(SyntaxLanguagePickerState),
     DebugLog(DebugLogState),

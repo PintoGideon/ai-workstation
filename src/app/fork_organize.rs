@@ -121,6 +121,7 @@ impl App {
 
     /// A session was deleted: drop its note.
     pub(crate) fn forget_organize_session(&mut self, session_id: &str) {
+        self.forget_schedules_for_session(session_id); // FORK: §19.9
         let target = NoteTarget::Session(session_id.to_string());
         if self.organize.notes.remove(&target).is_some()
             && let Some(db) = self.db.as_ref()
@@ -132,6 +133,7 @@ impl App {
 
     /// A feature was deleted: drop its notes and its group seat.
     pub(crate) fn forget_organize_feature(&mut self, feature: &Feature) {
+        self.forget_schedules_for_feature(&feature.id); // FORK: §19.9
         for session in &feature.sessions {
             self.forget_organize_session(&session.id);
         }

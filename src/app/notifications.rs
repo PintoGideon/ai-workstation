@@ -912,6 +912,8 @@ impl App {
                 crate::fork::followups::QUEUE_ACTION => self.automation_queue_followup(&raw),
                 // FORK: `aiw automation message` (DESIGN.md §19.5).
                 crate::fork::messaging::MESSAGE_ACTION => self.automation_message(&raw),
+                // FORK: `aiw automation schedule …` (DESIGN.md §19.9).
+                crate::fork::schedules::SCHEDULE_ACTION => self.automation_schedule(&raw),
                 _ => automation_error_response(
                     if action.is_empty() {
                         "unknown"

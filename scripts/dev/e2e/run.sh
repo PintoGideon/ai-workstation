@@ -484,6 +484,9 @@ source "$HERE/background.sh"
 # §19.8: the watchdog (restarts aiw with short windows)
 # shellcheck disable=SC1091
 source "$HERE/watchdog.sh"
+# §19.9: scheduled prompts and commands.
+# shellcheck disable=SC1091
+source "$HERE/schedules.sh"
 
 aiw_quit; check "q: quit at the end" $?
 ! cockpit_alive && [ "$(view_sessions)" = 0 ]; check "q: cockpit server gone, no view sessions, agents still running" $?

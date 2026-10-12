@@ -118,6 +118,9 @@ pub struct SessionInfo {
     /// FORK: §19.7 — `bg 7c5dcf5d · working · <last log line>` for a
     /// background Claude session.
     pub background: Option<String>,
+    /// FORK: §19.9 — `⏲ next 14:30 · every 30 min` when a schedule acts on
+    /// the session.
+    pub schedule: Option<String>,
 }
 
 /// The harness's name as the block says it.
@@ -383,6 +386,7 @@ impl App {
             background: session
                 .is_background()
                 .then(|| self.background_info_line(&session.id)),
+            schedule: self.schedule_info_line(&session.id),
         })
     }
 

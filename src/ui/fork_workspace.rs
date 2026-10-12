@@ -273,6 +273,10 @@ fn sidebar_item_lines(
             if app.feature_note(&feature.id).is_some() {
                 left.push(Span::styled(" ✎", dim));
             }
+            // FORK: §19.9 — the feature has an active schedule.
+            if app.feature_has_active_schedule(&feature.id) {
+                left.push(Span::styled(" ⏲", dim));
+            }
             let right = if compact || matches!(badge.kind, BadgeKind::Idle | BadgeKind::Stopped) {
                 Vec::new()
             } else {
@@ -354,6 +358,10 @@ fn sidebar_item_lines(
             // FORK: §19.4 — the session has a note.
             if app.session_note(&session.id).is_some() {
                 left.push(Span::styled(" ✎", dim));
+            }
+            // FORK: §19.9 — a schedule acts on this session.
+            if app.session_has_active_schedule(&session.id) {
+                left.push(Span::styled(" ⏲", dim));
             }
             let mut right = Vec::new();
             // P4: context use, toned by the configured thresholds.

@@ -44,6 +44,10 @@ on disk, and what was removed in favour of the harnesses' own features.
   minutes), sit idle with something queued, or sit at the prompt with a full
   context, and offers the fix on `!`: restart resuming the conversation,
   interrupt, `/compact`, replay the prompt, or deliver the queued item now.
+- Runs prompts and commands on a schedule (`every 30m`, `daily 09:00`, a
+  cron rule, or once): a prompt goes to an idle agent at once, waits in the
+  queue while it works, and is held while it waits on you; a command runs in
+  a terminal only when it is at its prompt.
 - Shows context use, cost and usage windows per session, read from the
   harnesses' own files and status line, and what each session just did:
   compacted, switched model, failed a turn, open tasks, background work.
@@ -156,6 +160,7 @@ Pi receives no mode flags.
 | `W` | Worktrees Claude made itself (`--worktree`, subagents), created in AIW's layout: terminal, copy path, remove |
 | `@` | Message an agent session: straight into a Claude session's inbox, otherwise at its next turn end |
 | `!` | Recover an agent the watchdog flagged (exited, stuck, idle with something queued, context critical): restart resuming, interrupt, `/compact`, replay, deliver now |
+| `t` | Schedules: recurring prompts for an agent and commands for a terminal (`every 30m`, `daily 09:00`, cron, once) |
 | `Enter` / `c` / `x` / `d` | On a background Claude row: attach / restart / stop / `claude rm` |
 | `V` | Reopen a pending Vibeless edit approval |
 | `I` | On a TODOs row: start an agent on the next TODO |

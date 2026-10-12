@@ -236,3 +236,38 @@ an unknown session id or empty text is an error. The queue is stored in
 `aiw.db` and shown on the session row as `⏭ N queued`; the dashboard dialog
 (`e` on the row) lists, reorders and drops items. See the README section
 "Harness hooks: what AIW does with them".
+
+## Schedules
+
+```bash
+aiw automation schedule add --session <session> --when "every 30m" --prompt "Run the tests and fix what fails."
+aiw automation schedule add --feature api-auth --project api --when "daily 02:00" \
+  --command "make test" --target ci
+aiw automation schedule list [--session <session> | --feature <feature> [--project <name>] | --project <name>]
+aiw automation schedule pause|resume|run|delete|history --id <id or unique prefix>
+```
+
+A prompt schedule goes to an agent session: `--session` takes the same targets as `message` (an AIW session id, a
+Claude session's name, `<feature>/<label>`, or a unique label); with `--feature` it goes to `--target <label>`, or the
+feature's first agent. A command schedule (`--command`) runs in the feature's terminal named by `--target` (default
+`schedule`), opened when missing. `--feature` takes an id, a name, a branch or `project/feature`.
+
+`--when` is `every 30m` / `every 1h30m`, `daily 09:00`, `cron 0 9 * * 1-5` (numbers, `*`, ranges, lists and steps; no
+names) or `at 2026-10-12 15:00`, in local time. Options: `--start-if-stopped`, `--catch-up once|none` (runs missed
+while AIW was not running), `--end "2026-10-31 18:00"`, `--max-runs N`, `--paused`.
+
+`add` answers with the schedule:
+
+```json
+{"type":"automation-result","action":"schedule","op":"add","ok":true,
+ "schedule":{"id":"5d1c…","project":"api","feature":"api-auth","target":"→ Claude 1","kind":"prompt",
+  "spec":"every 30m","describe":"every 30 min","text":"Run the tests and fix what fails.","paused":false,
+  "finished":false,"next_fire":"2026-10-12T15:30:00+00:00","runs":0,"max_runs":null,"end_at":null,
+  "catch_up":"once","start_if_stopped":false,"source":"user","config_name":null,"last_run":null}}
+```
+
+`list` answers `{"schedules": [ … ]}`; `run` answers `{"id", "outcome"}` where the outcome is `delivered`, `queued`,
+`ran`, `started`, `delivered (inbox)`, `skipped: waiting on you`, `skipped: not running`, `skipped: previous run still
+queued`, `skipped: busy (<command>)`, `skipped: resource limits` or `failed: <why>`; `history` answers `{"runs": [{"at",
+"outcome", "detail"}]}`, newest first, where `detail` says what fired it (`timer`, `catch-up`, `run now`,
+`automation`, `after waiting on you`). Schedules defined in `aiw.json` can be paused and run but not deleted.

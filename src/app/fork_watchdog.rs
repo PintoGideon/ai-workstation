@@ -206,7 +206,7 @@ impl App {
 
     /// What the app knows about the agent session at `(pi, fi, si)`; `None`
     /// for anything that is not an agent.
-    fn watchdog_observe(&self, pi: usize, fi: usize, si: usize) -> Option<Observation> {
+    pub(crate) fn watchdog_observe(&self, pi: usize, fi: usize, si: usize) -> Option<Observation> {
         let feature = self.store.projects.get(pi)?.features.get(fi)?;
         let session = feature.sessions.get(si)?;
         if !session.kind.is_agent_harness() {
@@ -671,6 +671,20 @@ impl App {
             return;
         }
         let actions = self.watchdog_actions(session_id);
+        let probe = format!(
+            "! on {} in {}: feature {:?}, stopped {}, exited marker {}, status {:?}, flag {:?}, observed {:?}",
+            session.label,
+            feature.name,
+            feature.status,
+            session.stopped,
+            self.session_is_exited(session_id),
+            session.status_text,
+            self.watchdog_flag(session_id).map(|f| f.kind),
+            self.watchdog_observe(pi, fi, si),
+        );
+        self.log_debug("watchdog", probe);
+        let feature = &self.store.projects[pi].features[fi];
+        let session = &feature.sessions[si];
         if actions.is_empty() {
             self.message = Some(format!("Nothing to do for {} right now", session.label));
             return;

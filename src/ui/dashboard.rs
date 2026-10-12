@@ -534,6 +534,13 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     if let AppMode::Watchdog(state) = &app.mode {
         super::dialogs::fork_watchdog::draw_watchdog(frame, state, &app.theme);
     }
+    // FORK: §19.9
+    if let AppMode::Schedules(state) = &app.mode {
+        super::dialogs::fork_schedules::draw_schedules(frame, app, state);
+    }
+    if let AppMode::ScheduleEditor(state) = &app.mode {
+        super::dialogs::fork_schedules::draw_schedule_editor(frame, app, state);
+    }
 
     if let AppMode::ThemePicker(state) = &app.mode {
         super::dialogs::draw_theme_picker(

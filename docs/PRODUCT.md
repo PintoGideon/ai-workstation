@@ -271,6 +271,7 @@ inside the app.
 | `W` | List the worktrees Claude made for the selected feature (or, on a project row, the project) with its own `--worktree`, subagents or workflows. `t` opens a terminal there, `y` copies the path, `d` then `y` removes a clean one |
 | `@` | Send a message to an agent session. A Claude session gets it straight in its inbox as its next prompt; any other agent gets it when its current turn ends. The dialog shows which; `↑`/`↓` pick the target |
 | `!` | Recover the selected agent (or the feature's flagged one): restart resuming its conversation, interrupt the turn, send `/compact`, paste the latest prompt again, or deliver a queued item now. The watchdog offers it on rows that need it; see Watchdog below |
+| `t` | Schedules: recurring or one-time prompts for an agent and commands for a terminal, for the selected session, its feature, or (on a project row) every feature of the project; see Schedules below |
 | `Enter` / `c` / `x` / `d` on a background Claude row | Attach in the agent pane (`claude attach`; detaching sends it back) / restart it (`claude respawn`, or resume its conversation when Claude no longer lists it) / stop it (`claude stop`) / remove it (`claude rm`, asking first and showing Claude's refusal with the flag it suggests) |
 | `V` | Reopen a pending Vibeless edit approval |
 | `I` | On a TODOs row, start an agent on the next unstarted TODO |
@@ -525,6 +526,84 @@ Nothing happens by itself unless `watchdog_auto_restart` is on: then an
 exited agent is relaunched, resuming, at most once an hour per session and
 only when the resource limits allow. `watchdog: false` turns the watchdog off.
 
+**Schedules.** A schedule sends a prompt to an agent, or runs a command in a
+terminal, on a timer. `t` opens the schedules of the selected session (and its
+feature), of the selected feature, or of every feature of a project:
+
+| Key | What it does |
+| --- | --- |
+| `n` | New schedule (on a session or feature row) |
+| `e` / `Enter` | Edit it |
+| `Space` / `p` | Pause or resume |
+| `r` | Run it now |
+| `d` then `y` | Delete it |
+| `h` | Show its run history |
+| `Esc` / `q` / `t` | Close |
+
+The editor asks what it does (a prompt for an agent, or a command in a
+terminal), the target (a prompt goes to one agent session or to the feature's
+first agent; a command runs in a named terminal of the feature, `schedule` by
+default, opened when missing), when, the text, and three options. While you
+type the rule it shows the first fire time, or what is wrong.
+
+When, in local time:
+
+| Rule | Means |
+| --- | --- |
+| `every 30m`, `every 2h`, `every 1h30m`, `every 2 hours` | That long after the previous run (the first one that long after you save it). Not shorter than `schedule_min_interval_secs`, one minute by default |
+| `daily 09:00` | Every day at that time |
+| `cron 0 9 * * 1-5` | Five fields: minute, hour, day of month, month, day of week (0 and 7 are Sunday). Each field is `*`, a number, a range `a-b`, a list `a,b`, or a step `*/n` or `a-b/n`. When day of month and day of week are both set, either matching is enough. Names (`MON`, `JAN`), `L`, `W`, `#`, `?` and `@daily` are not supported and are refused with a message saying so |
+| `at 2026-10-12 15:00`, `at 15:00` | Once. A bare time means its next occurrence |
+
+When a clock change skips a time (02:30 on the spring-forward night), the run
+happens at the first minute after the gap. A time that happens twice (the
+autumn night) runs once.
+
+How a prompt is delivered, the same way a follow-up is:
+
+- the agent is idle at its prompt and nothing else waits for it: pasted and
+  sent (`delivered`);
+- the agent is working, or something is already queued for it: queued, and
+  sent when its turn ends (`queued`);
+- the agent waits on you (a permission or a question): nothing is typed; the
+  run is put off (`skipped: waiting on you`) and retried every half minute
+  until it goes, or until the next run comes due;
+- the agent is stopped or exited: skipped (`skipped: not running`), unless
+  "If stopped" is set to start it, within the resource limits, in which case
+  the prompt is sent once the agent says it is ready (`started`);
+- the previous run is still waiting in the queue: skipped, so runs never pile
+  up (`skipped: previous run still queued`);
+- a background Claude session gets it in its inbox, or queued.
+
+A command is typed into its terminal only when that terminal is at its prompt
+(`ran`); a terminal running something else is skipped
+(`skipped: busy (sleep)`). A stopped feature is skipped unless "If stopped" is
+set.
+
+Runs missed while aiw was not running are caught up once when it starts
+(`Missed runs: run once`, the default) or recorded as missed
+(`skip them`). A schedule can stop after a number of runs or at an end time;
+skipped runs do not count. Rows with an active schedule show `⏲`, and the info
+block shows the next run (`⏲ next 14:30 · every 30 min`). The last 100 runs of
+each schedule are kept. `schedules: false` keeps them all but fires none.
+
+A project's `aiw.json` (or the global `extension` block) can define schedules
+for every feature whose name or branch matches `match` (`*` and `?`
+wildcards):
+
+```json
+"schedules": [
+  { "name": "nightly", "match": "api-*", "when": "daily 02:00",
+    "command": "make test", "terminal": "ci" },
+  { "name": "status", "when": "every 2h", "prompt": "Summarise what is left.",
+    "session": "Claude 1", "catch_up": "none", "max_runs": 10 }
+]
+```
+
+They appear in the list marked `(aiw.json)`. They can be paused and run from
+the dashboard, but are edited and removed in the file; aiw re-reads it every
+half minute.
+
 **Layout presets.** A project's `aiw.json` (or the global `extension` block)
 can name sets of extra sessions to open with a feature:
 
@@ -696,6 +775,8 @@ written back, so a config from an older version keeps loading.
 | `watchdog_stuck_minutes` | `10` | Minutes a working session may go with no hooks *and* an unchanged pane before it is called stuck. Fractions allowed |
 | `watchdog_queued_idle_secs` | `30` | Seconds a follow-up or message may wait for an idle session before the watchdog offers to deliver it now |
 | `watchdog_auto_restart` | `false` | Relaunch an exited agent by itself, resuming its conversation: at most once an hour per session, only within the resource limits, and logged |
+| `schedules` | `true` | Run scheduled prompts and commands. Off keeps every schedule but fires none |
+| `schedule_min_interval_secs` | `60` | The shortest interval an `every` schedule may have |
 | `claude_cross_session_inbound` | `"accept"` | Claude's rule for messages from your other sessions and aiw: `accept`, `hold` (approve each in the pane), `refuse`, or `default` to leave Claude's own rule. `accept` is not applied to SuperVibe sessions |
 | `max_concurrent_agents` | `4` | Warn before starting an agent past this many running harnesses; 0 disables |
 | `low_memory_warn_mb` | `1536` | Warn before starting an agent with less free memory than this; 0 disables |
@@ -747,6 +828,9 @@ written back, so a config from an older version keeps loading.
       "prompt": { "title": "Seed the database?", "options": ["yes", "no"] }
     }
   },
+  "schedules": [
+    { "name": "nightly", "match": "*", "when": "daily 02:00", "command": "npm test", "terminal": "ci" }
+  ],
   "keybindings": { "quit": "Q" },
   "prompt_templates": [
     { "name": "Explain this file", "body": "Explain {{path}} to a new teammate.",
@@ -830,6 +914,7 @@ to writing that file. Codex gets its notify hook per launch rather than in
 | `aiw automation create-batch-features` | Create one project with many parallel feature worktrees |
 | `aiw automation queue --session <id> "text"` | Queue a follow-up for a session; the id is in the doctor's JSON output |
 | `aiw automation message --to <session> --text "text" [--from <name>]` | Message a session: into a Claude session's inbox, otherwise queued for its next turn end. Prints `delivered`, `queued` or `failed` |
+| `aiw automation schedule add\|list\|pause\|resume\|delete\|run\|history` | Manage schedules. `add --session <session> --when "every 30m" --prompt "…"`, or `add --feature <feature> --when "daily 02:00" --command "make test" --target ci`; `--start-if-stopped`, `--catch-up none`, `--end`, `--max-runs`, `--paused`. The others take `--id` (a unique prefix is enough); `list` takes `--session`, `--feature` or `--project` |
 | `aiw --help` | Everything else |
 
 Automation talks to the running dashboard over its socket and prints a JSON
@@ -862,7 +947,8 @@ Every file aiw puts inside a repository is added to that repository's
 block of ten TCP ports, reserved under a lock and passed to every window as
 `AIW_PORT` and `AIW_PORT_COUNT`, so parallel dev servers do not fight over
 one port. The database keeps projects, features, sessions, bookmarks, TODOs,
-prompt templates, follow-ups, hook approvals, token caches and the debug log.
+prompt templates, follow-ups, schedules and their run history, hook approvals,
+token caches and the debug log.
 Tables that belonged to removed features stay in the schema, unread, so an
 older database opens unchanged.
 
