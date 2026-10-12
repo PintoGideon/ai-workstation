@@ -234,7 +234,7 @@ edit the project config for you.
 | `aiw grid <feature>` | The feature's agents as live tiled panes in this terminal; `Alt+q` closes |
 | `aiw doctor [--json]` | Read-only report: agents against the limit, memory, orphaned sessions and worktrees, hook mode, no-network check |
 | `aiw fonts` | A font and icon config snippet for your terminal |
-| `aiw automation …` | `create-project`, `create-feature`, `create-batch-features` and `queue` from JSON; see [docs/automation](docs/automation/README.md) |
+| `aiw automation …` | `create-project`, `create-feature`, `create-batch-features`, `queue`, `message`, `schedule` and `land` from JSON or flags; see [docs/automation](docs/automation/README.md) |
 
 ## No cloud
 

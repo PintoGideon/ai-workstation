@@ -44,6 +44,7 @@ pub fn draw_fork_session_dialog(frame: &mut Frame, state: &ForkSessionState, the
             &[("j/k", "choose"), ("Enter", "fork"), ("Esc", "cancel")],
         ))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(rect);
@@ -129,6 +130,7 @@ pub fn draw_external_sessions(
             ],
         ))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(rect);

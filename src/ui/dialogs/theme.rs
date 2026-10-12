@@ -28,6 +28,7 @@ pub fn draw_theme_picker(
 
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.border_focus.to_color())) // FORK: focus colour
         .title(title);

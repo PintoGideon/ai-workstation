@@ -43,6 +43,7 @@ fn draw_batch_workspace_path(frame: &mut Frame, state: &CreateBatchFeaturesState
     let block = Block::default()
         .title(" Create Batch Features ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -70,6 +71,7 @@ fn draw_batch_workspace_path(frame: &mut Frame, state: &CreateBatchFeaturesState
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
                 .border_style(Style::default().fg(theme.warning.to_color())),
         )
         .wrap(Wrap { trim: true });
@@ -104,6 +106,7 @@ fn draw_batch_project_name(frame: &mut Frame, state: &CreateBatchFeaturesState, 
     let block = Block::default()
         .title(" Create Batch Features ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -131,6 +134,7 @@ fn draw_batch_project_name(frame: &mut Frame, state: &CreateBatchFeaturesState, 
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
                 .border_style(Style::default().fg(theme.warning.to_color())),
         )
         .wrap(Wrap { trim: true });
@@ -169,6 +173,7 @@ fn draw_batch_feature_base_name(
     let block = Block::default()
         .title(" Create Batch Features ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -196,6 +201,7 @@ fn draw_batch_feature_base_name(
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
                 .border_style(Style::default().fg(theme.warning.to_color())),
         )
         .wrap(Wrap { trim: true });
@@ -229,6 +235,7 @@ fn draw_batch_feature_count(frame: &mut Frame, state: &CreateBatchFeaturesState,
     let block = Block::default()
         .title(" Create Batch Features ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -257,6 +264,7 @@ fn draw_batch_feature_count(frame: &mut Frame, state: &CreateBatchFeaturesState,
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
                 .border_style(Style::default().fg(theme.warning.to_color())),
         )
         .wrap(Wrap { trim: true });
@@ -302,6 +310,7 @@ fn draw_batch_feature_settings(frame: &mut Frame, state: &CreateBatchFeaturesSta
     let block = Block::default()
         .title(" Create Batch Features ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -381,9 +390,12 @@ fn draw_batch_feature_settings(frame: &mut Frame, state: &CreateBatchFeaturesSta
         let block = if is_focused {
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
                 .border_style(Style::default().fg(theme.warning.to_color()))
         } else {
-            Block::default().borders(Borders::ALL)
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
         };
 
         let paragraph = Paragraph::new(text).block(block);

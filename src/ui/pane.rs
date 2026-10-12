@@ -56,6 +56,7 @@ pub(crate) fn draw_command_menu(
         Block::default()
             .title(title)
             .borders(Borders::ALL)
+            .border_type(ratatui::widgets::BorderType::Rounded)
             .style(Style::default().bg(theme.effective_bg()))
             .border_style(Style::default().fg(theme.info.to_color())),
     );

@@ -45,6 +45,7 @@ pub fn draw_diff_review_dialog(frame: &mut Frame, state: &DiffReviewState, theme
     let block = Block::default()
         .title(" Diff Review ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -195,6 +196,7 @@ pub fn draw_diff_review_dialog(frame: &mut Frame, state: &DiffReviewState, theme
         let feedback_block = Block::default()
             .title(" Reject With Feedback ")
             .borders(Borders::ALL)
+            .border_type(ratatui::widgets::BorderType::Rounded)
             .style(Style::default().bg(theme.effective_bg()))
             .border_style(Style::default().fg(theme.danger.to_color()));
         let feedback_inner = feedback_block.inner(feedback_area);
@@ -330,6 +332,7 @@ pub fn draw_running_hook_dialog(
     let block = Block::default()
         .title(" Running Hook ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(border_color));
 
@@ -452,6 +455,7 @@ pub fn draw_hook_prompt_dialog(frame: &mut Frame, state: &HookPromptState, theme
     let block = Block::default()
         .title(format!(" {} ", state.title))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -523,6 +527,7 @@ pub fn draw_latest_prompt_dialog(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 

@@ -22,6 +22,7 @@ pub fn draw_context_settings_dialog(
     let block = Block::default()
         .title(" Context Window Settings ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);

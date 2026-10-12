@@ -73,6 +73,7 @@ pub fn draw_schedules(frame: &mut Frame, app: &App, state: &ScheduleListState) {
         .title(format!(" Schedules · {} ", state.title))
         .title_bottom(hints)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.border_focus.to_color()));
     let inner = block.inner(rect);
@@ -210,6 +211,7 @@ pub fn draw_schedule_editor(frame: &mut Frame, app: &App, state: &ScheduleEditor
         .title(title)
         .title_bottom(hints)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.border_focus.to_color()));
     let inner = block.inner(rect);

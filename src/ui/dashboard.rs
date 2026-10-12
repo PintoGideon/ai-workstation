@@ -627,6 +627,18 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         app.fork_workspace.sidebar_rect,
     ) {
         (true, Some(body)) => body.inner(ratatui::layout::Margin::new(1, 1)),
+        // No projects yet: the list panel sits between the 3-row header and
+        // the 3-row status panel (`draw_dashboard_chrome`), so keep the toast
+        // inside it rather than across their borders.
+        (true, None) => {
+            let a = frame.area();
+            ratatui::layout::Rect::new(
+                a.x + 1,
+                a.y + 4,
+                a.width.saturating_sub(2),
+                a.height.saturating_sub(8),
+            )
+        }
         _ => frame.area(),
     };
     super::draw_toasts(frame, toast_area, &app.toasts, &app.theme);

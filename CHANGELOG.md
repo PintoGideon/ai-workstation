@@ -38,10 +38,11 @@ are tagged.
   `ai-workstation`; GUI "AI Workstation" (`aiw-gui`); env vars `AIW_*`; tmux
   sessions `aiw-*`; config in `~/.config/ai_workstation` (`aiw.db`, hooks in
   `hooks/`); state in `~/.local/state/ai_workstation`; repo files `aiw.json`,
-  `.aiw/`; skills `aiw-*`; theme `classic`. The first launch
-  copies the upstream setup into the new folders without touching the
-  original, and old names in configs keep loading. See README ("Coming from
-  …") and DESIGN.md §11.
+  `.aiw/`; skills `aiw-*`; theme `classic`. See DESIGN.md §11.
+- CI is one Linux job (fmt, clippy, tests, the no-network check); the macOS
+  matrix, the release and site workflows and the scheduled advisory audit
+  are gone, as is `scripts/dev/release.sh`. Install with `cargo install
+  --path .`.
 
 ### Removed
 
@@ -57,6 +58,14 @@ are tagged.
   longer exist; the New Feature dialog is Name, Worktree, Harness, Mode and
   Chrome. No migration: the old tables and feature columns stay in `aiw.db`
   unread. See DESIGN.md §18.1.
+- **Upstream migration shim** (2026-10-12): the first-run copy of a
+  `~/.config/amf` setup, the `amf.json` / `.amf/config.json` project config
+  fallback, the `amf-*` session and hook-path recognisers, the `amf` theme
+  alias and the cleanup of upstream hooks in `~/.claude/settings.json` are
+  gone; `aiw.json` is the only project config. The no-tmux Docker image and
+  the release bundle scripts went with the release pipeline. The settings
+  `diff_review_viewer` (one value) and `input_request_wait_seconds` (unread)
+  are dropped; old config files still load.
 
 - **OpenCode support.** Claude Code, Codex, Gemini CLI, Cursor agent and Pi
   remain. Stored OpenCode sessions are dropped on load; features and

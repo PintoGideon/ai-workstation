@@ -199,7 +199,7 @@ pub(crate) fn normal_keybinds() -> Vec<(&'static str, &'static str)> {
             "Land the feature: rebase onto its base, run the check, then merge locally or open a PR",
         ), // FORK: §19.10
         (
-            "Enter / c / x / d",
+            "Enter/c/x/d",
             "On a background Claude row: attach / restart (respawn) / stop / claude rm",
         ),
         ("y", "Toggle mark feature as ready"),

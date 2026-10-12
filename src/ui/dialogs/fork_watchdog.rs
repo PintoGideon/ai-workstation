@@ -33,6 +33,7 @@ pub fn draw_watchdog(frame: &mut Frame, state: &WatchdogDialogState, theme: &The
         .title(format!(" Recover {} · {} ", state.label, state.feature))
         .title_bottom(hints)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.warning.to_color()));
     let inner = block.inner(rect);

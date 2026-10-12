@@ -25,6 +25,7 @@ pub fn draw_stopped_session_dialog(
     let block = Block::default()
         .title(" Session Not Running ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.warning.to_color()));
     let inner = block.inner(area);
@@ -103,6 +104,7 @@ pub fn draw_rename_session_dialog(frame: &mut Frame, state: &RenameSessionState,
     let block = Block::default()
         .title(" Rename Session ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -129,6 +131,7 @@ pub fn draw_new_session_name_dialog(frame: &mut Frame, state: &NewSessionNameSta
     let block = Block::default()
         .title(" Name Session ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -155,6 +158,7 @@ pub fn draw_rename_feature_dialog(frame: &mut Frame, state: &RenameFeatureState,
     let block = Block::default()
         .title(" Rename Feature ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -250,6 +254,7 @@ fn draw_agent_config_dialog(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 

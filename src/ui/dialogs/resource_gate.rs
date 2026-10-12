@@ -39,6 +39,7 @@ pub fn draw_resource_confirm_dialog(
     let block = Block::default()
         .title(" Resource Check ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.warning.to_color()));
 

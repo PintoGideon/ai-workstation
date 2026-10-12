@@ -29,6 +29,7 @@ pub fn draw_todo_reference_completion_dialog(
     let block = Block::default()
         .title(" Complete referenced TODO ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.warning.to_color()));
     let inner = block.inner(area);
@@ -62,6 +63,7 @@ pub fn draw_todo_quick_capture_dialog(
     let block = Block::default()
         .title(format!(" New TODO · {} ", state.project_name))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -127,6 +129,7 @@ pub fn draw_todos_host_reassign_dialog(
     let block = Block::default()
         .title(format!(" TODO list needs a home · {} ", state.project_name))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.warning.to_color()));
     let inner = block.inner(area);
@@ -415,6 +418,7 @@ fn draw_hidden_placeholder(frame: &mut Frame, area: Rect, kind: TodoPaneKind, th
     };
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .border_style(Style::default().fg(theme.text_muted.to_color()));
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -481,6 +485,7 @@ fn draw_pane(
             Style::default().fg(theme.text_muted.to_color()),
         ))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .border_style(Style::default().fg(border_color));
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -620,6 +625,7 @@ fn draw_scope_move(frame: &mut Frame, step: &TodoScopeMoveState, theme: &Theme) 
     let block = Block::default()
         .title(format!(" {verb} "))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -736,6 +742,7 @@ fn draw_launch_step(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -808,6 +815,7 @@ pub fn draw_todo_implement_choice_dialog(
     let block = Block::default()
         .title(" Work has already started on this TODO ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.warning.to_color()));
     let inner = block.inner(area);
@@ -1051,6 +1059,7 @@ fn draw_editor(frame: &mut Frame, editor: &TodoEditor, theme: &Theme) {
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -1095,6 +1104,7 @@ fn draw_delete_confirm(frame: &mut Frame, state: &TodoViewState, theme: &Theme) 
     let block = Block::default()
         .title(" Delete TODO ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.danger.to_color()));
     let inner = block.inner(area);
@@ -1132,6 +1142,7 @@ pub fn draw_todo_spawn_target_dialog(
     let block = Block::default()
         .title(" Where should this TODO be worked? ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -1215,6 +1226,7 @@ pub fn draw_todo_delete_disposition_dialog(
     let block = Block::default()
         .title(" This worktree still has TODOs ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.warning.to_color()));
     let inner = block.inner(area);

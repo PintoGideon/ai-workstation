@@ -51,6 +51,7 @@ pub fn draw_message_dialog(frame: &mut Frame, state: &MessageDialogState, theme:
             ],
         ))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(rect);

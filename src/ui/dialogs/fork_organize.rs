@@ -64,6 +64,7 @@ pub fn draw_feature_groups(frame: &mut Frame, app: &App, state: &FeatureGroupsSt
         .title(format!(" Groups · {} ", state.project_name))
         .title_bottom(key_hints(theme, hints))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(rect);
@@ -198,6 +199,7 @@ pub fn draw_note_editor(frame: &mut Frame, state: &NoteEditorState, theme: &Them
             ],
         ))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(rect);

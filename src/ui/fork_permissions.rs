@@ -133,6 +133,7 @@ pub(crate) fn draw_detail(frame: &mut Frame, app: &App, state: &PermissionDetail
     let block = Block::default()
         .title(" Permission request ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.status_waiting.to_color()));
     let inner = block.inner(area);

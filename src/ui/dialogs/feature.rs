@@ -57,6 +57,7 @@ fn draw_create_feature_session_name(frame: &mut Frame, state: &CreateFeatureStat
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -104,6 +105,7 @@ fn draw_create_feature_source(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -176,6 +178,7 @@ fn draw_create_feature_preset_picker(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -255,6 +258,7 @@ fn draw_create_feature_worktree_picker(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -419,6 +423,7 @@ fn draw_create_feature_branch_mode(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -803,6 +808,7 @@ pub fn draw_confirm_supervibe_dialog(frame: &mut Frame, theme: &Theme) {
     let block = Block::default()
         .title(" SuperVibe Mode ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.danger.to_color()));
 
@@ -930,6 +936,7 @@ pub fn draw_delete_feature_confirm(
         Block::default()
             .title(" Confirm Delete ")
             .borders(Borders::ALL)
+            .border_type(ratatui::widgets::BorderType::Rounded)
             .style(Style::default().bg(theme.effective_bg()))
             .border_style(Style::default().fg(theme.danger.to_color())),
     );
@@ -963,6 +970,7 @@ pub fn draw_deleting_feature_dialog(
     let block = Block::default()
         .title(" Deleting Feature ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(border_color));
 
@@ -1083,6 +1091,7 @@ pub fn draw_fork_feature_dialog(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 

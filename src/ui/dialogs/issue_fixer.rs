@@ -18,6 +18,7 @@ pub fn draw_issue_browser(frame: &mut Frame, state: &IssueBrowserState, theme: &
             state.repository.canonical()
         ))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(frame.area());
@@ -139,6 +140,7 @@ pub fn draw_issue_setup(frame: &mut Frame, state: &IssueSetupState, theme: &Them
             state.browser.repository.canonical()
         ))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -254,6 +256,7 @@ pub fn draw_issue_duplicate_warning(
     let block = Block::default()
         .title(format!(" Issue #{issue} already has feature work "))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.warning.to_color()));
     let inner = block.inner(area);

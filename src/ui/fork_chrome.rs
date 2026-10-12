@@ -188,13 +188,15 @@ pub(crate) fn draw_no_projects(frame: &mut Frame, area: Rect, theme: &Theme) {
             Span::styled(" quit", dim),
         ]),
     ];
-    let height = lines.len() as u16;
+    // Wrapped to the panel: a 34-column sidebar would otherwise clip the
+    // sentences mid-word.
+    let paragraph = Paragraph::new(lines)
+        .alignment(Alignment::Center)
+        .wrap(ratatui::widgets::Wrap { trim: true });
+    let height = (paragraph.line_count(inner.width) as u16).min(inner.height);
     let top = inner.y + inner.height.saturating_sub(height) / 2;
-    let text_area = Rect::new(inner.x, top, inner.width, height.min(inner.height));
-    frame.render_widget(
-        Paragraph::new(lines).alignment(Alignment::Center),
-        text_area,
-    );
+    let text_area = Rect::new(inner.x, top, inner.width, height);
+    frame.render_widget(paragraph, text_area);
 }
 
 #[cfg(test)]

@@ -285,6 +285,7 @@ fn draw_field_editor(frame: &mut Frame, state: &mut ConfigWizardState, theme: &T
         .title(format!(" Edit {} ", editor_state.label))
         .title_bottom(hints)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -387,6 +388,7 @@ fn draw_modal(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);

@@ -18,6 +18,7 @@ pub fn draw_browse_path_dialog(frame: &mut Frame, state: &BrowsePathState, theme
     let block = Block::default()
         .title(" Browse for Directory ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 

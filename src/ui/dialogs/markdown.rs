@@ -20,6 +20,7 @@ pub fn draw_markdown_viewer(frame: &mut Frame, state: &mut MarkdownViewerState, 
         let block = Block::default()
             .title(title)
             .borders(Borders::ALL)
+            .border_type(ratatui::widgets::BorderType::Rounded)
             .style(Style::default().bg(theme.effective_header_bg()))
             .border_style(
                 Style::default()
@@ -138,6 +139,7 @@ pub fn draw_markdown_loading(
     let block = Block::default()
         .title(" Markdown ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_header_bg()))
         .border_style(
             Style::default()

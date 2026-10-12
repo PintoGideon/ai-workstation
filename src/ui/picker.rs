@@ -101,6 +101,7 @@ pub fn draw_notification_picker(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.warning.to_color()));
 
@@ -247,6 +248,7 @@ pub fn draw_command_picker(frame: &mut Frame, state: &CommandPickerState, theme:
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -362,6 +364,7 @@ pub fn draw_syntax_language_picker(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.info.to_color()));
 
@@ -616,6 +619,7 @@ pub fn draw_markdown_file_picker(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.info.to_color()));
 
@@ -868,6 +872,7 @@ pub fn draw_bookmark_picker(
     let block = Block::default()
         .title(" Session Bookmarks ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -964,6 +969,7 @@ pub fn draw_claude_session_picker(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.success.to_color()));
 
@@ -1039,6 +1045,7 @@ pub fn draw_codex_session_picker(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.session_icon_codex.to_color()));
 
@@ -1140,6 +1147,7 @@ fn draw_session_restore_confirm(frame: &mut Frame, theme: &Theme, agent_name: &s
         Block::default()
             .title(" Confirm Restart ")
             .borders(Borders::ALL)
+            .border_type(ratatui::widgets::BorderType::Rounded)
             .style(Style::default().bg(theme.effective_bg()))
             .border_style(Style::default().fg(theme.warning.to_color())),
     )
@@ -1335,6 +1343,7 @@ pub fn draw_session_picker(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 

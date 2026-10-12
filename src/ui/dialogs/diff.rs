@@ -35,6 +35,7 @@ pub fn draw_diff_picker(frame: &mut Frame, state: &DiffPickerState, theme: &Them
     let block = Block::default()
         .title(" Choose Diff Scope ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -140,6 +141,7 @@ pub fn draw_diff_viewer(frame: &mut Frame, state: &mut DiffViewerState, theme: &
             " Current Changes "
         })
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(border_color));
     let inner = block.inner(area);
@@ -170,6 +172,7 @@ fn draw_base_ref_prompt(frame: &mut Frame, state: &DiffViewerState, theme: &Them
     let block = Block::default()
         .title(" Choose Base Ref ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -251,6 +254,7 @@ pub fn draw_diff_viewer_loading(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -527,6 +531,7 @@ fn draw_file_list(frame: &mut Frame, area: Rect, state: &DiffViewerState, theme:
             Block::default()
                 .title(format!(" Files ({}) ", state.files.len()))
                 .borders(Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
                 .border_style(Style::default().fg(border)),
         )
         .highlight_style(
@@ -623,6 +628,7 @@ pub(crate) fn draw_patch_panel(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .border_style(Style::default().fg(options.border_color));
 
     let Some(file) = file else {

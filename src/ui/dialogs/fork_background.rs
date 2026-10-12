@@ -34,6 +34,7 @@ fn frame_block(title: String, hints: Line<'static>, theme: &Theme) -> Block<'sta
         .title(title)
         .title_bottom(hints)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()))
 }

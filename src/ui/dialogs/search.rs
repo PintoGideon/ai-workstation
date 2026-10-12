@@ -18,6 +18,7 @@ pub fn draw_search_dialog(frame: &mut Frame, state: &SearchState, theme: &Theme)
     let block = Block::default()
         .title(" Search ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 

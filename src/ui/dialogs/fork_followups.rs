@@ -64,6 +64,7 @@ pub fn draw_followup_queue(
         .title(format!(" Queue a follow-up → {} ", state.title))
         .title_bottom(dialog_hints(theme, state.focus))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(rect);

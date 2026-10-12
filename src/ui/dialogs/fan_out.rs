@@ -53,6 +53,7 @@ pub fn draw_fan_out_layout(frame: &mut Frame, state: &CreateFeatureState, theme:
     let block = Block::default()
         .title(format!(" Fan-out: {} ", agents_line(state)))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -129,6 +130,7 @@ pub fn draw_feature_prompt(frame: &mut Frame, state: &CreateFeatureState, theme:
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -185,6 +187,7 @@ pub fn draw_feature_prompt(frame: &mut Frame, state: &CreateFeatureState, theme:
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
                 .border_style(Style::default().fg(theme.border.to_color())),
         );
     frame.render_widget(prompt, chunks[1]);
@@ -269,6 +272,7 @@ pub fn draw_feature_prompt(frame: &mut Frame, state: &CreateFeatureState, theme:
                 Block::default()
                     .title(" Prompt library — Enter inserts, Esc closes ")
                     .borders(Borders::ALL)
+                    .border_type(ratatui::widgets::BorderType::Rounded)
                     .style(Style::default().bg(theme.effective_bg()))
                     .border_style(Style::default().fg(theme.primary.to_color())),
             )

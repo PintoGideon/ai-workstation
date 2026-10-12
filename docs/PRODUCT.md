@@ -945,7 +945,8 @@ code on your machine. Hooks in your own global config never ask.
 Remappable actions for `keybindings` are `quit`, `create_project`,
 `create_feature`, `issue_fixer`, `start_session`, `stop_session`, `delete`,
 `sessions`, `help`, `search`, `refresh`, `syntax_picker`, `session_config`,
-`fork_feature` and `mark_ready`.
+`fork_feature` and `mark_ready`, plus `next_feature` and `prev_feature`, which
+have no default key (`Ctrl+j` / `Ctrl+k` are fixed) until you bind one.
 
 **Appearance.** Thirty-three themes ship: Default, Ember, Graphite, Midnight,
 Paper, Porcelain, Classic, Dracula, Nord, four Catppuccin flavours, Gruvbox
@@ -1077,7 +1078,10 @@ per-session drafts, the diff viewer, Vibeless edit approvals, dormant
 features, a refresh button for pull-request badges, themes and the debug
 log. Agent tabs have a sidebar with status, usage, context, issue and pull
 request, prompt and TODO sections. It has no cockpit; prompts it prepares
-land in its composer instead of a pane. Build it with `npm ci` and `npm run
+land in its composer instead of a pane. It does not show feature groups,
+notes, schedules, the watchdog, messages, fan-out groups, background
+sessions, Claude's own worktrees or landing; those live in the terminal
+dashboard, and `aiw automation` reaches most of them from scripts. Build it with `npm ci` and `npm run
 tauri build` inside `gui/`; the GUI README has platform notes for macOS and
 Windows under WSL2.
 

@@ -65,6 +65,7 @@ pub fn draw_claude_worktrees(frame: &mut Frame, app: &App, state: &ClaudeWorktre
         .title(format!(" Worktrees Claude made · {} ", state.title))
         .title_bottom(key_hints(theme, hints))
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(rect);

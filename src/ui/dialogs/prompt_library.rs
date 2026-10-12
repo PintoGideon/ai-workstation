@@ -39,6 +39,7 @@ pub fn draw_prompt_library(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -338,6 +339,7 @@ pub fn draw_prompt_editor(frame: &mut Frame, state: &PromptEditorState, theme: &
         .title(title)
         .title_bottom(footer)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()))
         .padding(Padding::horizontal(1));
@@ -375,6 +377,7 @@ pub fn draw_prompt_editor(frame: &mut Frame, state: &PromptEditorState, theme: &
         Block::default()
             .title(Span::styled(format!(" {title_text} "), title_style))
             .borders(Borders::ALL)
+            .border_type(ratatui::widgets::BorderType::Rounded)
             .border_style(Style::default().fg(border))
             .padding(Padding::horizontal(1))
     };
@@ -452,6 +455,7 @@ pub fn draw_prompt_editor(frame: &mut Frame, state: &PromptEditorState, theme: &
         .title(Span::styled(body_title, body_title_style))
         .title_bottom(help)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .border_style(Style::default().fg(body_border))
         .padding(Padding::horizontal(1));
     // The placeholder-syntax legend on the box's bottom border already
@@ -519,6 +523,7 @@ pub fn draw_placeholder_fill(frame: &mut Frame, state: &PlaceholderFillState, th
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);
@@ -668,6 +673,7 @@ pub fn draw_skill_picker(frame: &mut Frame, state: &SkillPickerState, theme: &Th
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
     let inner = block.inner(area);

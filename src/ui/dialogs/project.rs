@@ -23,6 +23,7 @@ pub fn draw_create_project_dialog(
     let block = Block::default()
         .title(" New Project ")
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(Style::default().bg(theme.effective_bg()))
         .border_style(Style::default().fg(theme.primary.to_color()));
 
@@ -230,6 +231,7 @@ pub fn draw_delete_project_confirm(frame: &mut Frame, name: &str, theme: &Theme)
         Block::default()
             .title(" Confirm Delete ")
             .borders(Borders::ALL)
+            .border_type(ratatui::widgets::BorderType::Rounded)
             .style(Style::default().bg(theme.effective_bg()))
             .border_style(Style::default().fg(theme.danger.to_color())),
     );

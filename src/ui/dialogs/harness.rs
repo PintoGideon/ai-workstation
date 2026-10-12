@@ -28,6 +28,7 @@ pub fn draw_harness_setup_dialog(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded)
         .style(
             Style::default()
                 .fg(theme.text.to_color())
