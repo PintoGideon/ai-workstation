@@ -949,6 +949,8 @@ impl App {
         // what the last Claude roster read said it waited for.
         if let Some(feature_session_id) = msg.aiw_feature_session_id.as_deref() {
             self.roster_saw_hook_activity(feature_session_id, &msg_type);
+            // FORK: §19.8 — any hook is a sign of life for the watchdog.
+            self.watchdog_saw_activity(feature_session_id);
         }
 
         // "clear" removes any pending notification for this
@@ -1626,6 +1628,15 @@ impl App {
         // not the same as dealing with it, so it clears when the agent
         // produces output (or ages out), exactly as it would have without the
         // detour through this list.
+        // FORK: §19.8 — a watchdog row opens that session's recovery actions.
+        if let crate::app::attention::AttentionRow::Watchdog { session_id, .. } = &row {
+            self.mode = AppMode::Normal;
+            if let Some((pi, fi, si)) = self.session_indices_by_id(session_id) {
+                self.selection = Selection::Session(pi, fi, si);
+            }
+            self.open_watchdog_dialog(session_id);
+            return Ok(());
+        }
         let idx = match row.pending_index() {
             Some(idx) => idx,
             None => {

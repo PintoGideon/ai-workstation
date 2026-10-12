@@ -2019,6 +2019,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         force_redraw |= app.pending_prompts_tick();
         // FORK: §19.7 — background Claude sessions: launches, commands, detaches.
         force_redraw |= app.background_tick();
+        // FORK: §19.8 — the watchdog: exited, stuck, idle-with-queued agents.
+        force_redraw |= app.watchdog_tick();
 
         let current_redraw_signature = app.redraw_signature();
         let state_changed = current_redraw_signature != loop_state_signature;

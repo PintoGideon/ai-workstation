@@ -194,6 +194,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "Message an agent session (Claude: its inbox; others: next turn end)",
         ), // FORK: §19.7
         (
+            "!",
+            "Recover an agent: restart resuming, interrupt, /compact, replay, deliver queued",
+        ), // FORK: §19.8
+        (
             "Enter / c / x / d",
             "On a background Claude row: attach / restart (respawn) / stop / claude rm",
         ),

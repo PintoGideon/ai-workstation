@@ -40,6 +40,10 @@ on disk, and what was removed in favour of the harnesses' own features.
 - Marks which agents need you, answers their permission prompts from the
   dashboard, holds Vibeless file edits for approval, and queues follow-ups
   that are delivered when a turn ends.
+- Watches for agents that exited, look stuck (no hooks and no output for ten
+  minutes), sit idle with something queued, or sit at the prompt with a full
+  context, and offers the fix on `!`: restart resuming the conversation,
+  interrupt, `/compact`, replay the prompt, or deliver the queued item now.
 - Shows context use, cost and usage windows per session, read from the
   harnesses' own files and status line, and what each session just did:
   compacted, switched model, failed a turn, open tasks, background work.
@@ -151,6 +155,7 @@ Pi receives no mode flags.
 | `e` | Queue a follow-up, delivered when the agent's turn ends |
 | `W` | Worktrees Claude made itself (`--worktree`, subagents), created in AIW's layout: terminal, copy path, remove |
 | `@` | Message an agent session: straight into a Claude session's inbox, otherwise at its next turn end |
+| `!` | Recover an agent the watchdog flagged (exited, stuck, idle with something queued, context critical): restart resuming, interrupt, `/compact`, replay, deliver now |
 | `Enter` / `c` / `x` / `d` | On a background Claude row: attach / restart / stop / `claude rm` |
 | `V` | Reopen a pending Vibeless edit approval |
 | `I` | On a TODOs row: start an agent on the next TODO |

@@ -211,6 +211,8 @@ impl SessionBadge {
             BadgeKind::Exited => {
                 let mut parts = vec!["exited".to_string()];
                 parts.extend(self.background.clone());
+                // FORK: §19.8 — the watchdog's hint.
+                parts.extend(self.detail.clone());
                 parts.join(" · ")
             }
             // A background session says why: stopped (attach resumes it)
@@ -373,7 +375,11 @@ fn session_kind_for_agent(agent: &AgentKind) -> SessionKind {
 /// the session of that harness when the feature lists one (even stopped or
 /// exited — the signal stays with the agent that raised it), every agent
 /// session otherwise.
-fn signal_applies(feature: &Feature, agent: Option<&AgentKind>, session: &FeatureSession) -> bool {
+pub(crate) fn signal_applies(
+    feature: &Feature,
+    agent: Option<&AgentKind>,
+    session: &FeatureSession,
+) -> bool {
     if !session.kind.is_agent_harness() {
         return false;
     }
@@ -420,7 +426,7 @@ fn feature_pending_detail(app: &App, feature: &Feature) -> Option<String> {
 
 /// Whether `session` is working: its own IPC marker when the harness sends
 /// one, else the feature's thinking marker shared by its agent sessions.
-fn session_working(app: &App, feature: &Feature, session: &FeatureSession) -> bool {
+pub(crate) fn session_working(app: &App, feature: &Feature, session: &FeatureSession) -> bool {
     if !session.kind.is_agent_harness() {
         return false;
     }
@@ -531,7 +537,13 @@ pub fn session_badge(
                 || session.status_text.as_deref()
                     == Some(crate::fork::session_reconcile::EXITED_STATUS));
         return if exited {
-            badge(BadgeKind::Exited, None)
+            // FORK: §19.8 — the watchdog offers the restart.
+            badge(
+                BadgeKind::Exited,
+                app.watchdog_flag(&session.id)
+                    .filter(|f| f.kind == crate::fork::watchdog::WatchKind::Exited)
+                    .map(|_| "! recover".to_string()),
+            )
         } else {
             badge(BadgeKind::Stopped, None)
         };
@@ -548,6 +560,24 @@ pub fn session_badge(
             BadgeKind::NeedsYou,
             at,
             Some(format!("turn failed: {reason}")),
+        ));
+    }
+    // FORK: §19.8 — a stuck agent being stopped for its relaunch.
+    if app.watchdog_restart_pending(&session.id) {
+        return decorate(badge(BadgeKind::Working, Some("restarting…".into())));
+    }
+    // FORK: §19.8 — the watchdog: a stuck turn or items queued for an idle
+    // agent wait on the user, whatever else the row would say.
+    if let Some(flag) = app.watchdog_flag(&session.id).filter(|f| {
+        matches!(
+            f.kind,
+            crate::fork::watchdog::WatchKind::Stuck | crate::fork::watchdog::WatchKind::QueuedIdle
+        )
+    }) {
+        return decorate(SessionBadge::new(
+            BadgeKind::NeedsYou,
+            flag.since,
+            Some(flag.reason()),
         ));
     }
     // FORK: §19.2 — Claude's roster says the session waits on input that
@@ -585,6 +615,17 @@ pub fn session_badge(
         && signal_applies(feature, None, session)
     {
         return decorate(badge(BadgeKind::NeedsYou, Some(detail)));
+    }
+    // FORK: §19.8 — idle at the prompt past the context critical threshold.
+    if let Some(flag) = app
+        .watchdog_flag(&session.id)
+        .filter(|f| f.kind == crate::fork::watchdog::WatchKind::ContextCritical)
+    {
+        return decorate(SessionBadge::new(
+            BadgeKind::NeedsYou,
+            flag.since,
+            Some(flag.reason()),
+        ));
     }
     decorate(badge(BadgeKind::Idle, None))
 }

@@ -59,6 +59,8 @@ impl App {
             self.log_debug("hook-event", format!("{event:?} matched no session"));
             return true;
         };
+        // §19.8: a sign of life for the watchdog.
+        self.watchdog_saw_activity(&session_id);
         // §19.3: the agent is up — a prompt waiting for it can go.
         if matches!(event, HookEvent::SessionStart) {
             self.fan_out_session_ready(&session_id);

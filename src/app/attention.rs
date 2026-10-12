@@ -303,6 +303,13 @@ pub enum AttentionRow {
     /// A pending input with no attention record: a review prompt, or a
     /// harness that reports no lifecycle events at all.
     Pending(usize),
+    /// FORK: §19.8 — a session the watchdog flagged. `Enter` opens its
+    /// recovery actions; `x` dismisses the flag for a while.
+    Watchdog {
+        session_id: String,
+        project_name: String,
+        feature_name: String,
+    },
 }
 
 impl AttentionRow {
@@ -311,6 +318,7 @@ impl AttentionRow {
         match self {
             AttentionRow::Attention { pending, .. } => *pending,
             AttentionRow::Pending(index) => Some(*index),
+            AttentionRow::Watchdog { .. } => None,
         }
     }
 
@@ -318,7 +326,7 @@ impl AttentionRow {
     pub fn state(&self) -> Option<AttentionState> {
         match self {
             AttentionRow::Attention { entry, .. } => Some(entry.record.state),
-            AttentionRow::Pending(_) => None,
+            AttentionRow::Pending(_) | AttentionRow::Watchdog { .. } => None,
         }
     }
 }
@@ -526,6 +534,16 @@ impl App {
                 .filter(|(_, claimed)| !**claimed)
                 .map(|(index, _)| AttentionRow::Pending(index)),
         );
+        // FORK: §19.8 — what the watchdog flagged, most urgent kind first.
+        rows.extend(self.watchdog_rows().into_iter().filter_map(|(id, _)| {
+            let (pi, fi, _) = self.session_indices_by_id(&id)?;
+            let project = &self.store.projects[pi];
+            Some(AttentionRow::Watchdog {
+                session_id: id,
+                project_name: project.name.clone(),
+                feature_name: project.features[fi].name.clone(),
+            })
+        }));
         rows
     }
 

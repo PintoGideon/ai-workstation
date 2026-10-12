@@ -66,6 +66,21 @@ pub struct AiwConfig {
     /// in the add-session picker and the New Feature dialog (§19.7). On by
     /// default; the default harness stays interactive either way.
     pub claude_background_sessions: bool,
+    /// Flag agents that exited, look stuck, sit idle with something queued,
+    /// or sit at the prompt past the context critical threshold, with
+    /// recovery actions on `!` and in the needs-you list (§19.8). On by
+    /// default; nothing is done without you unless `watchdog_auto_restart`.
+    pub watchdog: bool,
+    /// Minutes a working session may go with no hook events *and* an
+    /// unchanged pane before it is called stuck (§19.8). Fractions allowed.
+    pub watchdog_stuck_minutes: f64,
+    /// Seconds a follow-up or message may wait for an idle session before
+    /// the watchdog offers to deliver it now (§19.8).
+    pub watchdog_queued_idle_secs: u64,
+    /// Relaunch an exited agent by itself, resuming its conversation: at
+    /// most once per session per hour, only when the resource gate allows,
+    /// and logged (§19.8). Off by default.
+    pub watchdog_auto_restart: bool,
 }
 
 impl Default for AiwConfig {
@@ -84,6 +99,10 @@ impl Default for AiwConfig {
             claude_cross_session_inbound: crate::fork::messaging::InboundPolicy::Accept,
             claude_worktree_hooks: true,
             claude_background_sessions: true,
+            watchdog: true,
+            watchdog_stuck_minutes: crate::fork::watchdog::DEFAULT_STUCK_MINUTES,
+            watchdog_queued_idle_secs: crate::fork::watchdog::DEFAULT_QUEUED_IDLE_SECS,
+            watchdog_auto_restart: false,
         }
     }
 }

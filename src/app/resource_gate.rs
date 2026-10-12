@@ -339,6 +339,9 @@ impl App {
             PendingStart::RestartSessionWindow { pi, fi, si } => self
                 .restart_stopped_session_window_unchecked(pi, fi, si)
                 .map(|_| ()),
+            PendingStart::WatchdogRestart { session_id } => self
+                .watchdog_restart_exited_unchecked(&session_id)
+                .map(|message| self.push_toast_success(message)),
         };
 
         // Returning to the view the start came from is what the ungated path

@@ -265,11 +265,12 @@ inside the app.
 | `c` | Start the selected feature or stopped session; relaunch an exited agent in its window |
 | `x` | Stop the selected session or feature. The row stays |
 | `v` | Tile the feature's agents in the right pane; on a fan-out sibling, the first agent of every sibling. `Alt+q` there comes back |
-| `i` | List everything that needs you: questions first, then finished work |
+| `i` | List everything that needs you: questions first, then finished work, then what the watchdog flagged. `Enter` on a watchdog row opens its recovery actions; `x` dismisses it for a while |
 | `a` / `X` | Allow or deny the permission the selected agent is waiting on |
 | `e` | Queue a follow-up for the selected agent |
 | `W` | List the worktrees Claude made for the selected feature (or, on a project row, the project) with its own `--worktree`, subagents or workflows. `t` opens a terminal there, `y` copies the path, `d` then `y` removes a clean one |
 | `@` | Send a message to an agent session. A Claude session gets it straight in its inbox as its next prompt; any other agent gets it when its current turn ends. The dialog shows which; `↑`/`↓` pick the target |
+| `!` | Recover the selected agent (or the feature's flagged one): restart resuming its conversation, interrupt the turn, send `/compact`, paste the latest prompt again, or deliver a queued item now. The watchdog offers it on rows that need it; see Watchdog below |
 | `Enter` / `c` / `x` / `d` on a background Claude row | Attach in the agent pane (`claude attach`; detaching sends it back) / restart it (`claude respawn`, or resume its conversation when Claude no longer lists it) / stop it (`claude stop`) / remove it (`claude rm`, asking first and showing Claude's refusal with the flag it suggests) |
 | `V` | Reopen a pending Vibeless edit approval |
 | `I` | On a TODOs row, start an agent on the next unstarted TODO |
@@ -488,6 +489,42 @@ Stopping the feature leaves its background sessions running; deleting the
 row or the feature stops them in Claude. `claude_background_sessions: false`
 hides the option.
 
+**Watchdog.** aiw watches every agent session for five conditions and
+flags them on the row, with `! recover` at the end of the reason line, and
+in the needs-you list:
+
+- **exited**: the agent quit and left its pane at the shell (`exited · ! recover`);
+- **background failed**: Claude reports a background session as failed;
+- **stuck**: the session reads as working, no hook has arrived for ten
+  minutes, *and* its pane has not changed for ten minutes
+  (`stuck · no hooks or output for 12m`). Both signals are needed, so a long
+  build that keeps printing, or a chatty tool loop, is never stuck. Running
+  subagents keep the parent from being called stuck. The pane comparison
+  ignores the harness's own status line spinner, seconds and token counters,
+  which keep ticking even while an API call hangs;
+- **queued for an idle agent**: a follow-up or message waits for a session
+  that is not working, so the turn end that would deliver it never comes;
+- **context critical at the prompt**: the session sits idle past the
+  critical context threshold (`ctx 92% at the prompt`).
+
+A session that is already waiting on you (a permission prompt, a question)
+is never called stuck, and nothing is pasted into it.
+
+`!` (or `Enter` on the needs-you row) opens the actions that fit:
+
+| Action | What it does |
+| --- | --- |
+| Restart, resuming the conversation | An exited agent is relaunched in its pane with its conversation (`claude --resume <id>`, Codex by thread id). A stuck agent is ended first (its process tree, not the pane's shell), then relaunched the same way. A background session runs `claude respawn` |
+| Interrupt the turn (Esc) | Presses Esc in the agent |
+| Send /compact | Types `/compact` into an idle agent |
+| Paste the latest prompt again (unsent) | The prompt still waiting for the agent, else the last one it was sent, pasted unsent |
+| Deliver the first queued item now | Pastes and sends it; the rest go at the next turn end. A failed paste leaves it queued |
+| Dismiss (keep waiting) | The flag stays quiet for the stuck window |
+
+Nothing happens by itself unless `watchdog_auto_restart` is on: then an
+exited agent is relaunched, resuming, at most once an hour per session and
+only when the resource limits allow. `watchdog: false` turns the watchdog off.
+
 **Layout presets.** A project's `aiw.json` (or the global `extension` block)
 can name sets of extra sessions to open with a feature:
 
@@ -655,6 +692,10 @@ written back, so a config from an older version keeps loading.
 | `messaging_inbox` | `true` | Deliver `@` messages and `aiw automation message` straight into a Claude session's inbox. Off: every message goes through the follow-up queue |
 | `claude_worktree_hooks` | `true` | Pass Claude a worktree hook so the worktrees it makes itself (`--worktree`, subagents, workflows) are created in aiw's worktree folder with the included files and a port block, and listed under their feature |
 | `claude_background_sessions` | `true` | Offer "Claude (background)" (`claude --bg`, attached on demand) in the `s` picker and as `b` on the New Feature harness list. The default harness stays interactive |
+| `watchdog` | `true` | Flag exited, stuck, idle-with-queued and context-critical agents, with recovery actions on `!` and in the needs-you list |
+| `watchdog_stuck_minutes` | `10` | Minutes a working session may go with no hooks *and* an unchanged pane before it is called stuck. Fractions allowed |
+| `watchdog_queued_idle_secs` | `30` | Seconds a follow-up or message may wait for an idle session before the watchdog offers to deliver it now |
+| `watchdog_auto_restart` | `false` | Relaunch an exited agent by itself, resuming its conversation: at most once an hour per session, only within the resource limits, and logged |
 | `claude_cross_session_inbound` | `"accept"` | Claude's rule for messages from your other sessions and aiw: `accept`, `hold` (approve each in the pane), `refuse`, or `default` to leave Claude's own rule. `accept` is not applied to SuperVibe sessions |
 | `max_concurrent_agents` | `4` | Warn before starting an agent past this many running harnesses; 0 disables |
 | `low_memory_warn_mb` | `1536` | Warn before starting an agent with less free memory than this; 0 disables |

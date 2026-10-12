@@ -48,6 +48,12 @@ pub(crate) fn row_badges(
                         .position(|f| f.tmux_session == entry.tmux_session)
                         .map(|fi| crate::fork::badges::feature_badge(app, pi, fi, now))
                 }),
+            // FORK: §19.8 — the flagged session's own badge carries the
+            // watchdog's reason.
+            AttentionRow::Watchdog { session_id, .. } => {
+                let (pi, fi, si) = app.session_indices_by_id(session_id)?;
+                Some(crate::fork::badges::session_badge(app, pi, fi, si, now))
+            }
             AttentionRow::Pending(index) => {
                 let input = app.pending_inputs.get(*index)?;
                 let feature_name = input.feature_name.as_deref()?;
@@ -125,6 +131,11 @@ pub fn draw_notification_picker(
                         .and_then(|i| i.feature_name.as_deref())
                         .unwrap_or("unknown"),
                 ),
+                AttentionRow::Watchdog {
+                    project_name,
+                    feature_name,
+                    ..
+                } => (project_name.as_str(), feature_name.as_str()),
             };
 
             // What the row is asking for. FORK: the badge says it (glyph,

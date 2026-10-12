@@ -34,6 +34,7 @@ pub(crate) mod fork_session_info; // FORK: the session info block (DESIGN.md §1
 pub(crate) mod fork_skills; // FORK: the skill catalogue (out of the compose box)
 pub(crate) mod fork_subagents; // FORK: subagent counts per session (P5, DESIGN.md §16)
 pub(crate) mod fork_telemetry; // FORK: per-session context and cost (P4, DESIGN.md §16)
+pub(crate) mod fork_watchdog; // FORK: exited / stuck / idle-with-queued agents and recovery (DESIGN.md §19.8)
 pub(crate) mod fork_workspace; // FORK: workspace layout (DESIGN.md §15)
 pub(crate) mod github_workflow;
 mod hooks;
@@ -711,6 +712,8 @@ pub struct App {
     pub(crate) claude_worktrees: fork_claude_worktrees::ClaudeWorktreeRuntime,
     /// FORK: §19.7 — background Claude sessions (`claude --bg`).
     pub(crate) background: fork_background::BackgroundRuntime,
+    /// FORK: §19.8 — the watchdog: flags and recovery.
+    pub(crate) watchdog: fork_watchdog::WatchdogRuntime,
     /// FORK: ids for queued items when no database is open (negative).
     pub(crate) followup_memory_id: i64,
     pub ipc_tool_sessions: std::collections::HashSet<String>,
@@ -1153,6 +1156,7 @@ impl App {
             messaging: Default::default(),        // FORK: §19.5
             claude_worktrees: Default::default(), // FORK: §19.6
             background: Default::default(),       // FORK: §19.7
+            watchdog: fork_watchdog::WatchdogRuntime::production(), // FORK: §19.8
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
@@ -1380,6 +1384,7 @@ impl App {
             messaging: Default::default(),        // FORK: §19.5
             claude_worktrees: Default::default(), // FORK: §19.6
             background: Default::default(),       // FORK: §19.7
+            watchdog: Default::default(),         // FORK: §19.8
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),

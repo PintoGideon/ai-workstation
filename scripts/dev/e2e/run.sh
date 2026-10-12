@@ -36,6 +36,13 @@ cleanup() {
     cockpit_kill
     tmux -S "$AIW_SOCK" kill-server 2>/dev/null || true
     pkill -f "sleep 600" 2>/dev/null || true
+    # §19.7: the fake `claude --bg` workers are detached; end the ones this
+    # sandbox started (matched by their HOME, never by a pattern on the
+    # command line, which would match this shell too).
+    local p
+    for p in $(pgrep -u "$(id -u)" -f -- '--aiw-e2e-bg-worker' 2>/dev/null); do
+        tr '\0' '\n' <"/proc/$p/environ" 2>/dev/null | grep -qx "HOME=$S" && kill "$p" 2>/dev/null
+    done
     drive_kill
 }
 trap cleanup EXIT
@@ -474,6 +481,9 @@ source "$HERE/worktree_hooks.sh"
 # §19.7: background Claude sessions
 # shellcheck disable=SC1091
 source "$HERE/background.sh"
+# §19.8: the watchdog (restarts aiw with short windows)
+# shellcheck disable=SC1091
+source "$HERE/watchdog.sh"
 
 aiw_quit; check "q: quit at the end" $?
 ! cockpit_alive && [ "$(view_sessions)" = 0 ]; check "q: cockpit server gone, no view sessions, agents still running" $?

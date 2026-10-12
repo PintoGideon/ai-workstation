@@ -362,6 +362,11 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char('@') => {
             app.open_message_dialog();
         }
+        // FORK: §19.8 — the watchdog's recovery actions for the selected
+        // session (or the feature's flagged one).
+        KeyCode::Char('!') => {
+            app.open_watchdog_for_selection();
+        }
         // `z` for zzz: features nobody is watching.
         KeyCode::Char('z') => {
             app.open_dormant_view();

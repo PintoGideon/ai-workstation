@@ -521,6 +521,11 @@ pub fn handle_notification_picker_key(app: &mut App, key: KeyCode) -> Result<()>
             if let crate::app::attention::AttentionRow::Attention { ref entry, .. } = row {
                 app.clear_attention(&entry.tmux_session);
             }
+            // FORK: §19.8 — dismissing a watchdog row snoozes its flag.
+            if let crate::app::attention::AttentionRow::Watchdog { ref session_id, .. } = row {
+                let _ =
+                    app.watchdog_perform(session_id, crate::fork::watchdog::WatchAction::Dismiss);
+            }
 
             let remaining = app.attention_rows().len();
             if let AppMode::NotificationPicker(ref mut idx, _) = app.mode

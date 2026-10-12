@@ -1236,6 +1236,8 @@ pub enum AppMode {
     NoteEditor(crate::app::fork_organize::NoteEditorState),
     /// FORK: `@` — a message to an agent session (DESIGN.md §19.5).
     MessageSession(crate::app::fork_messaging::MessageDialogState),
+    /// FORK: `!` — the watchdog's recovery actions for a session (§19.8).
+    Watchdog(crate::app::fork_watchdog::WatchdogDialogState),
     ThemePicker(ThemePickerState),
     SyntaxLanguagePicker(SyntaxLanguagePickerState),
     DebugLog(DebugLogState),
@@ -1585,6 +1587,9 @@ pub enum PendingStart {
     /// was stopped individually with `x`) while the rest of its feature
     /// stays up.
     RestartSessionWindow { pi: usize, fi: usize, si: usize },
+    /// FORK: §19.8 — the watchdog's restart of an exited agent, resuming
+    /// its conversation in any harness.
+    WatchdogRestart { session_id: String },
 }
 
 /// The pre-start warning: what tripped, what it was about to do, and where to

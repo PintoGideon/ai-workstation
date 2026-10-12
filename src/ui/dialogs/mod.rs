@@ -14,6 +14,7 @@ pub(crate) mod fork_followups; // FORK: queued follow-ups (P7)
 pub(crate) mod fork_identity; // FORK: fork dialog, external sessions (DESIGN.md §19.2)
 pub(crate) mod fork_messaging; // FORK: `@` message dialog (DESIGN.md §19.5)
 pub(crate) mod fork_organize; // FORK: groups dialog, note editor (DESIGN.md §19.4)
+pub(crate) mod fork_watchdog; // FORK: the watchdog's recovery actions (DESIGN.md §19.8)
 mod harness;
 mod help;
 mod hooks;

@@ -104,6 +104,9 @@ fn pending_summary(pending: &PendingStart) -> String {
             None => "Adding a session".to_string(),
         },
         PendingStart::RestartSessionWindow { .. } => "Restarting a session".to_string(),
+        PendingStart::WatchdogRestart { .. } => {
+            "Restarting an exited agent, resuming its conversation".to_string()
+        }
     }
 }
 

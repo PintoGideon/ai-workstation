@@ -2017,7 +2017,7 @@ impl App {
     /// harness process — the condition the resource gate cares about, mirrored
     /// from the early-outs in `restart_stopped_session_window_unchecked`
     /// below.
-    fn restart_stopped_session_window_would_start_agent(
+    pub(crate) fn restart_stopped_session_window_would_start_agent(
         &self,
         pi: usize,
         fi: usize,

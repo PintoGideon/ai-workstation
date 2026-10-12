@@ -334,6 +334,8 @@ impl App {
             .iter()
             .enumerate()
             .any(|(i, s)| i != si && s.kind.is_agent_harness() && s.runs_with_feature());
+        // FORK: §19.8 — an agent that died mid-turn sends no Stop.
+        self.clear_session_working_markers(&id);
         self.exited_sessions.insert(id);
         if !other_agent_running {
             self.clear_attention(&tmux_session);

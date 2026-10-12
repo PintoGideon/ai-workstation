@@ -530,6 +530,10 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     if let AppMode::MessageSession(state) = &app.mode {
         super::dialogs::fork_messaging::draw_message_dialog(frame, state, &app.theme);
     }
+    // FORK: §19.8
+    if let AppMode::Watchdog(state) = &app.mode {
+        super::dialogs::fork_watchdog::draw_watchdog(frame, state, &app.theme);
+    }
 
     if let AppMode::ThemePicker(state) = &app.mode {
         super::dialogs::draw_theme_picker(

@@ -659,6 +659,17 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("n", key_style()),
             Span::raw(" keep"),
         ]),
+        // FORK: §19.8
+        AppMode::Watchdog(_) => Line::from(vec![
+            Span::styled(" j/k", key_style()),
+            Span::raw(" move  "),
+            Span::styled("Enter", key_style()),
+            Span::raw(" run  "),
+            Span::styled("1-9", key_style()),
+            Span::raw(" run that one  "),
+            Span::styled("Esc", key_style()),
+            Span::raw(" close"),
+        ]),
         // FORK: §19.6
         AppMode::ClaudeWorktrees(state) if state.confirm_remove => Line::from(vec![
             Span::styled(" y", key_style()),

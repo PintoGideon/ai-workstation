@@ -1268,3 +1268,101 @@ through the settings env and the row reads `bg · done`; the info block shows th
 attaches in the agent pane, typing reaches the session, `/detach` closes the window; `x` stops, `c` respawns; `d` →
 `claude rm` refused over a dirty checkout with Claude's words, `y` again removes with the printed flag; the New
 Feature `b` route starts the feature's Claude with `--bg` and its task prompt and no tmux session.
+
+### 19.8 Watchdog recovery (proposal 8)
+
+**Ask.** With several agents running, the ones that quietly stop making progress are the expensive ones: an agent
+that exited, a turn whose API call hangs, a follow-up queued for a session that is idle (so the `Stop` hook that
+would deliver it never fires), a session sitting at its prompt with a nearly full context. Say so on the row and in
+the needs-you list, and offer the fix; never act on its own unless asked to.
+
+**Detectors** (`fork::watchdog`, pure; `app::fork_watchdog` feeds them every 2 s from what the app already knows):
+- *exited*: the §16 exited sweep's marker (`exited_sessions` / the `exited` status text);
+- *background failed*: §19.7's roster state `failed`;
+- *stuck*: `badges::session_working` AND no hook event of any kind for `watchdog_stuck_minutes` AND the pane's
+  fingerprint unchanged for the same window. Two signals because each alone misleads: a long build prints but sends no
+  hooks; a long tool call sends `PreToolUse` and then nothing while its output moves. Running subagents (§16 P5)
+  suppress it — the parent waits on them quietly. The last hook is stamped where every hook already arrives (one call
+  beside §19.2's `roster_saw_hook_activity` in the IPC handler, one in the `hook-event` handler); any hook clears a
+  stuck flag at once;
+- *queued, idle*: follow-ups queued (the §19.5 fallback lands there too) for a running session that has not been
+  working for `watchdog_queued_idle_secs`;
+- *context critical, idle*: the existing critical band while not working.
+A session already waiting on the user — a pending permission (P6), a question or wait attention record that applies
+to it, an unexplained pending input, a §19.2 roster wait — is never flagged stuck, queued or critical: a permission
+prompt looks exactly like a stuck turn (working, quiet, still), and pasting into it would answer the question. Exited
+and failed still count.
+
+**The pane fingerprint.** Working sessions' panes are captured (`capture_pane_ansi`) on a helper thread at a quarter
+of the stuck window (2–30 s), never on the draw path; sessions not working are not captured and their fingerprint is
+dropped, so each turn starts fresh. The fingerprint hashes the visible text with ANSI stripped, except that on the
+harness's own status line (a line with `esc to interrupt`, or one starting with a spinner glyph) digits and spinner
+glyphs are dropped: Claude and Codex keep animating the spinner and counting seconds and tokens while an API call
+hangs, so a raw hash would never stay still. Every other line keeps its digits, so `Compiling 12/400` → `13/400` is
+progress. Tests feed fingerprints directly (`watchdog_record_pane`); the capture thread is enabled only in the real
+dashboard (`WatchdogRuntime::production`).
+
+**Surface.** A flag carries `kind`, `since` and a detail; its reason ends with `· ! recover`. Exited keeps the ■
+exited badge with `! recover` added; stuck and queued-idle become ⛔ needs-you with the reason (ahead of the attention
+record, behind a failed turn); context-critical becomes ⛔ only when nothing else (finished, question) speaks for the
+row. The needs-you list gains `AttentionRow::Watchdog { session_id, project_name, feature_name }` rows after the
+attention and pending rows (most urgent kind first, then oldest): `Enter` opens the actions, `x` dismisses. A dismissed
+flag is snoozed per `(session, kind)` for the stuck window (at least a minute).
+
+**Actions** (`!` on a session row, or on a feature row for its flagged session; `fork::watchdog::actions_for` picks
+the ones that fit; `1`–`9` run one directly):
+- *Restart, resuming*: an exited agent goes through `restart_stopped_session_window_resuming` with the session's
+  persisted conversation id for any harness (the default `None` resumes only Claude), behind the resource gate
+  (`PendingStart::WatchdogRestart` replays it after confirmation with the id kept). A stuck agent is ended first: the
+  pane's shell pid comes from `pane_commands`, its child trees get SIGTERM then SIGKILL after 3 s on a helper thread
+  (`resources::procs::terminate_tree`), the shell stays, and a pending restart relaunches as soon as
+  `exited_agent_pane` sees the shell (row: `restarting…`), giving up after 30 s. A background session runs
+  `claude respawn` (§19.7).
+- *Interrupt*: `Escape` into the pane.
+- *Send /compact*, *Paste the latest prompt again*, *Deliver the first queued item now*: only into an agent that is
+  running, not working and not waiting on the user. `/compact` is typed (`send_literal`) and its Enter scheduled
+  through §19.3's delayed-Enter map (`schedule_prompt_enter`). Replay delivers a §19.3 pending prompt if one waits,
+  else pastes the latest prompt (harness transcripts, else `.claude/latest-prompt.txt`) unsent. Deliver peeks the
+  queue, pastes, and only then takes the item, so a failed paste leaves it queued; the rest still go at turn ends.
+- *Dismiss*.
+
+**A dead agent stops reading as working.** An agent that dies mid-turn — ended by the watchdog, crashed, exited —
+sends no `Stop`, so its per-session working markers (`ipc_thinking_feature_sessions`, `ipc_tool_feature_sessions`, the
+conversation-keyed sets, subagent counts) used to survive the relaunch: the new agent read as working, and with the
+watchdog, as stuck again within the window. `clear_session_working_markers` now runs when the exited sweep marks a
+session exited (`mark_session_exited`), when the watchdog ends a stuck agent, and before any watchdog relaunch. The
+thinking hook also marks the feature's tmux session, which sync turns into the feature-level marker that every agent
+of the feature without a marker of its own falls back to (`session_working`); it is dropped too unless a sibling still
+has its own marker — otherwise a dead Claude left the idle Codex beside it reading as working, then stuck. Both were
+caught by the first e2e runs.
+
+**Automatic restart.** `watchdog_auto_restart` (default false): an exited flag is relaunched resuming, at most once per
+session per hour, only when `check_start_preconditions` is `Ok`, and logged. Nothing else is ever automatic.
+
+**Config.** `watchdog` (true), `watchdog_stuck_minutes` (10.0; fractions allowed so the e2e can use 6 s),
+`watchdog_queued_idle_secs` (30), `watchdog_auto_restart` (false). No schema change: flags, snoozes and fingerprints are
+in memory (a restart of AIW re-derives them).
+
+**Housekeeping in this step.** Test runs leaked one `aiw-test-home-<pid>` (and `aiw-test-data-`, `aiw-test-tmux-`)
+directory each, because the process-global roots are never dropped; 2,204 of them filled `/tmp` during §19.7. An
+`atexit` handler removes the current run's roots and every run first sweeps roots whose process is gone (another
+user's live process counts as alive). The e2e check "nothing was typed through the sidebar" read the whole sidebar,
+including the session info block, whose title is the agent's own first prompt once its transcript is read — a race
+with the transcript reader, not typed input; it now skips the info block (`cap_no_info`) and asserts no dialog opened.
+
+**Tests.** `fork::watchdog` (12: two-signal stuck, subagent suppression, waiting-on-user suppression, the stuck
+detail, priority of exited/failed, queued grace, context only at the prompt, the fingerprint ignoring spinner/timer/
+token ticks but not other digits, thresholds with fractions and nonsense, hourly auto-restart, actions per flag,
+reasons), `app::tests::fork_watchdog` (20 against `MockTmuxOps`: stuck flagged / badge / needs-you row / actions and
+cleared by a hook; moving output and subagents; a question blocks both stuck and pasting; interrupt; exited restart
+with `--resume conv-1`; Codex restart with its thread id; a stuck restart kills the pane's children, clears its
+working markers and relaunches once the pane is a shell, and gives up at the deadline; an agent that died mid-turn
+loses its working markers when the sweep marks it exited; the feature-level marker goes unless a sibling still works; queued-idle flag, badge and deliver-once with the rest kept; a
+failed paste keeps the item; never into a working agent; context-critical `/compact`; replay of a pending prompt;
+dismiss snoozing; the needs-you row's Enter and `x`; `!` unflagged; auto-restart off by default then hourly; turning
+the watchdog off), `project` (the test-dir sweep). E2E (`scripts/dev/e2e/watchdog.sh`; aiw restarted with a 6 s stuck
+window and a 3 s grace; the fake gained `/hang` — a turn that only ticks its status line — `/ctx N`, and a log of every
+input line): a hung claude turns stuck after the window and `i` lists it; `!` → Restart ends it and relaunches with
+`--resume <conversation>`; `/exit` → listed, `!` → Restart resumes; `/ctx 92` → flagged, `!` → `/compact` typed once and
+the flag clears when the context drops; a follow-up queued for an idle codex is flagged and not typed, `!` → Deliver
+runs it exactly once and empties the queue.

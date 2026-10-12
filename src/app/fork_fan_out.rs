@@ -690,7 +690,16 @@ impl App {
 
     /// Paste the prompt waiting for `session_id` (and schedule its Enter).
     /// Returns whether it was delivered.
-    fn deliver_pending_prompt(&mut self, session_id: &str) -> bool {
+    /// Press Enter in `session_id`'s pane a moment from now (after a paste or
+    /// a typed command has settled). §19.8 uses it too.
+    pub(crate) fn schedule_prompt_enter(&mut self, session_id: &str) {
+        self.fan_out.enters.insert(
+            session_id.to_string(),
+            Instant::now() + crate::fork::fan_out::ENTER_DELAY,
+        );
+    }
+
+    pub(crate) fn deliver_pending_prompt(&mut self, session_id: &str) -> bool {
         let Some((pi, fi, si)) = self.session_indices_by_id(session_id) else {
             self.forget_fan_out_session(session_id);
             return false;

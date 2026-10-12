@@ -463,6 +463,8 @@ def hook_commands(event):
 
 
 STATUS_TURNS = [0]
+# §19.8: what the status line reports as context used (`/ctx N` changes it).
+CTX_PCT = [42]
 
 
 def status_line_command():
@@ -487,7 +489,8 @@ def run_status_line():
         "model": {"id": "fake-model-1", "display_name": "Fake 1"},
         "workspace": {"current_dir": CWD, "project_dir": CWD},
         "context_window": {"total_input_tokens": 84000, "total_output_tokens": 6000,
-                           "context_window_size": 200000, "used_percentage": 42, "remaining_percentage": 58,
+                           "context_window_size": 200000, "used_percentage": CTX_PCT[0],
+                           "remaining_percentage": 100 - CTX_PCT[0],
                            "current_usage": {"input_tokens": 4000, "output_tokens": 500,
                                              "cache_creation_input_tokens": 0, "cache_read_input_tokens": 80000}},
         "cost": {"total_cost_usd": 0.84, "total_duration_ms": 12000, "total_api_duration_ms": 9000,
@@ -707,6 +710,25 @@ def normal_turn(prompt):
     finish_turn(prompt, answer)
 
 
+def hang_turn():
+    """§19.8: a turn whose API call hangs. The turn starts (hooks say
+    working), then nothing: no more hooks, no output — only the status line's
+    spinner glyph and seconds tick in place, as Claude's and Codex's do. The
+    agent never reads its input again; it has to be ended from outside."""
+    ev("prompt", {"prompt": "hang"})
+    ev("tool_start", tool_extra("start"))
+    out("⏺ Calling the API …")
+    frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    started = time.time()
+    n = 0
+    while True:
+        secs = int(time.time() - started)
+        sys.stdout.write(f"\r{frames[n % len(frames)]} Working ({secs}s • esc to interrupt)  ")
+        sys.stdout.flush()
+        n += 1
+        time.sleep(0.5)
+
+
 def wide_lines():
     lines = [
         "🚀 emoji ✅ 🧪 🔥 🐍 🦀 " * 12,
@@ -793,8 +815,19 @@ def main():
         line = line.strip()
         if not line:
             continue
+        # §19.8: every line that reached the agent, to count deliveries.
+        log("input", {"line": line})
         cmd, _, rest = line.partition(" ")
-        if cmd == "/perm":
+        if cmd == "/hang":
+            hang_turn()
+        elif cmd == "/ctx":
+            # Report a context percentage through the status line, idle.
+            try:
+                CTX_PCT[0] = int(rest or "92")
+            except ValueError:
+                pass
+            run_status_line()
+        elif cmd == "/perm":
             command = rest or "cargo test"
             out(f"⏺ Bash({command})")
             out(f"permission: {permission_request(command)}")
@@ -847,6 +880,10 @@ def main():
         elif cmd == "/compact":
             out("✻ Compacted the conversation")
             fire_collect("PostCompact", {"trigger": "manual", "compact_summary": "summary"})
+            # A compacted context is small again; the status line says so.
+            if CTX_PCT[0] > 20:
+                CTX_PCT[0] = 20
+                run_status_line()
         elif cmd == "/model":
             model = rest or "fake-model-2"
             out(f"⎿ Set model to {model}")
