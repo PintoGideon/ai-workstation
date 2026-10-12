@@ -85,6 +85,11 @@ keys() { dt send-keys -t "$DRIVE_SESSION" "$@"; }
 cap() { if cockpit_alive; then ck capture-pane -p -t aiw:0.0; else dt capture-pane -p -t "$DRIVE_SESSION"; fi; }
 cap_ansi() { if cockpit_alive; then ck capture-pane -p -e -t aiw:0.0; else dt capture-pane -p -e -t "$DRIVE_SESSION"; fi; }
 cap_all() { dt capture-pane -p -t "$DRIVE_SESSION"; }
+# The sidebar without the session info block (the titled box under the
+# sessions list: `╭ Claude 1 ───…`). The info block shows the selected
+# session's own transcript title — the first prompt typed into the agent — so
+# a check that the sidebar did not receive typed text must skip it.
+cap_no_info() { cap | awk '/^╭ [^─]/ && !/Sessions/ {skip=1} !skip {print} /^╰/ {skip=0}'; }
 
 wait_for() {
     local re=$1 secs=${2:-10} i=0

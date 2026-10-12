@@ -123,7 +123,10 @@ wait_title '› Claude 1' 6; check "selection: the agent pane follows the row (d
 keys Enter; sleep 0.5; [ "$(pane_active)" = 1 ]; check "Enter: focuses the agent's real pane" $?
 keys -l 'hello from e2e'; keys Enter; sleep 1.5
 wait_agent_for "handled 'hello from e2e' \(claude\)" 6; check "typing is native: the agent echoed what was typed in its own pane" $?
-! cap | grep -q 'hello from e2e'; check "nothing was typed through the sidebar" $?
+# The info block may already show the session's transcript title (the typed
+# prompt) by now; that is the agent's transcript, not sidebar input. Typing that
+# reached the sidebar would show in the list/footer or open a zoomed dialog.
+! cap_no_info | grep -q 'hello from e2e' && [ "$(zoomed)" != 1 ]; check "nothing was typed through the sidebar" $?
 grep -q '"event": "Stop"' "$S/log/claude.args" "$S/log/claude.hooks" 2>/dev/null; check "Claude Stop hook fired through AIW's hook settings (--settings)" $?
 keys C-q; sleep 0.5; [ "$(pane_active)" = 0 ]; check "Ctrl+Q: back to the sidebar (tmux root key)" $?
 cap | sed -n 2p | grep -q '✓ 1'; check "header pill shows 1 finished" $?
