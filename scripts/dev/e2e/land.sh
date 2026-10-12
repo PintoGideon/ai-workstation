@@ -100,6 +100,9 @@ land --feature fc-feat >"$S/land-fc.json"
 select_row 'fc-feat' >/dev/null
 wait_for '⛔ land failed: check failed' 5; check "land: the row shows ⛔ land failed" $?
 snap land-failed-row
+keys i; wait_for 'Needs Attention' 3 && wait_for 'fc-feat' 3; check "land: the failed land is listed in i" $?
+cap | grep 'fc-feat' | grep -q 'land failed'; check "land: the i row says land failed" $?
+close_dialogs
 
 # ── 3. a rebase conflict, aborted from the dialog ───────────────
 mk_land rc main '{}'

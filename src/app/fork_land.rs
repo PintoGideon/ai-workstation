@@ -129,6 +129,19 @@ impl App {
         self.land.failures.get(feature_id)
     }
 
+    /// Features whose last land failed and has not been dismissed, in a
+    /// stable order (the needs-you list shows one row each).
+    pub(crate) fn land_failed_features(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self.land.failures.keys().cloned().collect();
+        ids.sort();
+        ids
+    }
+
+    /// Forget `feature_id`'s last failure (the needs-you list's `x`).
+    pub(crate) fn forget_land_failure(&mut self, feature_id: &str) -> bool {
+        self.land.failures.remove(feature_id).is_some()
+    }
+
     pub(crate) fn land_last(&self, feature_id: &str) -> Option<&LastLand> {
         self.land.last.get(feature_id)
     }

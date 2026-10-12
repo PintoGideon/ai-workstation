@@ -1641,6 +1641,15 @@ impl App {
             self.open_watchdog_dialog(session_id);
             return Ok(());
         }
+        // FORK: §19.10 — a failed-land row opens that feature's land dialog.
+        if let crate::app::attention::AttentionRow::LandFailed { feature_id, .. } = &row {
+            self.mode = AppMode::Normal;
+            if let Some((pi, fi)) = self.feature_indices_by_id(feature_id) {
+                self.selection = Selection::Feature(pi, fi);
+            }
+            self.open_land_dialog(feature_id);
+            return Ok(());
+        }
         let idx = match row.pending_index() {
             Some(idx) => idx,
             None => {

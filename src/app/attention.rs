@@ -310,6 +310,13 @@ pub enum AttentionRow {
         project_name: String,
         feature_name: String,
     },
+    /// FORK: §19.10 — a feature whose last land failed. `Enter` opens its
+    /// land dialog (abort, recheck, retry); `x` dismisses the failure.
+    LandFailed {
+        feature_id: String,
+        project_name: String,
+        feature_name: String,
+    },
 }
 
 impl AttentionRow {
@@ -318,7 +325,7 @@ impl AttentionRow {
         match self {
             AttentionRow::Attention { pending, .. } => *pending,
             AttentionRow::Pending(index) => Some(*index),
-            AttentionRow::Watchdog { .. } => None,
+            AttentionRow::Watchdog { .. } | AttentionRow::LandFailed { .. } => None,
         }
     }
 
@@ -326,7 +333,9 @@ impl AttentionRow {
     pub fn state(&self) -> Option<AttentionState> {
         match self {
             AttentionRow::Attention { entry, .. } => Some(entry.record.state),
-            AttentionRow::Pending(_) | AttentionRow::Watchdog { .. } => None,
+            AttentionRow::Pending(_)
+            | AttentionRow::Watchdog { .. }
+            | AttentionRow::LandFailed { .. } => None,
         }
     }
 }
@@ -540,6 +549,16 @@ impl App {
             let project = &self.store.projects[pi];
             Some(AttentionRow::Watchdog {
                 session_id: id,
+                project_name: project.name.clone(),
+                feature_name: project.features[fi].name.clone(),
+            })
+        }));
+        // FORK: §19.10 — failed lands, one row per feature.
+        rows.extend(self.land_failed_features().into_iter().filter_map(|id| {
+            let (pi, fi) = self.feature_indices_by_id(&id)?;
+            let project = &self.store.projects[pi];
+            Some(AttentionRow::LandFailed {
+                feature_id: id,
                 project_name: project.name.clone(),
                 feature_name: project.features[fi].name.clone(),
             })

@@ -526,6 +526,10 @@ pub fn handle_notification_picker_key(app: &mut App, key: KeyCode) -> Result<()>
                 let _ =
                     app.watchdog_perform(session_id, crate::fork::watchdog::WatchAction::Dismiss);
             }
+            // FORK: §19.10 — dismissing a failed-land row forgets the failure.
+            if let crate::app::attention::AttentionRow::LandFailed { ref feature_id, .. } = row {
+                app.forget_land_failure(feature_id);
+            }
 
             let remaining = app.attention_rows().len();
             if let AppMode::NotificationPicker(ref mut idx, _) = app.mode

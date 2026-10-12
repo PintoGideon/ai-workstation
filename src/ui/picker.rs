@@ -54,6 +54,11 @@ pub(crate) fn row_badges(
                 let (pi, fi, si) = app.session_indices_by_id(session_id)?;
                 Some(crate::fork::badges::session_badge(app, pi, fi, si, now))
             }
+            // FORK: §19.10 — the feature badge carries "land failed: …".
+            AttentionRow::LandFailed { feature_id, .. } => {
+                let (pi, fi) = app.feature_indices_by_id(feature_id)?;
+                Some(crate::fork::badges::feature_badge(app, pi, fi, now))
+            }
             AttentionRow::Pending(index) => {
                 let input = app.pending_inputs.get(*index)?;
                 let feature_name = input.feature_name.as_deref()?;
@@ -132,6 +137,11 @@ pub fn draw_notification_picker(
                         .unwrap_or("unknown"),
                 ),
                 AttentionRow::Watchdog {
+                    project_name,
+                    feature_name,
+                    ..
+                }
+                | AttentionRow::LandFailed {
                     project_name,
                     feature_name,
                     ..

@@ -214,7 +214,7 @@ add_project() {
 # new_feature <name> <worktree y|n> <agent-index 0..4 (claude codex pi gemini cursor)> [mode-index 0..2]
 new_feature() {
     local name=$1 wt=$2 agent=${3:-0} mode=${4:-1} i
-    keys n; wait_for 'New Feature' 5 || return 1
+    keys n; wait_for 'New Feature' 5 || return 1; sleep 0.3  # a frame can be caught half drawn
     if cap | grep -q 'Source:'; then keys Enter; sleep 0.2; fi
     wait_for 'Name:' 3 || return 1
     keys -l "$name"; keys Enter; sleep 0.2
@@ -279,4 +279,45 @@ close_dialogs() {
         if cap | grep -qE '╭ (Projects|Sessions)|No projects yet'; then settle; return 0; fi
         keys Escape; sleep 0.25
     done
+}
+
+# db_q SQL: one query against the sandbox's aiw.db (read-only), one value per line.
+db_q() {
+    python3 - "$XDG_CONFIG_HOME/ai_workstation/aiw.db" "$1" <<'PY' 2>/dev/null
+import sqlite3, sys
+try:
+    con = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True, timeout=2)
+    for row in con.execute(sys.argv[2]):
+        print("\t".join("" if v is None else str(v) for v in row))
+except Exception:
+    sys.exit(1)
+PY
+}
+
+# wait_feature_running PROJECT FEATURE TMUX_SESSION [secs]: the feature is
+# stored under the project and its tmux session is up on AIW's socket.
+wait_feature_running() {
+    local project=$1 feature=$2 session=$3 secs=${4:-6} i
+    for i in $(seq 1 $((secs * 5))); do
+        if [ -n "$(db_q "SELECT f.id FROM features f JOIN projects p ON p.id = f.project_id
+                WHERE p.name = '$project' AND f.name = '$feature'")" ] \
+            && aiw_tmux has-session -t "=$session" 2>/dev/null; then
+            return 0
+        fi
+        sleep 0.2
+    done
+    return 1
+}
+
+# wait_project_features PROJECT COUNT [secs]: the project is stored with at
+# least COUNT features.
+wait_project_features() {
+    local project=$1 count=$2 secs=${3:-6} i n
+    for i in $(seq 1 $((secs * 5))); do
+        n=$(db_q "SELECT COUNT(f.id) FROM projects p LEFT JOIN features f ON f.project_id = p.id
+                WHERE p.name = '$project'")
+        [ -n "$n" ] && [ "$n" -ge "$count" ] && return 0
+        sleep 0.2
+    done
+    return 1
 }

@@ -97,7 +97,9 @@ add_project gamma "$S/repos/gamma" 3; check "add project gamma" $?
 add_project plain "$S/repos/plain" 2; check "add non-git project" $?
 
 select_row 'alpha' >/dev/null; new_feature alpha-1 n 0 1; sleep 2; hook_prompts
-wait_for "Created and started feature" 5; check "n: Claude feature in repo dir starts" $?
+# The cockpit has no status panel, so check the outcome: the feature is stored
+# and its tmux session is up on AIW's socket.
+wait_feature_running alpha alpha-1 aiw-alpha-alpha-1 8; check "n: Claude feature in repo dir starts" $?
 aiw_tmux list-windows -t aiw-alpha-alpha-1 -F '#W' | grep -q claude; check "tmux window for claude exists on AIW's socket" $?
 wait_title 'alpha › alpha-1 › Claude 1' 6; check "cockpit: the agent pane shows the new feature's agent" $?
 
@@ -116,7 +118,8 @@ select_row 'alpha' >/dev/null; keys B; wait_for 'Workspace Path' 3; keys Enter; 
 for i in $(seq 1 12); do keys BSpace; done; keys -l batch; keys Enter; sleep 0.3
 keys j Enter; sleep 0.3; for i in $(seq 1 12); do keys BSpace; done; keys -l batch; keys Enter; sleep 0.3
 keys j Enter j Enter Enter; sleep 2; hook_prompts
-wait_for "Created project 'batch'" 5 && wait_for 'batch2' 3; check "B: batch project with 2 Codex worktree features" $?
+# (the new project's row starts folded, so its features are not on screen)
+wait_project_features batch 2 8 && wait_for '[▾▸] batch' 3; check "B: batch project with 2 Codex worktree features" $?
 grep -q 'developer_instructions' "$S/log/codex.args"; check "Codex launched (with AIW's developer instructions)" $?
 # a second agent in alpha-1: Codex beside Claude, same checkout
 # §19.7: "Claude (background)" sits right after Claude in the picker.
@@ -169,20 +172,26 @@ focus_sidebar
 
 echo "=== Part 1e: the rest of the dashboard"
 select_row 'Codex 1' >/dev/null; keys r; sleep 0.4; for i in $(seq 1 40); do keys BSpace; done; keys -l cx; keys Enter; sleep 0.8
-cap | grep -q "Renamed to 'cx'"; check "r: rename session" $?
+# the toast can be gone by now: check the stored label and the row
+for i in $(seq 1 30); do [ -n "$(db_q "select id from feature_sessions where label = 'cx'")" ] && break; sleep 0.1; done
+[ -n "$(db_q "select id from feature_sessions where label = 'cx'")" ] && wait_for '(^|[^a-z])cx( |$)' 3; check "r: rename session" $?
 select_row 'alpha-1' >/dev/null; keys x; sleep 2; ! aiw_tmux has-session -t aiw-alpha-alpha-1 2>/dev/null; check "x: stop feature kills its tmux session" $?
 wait_title 'select a session' 6; check "x: the agent pane falls back to the placeholder" $?
 keys c; sleep 2; hook_prompts; aiw_tmux has-session -t aiw-alpha-alpha-1 2>/dev/null; check "c: start feature again" $?
-select_row 'Claude 1' >/dev/null; keys S; wait_for 'Claude Sessions' 4; check "S: saved Claude conversations listed" $?
+select_row 'Claude 1' >/dev/null; resume_mark=$(wc -l <"$S/log/claude.args"); keys S; wait_for 'Claude Sessions' 4; check "S: saved Claude conversations listed" $?
 keys Enter; sleep 0.8
 wait_for 'Confirm Restart' 3 && keys y; sleep 3; hook_prompts; focus_sidebar
-tail -1 "$S/log/claude.args" | grep -q '"--resume"'; check "S: Claude relaunched with --resume <id>" $?
+# Any launch recorded after the picker opened: a later Claude launch (another
+# session) can be the last line, so do not read only the tail.
+tail -n +"$((resume_mark + 1))" "$S/log/claude.args" | grep -q '"--resume"'; check "S: Claude relaunched with --resume <id>" $?
 
 keys z; sleep 0.6; cap | grep -qi 'dormant'; check "z: dormant list" $?; close_dialogs
 keys '?'; wait_for 'Keybindings' 3; check "?: help overlay" $?
 [ "$(zoomed)" = 1 ]; check "?: the help zooms the sidebar" $?
 snap p1-help-zoomed
-! cap | grep -qiE 'compose|Tab.*type|full view|attach'; check "?: no stale compose / Tab / view / attach claims" $?
+# "attach" is legitimate now for background Claude rows (claude attach) and in
+# "typing is native, as in tmux attach"; only the old attach-mode claims are stale.
+! cap | grep -iE 'compose|Tab.*type|full view|attach' | grep -viqE 'tmux attach|background Claude|claude attach'; check "?: no stale compose / Tab / view / attach claims" $?
 close_dialogs
 keys /; keys -l gam; sleep 0.4; cap | grep -q 'gamma-1'; check "/: search finds features" $?; close_dialogs
 
@@ -256,7 +265,7 @@ row_running 'Claude 1' && [ "$(wc -l <"$S/log/claude.args")" -gt "$n_before" ]; 
 focus_sidebar
 
 # names git refuses are stopped in the dialog with a plain message
-select_row 'alpha' >/dev/null; keys n; wait_for 'New Feature' 5
+select_row 'alpha' >/dev/null; keys n; wait_for 'New Feature' 5; sleep 0.3  # a frame can be caught half drawn
 if cap | grep -q 'Source:'; then keys Enter; sleep 0.2; fi
 wait_for 'Name:' 3; keys -l 'bad name'; keys Enter; sleep 0.6
 cap | grep -q 'cannot contain spaces'; check "feature name with a space → plain message, no git error" $?

@@ -26,7 +26,7 @@ wait_count() {
 # open_fan_out_dialog <branch>: n on alpha, name, worktree yes, harness list
 open_fan_out_dialog() {
     select_row 'alpha' >/dev/null
-    keys n; wait_for 'New Feature' 5 || return 1
+    keys n; wait_for 'New Feature' 5 || return 1; sleep 0.3  # a frame can be caught half drawn
     if cap | grep -q 'Source:'; then keys Enter; sleep 0.2; fi
     wait_for 'Name:' 3 || return 1
     keys -l "$1"; keys Enter; sleep 0.3

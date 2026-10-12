@@ -94,7 +94,7 @@ add_project delta "$S/repos/delta" 0; check "layout: project delta added" $?
 # open_layout_dialog <branch> <presses of j on the Layout row>
 open_layout_dialog() {
     select_row 'delta' >/dev/null
-    keys n; wait_for 'New Feature' 5 || return 1
+    keys n; wait_for 'New Feature' 5 || return 1; sleep 0.3  # a frame can be caught half drawn
     if cap | grep -q 'Source:'; then keys Enter; sleep 0.2; fi
     wait_for 'Name:' 3 || return 1
     keys -l "$1"; keys Enter; sleep 0.3

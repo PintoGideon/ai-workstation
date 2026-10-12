@@ -578,3 +578,57 @@ fn the_land_line_reads_landing_while_it_runs() {
     assert_eq!(fx.app.land_line("feat-1"), None);
     let _ = Calls::default();
 }
+
+#[test]
+fn a_failed_land_is_a_needs_you_row_that_opens_the_dialog_and_x_dismisses() {
+    let mut fx = fixture();
+    set_land(
+        &mut fx.app,
+        LandConfig {
+            check_command: Some("exit 3".into()),
+            ..Default::default()
+        },
+    );
+    open_with_preflight(&mut fx.app);
+    press(&mut fx.app, KeyCode::Enter);
+    tick_until(&mut fx.app, "the land to fail", |a| {
+        a.land_failure("feat-1").is_some()
+    });
+    press(&mut fx.app, KeyCode::Esc);
+    fx.app.mode = AppMode::Normal;
+
+    let rows = fx.app.attention_rows();
+    let index = rows
+        .iter()
+        .position(|r| {
+            matches!(
+                r,
+                crate::app::attention::AttentionRow::LandFailed { feature_id, .. }
+                    if feature_id == "feat-1"
+            )
+        })
+        .expect("a failed land is listed in i");
+    assert_eq!(
+        rows.iter()
+            .filter(|r| matches!(r, crate::app::attention::AttentionRow::LandFailed { .. }))
+            .count(),
+        1
+    );
+
+    // Enter opens that feature's land dialog.
+    fx.app.mode = AppMode::NotificationPicker(index, None);
+    fx.app.handle_notification_select().unwrap();
+    assert_eq!(dialog(&fx.app).feature_id, "feat-1");
+    press(&mut fx.app, KeyCode::Esc);
+
+    // x in the list forgets the failure; the row goes.
+    fx.app.mode = AppMode::NotificationPicker(index, None);
+    crate::handlers::handle_key(&mut fx.app, KeyEvent::from(KeyCode::Char('x'))).unwrap();
+    assert!(fx.app.land_failure("feat-1").is_none());
+    assert!(
+        !fx.app
+            .attention_rows()
+            .iter()
+            .any(|r| matches!(r, crate::app::attention::AttentionRow::LandFailed { .. }))
+    );
+}

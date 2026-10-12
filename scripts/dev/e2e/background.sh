@@ -106,7 +106,7 @@ close_dialogs
 
 # ── 6. the New Feature dialog's b ───────────────────────────────
 select_row 'delta' >/dev/null
-keys n; wait_for 'New Feature' 5
+keys n; wait_for 'New Feature' 5; sleep 0.3  # a frame can be caught half drawn
 if cap | grep -q 'Source:'; then keys Enter; sleep 0.2; fi
 wait_for 'Name:' 3; keys -l 'bg-feat'; keys Enter; sleep 0.3
 keys Enter; sleep 0.3
