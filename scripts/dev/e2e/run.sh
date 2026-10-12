@@ -504,11 +504,6 @@ aiw_quit; check "q: quit at the end" $?
 ! cockpit_alive && [ "$(view_sessions)" = 0 ]; check "q: cockpit server gone, no view sessions, agents still running" $?
 doctor_clean; check "doctor clean after the adversarial run" $?
 
-echo "=== Part 3: AMF migration cases"
-"$HERE/migration.sh" "$XDG_CONFIG_HOME/ai_workstation/aiw.db" "$S/mig" >"$S/migration.log" 2>&1
-grep -q "plain.*amf_untouched=yes.*marker=yes.*aiw.db=yes" "$S/mig/migration-results.tsv"; check "migration: AMF setup copied, AMF folder untouched" $?
-grep -q "nodb.*marker=yes" "$S/mig/migration-results.tsv"; check "migration: settings without a database" $?
-grep -q "opencode.*marker=yes" "$S/mig/migration-results.tsv"; check "migration: OpenCode-only features load" $?
 
 echo
 echo "=== Results ($RESULTS)"

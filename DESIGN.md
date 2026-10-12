@@ -1610,3 +1610,33 @@ re-pointed `~/.local/bin/claude` there, so deleting the sandbox broke the real `
 pointed back at `~/.local/share/claude/versions/<version>`. Check that link before removing a real-run sandbox (or
 leave `XDG_DATA_HOME` unset for the agents and only isolate aiw's worktree root).
 
+
+### 19.12 Final pass (2026-10-12)
+
+**Obsolete code gone.** The release pipeline (`release.yml`, `scripts/dev/release.sh`, the bundle packagers),
+the site workflow, the scheduled RustSec audit and the macOS CI matrix; the no-tmux Docker image and its guide; the
+upstream migration shim (`src/fork/migrate.rs`, `amf.json` / `.amf/config.json` fallback, `amf-*` session and
+hook-path recognisers, the `amf` theme alias, the `cleanup_global_hooks` that edited `~/.claude/settings.json`);
+the one-value `diff_review_viewer` setting and the unread `input_request_wait_seconds`; six copies of shell
+quoting (now `fork::shell::quote` / `quote_min`) and two of the hook stdin reader; the repo `aiw.json`'s release and
+ticker sessions. CI is one Linux job that mirrors the local gate.
+
+**Feature review.** Every per-session runtime now forgets a deleted session: the watchdog drops its activity,
+pane fingerprint, flag, snooze and restart records (`forget_watchdog_session`, from `forget_session_identity`),
+and a deleted feature drops its land preflight and failure (`forget_land_feature`, from `forget_organize_feature`).
+`LandRuntime::last` is capped at 50 outcomes, newest kept, because `--status` must still answer for a feature the
+land itself removed. The remaining `unwrap`/`expect` calls outside tests are on mutexes, constants, or values
+checked on the line before. Dialogs all guard a 30x8 floor and size from the terminal. The messaging test for a
+refused socket uses the 10 s test timeout instead of the 2 s production one (it flaked once under a full
+parallel run).
+
+**Doc truth.** `theme` defaults to `ember`, not `default`; the doctor no longer mentions `amf.json`; the
+remappable actions include `next_feature` / `prev_feature`; the README's automation row lists `message`,
+`schedule` and `land`; §13 says what the GUI does not show. Every `--flag`, config key and subcommand named in
+PRODUCT.md was grepped against the source.
+
+**UI.** The empty-dashboard note wraps to the sidebar instead of clipping mid-word; a toast before the first
+project stays inside the list panel; the 98 dialogs that still drew square `┌┐` corners now use the same rounded
+border as the panels; the one help key label that overflowed its column is shorter.
+
+**Gate.** See the STEP NOTES for the counts of this pass.
