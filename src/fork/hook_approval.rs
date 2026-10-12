@@ -9,7 +9,7 @@
 //! user's own global config are trusted and never ask.
 //!
 //! Interactive flows (TUI create/start/stop/fork) show a confirm dialog and
-//! replay the action afterwards. Non-interactive flows (automation, GUI
+//! replay the action afterwards. Non-interactive flows (automation
 //! contract) skip an unapproved hook with a
 //! warning instead.
 

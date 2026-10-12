@@ -378,7 +378,7 @@ impl App {
     /// the feature's first agent instead of pasted at once, whenever the
     /// pane can be watched (the cockpit) or a dialog launch is under way.
     /// Returns `false` when the caller should deliver it the old way (an
-    /// embedding GUI collects it).
+    /// latest-prompt file keeps it).
     pub(crate) fn queue_startup_prompt(&mut self, pi: usize, fi: usize, prompt: &str) -> bool {
         if !(self.cockpit_active() || self.fan_out.run.is_some()) {
             return false;

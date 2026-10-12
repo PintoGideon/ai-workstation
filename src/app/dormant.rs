@@ -135,14 +135,11 @@ pub fn dormant_features(
 }
 
 /// One dormancy check, with the activity readings it was decided on, so a
-/// caller that must re-check later (the GUI's confirm-time recheck) can tell
+/// caller that must re-check later can tell
 /// *what* changed rather than only that something did.
 #[derive(Debug, Clone)]
 pub(crate) struct DormancyScan {
     pub features: Vec<DormantFeature>,
-    /// Latest tmux activity per session name, as read for this scan.
-    pub activity: HashMap<String, DateTime<Utc>>,
-    pub now: DateTime<Utc>,
 }
 
 impl App {
@@ -176,11 +173,7 @@ impl App {
         // FORK: §19.1 — background tasks or a /loop schedule are work in
         // progress, however quiet the pane looks.
         features.retain(|feature| !self.feature_has_background_work(feature.pi, feature.fi));
-        Some(DormancyScan {
-            features,
-            activity,
-            now,
-        })
+        Some(DormancyScan { features })
     }
 
     /// Open the dormant-features overlay. Opens even when nothing is dormant —

@@ -1,8 +1,7 @@
 //! Supervised edits: Vibeless mode's per-edit approval. A harness hook
 //! (Claude's `custom-diff-review.sh`, Codex's `codex-diff-review.sh`) holds
 //! each file write until AIW answers `proceed`, `reject` or `cancel`. The
-//! TUI answers from `AppMode::DiffReviewPrompt`; the desktop GUI answers the
-//! same file-fallback requests through `gui_supervised_edits`. Both use the
+//! TUI answers from `AppMode::DiffReviewPrompt`, using the
 //! helpers here, so the diff a reviewer sees and the reply a hook reads are
 //! built once.
 
@@ -231,12 +230,6 @@ impl App {
         std::fs::write(reply.proceed_signal, "")
             .with_context(|| format!("Could not write {}", reply.proceed_signal.display()))?;
         Ok(EditReviewDelivery::Files)
-    }
-
-    /// Whether a notification is a per-edit approval request AIW answers
-    /// with its own diff viewer (rather than a plain attention ping).
-    pub(crate) fn is_structured_edit_review(&self, notification_type: &str) -> bool {
-        notification_type == "change-reason" || notification_type == "diff-review"
     }
 }
 

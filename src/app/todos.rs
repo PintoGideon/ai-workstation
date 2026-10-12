@@ -2758,7 +2758,7 @@ impl App {
     }
 
     /// Mark a session's referenced TODO complete: the shared engine behind
-    /// the TUI's `leader z` confirmation and the GUI session sidebar's
+    /// the TUI's `leader z` confirmation and automation's
     /// Active TODO action. Keeps the session association. A TODO that no
     /// longer exists fails with [`ReferencedTodoDeleted`].
     pub(crate) fn complete_referenced_todo(&self, todo_id: &str) -> Result<&'static str> {

@@ -1793,7 +1793,7 @@ impl App {
 
     /// FORK: the TUI's poll — a clean finish needs no keypress: the dialog
     /// closes itself and a toast says so; only an error stays up to be
-    /// acknowledged. (The GUI contract polls and completes on its own.)
+    /// acknowledged.
     pub fn poll_deleting_feature_and_finish(&mut self) -> Result<()> {
         self.poll_deleting_feature()?;
         if let AppMode::DeletingFeatureInProgress(state) = &self.mode
@@ -2422,7 +2422,7 @@ pub(crate) struct RecoveryLaunch {
     /// `None` starts a fresh conversation.
     pub resume_id: Option<String>,
     /// Launch no other agent session and give none of them a window, so each
-    /// stays stopped until it is recovered on its own (the GUI's per-tab
+    /// stays stopped until it is recovered on its own (automation's per-session
     /// resume). The TUI passes `false` and brings every session up as an
     /// ordinary start would.
     pub only_this_agent: bool,

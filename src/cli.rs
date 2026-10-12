@@ -22,7 +22,7 @@ use crate::app::{App, load_config};
 use crate::tmux::TmuxManager;
 
 // `cli` is no longer the crate root (it moved here from `main.rs` so `aiw`
-// and the GUI shell can share one library), so every sibling module that
+// stays a library behind the binary), so every sibling module that
 // used to be reachable as a bare name at crate-root scope needs bringing
 // into scope explicitly rather than editing every call site below.
 use crate::{
@@ -1605,7 +1605,7 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
     let mut startup_usage_pending = true;
     let mut startup_claude_hooks_pending = true;
     let mut startup_sidebar_warm_pending = true;
-    // Another process (the desktop GUI, a second TUI, `aiw` automation) can
+    // Another process (a second TUI, `aiw` automation) can
     // commit to the shared store at any time. Picking that up here keeps the
     // next local save from conflicting on it; a one-row `store_meta` read is
     // cheap, but there is no reason to issue it every frame either.
@@ -1698,8 +1698,6 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         {
             app.show_error(e);
         }
-
-        force_redraw |= app.poll_codex_sidebar_metadata();
 
         if app.session_status_bg.is_some() {
             let started_at = Instant::now();

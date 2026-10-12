@@ -1,10 +1,3 @@
-[workspace]
-members = ["gui/src-tauri"]
-# The workspace root is this package itself (the common root-crate-as-member
-# layout) rather than a virtual manifest, so the root Cargo.toml location
-# is unchanged. No `resolver` override: the
-# workspace inherits the root package's edition-2024 default (resolver "3").
-
 [package]
 name = "ai-workstation"
 version = "0.49.0"
@@ -63,10 +56,6 @@ notify = "8.2.0"
 # web-push-native, p256), the HTTP client (ureq) and the GitHub screenshot
 # downloader's crates (zip, scraper) are gone — AIW links no HTTP client or
 # server library. See NO_CLOUD.md and scripts/check-no-network.sh.
-# Data-URL encoding for local screenshot evidence (`src/screenshot_evidence.rs`).
-base64ct = { version = "1", features = ["alloc"] }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
-url = "2"
 
 [dev-dependencies]
 mockall = "0.13"

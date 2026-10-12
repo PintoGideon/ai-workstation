@@ -9,28 +9,15 @@
 //! themselves. The task prompt is never sent on its own. A failed paste is
 //! an error the caller stashes (`stash_lost_prompt`) or reports.
 //!
-//! Without a cockpit — the `App` embedded in the desktop GUI, or a test —
-//! nothing is pasted: the prompt is kept as an [`UnsentPromptHandoff`] the
-//! frontend collects with [`App::take_unsent_prompt`] and shows in its own
-//! composer, exactly what it read from the compose box before. The GUI
-//! contract is unchanged.
+//! Without a cockpit (a test, or a dashboard that has not attached yet)
+//! nothing is pasted: the prompt is still saved as `latest-prompt.txt`, so
+//! the past-prompts view (`l`) can deliver it later.
 
 use anyhow::{Context, Result, anyhow};
 
 use super::{App, AppMode, Selection, ViewState};
 
-/// A prompt an embedding frontend still has to show, unsent.
-#[derive(Clone)]
-pub struct UnsentPromptHandoff {
-    pub text: String,
-}
-
 impl App {
-    /// The prompt the last embedded delivery left for the frontend, once.
-    pub fn take_unsent_prompt(&mut self) -> Option<UnsentPromptHandoff> {
-        self.unsent_prompt_handoff.take()
-    }
-
     /// Paste `text` into the window of the session at `(pi, fi, si)`.
     pub fn paste_prompt_unsent(
         &mut self,
@@ -77,10 +64,6 @@ impl App {
             self.tmux
                 .paste_text(&view.session, &view.window, text)
                 .with_context(|| format!("could not paste the prompt into {label}"))?;
-        } else {
-            self.unsent_prompt_handoff = Some(UnsentPromptHandoff {
-                text: text.to_string(),
-            });
         }
         self.selection = Selection::Session(pi, fi, si);
         self.mode = AppMode::Normal;
@@ -203,19 +186,6 @@ mod tests {
                 .iter()
                 .any(|t| t.message.contains("press Enter to send"))
         );
-    }
-
-    #[test]
-    fn without_a_cockpit_the_prompt_is_kept_for_the_frontend() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut app = app_with(MockTmuxOps::new(), dir.path());
-        app.fork_cockpit.link = None;
-        app.paste_prompt_unsent(0, 0, 1, "For the GUI").unwrap();
-        let handoff = app.take_unsent_prompt().expect("kept");
-        assert_eq!(handoff.text, "For the GUI");
-        assert!(app.take_unsent_prompt().is_none(), "taken once");
-        assert!(matches!(app.selection, Selection::Session(0, 0, 1)));
-        assert!(matches!(app.mode, AppMode::Normal));
     }
 
     #[test]

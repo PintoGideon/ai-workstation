@@ -73,7 +73,7 @@ const NOTIFICATION_MAX_AGE: std::time::Duration = std::time::Duration::from_secs
 
 /// A hook's file-fallback notification as written to `.claude/notifications/`
 /// or the global notifications directory. Shared by the TUI's scan and the
-/// desktop GUI's supervised-edit reader, so both see the same requests.
+/// file fallback the hook writes when no TUI is listening.
 #[derive(Deserialize)]
 struct NotificationJson {
     session_id: Option<String>,

@@ -1,6 +1,6 @@
 //! What is left of the embedded session view (DESIGN.md §18): the leader
 //! command menu the dashboard still draws, and the capture normaliser the
-//! desktop GUI's terminal shares. The view itself — a captured tmux screen
+//! cockpit uses. The view itself — a captured tmux screen
 //! redrawn by AIW, with its Claude sidebar — is gone: the cockpit shows the
 //! agent's real pane beside the sidebar.
 
@@ -63,14 +63,4 @@ pub(crate) fn draw_command_menu(
 
     frame.render_widget(Clear, area);
     frame.render_widget(popup, area);
-}
-
-/// Normalize captured tmux pane text for vt100 parsing. capture-pane
-/// output terminates the last line with a newline; processing that
-/// final newline in a parser whose height equals the pane scrolls the
-/// whole screen up one row, so strip it before converting line
-/// endings.
-pub(crate) fn normalize_captured_pane(raw: &str) -> String {
-    let raw = raw.strip_suffix('\n').unwrap_or(raw);
-    raw.replace('\n', "\r\n")
 }

@@ -286,12 +286,6 @@ where
     ))
 }
 
-/// Whether an installed parser actually loaded: its library opened and its
-/// queries compiled. An install that fails here highlights nothing.
-pub fn parser_loads(language: HighlightLanguage) -> bool {
-    with_registry(|registry| Ok(registry.config(language).is_some())).unwrap_or(false)
-}
-
 pub fn reset_registry() {
     if let Some(registry) = REGISTRY.get()
         && let Ok(mut guard) = registry.lock()

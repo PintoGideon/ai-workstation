@@ -783,34 +783,3 @@ fn desktop_debug_log_bounds_merged_history_and_preserves_pending_queue() {
     assert_eq!(entries[1].message, "pending newest");
     assert_eq!(app.pending_debug_log_entries.len(), 2);
 }
-
-#[test]
-fn desktop_debug_log_without_database_returns_memory_and_serializes_levels() {
-    let mut app = context_settings_test_app();
-    app.db = None;
-    app.debug_log
-        .inject_entries(vec![debug_log_entry(10, "café\n<script>text</script>")]);
-    let mut gui = crate::gui_contract::GuiHandle::from_app(app);
-    let view = crate::gui_debug_log::load(&mut gui).unwrap();
-    assert!(!view.shared_history);
-    assert_eq!(view.limit, 1000);
-    assert_eq!(view.entries.len(), 1);
-    let json = serde_json::to_value(view).unwrap();
-    assert_eq!(json["entries"][0]["level"], "WARN");
-    assert_eq!(json["entries"][0]["message"], "café\n<script>text</script>");
-}
-
-#[test]
-fn desktop_debug_log_database_failure_is_reported_instead_of_cached_history() {
-    let mut app = context_settings_test_app();
-    let file = NamedTempFile::new().unwrap();
-    app.db = Some(crate::db::AiwDb::open(file.path()).unwrap());
-    let external = rusqlite::Connection::open(file.path()).unwrap();
-    external.execute("DROP TABLE debug_log", []).unwrap();
-    app.debug_log
-        .inject_entries(vec![debug_log_entry(10, "stale")]);
-    let mut gui = crate::gui_contract::GuiHandle::from_app(app);
-    let error = crate::gui_debug_log::load(&mut gui).unwrap_err();
-    assert_eq!(error.kind, crate::gui_contract::GuiErrorKind::Internal);
-    assert!(error.message.contains("debug_log"));
-}

@@ -51,8 +51,6 @@ pub(crate) fn vscode_cli_available() -> bool {
 #[derive(Debug, Clone)]
 pub(crate) struct VscodeLaunch {
     pub workdir: std::path::PathBuf,
-    /// The `launched_editors` row tracking it, when a database is attached.
-    pub record_id: Option<String>,
 }
 
 pub(crate) fn session_kind_for_agent(agent: &AgentKind) -> SessionKind {
@@ -168,25 +166,6 @@ pub(crate) fn persisted_resume_id(session: &FeatureSession) -> Option<String> {
         _ => None,
     };
     id.filter(|id| !id.trim().is_empty())
-}
-
-/// The same saved transcripts used by the TUI's `S` pickers, exposed in a
-/// presentation-neutral shape for the GUI recovery dialog.
-pub(crate) fn saved_sessions_for_kind(
-    kind: &SessionKind,
-    workdir: &std::path::Path,
-) -> Result<Vec<(String, String, i64)>> {
-    match kind {
-        SessionKind::Claude => Ok(super::claude_sessions::fetch_claude_sessions(workdir)?
-            .into_iter()
-            .map(|session| (session.id, session.title, session.updated))
-            .collect()),
-        SessionKind::Codex => Ok(super::codex_sessions::fetch_codex_sessions(workdir)?
-            .into_iter()
-            .map(|session| (session.id, session.title, session.updated))
-            .collect()),
-        _ => Ok(Vec::new()),
-    }
 }
 
 impl App {
@@ -742,105 +721,6 @@ impl App {
             .run_shell_command(tmux_session, window, &shell_cmd)
     }
 
-    /// GUI variant of [`Self::add_custom_session_type_named`]: the caller has
-    /// already run the `pre_check` and cleared the resource gate, and needs
-    /// the new session's stable ID. A failure closes the new window, and the
-    /// feature too when this add is what started it.
-    pub(crate) fn add_custom_session_identified(
-        &mut self,
-        pi: usize,
-        fi: usize,
-        config: &crate::extension::CustomSessionConfig,
-        label: String,
-    ) -> Result<String> {
-        self.with_feature_started_for_add(pi, fi, |app| {
-            let window_hint = config
-                .window_name
-                .clone()
-                .unwrap_or_else(|| slugify(&config.name));
-            let feature = &mut app.store.projects[pi].features[fi];
-            let tmux_session = feature.tmux_session.clone();
-            let workdir = config
-                .working_dir
-                .as_ref()
-                .map(|rel| feature.workdir.join(rel))
-                .unwrap_or_else(|| feature.workdir.clone());
-            let session_record = feature
-                .add_custom_session_named(
-                    label,
-                    window_hint,
-                    config.command.clone(),
-                    config.on_stop.clone(),
-                    config.pre_check.clone(),
-                )
-                .clone();
-            let feature_id = feature.id.clone();
-
-            if let Err(error) = app.start_custom_session_window(
-                &tmux_session,
-                &session_record.tmux_window,
-                &workdir,
-                &session_record.id,
-                session_record.command.as_deref(),
-            ) {
-                let _ = app
-                    .tmux
-                    .kill_window(&tmux_session, &session_record.tmux_window);
-                app.store.projects[pi].features[fi]
-                    .sessions
-                    .retain(|session| session.id != session_record.id);
-                return Err(error);
-            }
-
-            let feature = &mut app.store.projects[pi].features[fi];
-            feature.collapsed = false;
-            let si = feature.sessions.len() - 1;
-            app.selection = Selection::Session(pi, fi, si);
-            app.save_new_builtin_tmux_session(&feature_id, &tmux_session, &session_record)?;
-            Ok(session_record.id)
-        })
-    }
-
-    /// Bring the feature up for an add, then run `add`. When `add` fails and
-    /// this call is what started the feature, stop it again: a failed
-    /// request (including a save conflict) must not leave an unexpectedly
-    /// running feature behind.
-    pub(crate) fn with_feature_started_for_add<T>(
-        &mut self,
-        pi: usize,
-        fi: usize,
-        add: impl FnOnce(&mut Self) -> Result<T>,
-    ) -> Result<T> {
-        let feature_id = self.store.projects[pi].features[fi].id.clone();
-        let created_feature_session =
-            self.ensure_feature_running_for_new_session(pi, fi, StartIntent::Approved)?;
-        let tmux_session = self.store.projects[pi].features[fi].tmux_session.clone();
-        let result = add(self);
-        if result.is_err() && created_feature_session {
-            self.tmux.kill_session(&tmux_session)?;
-            if let Some((pi, fi)) = self.store.locate_feature_by_id(None, &feature_id)
-                && self.store.projects[pi].features[fi].tmux_session == tmux_session
-            {
-                let feature = &mut self.store.projects[pi].features[fi];
-                feature.status = ProjectStatus::Stopped;
-                feature.touch();
-                let _ = self.save_reapplying(|store| {
-                    let Some((pi, fi)) = store.locate_feature_by_id(None, &feature_id) else {
-                        return false;
-                    };
-                    let feature = &mut store.projects[pi].features[fi];
-                    if feature.tmux_session != tmux_session {
-                        return false;
-                    }
-                    feature.status = ProjectStatus::Stopped;
-                    feature.touch();
-                    true
-                })?;
-            }
-        }
-        result
-    }
-
     pub fn add_builtin_session(&mut self, pi: usize, fi: usize, kind: SessionKind) -> Result<()> {
         self.add_builtin_session_named(pi, fi, kind, None)
     }
@@ -926,27 +806,6 @@ impl App {
             SessionKind::Vscode => self.add_vscode_session_for_picker(pi, fi),
             _ => anyhow::bail!("unsupported session type"),
         }
-    }
-
-    /// GUI variant for tmux-backed builtins: the store can reorder on a
-    /// conflict retry, so the caller needs the new session's stable ID.
-    pub(crate) fn add_builtin_tmux_session_identified(
-        &mut self,
-        pi: usize,
-        fi: usize,
-        kind: SessionKind,
-        label: String,
-    ) -> Result<String> {
-        if !matches!(kind, SessionKind::Terminal | SessionKind::Nvim) {
-            anyhow::bail!("unsupported builtin tmux session type");
-        }
-        // The add may start this feature as well as opening a new window;
-        // the helper stops it again if the add then fails.
-        self.with_feature_started_for_add(pi, fi, |app| match kind {
-            SessionKind::Terminal => app.add_terminal_session_for_picker(pi, fi, Some(label)),
-            SessionKind::Nvim => app.add_nvim_session_for_picker(pi, fi, Some(label)),
-            _ => unreachable!("validated above"),
-        })
     }
 
     /// Add a native TODOs session under the given feature and create the
@@ -1180,7 +1039,7 @@ impl App {
     }
 
     /// Open the feature's worktree in a new VS Code window and track it —
-    /// the TUI picker's launch, shared with the GUI. The caller has already
+    /// the TUI picker's launch, shared with automation. The caller has already
     /// checked that the CLI runs and started the feature.
     pub(crate) fn launch_vscode_window(&mut self, pi: usize, fi: usize) -> Result<VscodeLaunch> {
         let feature = match self.store.projects.get(pi).and_then(|p| p.features.get(fi)) {
@@ -1208,9 +1067,9 @@ impl App {
             .spawn()
             .map_err(|e| anyhow::anyhow!("Failed to launch VSCode: {}", e))?;
 
-        let record_id = self.record_vscode_launch(&feature_id, &workdir, &command, before);
+        self.record_vscode_launch(&feature_id, &workdir, &command, before);
 
-        Ok(VscodeLaunch { workdir, record_id })
+        Ok(VscodeLaunch { workdir })
     }
 
     /// Record the launch, then resolve which process it produced in the
@@ -1423,7 +1282,7 @@ impl App {
 
     /// The same launch as `create_agent_session_labeled`, with stable session
     /// and window identities for adapters that must associate the result with
-    /// another persisted record (such as a GUI TODO launch). A save conflict
+    /// another persisted record (such as an automation TODO launch). A save conflict
     /// reloads the store, which can move the feature itself, so a caller
     /// that keeps going after this returns should re-resolve `(pi, fi, si)`
     /// from the session id rather than trust the `pi`/`fi` it passed in.
@@ -1876,7 +1735,7 @@ impl App {
     }
 
     /// The front-end-neutral half of a single-session stop, shared by the
-    /// TUI's `x` and the GUI. Kills the window and records the stop, or says
+    /// TUI's `x` and automation. Kills the window and records the stop, or says
     /// why it didn't.
     ///
     /// - On a stopped feature there is no window; the stop is only recorded,
@@ -1885,7 +1744,7 @@ impl App {
     ///   to start" by starting everything, so that flag would not hold.
     /// - On a running feature whose last running session this is, nothing is
     ///   touched and [`SessionStop::StopsFeature`] hands the decision back:
-    ///   the TUI runs its full `stop_feature` (hooks and all), the GUI its
+    ///   the TUI runs its full `stop_feature` (hooks and all), automation its
     ///   hook-less `do_stop_feature`. The session is left unflagged, so
     ///   starting the feature again brings back what was last running.
     pub(crate) fn stop_session_at(

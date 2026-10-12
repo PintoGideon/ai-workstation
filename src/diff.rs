@@ -48,56 +48,6 @@ pub struct DiffFile {
     pub hunks: Vec<DiffHunk>,
 }
 
-/// Location of a commentable diff line: its line number on the base (old)
-/// and/or current (new) side. Used to anchor line-level review comments.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct DiffLineLocation {
-    pub old_line: Option<usize>,
-    pub new_line: Option<usize>,
-}
-
-/// Source coordinates for every physical row in one hunk. Addressable rows
-/// carry a [`DiffLineLocation`]; the no-newline marker carries `None`. Keeping
-/// marker slots makes the result safe to zip with `hunk.lines` when producing
-/// annotated prompts or rendered diffs.
-pub fn line_locations_in_hunk(hunk: &DiffHunk) -> Vec<Option<DiffLineLocation>> {
-    let mut out = Vec::with_capacity(hunk.lines.len());
-    let mut old_line = hunk.old_start;
-    let mut new_line = hunk.new_start;
-    for line in &hunk.lines {
-        let location = match line.kind {
-            DiffLineKind::Context => {
-                let location = DiffLineLocation {
-                    old_line: Some(old_line),
-                    new_line: Some(new_line),
-                };
-                old_line += 1;
-                new_line += 1;
-                Some(location)
-            }
-            DiffLineKind::Removed => {
-                let location = DiffLineLocation {
-                    old_line: Some(old_line),
-                    new_line: None,
-                };
-                old_line += 1;
-                Some(location)
-            }
-            DiffLineKind::Added => {
-                let location = DiffLineLocation {
-                    old_line: None,
-                    new_line: Some(new_line),
-                };
-                new_line += 1;
-                Some(location)
-            }
-            DiffLineKind::NoNewlineMarker => None,
-        };
-        out.push(location);
-    }
-    out
-}
-
 impl DiffFile {
     pub fn can_expand_context(&self) -> bool {
         !self.is_binary

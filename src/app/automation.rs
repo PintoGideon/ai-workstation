@@ -128,19 +128,6 @@ impl App {
             })
     }
 
-    /// Validate before creating a checkout or reserving a TODO. Dry-run
-    /// callers can still discover the prompt without supplying an answer.
-    pub(crate) fn validate_worktree_hook_choice(
-        &self,
-        project_repo: &Path,
-        choice: Option<&str>,
-    ) -> Result<()> {
-        let ext = self.merge_extension(&self.config.extension, project_repo);
-        let hook = ext.lifecycle_hooks.on_worktree_created.as_ref();
-        checked_hook_choice(hook.and_then(|hook| hook.prompt()), choice)?;
-        Ok(())
-    }
-
     pub fn create_project_from_request(
         &mut self,
         request: &CreateProjectRequest,

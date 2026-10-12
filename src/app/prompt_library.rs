@@ -896,35 +896,7 @@ pub(crate) struct LostPromptContext {
     pub workdir: PathBuf,
 }
 
-impl App {
-    /// Read-only source merge shared by remote and desktop library browsers.
-    pub(crate) fn prompt_library_for_scope(
-        &self,
-        pi: Option<usize>,
-        fi: Option<usize>,
-    ) -> Vec<PromptLibraryEntry> {
-        let project = pi.and_then(|pi| self.store.projects.get(pi));
-        let user = self
-            .db
-            .as_ref()
-            .and_then(|db| db.load_prompt_templates().ok())
-            .unwrap_or_else(|| self.store.prompt_templates.clone());
-        let global = if self.store_path.as_os_str().is_empty() {
-            self.config.extension.prompt_templates.clone()
-        } else {
-            crate::extension::load_global_extension_config().prompt_templates
-        };
-        let project_templates = project
-            .map(|project| load_project_prompt_templates(&project.repo))
-            .unwrap_or_default();
-        let worktree_templates = project
-            .and_then(|project| fi.and_then(|fi| project.features.get(fi)))
-            .filter(|feature| Some(&feature.workdir) != project.map(|project| &project.repo))
-            .map(|feature| load_project_prompt_templates(&feature.workdir))
-            .unwrap_or_default();
-        merge_prompt_library_entries(&user, &global, &project_templates, &worktree_templates)
-    }
-}
+impl App {}
 
 /// Read the `prompt_templates` declared in the project config (`aiw.json`).
 /// Returns an empty list when the file

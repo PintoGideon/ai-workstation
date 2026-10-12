@@ -56,22 +56,6 @@ impl CodexLiveThreadState {
         changed
     }
 
-    pub fn sidebar_work_text(&self) -> Option<String> {
-        match self
-            .active_work_item
-            .or_else(|| self.preferred_available_work_item())
-        {
-            Some(WorkItemKind::InputRequest) => self.input_request_text.clone(),
-            Some(WorkItemKind::FileChange) => self.file_change_text.clone(),
-            Some(WorkItemKind::Command) => self.command_text.clone(),
-            None => None,
-        }
-    }
-
-    pub fn summary_prefix(&self) -> Option<String> {
-        self.reasoning_text.clone()
-    }
-
     fn set_active_work_item(&mut self, next: Option<WorkItemKind>) -> bool {
         if self.active_work_item == next {
             return false;
@@ -319,6 +303,22 @@ fn normalize_status(status: &str) -> CommandStatus {
         }
         "failed" | "error" | "blocked" | "rejected" => CommandStatus::Failed,
         _ => CommandStatus::Running,
+    }
+}
+
+// Test-only accessors: production callers went with the desktop GUI.
+#[cfg(test)]
+impl CodexLiveThreadState {
+    pub fn sidebar_work_text(&self) -> Option<String> {
+        match self
+            .active_work_item
+            .or_else(|| self.preferred_available_work_item())
+        {
+            Some(WorkItemKind::InputRequest) => self.input_request_text.clone(),
+            Some(WorkItemKind::FileChange) => self.file_change_text.clone(),
+            Some(WorkItemKind::Command) => self.command_text.clone(),
+            None => None,
+        }
     }
 }
 

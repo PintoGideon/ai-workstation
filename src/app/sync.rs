@@ -541,7 +541,6 @@ fn apply_bg_result(app: &mut App, result: SessionStatusBgResult) {
     // Hint eligibility follows the normalized current-window snapshots. The
     // cumulative token usage above remains a separate billing/status value and
     // must not be used to infer context occupancy.
-    app.context_hint_states.sync_all(&app.context_states);
 
     if result.sources_discovered
         && let Err(err) = app.save()
@@ -1405,24 +1404,6 @@ impl App {
         }
     }
 
-    /// The thinking verdict available to a process that does not own the IPC
-    /// socket (the desktop GUI): the sources `sync_thinking_status` reads when
-    /// `self.ipc` is `None`, without its pending-input and attention side
-    /// effects.
-    pub(crate) fn thinking_from_shared_sources(
-        &self,
-        tmux_session: &str,
-        agent: &AgentKind,
-    ) -> bool {
-        match agent {
-            AgentKind::Claude
-            | AgentKind::Codex
-            | AgentKind::Pi
-            | AgentKind::Gemini // FORK
-            | AgentKind::Cursor => Self::is_session_marked_thinking(tmux_session),
-        }
-    }
-
     pub(crate) fn note_codex_prompt_submit(&mut self, tmux_session: &str, tmux_window: &str) {
         let mut matched: Option<(String, String, String)> = None;
         for project in &self.store.projects {
@@ -1476,21 +1457,5 @@ impl App {
         self.pending_inputs
             .iter()
             .any(|input| input.feature_name.as_deref() == Some(feature_name))
-    }
-
-    pub fn poll_codex_sidebar_metadata(&mut self) -> bool {
-        let mut changed = false;
-        while let Ok(result) = self.codex_sidebar_metadata_rx.try_recv() {
-            changed = true;
-            self.codex_sidebar_metadata_inflight
-                .remove(&result.cache_key);
-            self.codex_session_title_cache
-                .insert(result.cache_key.clone(), result.title);
-            self.codex_session_prompt_cache
-                .insert(result.cache_key.clone(), result.prompt);
-            self.codex_session_model_cache
-                .insert(result.cache_key, result.model_text);
-        }
-        changed
     }
 }

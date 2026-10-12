@@ -112,7 +112,7 @@ impl App {
             self.drain_ipc_messages();
         }
         // FORK(no-cloud): the explicit refresh is the only thing (besides
-        // the GUI refresh button) that asks `gh` for PR badge state.
+        // automation) that asks `gh` for PR badge state.
         self.sync_active_prs_background();
         // ...and retries issue comments the user asked for that never posted
         // (AIW did this unasked at every startup).

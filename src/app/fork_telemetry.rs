@@ -208,17 +208,6 @@ impl App {
             .map(|snapshot| (snapshot.percentage.get(), snapshot.band))
     }
 
-    /// The row's context label: `42% ctx`, or the token count when no
-    /// window is known (Gemini).
-    pub fn session_context_label(&self, session_id: &str) -> Option<String> {
-        if let Some((pct, _)) = self.session_context_percent(session_id) {
-            return Some(format!("{pct}% ctx"));
-        }
-        self.telemetry
-            .get(session_id)
-            .and_then(|t| t.context_label())
-    }
-
     /// Part of `App::redraw_signature`: what the hook-fed state (DESIGN.md
     /// §16) draws on the rows — context use, subagent counts, queued
     /// follow-ups, pending permissions — so an IPC update is a frame.
@@ -258,6 +247,21 @@ impl App {
             .iter()
             .filter_map(|(id, t)| Some((id.clone(), t.claude_runtime_payload(None)?)))
             .collect()
+    }
+}
+
+// Test-only accessors: production callers went with the desktop GUI.
+#[cfg(test)]
+impl App {
+    /// The row's context label: `42% ctx`, or the token count when no
+    /// window is known (Gemini).
+    pub fn session_context_label(&self, session_id: &str) -> Option<String> {
+        if let Some((pct, _)) = self.session_context_percent(session_id) {
+            return Some(format!("{pct}% ctx"));
+        }
+        self.telemetry
+            .get(session_id)
+            .and_then(|t| t.context_label())
     }
 }
 

@@ -162,50 +162,6 @@ pub fn total_active_agents(store: &ProjectStore, live: &LiveHarnesses) -> usize 
     count_active_harness_sessions(store, live)
 }
 
-/// A pane that really has a process in it, for census tests: a `sh` that
-/// stays alive as the parent of a `sleep`, so `ps` reports a child of the
-/// returned pid. Killed on drop.
-#[cfg(test)]
-pub(crate) struct BusyPane(std::process::Child);
-
-#[cfg(test)]
-impl BusyPane {
-    #[must_use]
-    pub(crate) fn spawn() -> Self {
-        // `& wait` keeps the shell itself alive as the parent instead of
-        // exec'ing away, so the pane pid really does have a child.
-        let child = std::process::Command::new("sh")
-            .args(["-c", "sleep 60 & wait"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .expect("sh should be available");
-        let pid = child.id() as i64;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while std::time::Instant::now() < deadline {
-            let procs = procs::list_processes();
-            if procs::process_tree(&procs, pid).len() > 1 {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        }
-        Self(child)
-    }
-
-    /// The pid tmux would report for the pane.
-    pub(crate) fn pid(&self) -> i64 {
-        self.0.id() as i64
-    }
-}
-
-#[cfg(test)]
-impl Drop for BusyPane {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

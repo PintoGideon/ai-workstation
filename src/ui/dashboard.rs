@@ -667,13 +667,9 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::agent_sidebar::*;
-    use crate::project::TokenUsageSourceMatch;
 
     use crate::app::App;
-    use crate::project::FeatureSession;
-    use crate::project::{ProjectStore, SessionKind};
-    use crate::token_tracking::{TokenUsageProvider, TokenUsageSource};
+    use crate::project::ProjectStore;
     use crate::traits::{MockTmuxOps, MockWorktreeOps};
     use ratatui::layout::Rect;
     use ratatui::{Terminal, backend::TestBackend};
@@ -723,22 +719,6 @@ mod tests {
     }
 
     #[test]
-    fn sidebar_usage_is_split_into_labeled_lines() {
-        assert_eq!(
-            format_sidebar_usage("16.0k in · 2.0k out · 21.8k eff · $0.07"),
-            "Input: 16.0k tokens\nOutput: 2.0k tokens\nEffective: 21.8k tokens\nCost: $0.07"
-        );
-    }
-
-    #[test]
-    fn sidebar_usage_falls_back_when_format_is_unknown() {
-        assert_eq!(
-            format_sidebar_usage("tokens unavailable"),
-            "Usage: tokens unavailable"
-        );
-    }
-
-    #[test]
     fn expired_toasts_do_not_leave_stale_cells_behind() {
         let backend = TestBackend::new(100, 30);
         let mut terminal = Terminal::new(backend).unwrap();
@@ -783,135 +763,5 @@ mod tests {
             .map(|cell| cell.symbol())
             .collect();
         assert!(!second_rendered.contains("toast should disappear"));
-    }
-
-    fn codex_feature_session(session_id: &str) -> FeatureSession {
-        FeatureSession {
-            id: "session-1".into(),
-            kind: SessionKind::Codex,
-            label: "Codex".into(),
-            tmux_window: "codex".into(),
-            claude_session_id: None,
-            todo_reference: None,
-            token_usage_source: Some(TokenUsageSource {
-                provider: TokenUsageProvider::Codex,
-                id: session_id.into(),
-            }),
-            token_usage_source_match: Some(TokenUsageSourceMatch::Exact),
-            created_at: chrono::Utc::now(),
-            command: None,
-            on_stop: None,
-            pre_check: None,
-            status_text: None,
-            token_usage: None,
-            stopped: false,
-        }
-    }
-
-    #[test]
-    fn select_sidebar_prompt_prefers_session_specific_prompt() {
-        assert_eq!(
-            select_sidebar_prompt(Some("session prompt"), Some("fallback prompt")),
-            Some("session prompt".to_string())
-        );
-    }
-
-    #[test]
-    fn sidebar_prompt_text_falls_back_when_codex_session_prompt_is_missing() {
-        let prompt = sidebar_prompt_text(None, Some("fallback prompt"));
-
-        assert!(prompt.contains("fallback prompt"));
-        assert!(!prompt.contains("leader l"));
-        assert!(!prompt.contains("Preview:"));
-    }
-
-    #[test]
-    fn sidebar_prompt_text_is_empty_when_no_prompt_is_available() {
-        assert_eq!(sidebar_prompt_text(None, None), "");
-    }
-
-    #[test]
-    fn sidebar_prompt_text_truncates_long_prompt_preview() {
-        let prompt = sidebar_prompt_text(
-            Some(
-                "This is a much longer prompt preview that should be shortened once it crosses the sidebar limit for prompt text.",
-            ),
-            None,
-        );
-
-        assert_eq!(prompt, "This is a much longer prompt preview that shoul…");
-    }
-
-    #[test]
-    fn compact_sidebar_text_truncates_summary_text() {
-        let compacted = compact_sidebar_text(
-            "This is a longer summary that should be shortened once it crosses the sidebar limit.",
-            40,
-        );
-
-        assert_eq!(compacted, "This is a longer summary that should be…");
-    }
-
-    #[test]
-    fn sidebar_status_activity_text_omits_activity_when_work_is_present() {
-        assert_eq!(sidebar_status_activity_text(true, "Ready".into()), None);
-        assert_eq!(
-            sidebar_status_activity_text(false, "Ready".into()),
-            Some("Ready".to_string())
-        );
-    }
-
-    #[test]
-    fn compose_sidebar_status_text_omits_missing_usage_lines() {
-        assert_eq!(compose_sidebar_status_text(None, None, None), "");
-        assert_eq!(
-            compose_sidebar_status_text(Some("Ready".into()), None, None),
-            "Activity: Ready"
-        );
-        assert_eq!(
-            compose_sidebar_status_text(None, Some("Input: 1.2K tokens".into()), None),
-            "Input: 1.2K tokens"
-        );
-    }
-
-    #[test]
-    fn append_model_status_line_adds_model_when_present() {
-        assert_eq!(
-            append_model_status_line("Activity: Ready".into(), Some("Model: gpt-5.5")),
-            "Activity: Ready\nModel: gpt-5.5"
-        );
-        assert_eq!(
-            append_model_status_line("Activity: Ready".into(), None),
-            "Activity: Ready"
-        );
-    }
-
-    #[test]
-    fn compose_sidebar_summary_text_omits_missing_summary() {
-        assert_eq!(compose_sidebar_summary_text(None, None), "");
-        assert_eq!(
-            compose_sidebar_summary_text(None, Some("Short summary".into())),
-            "Short summary"
-        );
-    }
-
-    #[test]
-    fn format_codex_usage_source_confidence_omits_exact_match_label() {
-        let session = codex_feature_session("sess-current");
-        assert_eq!(
-            format_codex_usage_source_confidence(&SessionKind::Codex, Some(&session)),
-            None
-        );
-    }
-
-    #[test]
-    fn format_codex_usage_source_confidence_uses_inferred_match_label() {
-        let mut session = codex_feature_session("sess-current");
-        session.token_usage_source_match = Some(TokenUsageSourceMatch::Inferred);
-
-        assert_eq!(
-            format_codex_usage_source_confidence(&SessionKind::Codex, Some(&session)),
-            Some("Usage source: inferred workdir match".to_string())
-        );
     }
 }

@@ -493,7 +493,7 @@ fn a_broken_aiw_json_read_by_any_action_is_announced_on_the_next_tick() {
         Box::new(MockWorktreeOps::new()),
     );
 
-    // Reads through `&self` (automation, the GUI contract…) queue it.
+    // Reads through `&self` (automation…) queue it.
     let _ = app.extension_for_repo(&repo);
     let _ = app.merge_extension(&app.config.extension.clone(), &repo);
     assert!(app.toasts.is_empty());

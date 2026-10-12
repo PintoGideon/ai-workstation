@@ -1,30 +1,15 @@
-//! Shared library behind AIW's front ends: the `aiw` TUI binary
-//! (`src/main.rs` -> `cli::run`) and the desktop GUI.
+//! The library behind the `aiw` binary (`src/main.rs` -> `cli::run`).
 //!
-//! Only `cli` and the modules the GUI calls are `pub`: `automation` and
-//! `project` for request/response types, and the `gui_*` contract modules,
-//! which wrap the same `App` operations the TUI uses. Everything else stays a
-//! plain `mod`, which keeps it fully visible within this crate without
-//! changing its *effective* visibility from what it was as part of the `aiw`
-//! binary: widening a module to `pub mod` pulls its whole public surface into
-//! clippy's API-hygiene lints (`should_implement_trait` and friends) even
-//! where nothing outside the crate calls it yet. Widen deliberately, module
-//! by module, as a consumer needs it.
+//! Only `cli`, `automation`, `project` and `fork` are `pub`, for the binary
+//! and for request/response types. Everything else stays a plain `mod`,
+//! which keeps it fully visible within this crate without pulling its whole
+//! public surface into clippy's API-hygiene lints (`should_implement_trait`
+//! and friends). Widen deliberately, module by module, as a consumer needs
+//! it.
 
 pub mod automation;
 pub mod cli;
 pub mod fork; // FORK: AI Workstation additions (DESIGN.md)
-pub mod gui_contract;
-pub mod gui_debug_log;
-pub mod gui_diff;
-pub mod gui_dormancy;
-pub mod gui_prompts;
-pub mod gui_sessions;
-pub mod gui_supervised_edits;
-pub mod gui_syntax;
-pub mod gui_terminal;
-pub mod gui_themes;
-pub mod gui_todos;
 pub mod project;
 
 mod app;

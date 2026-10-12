@@ -18,14 +18,6 @@ pub struct CodexSessionInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CodexSidebarMetadata {
-    pub title: Option<String>,
-    pub latest_prompt: Option<String>,
-    pub model: Option<String>,
-    pub model_provider: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CodexPromptEntry {
     pub text: String,
     pub timestamp: Option<i64>,
@@ -35,8 +27,6 @@ pub struct CodexPromptEntry {
 struct ParsedCodexSession {
     info: CodexSessionInfo,
     latest_prompt: Option<String>,
-    model: Option<String>,
-    model_provider: Option<String>,
 }
 
 pub fn fetch_codex_sessions(workdir: &Path) -> Result<Vec<CodexSessionInfo>> {
@@ -176,34 +166,6 @@ fn fetch_codex_sessions_from_index(workdir: &Path) -> Result<Option<Vec<CodexSes
     Ok(Some(sessions))
 }
 
-pub fn sidebar_metadata_for_session_id(
-    workdir: &Path,
-    session_id: &str,
-) -> Result<Option<CodexSidebarMetadata>> {
-    if let Some(path) = indexed_rollout_path(workdir, session_id) {
-        let mut metadata = parse_codex_session_file_details(&path, workdir)
-            .filter(|parsed| parsed.info.id == session_id)
-            .map(sidebar_metadata_from_parsed);
-        if let Some(metadata) = &mut metadata
-            && metadata.model.is_none()
-        {
-            metadata.model = crate::codex_config::configured_model();
-        }
-        return Ok(metadata);
-    }
-    let Some(sessions_root) = codex_sessions_root() else {
-        return Ok(None);
-    };
-    let mut metadata =
-        sidebar_metadata_for_session_id_from_root(workdir, session_id, &sessions_root)?;
-    if let Some(metadata) = &mut metadata
-        && metadata.model.is_none()
-    {
-        metadata.model = crate::codex_config::configured_model();
-    }
-    Ok(metadata)
-}
-
 pub fn prompt_history_for_session_id(
     workdir: &Path,
     session_id: &str,
@@ -261,60 +223,6 @@ fn latest_prompt_for_session_id_from_root(
     }
 
     Ok(newest_prompt.map(|(_, prompt)| prompt))
-}
-
-fn sidebar_metadata_for_session_id_from_root(
-    workdir: &Path,
-    session_id: &str,
-    sessions_root: &Path,
-) -> Result<Option<CodexSidebarMetadata>> {
-    if !is_real_dir(sessions_root) {
-        return Ok(None);
-    }
-
-    let mut newest_session: Option<ParsedCodexSession> = None;
-    let mut stack = vec![sessions_root.to_path_buf()];
-
-    while let Some(dir) = stack.pop() {
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            let file_type = entry.file_type()?;
-            if file_type.is_dir() {
-                stack.push(path);
-                continue;
-            }
-            if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
-                continue;
-            }
-            let Some(parsed) = parse_codex_session_file_details(&path, workdir) else {
-                continue;
-            };
-            if parsed.info.id != session_id {
-                continue;
-            }
-            match &newest_session {
-                Some(current) if current.info.updated >= parsed.info.updated => {}
-                _ => newest_session = Some(parsed),
-            }
-        }
-    }
-
-    Ok(newest_session.map(sidebar_metadata_from_parsed))
-}
-
-fn sidebar_metadata_from_parsed(parsed: ParsedCodexSession) -> CodexSidebarMetadata {
-    CodexSidebarMetadata {
-        title: Some(parsed.info.title)
-            .filter(|title| !title.trim().is_empty() && title != "Untitled"),
-        latest_prompt: parsed
-            .latest_prompt
-            .filter(|prompt| !prompt.trim().is_empty()),
-        model: parsed.model.filter(|model| !model.trim().is_empty()),
-        model_provider: parsed
-            .model_provider
-            .filter(|provider| !provider.trim().is_empty()),
-    }
 }
 
 fn prompt_history_for_session_id_from_root(
@@ -458,8 +366,6 @@ fn parse_codex_session_file_details(path: &Path, workdir: &Path) -> Option<Parse
     let mut updated = 0_i64;
     let mut latest_prompt: Option<String> = None;
     let mut latest_prompt_updated = 0_i64;
-    let mut model: Option<String> = None;
-    let mut model_provider: Option<String> = None;
 
     for line in reader.lines() {
         let line = line.ok()?;
@@ -499,8 +405,6 @@ fn parse_codex_session_file_details(path: &Path, workdir: &Path) -> Option<Parse
                 {
                     updated = updated.max(parsed);
                 }
-                model = extract_model(payload).or(model);
-                model_provider = extract_model_provider(payload).or(model_provider);
             }
             Some("event_msg") => {
                 if title.is_none() {
@@ -510,10 +414,7 @@ fn parse_codex_session_file_details(path: &Path, workdir: &Path) -> Option<Parse
                     latest_prompt = Some(prompt);
                     latest_prompt_updated = line_updated;
                 }
-                if line_updated >= latest_prompt_updated {
-                    model = extract_model(&value).or(model);
-                    model_provider = extract_model_provider(&value).or(model_provider);
-                }
+                if line_updated >= latest_prompt_updated {}
             }
             Some("response_item") => {
                 if title.is_none() {
@@ -525,10 +426,7 @@ fn parse_codex_session_file_details(path: &Path, workdir: &Path) -> Option<Parse
                     latest_prompt = Some(prompt);
                     latest_prompt_updated = line_updated;
                 }
-                if line_updated >= latest_prompt_updated {
-                    model = extract_model(&value).or(model);
-                    model_provider = extract_model_provider(&value).or(model_provider);
-                }
+                if line_updated >= latest_prompt_updated {}
             }
             _ => {}
         }
@@ -546,38 +444,7 @@ fn parse_codex_session_file_details(path: &Path, workdir: &Path) -> Option<Parse
             updated,
         },
         latest_prompt,
-        model,
-        model_provider,
     })
-}
-
-fn extract_model(value: &Value) -> Option<String> {
-    extract_string_field(value, &["model", "model_slug", "model_id"])
-}
-
-fn extract_model_provider(value: &Value) -> Option<String> {
-    extract_string_field(value, &["model_provider", "provider"])
-}
-
-fn extract_string_field(value: &Value, keys: &[&str]) -> Option<String> {
-    for key in keys {
-        if let Some(text) = value
-            .get(*key)
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|text| !text.is_empty())
-        {
-            return Some(text.to_string());
-        }
-    }
-
-    if let Some(payload) = value.get("payload")
-        && let Some(text) = extract_string_field(payload, keys)
-    {
-        return Some(text);
-    }
-
-    None
 }
 
 fn extract_title_from_event(value: &Value) -> Option<String> {
@@ -855,77 +722,6 @@ mod tests {
         let prompt =
             latest_prompt_for_session_id_from_root(&workdir, "sess-current", tmp.path()).unwrap();
         assert_eq!(prompt.as_deref(), Some("newer prompt"));
-    }
-
-    #[test]
-    fn sidebar_metadata_for_session_id_returns_title_and_prompt_from_newest_match() {
-        let tmp = TempDir::new().unwrap();
-        let workdir = tmp.path().join("repo");
-
-        write_session(
-            tmp.path(),
-            "2026/03/08/older.jsonl",
-            &format!(
-                concat!(
-                    "{{\"timestamp\":\"2026-03-08T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"sess-current\",\"timestamp\":\"2026-03-08T09:59:00Z\",\"cwd\":\"{}\"}}}}\n",
-                    "{{\"timestamp\":\"2026-03-08T10:01:00Z\",\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"older title\"}}]}}}}\n"
-                ),
-                workdir.display()
-            ),
-        );
-
-        write_session(
-            tmp.path(),
-            "2026/03/08/newer.jsonl",
-            &format!(
-                concat!(
-                    "{{\"timestamp\":\"2026-03-08T13:00:00Z\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"sess-current\",\"timestamp\":\"2026-03-08T12:59:00Z\",\"cwd\":\"{}\"}}}}\n",
-                    "{{\"timestamp\":\"2026-03-08T13:01:00Z\",\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"newer title\\nrest\"}}]}}}}\n"
-                ),
-                workdir.display()
-            ),
-        );
-
-        let metadata =
-            sidebar_metadata_for_session_id_from_root(&workdir, "sess-current", tmp.path())
-                .unwrap()
-                .unwrap();
-
-        assert_eq!(
-            metadata,
-            CodexSidebarMetadata {
-                title: Some("newer title".to_string()),
-                latest_prompt: Some("newer title\nrest".to_string()),
-                model: None,
-                model_provider: None,
-            }
-        );
-    }
-
-    #[test]
-    fn sidebar_metadata_includes_logged_model() {
-        let tmp = TempDir::new().unwrap();
-        let workdir = tmp.path().join("repo");
-
-        write_session(
-            tmp.path(),
-            "2026/03/08/current.jsonl",
-            &format!(
-                concat!(
-                    "{{\"timestamp\":\"2026-03-08T13:00:00Z\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"sess-current\",\"timestamp\":\"2026-03-08T12:59:00Z\",\"cwd\":\"{}\",\"model\":\"gpt-5.5\",\"model_provider\":\"openai\"}}}}\n",
-                    "{{\"timestamp\":\"2026-03-08T13:01:00Z\",\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"title\"}}]}}}}\n"
-                ),
-                workdir.display()
-            ),
-        );
-
-        let metadata =
-            sidebar_metadata_for_session_id_from_root(&workdir, "sess-current", tmp.path())
-                .unwrap()
-                .unwrap();
-
-        assert_eq!(metadata.model.as_deref(), Some("gpt-5.5"));
-        assert_eq!(metadata.model_provider.as_deref(), Some("openai"));
     }
 
     #[test]

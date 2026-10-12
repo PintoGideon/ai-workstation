@@ -45,67 +45,6 @@ fn usable_cli_binary(exe: PathBuf) -> Option<PathBuf> {
     crate::fork::extra_agents::is_executable(&path).then_some(path)
 }
 
-/// How many lines of tmux history a scroll-back view reads. Shared by the
-/// TUI's scroll mode and the GUI's history view so both show the same reach.
-pub const SCROLLBACK_HISTORY_LINES: i32 = 10_000;
-
-/// What [`TmuxManager::capture_scrollback`] found.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Scrollback {
-    /// The pane's program is on the alternate screen, so tmux holds no
-    /// history for what it shows.
-    AlternateScreen,
-    /// History plus the screen, `\n`-separated with SGR escapes, and how
-    /// many lines that is.
-    History { content: String, lines: usize },
-}
-
-/// Mouse reporting a pane's program asked for (DECSET 1000/1002/1003),
-/// and the encoding it wants reports in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MouseReporting {
-    Off,
-    /// SGR encoding (DECSET 1006): `ESC [ < b ; x ; y M`.
-    Sgr,
-    /// The original X10-style byte encoding: `ESC [ M b x y`.
-    Legacy,
-}
-
-/// The cursor and the modes of a pane that decide how a GUI scrolls it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PaneTerminalModes {
-    pub cursor_x: u16,
-    pub cursor_y: u16,
-    pub alternate_screen: bool,
-    pub mouse: MouseReporting,
-}
-
-impl PaneTerminalModes {
-    const FORMAT: &'static str =
-        "#{cursor_x} #{cursor_y} #{alternate_on} #{mouse_any_flag} #{mouse_sgr_flag}";
-
-    fn parse(output: &str) -> Option<Self> {
-        let fields: Vec<u16> = output
-            .split_whitespace()
-            .map(|field| field.parse().ok())
-            .collect::<Option<_>>()?;
-        let [cursor_x, cursor_y, alternate, mouse_any, mouse_sgr] = fields[..] else {
-            return None;
-        };
-        let mouse = match (mouse_any != 0, mouse_sgr != 0) {
-            (false, _) => MouseReporting::Off,
-            (true, true) => MouseReporting::Sgr,
-            (true, false) => MouseReporting::Legacy,
-        };
-        Some(Self {
-            cursor_x,
-            cursor_y,
-            alternate_screen: alternate != 0,
-            mouse,
-        })
-    }
-}
-
 pub struct TmuxManager;
 
 static TMUX_CONTROL_MODE_ENABLED: AtomicBool = AtomicBool::new(true);
@@ -113,108 +52,9 @@ static TMUX_CONTROL_MODE_ENABLED: AtomicBool = AtomicBool::new(true);
 // FORK: see `TmuxManager::processes_started`.
 static TMUX_PROCESSES_STARTED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// Strip a tmux control-mode line's trailing CR/LF and the `-CC` PTY
-/// wrapper's DCS framing (`\eP1000p` ... `\e\`) some tmux versions add
-/// around each line when the client is attached to a real PTY (see
-/// `TmuxManager::spawn_control_mode_view_client`). Shared by the TUI's
-/// control-mode view worker and the GUI terminal transport -- both read
-/// lines off the same kind of client and need the same framing removed
-/// before matching on `%`-prefixed notifications.
-pub(crate) fn sanitize_tmux_control_line(line: &str) -> &str {
-    let line = line.trim_end_matches(['\r', '\n']);
-    let line = line.strip_prefix("\u{1b}P1000p").unwrap_or(line);
-    line.strip_suffix("\u{1b}\\").unwrap_or(line)
-}
-
-/// Extract `(pane_id, payload)` from a control-mode `%output`/`%extended-output`
-/// notification line, or `None` for any other line. The payload is the
-/// notification's own escaped text -- both consumers of this (the TUI's
-/// control-mode worker and the GUI terminal transport) use it purely as a
-/// dirty-signal for the pane named by `pane_id`, then re-fetch real content
-/// via `capture_pane_ansi` (the GUI's `gui_terminal::capture_frame`) rather than decoding
-/// this payload directly; see the inline comment on the control stream in
-/// `App::run_control_mode_view_worker` (`src/app/mod.rs`) for why.
-pub(crate) fn parse_tmux_output_notification(line: &str) -> Option<(&str, &str)> {
-    if let Some(rest) = line.strip_prefix("%output ") {
-        return rest.split_once(' ');
-    }
-
-    let rest = line.strip_prefix("%extended-output ")?;
-    let (metadata, payload) = rest.split_once(" : ")?;
-    let pane_id = metadata.split_whitespace().next()?;
-    Some((pane_id, payload))
-}
-
 pub struct SpawnedTmuxCommand {
     pub child: Child,
     pub output_rx: Receiver<String>,
-}
-
-pub struct SpawnedTmuxControlClient {
-    pub child: Child,
-    writer: TmuxInputWriter,
-    output_rx: Receiver<String>,
-}
-
-impl SpawnedTmuxControlClient {
-    pub fn send_command(&mut self, command: &str) -> Result<()> {
-        self.writer.write_command(command)
-    }
-
-    pub fn recv_timeout(&self, timeout: Duration) -> Result<Option<String>> {
-        match self.output_rx.recv_timeout(timeout) {
-            Ok(line) => Ok(Some(line)),
-            Err(RecvTimeoutError::Timeout) => Ok(None),
-            Err(RecvTimeoutError::Disconnected) => {
-                bail!("tmux control client output stream disconnected");
-            }
-        }
-    }
-
-    pub fn is_running(&mut self) -> Result<bool> {
-        Ok(self
-            .child
-            .try_wait()
-            .context("Failed to poll tmux control client process")?
-            .is_none())
-    }
-
-    pub fn wait_for_token(&mut self, token: &str, timeout: Duration) -> Result<()> {
-        let deadline = std::time::Instant::now() + timeout;
-        loop {
-            if !self.is_running()? {
-                bail!("tmux control client exited before acknowledging readiness");
-            }
-
-            let now = std::time::Instant::now();
-            if now >= deadline {
-                bail!("timed out waiting for tmux control client readiness");
-            }
-
-            let remaining = deadline.saturating_duration_since(now);
-            match self.recv_timeout(remaining.min(Duration::from_millis(25)))? {
-                Some(line) => {
-                    log_to_file(
-                        LogLevel::Debug,
-                        "tmux",
-                        &format!("tmux control view recv: {line}"),
-                    );
-                    if line.contains(token) {
-                        return Ok(());
-                    }
-                }
-                None => continue,
-            }
-        }
-    }
-}
-
-impl Drop for SpawnedTmuxControlClient {
-    fn drop(&mut self) {
-        let _ = self.send_command("detach-client\n");
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
 }
 
 struct PersistentTmuxInputClient {
@@ -429,7 +269,7 @@ impl TmuxRuntime {
     }
 
     /// Points a test binary at a tmux server of its own. Without this, tests
-    /// that drive real tmux (the `gui_terminal` control-client suite) share
+    /// that drive real tmux share
     /// whatever server `detect` resolves to -- the user's live AIW socket by
     /// default, and also when run from inside an AIW session, which exports
     /// `AIW_TMUX_SOCKET` -- so a tmux crash they trigger takes the user's
@@ -590,20 +430,6 @@ impl TmuxManager {
         Self::control_mode_compatible()
     }
 
-    fn cli_binary_override() -> &'static OnceLock<Option<PathBuf>> {
-        static CLI_BINARY: OnceLock<Option<PathBuf>> = OnceLock::new();
-        &CLI_BINARY
-    }
-
-    /// Name the `aiw` CLI that sessions' hook scripts run as `$AIW_BIN`
-    /// (`aiw notify`, the diff-review hooks, ...). Only a host that is *not*
-    /// the CLI needs this -- the GUI, whose own executable would open a new
-    /// window per hook event. `None` omits `AIW_BIN`, so the scripts fall back
-    /// to `aiw` on `PATH`. First call wins; call it before launching sessions.
-    pub(crate) fn set_cli_binary(path: Option<PathBuf>) {
-        let _ = Self::cli_binary_override().set(path);
-    }
-
     /// FORK: §19.7 — the `aiw` the hook scripts run, for a background
     /// session's settings `env` block.
     pub(crate) fn cli_binary_path() -> Option<PathBuf> {
@@ -611,10 +437,7 @@ impl TmuxManager {
     }
 
     fn cli_binary() -> Option<PathBuf> {
-        match Self::cli_binary_override().get() {
-            Some(path) => path.clone(),
-            None => std::env::current_exe().ok().and_then(usable_cli_binary),
-        }
+        std::env::current_exe().ok().and_then(usable_cli_binary)
     }
 
     fn runtime() -> &'static TmuxRuntime {
@@ -1107,17 +930,6 @@ impl TmuxManager {
         })
     }
 
-    /// A control-mode `refresh-client -A` line for one pane. The `%pane:action`
-    /// argument must be quoted: tmux's command parser reads a bare word that
-    /// starts with `%` as a directive (`%if`, `%hidden`, ...) unless it is all
-    /// digits, so an unquoted `%12:on` is a "parse error: syntax error".
-    pub(crate) fn refresh_client_pane_command(pane_id: &str, action: &str) -> String {
-        format!(
-            "refresh-client -A {}\n",
-            Self::tmux_command_quote(&format!("{pane_id}:{action}"))
-        )
-    }
-
     // Control-mode commands go through tmux's parser, which expands variables
     // inside double quotes. Escape dollars as well as quotes/backslashes so
     // text and targets reach tmux literally; keep control bytes on one line.
@@ -1292,7 +1104,7 @@ impl TmuxManager {
         let mut termios: libc::termios = unsafe { std::mem::zeroed() };
 
         // The TUI always runs on a terminal and seeds the PTY from stdin's
-        // attributes. The GUI usually has no terminal on stdin (a desktop
+        // attributes. A caller may have no terminal on stdin (a desktop
         // launch, or stdin piped by `npm`/`cargo`), where `tcgetattr` fails
         // with ENOTTY; it gets the PTY's own defaults, made raw below.
         let from_stdin = unsafe { libc::tcgetattr(libc::STDIN_FILENO, &mut termios) } == 0;
@@ -1420,124 +1232,6 @@ impl TmuxManager {
         );
 
         Ok(client)
-    }
-
-    pub fn resolve_view_target_ids(session: &str, window: &str) -> Result<(String, String)> {
-        let target = format!("{}:{}", session, window);
-        let exact_target = format!("={session}:={window}");
-        let output = Self::command()
-            .args([
-                "list-panes",
-                "-t",
-                &exact_target,
-                "-F",
-                "#{window_id} #{pane_id} #{pane_active}",
-            ])
-            .output()
-            .context("Failed to resolve tmux view target IDs")?;
-
-        if !output.status.success() {
-            bail!("{}", Self::command_error(&output, "tmux list-panes failed"));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        stdout
-            .lines()
-            .find_map(|line| {
-                let mut parts = line.split_whitespace();
-                match (parts.next(), parts.next(), parts.next(), parts.next()) {
-                    (Some(window_id), Some(pane_id), Some("1"), None)
-                        if window_id.starts_with('@') && pane_id.starts_with('%') =>
-                    {
-                        Some((window_id.to_string(), pane_id.to_string()))
-                    }
-                    _ => None,
-                }
-            })
-            .ok_or_else(|| anyhow::anyhow!("tmux has no active pane for {target}"))
-    }
-
-    #[cfg(unix)]
-    pub fn spawn_control_mode_view_client(
-        session: &str,
-        window: &str,
-        pane_id: &str,
-        cols: u16,
-        rows: u16,
-    ) -> Result<SpawnedTmuxControlClient> {
-        Self::configure_control_client_terminal_features();
-        Self::ensure_stale_control_clients_detached(session);
-        let (master, slave) = Self::open_pty(cols, rows)?;
-        let reader = master
-            .try_clone()
-            .context("Failed to clone tmux control PTY reader")?;
-        let stdin_slave = slave
-            .try_clone()
-            .context("Failed to clone tmux control PTY stdin")?;
-        let stdout_slave = slave
-            .try_clone()
-            .context("Failed to clone tmux control PTY stdout")?;
-        let slave_fd = slave.as_raw_fd();
-
-        let mut child = Self::command();
-        unsafe {
-            child
-                .args(["-CC", "attach-session", "-f", "ignore-size", "-t", session])
-                .stdin(Stdio::from(stdin_slave))
-                .stdout(Stdio::from(stdout_slave))
-                .stderr(Stdio::from(slave))
-                .pre_exec(move || {
-                    if libc::setsid() == -1 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-                    if libc::ioctl(slave_fd, libc::TIOCSCTTY as _, 0) == -1 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-                    Ok(())
-                });
-        }
-        child.env_remove("TMUX").env_remove("TMUX_PANE");
-        Self::apply_control_client_term_env(&mut child);
-
-        let child = child.spawn().with_context(|| {
-            format!("Failed to spawn PTY tmux control view client for {session}")
-        })?;
-
-        let (tx, rx) = mpsc::channel();
-        Self::stream_child_output(Some(reader), tx);
-
-        let mut client = SpawnedTmuxControlClient {
-            child,
-            writer: TmuxInputWriter::Pty(master),
-            output_rx: rx,
-        };
-        let target = format!("{session}:{window}");
-        let quoted_target = Self::tmux_command_quote(&target);
-        client.send_command(&format!("select-window -t {quoted_target}\n"))?;
-        client.send_command(&Self::refresh_client_pane_command(pane_id, "on"))?;
-        client.send_command(&format!("refresh-client -C {cols},{rows}\n"))?;
-        let ready_token = format!("__AIW_VIEW_READY__{}__", std::process::id());
-        client.send_command(&format!("display-message -p {ready_token}\n"))?;
-        client.wait_for_token(&ready_token, Duration::from_millis(250))?;
-
-        log_to_file(
-            LogLevel::Debug,
-            "tmux",
-            &format!("Spawned ready PTY tmux control view client for {session}:{window}"),
-        );
-
-        Ok(client)
-    }
-
-    #[cfg(not(unix))]
-    pub fn spawn_control_mode_view_client(
-        _session: &str,
-        _window: &str,
-        _pane_id: &str,
-        _cols: u16,
-        _rows: u16,
-    ) -> Result<SpawnedTmuxControlClient> {
-        bail!("tmux PTY control view is only supported on Unix");
     }
 
     /// Apply a clean terminal environment to a control-mode client process.
@@ -2137,20 +1831,6 @@ impl TmuxManager {
         }
     }
 
-    /// Capture the current pane content of a session's window. Test
-    /// fixtures read real panes through this; production reads go through
-    /// the ANSI variants below.
-    #[cfg(test)]
-    pub fn capture_pane(session: &str, window: &str) -> Result<String> {
-        let target = format!("{}:{}", session, window);
-        let output = Self::command()
-            .args(["capture-pane", "-t", &target, "-p"])
-            .output()
-            .context("Failed to capture pane")?;
-
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    }
-
     /// Capture pane content with ANSI escape sequences preserved
     pub fn capture_pane_ansi(session: &str, window: &str) -> Result<String> {
         Self::capture_pane_ansi_from_line(session, window, 0, 0)
@@ -2181,75 +1861,6 @@ impl TmuxManager {
         };
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    }
-
-    /// Cursor position plus the terminal modes a GUI needs to route a
-    /// scroll gesture (see [`PaneTerminalModes`]), in one `display-message`.
-    pub fn pane_terminal_modes(session: &str, window: &str) -> Result<PaneTerminalModes> {
-        let target = format!("{}:{}", session, window);
-        let output = Self::command()
-            .args([
-                "display-message",
-                "-t",
-                &target,
-                "-p",
-                PaneTerminalModes::FORMAT,
-            ])
-            .output()
-            .context("Failed to read pane terminal modes")?;
-        PaneTerminalModes::parse(&String::from_utf8_lossy(&output.stdout))
-            .with_context(|| format!("tmux did not return terminal modes for {target}"))
-    }
-
-    /// The scroll-back snapshot shared by the TUI's scroll mode
-    /// (`App::toggle_scroll_mode`) and the GUI's history view
-    /// (`gui_terminal::TerminalHandle::history`): the last
-    /// [`SCROLLBACK_HISTORY_LINES`] lines of tmux history plus the screen.
-    ///
-    /// A program on the alternate screen (Neovim, `less`) has no
-    /// history in tmux -- tmux stops recording while the alternate screen is
-    /// up, and what `capture-pane -S` would return is the shell output from
-    /// *before* the program started -- so that case is reported rather than
-    /// captured. Each interface decides what scrolling means there.
-    pub fn capture_scrollback(session: &str, window: &str) -> Result<Scrollback> {
-        if Self::is_alternate_screen(session, window) {
-            return Ok(Scrollback::AlternateScreen);
-        }
-        let (content, lines) =
-            Self::capture_pane_with_history(session, window, SCROLLBACK_HISTORY_LINES)?;
-        Ok(Scrollback::History { content, lines })
-    }
-
-    /// Capture pane content with ANSI sequences, including scrollback history
-    /// Returns the raw content and the number of lines captured
-    pub fn capture_pane_with_history(
-        session: &str,
-        window: &str,
-        history_lines: i32,
-    ) -> Result<(String, usize)> {
-        let target = format!("{}:{}", session, window);
-        let start = format!("-{}", history_lines);
-        let output = Self::command()
-            .args(["capture-pane", "-t", &target, "-e", "-p", "-S", &start])
-            .output()
-            .context("Failed to capture pane with history")?;
-
-        let content = String::from_utf8_lossy(&output.stdout).to_string();
-        let lines = content.lines().count();
-        Ok((content, lines))
-    }
-
-    /// Check if the pane is using alternate screen mode (like vim/less)
-    pub fn is_alternate_screen(session: &str, window: &str) -> bool {
-        let target = format!("{}:{}", session, window);
-        Self::command()
-            .args(["display-message", "-t", &target, "-p", "#{alternate_on}"])
-            .output()
-            .map(|o| {
-                let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                s == "1"
-            })
-            .unwrap_or(false)
     }
 
     /// Resize a tmux pane to match the TUI rendering area
@@ -2625,15 +2236,6 @@ mod tests {
     #[cfg(unix)]
     use std::os::unix::process::ExitStatusExt;
     use tempfile::TempDir;
-
-    #[test]
-    fn refresh_client_pane_command_quotes_the_percent_pane_id() {
-        // Unquoted, tmux parses `%12:on` as a `%`-directive and rejects it.
-        assert_eq!(
-            TmuxManager::refresh_client_pane_command("%12", "on"),
-            "refresh-client -A \"%12:on\"\n"
-        );
-    }
 
     /// Use a private server and a raw byte sink: shell quoting or pane echo
     /// could hide input corruption, and the process-wide transport selection
@@ -3324,32 +2926,5 @@ mod tests {
         }
 
         assert_eq!(TmuxManager::pane_default_terminal(), None);
-    }
-
-    #[test]
-    fn pane_terminal_modes_parse_cursor_screen_and_mouse_encoding() {
-        use super::{MouseReporting, PaneTerminalModes};
-
-        let shell = PaneTerminalModes::parse("4 7 0 0 0\n").unwrap();
-        assert_eq!((shell.cursor_x, shell.cursor_y), (4, 7));
-        assert!(!shell.alternate_screen);
-        assert_eq!(shell.mouse, MouseReporting::Off);
-
-        let full_screen = PaneTerminalModes::parse("0 0 1 1 1").unwrap();
-        assert!(full_screen.alternate_screen);
-        assert_eq!(full_screen.mouse, MouseReporting::Sgr);
-        assert_eq!(
-            PaneTerminalModes::parse("0 0 1 1 0").unwrap().mouse,
-            MouseReporting::Legacy
-        );
-        // An SGR flag without any reporting mode asks for nothing.
-        assert_eq!(
-            PaneTerminalModes::parse("0 0 1 0 1").unwrap().mouse,
-            MouseReporting::Off
-        );
-
-        assert_eq!(PaneTerminalModes::parse(""), None);
-        assert_eq!(PaneTerminalModes::parse("1 2 0 0"), None);
-        assert_eq!(PaneTerminalModes::parse("1 2 x 0 0"), None);
     }
 }

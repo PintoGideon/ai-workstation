@@ -60,11 +60,6 @@ impl App {
         self.cockpit_open_selected()
     }
 
-    /// Back to the dashboard from a dialog that was about a session.
-    pub(crate) fn exit_view_to_dashboard(&mut self) {
-        self.mode = AppMode::Normal;
-    }
-
     fn feature_workdir_for_view(&self, view: &ViewState) -> Option<PathBuf> {
         self.store
             .projects

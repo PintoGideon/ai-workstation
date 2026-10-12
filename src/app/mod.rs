@@ -1,4 +1,3 @@
-pub(crate) mod agent_sidebar;
 pub(crate) mod attention;
 mod automation;
 mod bookmarks;
@@ -9,7 +8,6 @@ mod codex_session_picker;
 pub(crate) mod codex_sessions;
 pub mod commands;
 mod config_wizard;
-mod context_hints;
 mod context_settings;
 mod diff;
 pub(crate) mod diff_state;
@@ -62,6 +60,35 @@ pub(crate) mod toast;
 mod todos;
 pub mod util;
 
+// Test-only accessors: production callers went with the desktop GUI.
+#[cfg(test)]
+impl App {
+    pub fn latest_prompt_for_session(&self, tmux_session: &str) -> Option<&str> {
+        self.latest_prompt_cache
+            .get(tmux_session)
+            .map(String::as_str)
+    }
+
+    /// Shared persisted history plus this process's not-yet-flushed entries.
+    /// Reading does not flush, clear or otherwise mutate either log.
+    pub(crate) fn recent_debug_log_entries(&self) -> anyhow::Result<Vec<LogEntry>> {
+        let limit = self.debug_log.max_entries();
+        let mut entries = if let Some(db) = &self.db {
+            let mut entries = db.load_recent_log(limit)?;
+            entries.extend(self.pending_debug_log_entries.iter().cloned());
+            entries
+        } else {
+            self.debug_log.entries().iter().cloned().collect()
+        };
+        // Pending entries can interleave with another process's DB writes.
+        entries.sort_by_key(|entry| entry.timestamp);
+        if entries.len() > limit {
+            entries.drain(..entries.len() - limit);
+        }
+        Ok(entries)
+    }
+}
+
 #[cfg(test)]
 mod tests;
 
@@ -96,9 +123,7 @@ use crate::worktree::WorktreeManager;
 
 pub use self::prompt_library::PromptExportTarget;
 pub use self::setup::load_config;
-pub(crate) use automation::WorktreeHookChoiceError;
 pub use codex_live::CodexLiveThreadState;
-pub use codex_sessions::sidebar_metadata_for_session_id as codex_sidebar_metadata_for_session_id;
 pub(crate) use config_wizard::agent_toggles_to_allowed;
 pub(crate) use diff::context_level_label;
 pub use feature_setup::{FeatureSetupRow, FeatureSetupState};
@@ -106,7 +131,6 @@ pub use issue_fixer::{IssueBrowserState, IssueBrowserStatus};
 pub(crate) use resource_gate::{StartIntent, Started};
 pub use state::*;
 pub use toast::{Toast, ToastKind};
-pub(crate) use todos::ReferencedTodoDeleted;
 
 /// The budget refills on a rolling hourly window, so the exact reset is not
 /// knowable from a failed call. Fifteen minutes retries a few times an hour at
@@ -118,10 +142,7 @@ pub const GH_GRAPHQL_BACKOFF: Duration = Duration::from_secs(15 * 60);
 // for PR badges) is gone; see `App::refresh_status_and_notifications`.
 
 /// `App::save`'s message on a detected cross-process conflict (`AIW_PLAN.md`
-/// Task 5). A shared constant, not a literal repeated at each call site, so
-/// `gui_contract::GuiError`'s `From<anyhow::Error>` impl can classify this
-/// specific failure as `GuiErrorKind::Conflict` by exact match without the
-/// two texts silently drifting apart.
+/// Task 5). A shared constant, not a literal repeated at each call site.
 pub(crate) const SAVE_CONFLICT_MESSAGE: &str = "Workspace changed elsewhere (another AIW window or process) before this save landed. Your \
      change was not saved; the view has been refreshed with the current state -- please retry.";
 
@@ -154,14 +175,6 @@ pub(crate) struct ActivePrStatus {
     pub number: u32,
     /// `None` means the PR resolved but its thread metadata could not be read.
     pub unresolved_threads: Option<usize>,
-}
-
-#[derive(Debug, Clone)]
-pub struct CodexSidebarMetadataResult {
-    pub cache_key: String,
-    pub title: Option<String>,
-    pub prompt: Option<String>,
-    pub model_text: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -528,8 +541,6 @@ pub struct App {
     pub fork_cockpit: fork_cockpit::CockpitRuntime,
     /// FORK: the session info block's cache and sweep (DESIGN.md §18).
     pub fork_session_info: fork_session_info::SessionInfoRuntime,
-    /// FORK: a prompt an embedding frontend (the GUI) still shows, unsent.
-    pub unsent_prompt_handoff: Option<fork_prompt_paste::UnsentPromptHandoff>,
     /// FORK: ids of sessions whose finished turn has been looked at (their
     /// `✓` is dim). Not persisted; a new finished event clears the id.
     pub finished_seen: std::collections::HashSet<String>,
@@ -576,8 +587,7 @@ pub struct App {
     /// project-config read in `App` goes through that one checked loader,
     /// so whether a broken file is reported never depends on the entry
     /// point.
-    /// Keyed by repo, latest read wins, so it stays bounded in a process
-    /// that never drains it (the GUI).
+    /// Keyed by repo, latest read wins, so it stays bounded.
     pub(crate) config_error_checks:
         std::sync::Mutex<HashMap<PathBuf, Option<crate::extension::ProjectConfigError>>>,
     /// FORK: ids of projects whose repo folder no longer exists on disk; set
@@ -585,13 +595,7 @@ pub struct App {
     pub missing_project_repos: std::collections::HashSet<String>,
     pub latest_prompt_cache: HashMap<String, String>,
     pub sidebar_model_cache: HashMap<String, String>,
-    pub codex_session_title_cache: HashMap<String, Option<String>>,
-    pub codex_session_prompt_cache: HashMap<String, Option<String>>,
-    pub codex_session_model_cache: HashMap<String, Option<String>>,
     pub codex_live_threads: HashMap<String, CodexLiveThreadState>,
-    pub codex_sidebar_metadata_tx: std::sync::mpsc::Sender<CodexSidebarMetadataResult>,
-    pub codex_sidebar_metadata_rx: std::sync::mpsc::Receiver<CodexSidebarMetadataResult>,
-    pub codex_sidebar_metadata_inflight: std::collections::HashSet<String>,
     /// Rendered per-session active-TODO sidebar text, rebuilt on status sync and
     /// after any local mutation that affects it (completion, deletion,
     /// spawn) rather than on every frame. Resolving it runs two SQLite
@@ -608,7 +612,6 @@ pub struct App {
     /// Transient context-window telemetry keyed by AIW session ID.
     pub context_states: HashMap<String, SessionContextState>,
     /// Transient context-hint dismissal state keyed by AIW session ID.
-    pub(crate) context_hint_states: context_hints::ContextHintStates,
     pub context_collector: SessionContextCollector,
     pub(crate) session_status_bg: Option<Receiver<sync::SessionStatusBgResult>>,
     /// Background refresh and last-known values for the dashboard's open-PR
@@ -1040,7 +1043,6 @@ impl App {
             .first()
             .map(|p| merge_project_extension_config(&global_ext, &p.repo))
             .unwrap_or(global_ext);
-        let (codex_sidebar_metadata_tx, codex_sidebar_metadata_rx) = std::sync::mpsc::channel();
         let (wakeup_rx, wakeup_tx) = unsafe {
             let mut fds = [0i32; 2];
             libc::pipe(fds.as_mut_ptr());
@@ -1077,7 +1079,6 @@ impl App {
             fork_workspace: Default::default(), // FORK: workspace layout
             fork_cockpit: Default::default(),   // FORK: cockpit
             fork_session_info: Default::default(), // FORK: session info block
-            unsent_prompt_handoff: None,        // FORK: GUI prompt hand-off
             finished_seen: std::collections::HashSet::new(), // FORK: badges
             badge_ages: Default::default(),     // FORK: badges
             fork_render_memo: Default::default(), // FORK: render memo
@@ -1096,13 +1097,7 @@ impl App {
             missing_project_repos: std::collections::HashSet::new(),
             latest_prompt_cache,
             sidebar_model_cache: HashMap::new(),
-            codex_session_title_cache: HashMap::new(),
-            codex_session_prompt_cache: HashMap::new(),
-            codex_session_model_cache: HashMap::new(),
             codex_live_threads: HashMap::new(),
-            codex_sidebar_metadata_tx,
-            codex_sidebar_metadata_rx,
-            codex_sidebar_metadata_inflight: std::collections::HashSet::new(),
             active_todos_sidebar_cache: HashMap::new(),
             sidebar_load_tx,
             sidebar_load_rx,
@@ -1112,7 +1107,6 @@ impl App {
             usage: UsageManager::new(zai_enabled, zai_monthly, zai_weekly, zai_five_hour),
             token_tracker: SessionTokenTracker::default(),
             context_states: HashMap::new(),
-            context_hint_states: context_hints::ContextHintStates::default(),
             context_collector: SessionContextCollector::default(),
             session_status_bg: None,
             active_pr_bg: None,
@@ -1267,7 +1261,6 @@ impl App {
         crate::extension::set_test_global_extension_config(Some(ExtensionConfig::default()));
         let (sidebar_load_tx, sidebar_load_rx) = std::sync::mpsc::channel();
         let latest_prompt_cache = Self::build_latest_prompt_cache(&store);
-        let (codex_sidebar_metadata_tx, codex_sidebar_metadata_rx) = std::sync::mpsc::channel();
         let (wakeup_rx, wakeup_tx) = unsafe {
             let mut fds = [0i32; 2];
             libc::pipe(fds.as_mut_ptr());
@@ -1308,7 +1301,6 @@ impl App {
             fork_workspace: Default::default(), // FORK: workspace layout
             fork_cockpit: Default::default(),   // FORK: cockpit
             fork_session_info: Default::default(), // FORK: session info block
-            unsent_prompt_handoff: None,        // FORK: GUI prompt hand-off
             finished_seen: std::collections::HashSet::new(), // FORK: badges
             badge_ages: Default::default(),     // FORK: badges
             fork_render_memo: Default::default(), // FORK: render memo
@@ -1327,13 +1319,7 @@ impl App {
             missing_project_repos: std::collections::HashSet::new(),
             latest_prompt_cache,
             sidebar_model_cache: HashMap::new(),
-            codex_session_title_cache: HashMap::new(),
-            codex_session_prompt_cache: HashMap::new(),
-            codex_session_model_cache: HashMap::new(),
             codex_live_threads: HashMap::new(),
-            codex_sidebar_metadata_tx,
-            codex_sidebar_metadata_rx,
-            codex_sidebar_metadata_inflight: std::collections::HashSet::new(),
             active_todos_sidebar_cache: HashMap::new(),
             sidebar_load_tx,
             sidebar_load_rx,
@@ -1343,7 +1329,6 @@ impl App {
             usage: UsageManager::new(false, None, None, None),
             token_tracker: SessionTokenTracker::default(),
             context_states: HashMap::new(),
-            context_hint_states: context_hints::ContextHintStates::default(),
             context_collector: SessionContextCollector::default(),
             session_status_bg: None,
             active_pr_bg: None,
@@ -1516,107 +1501,6 @@ impl App {
         self.latest_prompt_cache.remove(tmux_session);
         self.sidebar_model_cache.remove(tmux_session);
         self.codex_live_threads.remove(tmux_session);
-        self.prune_codex_sidebar_caches();
-    }
-
-    /// Drop codex sidebar metadata cache entries that no longer belong to
-    /// any existing feature. These caches are keyed by `workdir::session_id`
-    /// (not the tmux session), so they cannot be removed alongside the
-    /// other per-session state above; without this GC they accumulate as
-    /// features are deleted and codex sessions are resumed under new ids.
-    fn prune_codex_sidebar_caches(&mut self) {
-        let valid_prefixes: Vec<String> = self
-            .store
-            .projects
-            .iter()
-            .flat_map(|project| project.features.iter())
-            .map(|feature| format!("{}::", feature.workdir.display()))
-            .collect();
-
-        let keep = |key: &String| {
-            valid_prefixes
-                .iter()
-                .any(|prefix| key.starts_with(prefix.as_str()))
-        };
-
-        self.codex_session_title_cache.retain(|key, _| keep(key));
-        self.codex_session_prompt_cache.retain(|key, _| keep(key));
-        self.codex_session_model_cache.retain(|key, _| keep(key));
-        self.codex_sidebar_metadata_inflight.retain(|key| keep(key));
-    }
-
-    pub fn latest_prompt_for_session(&self, tmux_session: &str) -> Option<&str> {
-        self.latest_prompt_cache
-            .get(tmux_session)
-            .map(String::as_str)
-    }
-
-    fn codex_sidebar_cache_key(workdir: &Path, session_id: &str) -> String {
-        format!("{}::{session_id}", workdir.display())
-    }
-
-    pub(crate) fn request_codex_sidebar_metadata_for_session(
-        &mut self,
-        workdir: &Path,
-        session_id: &str,
-    ) {
-        let cache_key = Self::codex_sidebar_cache_key(workdir, session_id);
-        if self.codex_sidebar_metadata_inflight.contains(&cache_key)
-            || (self.codex_session_title_cache.contains_key(&cache_key)
-                && self.codex_session_prompt_cache.contains_key(&cache_key))
-                && self.codex_session_model_cache.contains_key(&cache_key)
-        {
-            return;
-        }
-
-        self.codex_sidebar_metadata_inflight
-            .insert(cache_key.clone());
-        let tx = self.codex_sidebar_metadata_tx.clone();
-        let workdir = workdir.to_path_buf();
-        let session_id = session_id.to_string();
-        std::thread::spawn(move || {
-            let metadata = crate::app::codex_sidebar_metadata_for_session_id(&workdir, &session_id)
-                .ok()
-                .flatten();
-            let result = CodexSidebarMetadataResult {
-                cache_key,
-                title: metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.title.clone()),
-                prompt: metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.latest_prompt.clone()),
-                model_text: metadata.and_then(|metadata| {
-                    model_line(
-                        metadata.model.as_deref(),
-                        metadata.model_provider.as_deref(),
-                    )
-                }),
-            };
-            let _ = tx.send(result);
-        });
-    }
-
-    #[allow(dead_code)] // exercised only by unit tests
-    pub fn cached_codex_session_title(&self, workdir: &Path, session_id: &str) -> Option<&str> {
-        let cache_key = Self::codex_sidebar_cache_key(workdir, session_id);
-        self.codex_session_title_cache
-            .get(&cache_key)
-            .and_then(|title| title.as_deref())
-    }
-
-    pub fn cached_codex_session_prompt(&self, workdir: &Path, session_id: &str) -> Option<&str> {
-        let cache_key = Self::codex_sidebar_cache_key(workdir, session_id);
-        self.codex_session_prompt_cache
-            .get(&cache_key)
-            .and_then(|prompt| prompt.as_deref())
-    }
-
-    pub fn cached_codex_session_model(&self, workdir: &Path, session_id: &str) -> Option<&str> {
-        let cache_key = Self::codex_sidebar_cache_key(workdir, session_id);
-        self.codex_session_model_cache
-            .get(&cache_key)
-            .and_then(|model| model.as_deref())
     }
 
     pub fn apply_codex_live_event(&mut self, tmux_session: &str, raw: &serde_json::Value) -> bool {
@@ -1907,12 +1791,10 @@ impl App {
     /// concurrent-writer conflict, without turning a conflict into an `Err`
     /// -- see `save`, which wraps this for TUI call sites that just want to
     /// bail with a message, `save_reapplying` for call sites whose change can
-    /// be re-applied onto the refreshed store, and `gui_contract::GuiHandle`,
-    /// which wraps it to report `GuiErrorKind::Conflict` instead of a bare
-    /// internal error.
+    /// be re-applied onto the refreshed store.
     ///
     /// Cross-process-safe when backed by a real DB (`AIW_PLAN.md` Task 5):
-    /// the save only applies if nothing else -- the GUI, another AIW
+    /// the save only applies if nothing else -- another AIW
     /// process, or a stale reload -- has saved since this `App` last loaded
     /// or saved successfully. On a detected conflict the in-memory store is
     /// refreshed from disk (see `adopt_store_from_disk`) before returning, so
@@ -1995,7 +1877,7 @@ impl App {
         }
     }
 
-    /// Adopt a newer store written by another process (the GUI, another
+    /// Adopt a newer store written by another process (another
     /// TUI, or `aiw` automation) if one has landed since this `App` last
     /// loaded or saved. Called from the TUI's event loop so the next save
     /// starts from current state instead of conflicting on it.
@@ -2143,25 +2025,6 @@ impl App {
         self.theme
             .set_transparent(self.config.transparent_background);
         self.save_config();
-    }
-
-    /// Shared persisted history plus this process's not-yet-flushed entries.
-    /// Reading does not flush, clear or otherwise mutate either log.
-    pub(crate) fn recent_debug_log_entries(&self) -> anyhow::Result<Vec<LogEntry>> {
-        let limit = self.debug_log.max_entries();
-        let mut entries = if let Some(db) = &self.db {
-            let mut entries = db.load_recent_log(limit)?;
-            entries.extend(self.pending_debug_log_entries.iter().cloned());
-            entries
-        } else {
-            self.debug_log.entries().iter().cloned().collect()
-        };
-        // Pending entries can interleave with another process's DB writes.
-        entries.sort_by_key(|entry| entry.timestamp);
-        if entries.len() > limit {
-            entries.drain(..entries.len() - limit);
-        }
-        Ok(entries)
     }
 
     pub fn log_debug(&mut self, context: &str, message: String) {
