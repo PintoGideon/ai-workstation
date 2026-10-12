@@ -39,13 +39,27 @@ fn launch_override_args_for(
         "--add-dir".to_string(),
         workdir.to_string_lossy().into_owned(),
     ];
-    if matches!(mode, VibeMode::SuperVibe) {
-        args.extend([
+    match mode {
+        VibeMode::SuperVibe => args.extend([
             "--sandbox".to_string(),
             "danger-full-access".to_string(),
             "--ask-for-approval".to_string(),
             "never".to_string(),
-        ]);
+        ]),
+        // FORK: §19.11 — say the sandbox explicitly. In a checkout Codex has
+        // not been told to trust (every new aiw worktree) its effective
+        // sandbox is read-only, and Codex 0.162 then refuses the `--add-dir`
+        // above and exits before its first prompt (found by the real-harness
+        // smoke run). Workspace-write with approval on request is Codex's own
+        // recommended low-friction local setup and matches Vibe
+        // (edits accepted, other actions ask). Codex has no Vibeless, which
+        // the dialog maps to Vibe.
+        _ => args.extend([
+            "--sandbox".to_string(),
+            "workspace-write".to_string(),
+            "--ask-for-approval".to_string(),
+            "on-request".to_string(),
+        ]),
     }
     args.extend(launch_config_to_args(launch_config));
     args
@@ -252,18 +266,27 @@ mod tests {
         fs::write(&config_path, "notify = [\"/tmp/existing-hook.sh\"]\n").unwrap();
         let args = launch_override_args_for(&config_path, &hook_path, dir.path(), &VibeMode::Vibe);
 
-        assert_eq!(args.len(), 6);
+        assert_eq!(args.len(), 10);
         assert_eq!(args[0], "-C");
         assert_eq!(args[1], dir.path().to_string_lossy());
         assert_eq!(args[2], "--add-dir");
         assert_eq!(args[3], dir.path().to_string_lossy());
-        assert_eq!(args[4], "-c");
+        assert_eq!(
+            args[4..8],
+            [
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "on-request"
+            ]
+        );
+        assert_eq!(args[8], "-c");
         assert!(
-            args[5].contains("/tmp/existing-hook.sh"),
+            args[9].contains("/tmp/existing-hook.sh"),
             "existing user notify entry should be preserved"
         );
         assert!(
-            args[5].contains("aiw-codex-notify.sh"),
+            args[9].contains("aiw-codex-notify.sh"),
             "AIW hook should be injected into the transient override"
         );
     }
@@ -369,13 +392,22 @@ mod tests {
 
         let args = launch_override_args_for(&config_path, &hook_path, dir.path(), &VibeMode::Vibe);
 
-        assert_eq!(args.len(), 6);
+        assert_eq!(args.len(), 10);
         assert_eq!(args[0], "-C");
         assert_eq!(args[1], dir.path().to_string_lossy());
         assert_eq!(args[2], "--add-dir");
         assert_eq!(args[3], dir.path().to_string_lossy());
-        assert_eq!(args[4], "-c");
-        assert!(args[5].contains("aiw-codex-notify.sh"));
+        assert_eq!(
+            args[4..8],
+            [
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "on-request"
+            ]
+        );
+        assert_eq!(args[8], "-c");
+        assert!(args[9].contains("aiw-codex-notify.sh"));
     }
 
     #[test]
