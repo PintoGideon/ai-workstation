@@ -8,7 +8,7 @@ pub(crate) mod fork_workspace; // FORK: workspace layout (DESIGN.md §15)
 pub mod header;
 pub(crate) mod list;
 pub mod pane;
-mod picker;
+pub(crate) mod picker;
 mod status;
 pub(crate) mod toast; // FORK: `wrap_message` shared with the help overlay
 

@@ -54,10 +54,16 @@ pub(crate) fn row_badges(
                 let (pi, fi, si) = app.session_indices_by_id(session_id)?;
                 Some(crate::fork::badges::session_badge(app, pi, fi, si, now))
             }
-            // FORK: §19.10 — the feature badge carries "land failed: …".
+            // FORK: §19.10 — the land's own failure, not the feature's
+            // strongest badge (a watchdog flag on the same feature would
+            // otherwise label both of its rows).
             AttentionRow::LandFailed { feature_id, .. } => {
-                let (pi, fi) = app.feature_indices_by_id(feature_id)?;
-                Some(crate::fork::badges::feature_badge(app, pi, fi, now))
+                let failure = app.land_failure(feature_id)?;
+                Some(crate::fork::badges::SessionBadge::new(
+                    crate::fork::badges::BadgeKind::NeedsYou,
+                    now,
+                    Some(format!("land failed: {}", failure.reason)),
+                ))
             }
             AttentionRow::Pending(index) => {
                 let input = app.pending_inputs.get(*index)?;

@@ -615,6 +615,27 @@ fn a_failed_land_is_a_needs_you_row_that_opens_the_dialog_and_x_dismisses() {
         1
     );
 
+    // The row names the land's own failure, even when something else on the
+    // feature is just as urgent (the feature badge would show that instead).
+    let tmux_session = fx.app.store.projects[0].features[0].tmux_session.clone();
+    fx.app.store.projects[0].features[0].status = crate::project::ProjectStatus::Active;
+    fx.app.attention.insert(
+        tmux_session,
+        crate::app::attention::AttentionRecord::new(
+            crate::project::AgentKind::Claude,
+            crate::app::attention::AttentionState::Question,
+            chrono::Utc::now(),
+        ),
+    );
+    let rows = fx.app.attention_rows();
+    let index = rows
+        .iter()
+        .position(|r| matches!(r, crate::app::attention::AttentionRow::LandFailed { .. }))
+        .unwrap();
+    let badges = crate::ui::picker::row_badges(&fx.app, &rows);
+    let label = badges[index].as_ref().unwrap().detail.clone();
+    assert_eq!(label.as_deref(), Some("land failed: check failed (exit 3)"));
+
     // Enter opens that feature's land dialog.
     fx.app.mode = AppMode::NotificationPicker(index, None);
     fx.app.handle_notification_select().unwrap();
@@ -632,3 +653,4 @@ fn a_failed_land_is_a_needs_you_row_that_opens_the_dialog_and_x_dismisses() {
             .any(|r| matches!(r, crate::app::attention::AttentionRow::LandFailed { .. }))
     );
 }
+
