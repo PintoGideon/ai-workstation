@@ -144,6 +144,45 @@ pub fn ensure_hooks_file(workdir: &Path, hooks_dir: &Path) {
     write_managed_file(workdir, HOOKS_FILE, |existing| {
         merge_hooks(existing, hooks_dir)
     });
+    // FORK: §19.11 — Codex 0.162 reads project hooks from the *repository
+    // root* (the main checkout), never from a linked worktree's own
+    // `.codex/`: in every worktree feature AIW's hooks were silently ignored
+    // (found by the real-harness smoke run: `/hooks` listed 0 installed).
+    // Merge them there too. The hook scripts act on the launch's per-session
+    // environment, so one copy serves every worktree of the repository, and
+    // Codex asks to trust them once per repository instead of per worktree.
+    // The root copy is left in place when one worktree goes: its siblings
+    // still use it, and without AIW's environment the scripts do nothing.
+    if let Some(root) = repository_root(workdir) {
+        write_managed_file(&root, HOOKS_FILE, |existing| {
+            merge_hooks(existing, hooks_dir)
+        });
+    }
+}
+
+/// The main checkout of the repository `workdir` is a linked worktree of
+/// (`<root>/.git/worktrees/<name>` in its `.git` file), or `None` when
+/// `workdir` is a main checkout or not a git checkout.
+pub(crate) fn repository_root(workdir: &Path) -> Option<std::path::PathBuf> {
+    let text = std::fs::read_to_string(workdir.join(".git")).ok()?;
+    let gitdir = text.trim().strip_prefix("gitdir:")?.trim();
+    let gitdir = Path::new(gitdir);
+    let gitdir = if gitdir.is_absolute() {
+        gitdir.to_path_buf()
+    } else {
+        workdir.join(gitdir)
+    };
+    // <root>/.git/worktrees/<name>
+    let worktrees = gitdir.parent()?;
+    if worktrees.file_name()? != "worktrees" {
+        return None;
+    }
+    let dot_git = worktrees.parent()?;
+    if dot_git.file_name()? != ".git" {
+        return None;
+    }
+    let root = dot_git.parent()?.to_path_buf();
+    (root != workdir).then_some(root)
 }
 
 pub fn cleanup_hooks_file(workdir: &Path, hooks_dir: &Path) {
@@ -240,6 +279,64 @@ mod tests {
             cleaned["hooks"]["PreToolUse"][0]["hooks"][0]["command"],
             "./guard.sh"
         );
+    }
+
+    /// §19.11: in a linked worktree the hooks also land at the repository
+    /// root, the only project layer Codex 0.162 reads.
+    #[test]
+    fn a_linked_worktree_also_gets_the_hooks_at_the_repository_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("repo");
+        let wt = dir.path().join("wt");
+        let git = |args: &[&str], cwd: &Path| {
+            let ok = std::process::Command::new("git")
+                .args(args)
+                .current_dir(cwd)
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@t")
+                .output()
+                .unwrap()
+                .status
+                .success();
+            assert!(ok, "git {args:?}");
+        };
+        std::fs::create_dir_all(&root).unwrap();
+        git(&["init", "-q", "-b", "main"], &root);
+        std::fs::write(root.join("README"), "x").unwrap();
+        git(&["add", "-A"], &root);
+        git(&["commit", "-qm", "init"], &root);
+        git(
+            &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "feat"],
+            &root,
+        );
+        // A user hook already at the root survives the merge.
+        std::fs::create_dir_all(root.join(".codex")).unwrap();
+        std::fs::write(
+            root.join(HOOKS_FILE),
+            r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"./mine.sh"}]}]}}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            repository_root(&wt).map(|p| p.canonicalize().unwrap()),
+            Some(root.canonicalize().unwrap())
+        );
+        assert_eq!(repository_root(&root), None);
+        ensure_hooks_file(&wt, hooks_dir());
+        let at_root: Value =
+            serde_json::from_str(&std::fs::read_to_string(root.join(HOOKS_FILE)).unwrap()).unwrap();
+        assert!(at_root["hooks"]["UserPromptSubmit"].is_array());
+        assert!(at_root["hooks"]["SessionStart"].is_array());
+        assert!(
+            at_root["hooks"]["Stop"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|g| g["hooks"][0]["command"] == "./mine.sh")
+        );
+        assert!(wt.join(HOOKS_FILE).exists(), "the worktree keeps its copy");
     }
 
     #[test]
