@@ -1,5 +1,13 @@
 # AI Workstation (AIW)
 
+> **Archived, 2026-10-12.** This project is no longer developed. It has been
+> superseded by [herdr](https://github.com/herdrdev/herdr), the agent-aware
+> terminal runtime, which covers the same ground: agents in tmux panes with
+> hook-driven state, a scriptable socket API and `agent wait`. The code here
+> works as of the last commit and stays available for reference, but nothing
+> more will be added and issues will not be addressed. See
+> [docs/PRODUCT.md](docs/PRODUCT.md) for what it did.
+
 Based on [agent-mainframe](https://github.com/eldridgerdev/agent-mainframe) by Ryan Eldridge (MIT). See
 [LICENSE](LICENSE) for the original notice, [FORK.md](FORK.md) for how this fork is maintained and
 [DESIGN.md](DESIGN.md) for what it adds.
