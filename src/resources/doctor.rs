@@ -562,7 +562,7 @@ fn check_harness_hooks(inputs: &Inputs<'_>) -> Finding {
         },
     )
     .with_detail(vec![
-        "Codex trusts a project's hooks once per worktree: run /hooks in Codex if it asks about AIW's .codex/hooks.json (AIW never bypasses hook trust)".to_string(),
+        "Codex trusts a project's hooks once per repository (AIW writes them to the repository root's .codex/hooks.json too): run /hooks in Codex and trust them when it asks (AIW never bypasses hook trust)".to_string(),
         "Gemini CLI hooks cannot answer permission prompts: allow safe commands with tools.allowed in .gemini/settings.json".to_string(),
         "Cursor agent runs .cursor/hooks.json only in a trusted workspace".to_string(),
     ])

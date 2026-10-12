@@ -108,6 +108,33 @@ or expired. Do not silence all warnings or use a blanket ignore.
 
 ## End-to-end run (fake agents, sandboxed)
 
+Pass the binary as an absolute path, and on a machine whose `/tmp` has a tight
+per-user quota run both the unit suite and the e2e with `TMPDIR` and the sandbox
+under `/var/tmp`:
+
+```sh
+export TMPDIR=/var/tmp/aiw-tests
+scripts/dev/e2e/run.sh /var/tmp/aiw-e2e "$PWD/target/release/aiw"
+scripts/dev/e2e/multi-project.sh /var/tmp/aiw-e2e-mp "$PWD/target/release/aiw"
+```
+
+`multi-project.sh` (DESIGN.md §19.11) runs every orchestration feature together
+in one aiw across six repository shapes (a Rust crate, a Node package, a Python
+package, a monorepo, a `trunk` repository and one with a bare remote and a fake
+`gh`), including the cross-feature cases: landing a fan-out sibling, deleting a
+group that holds a fan-out pair, a schedule on a forked session, a message to a
+background session, and the watchdog leaving a waiting session alone.
+
+A real-harness smoke run (real `claude` and `codex`) is manual and costs a
+little; DESIGN.md §19.11 records how it was run and what it found. Point aiw at
+sandboxed `XDG_CONFIG_HOME` / `XDG_STATE_HOME` / `XDG_DATA_HOME` and create
+`$XDG_CONFIG_HOME/ai_workstation` first (otherwise aiw falls back to an existing
+`~/.config/ai_workstation`), give Codex a sandboxed `CODEX_HOME`, and note that
+aiw's Claude hook scripts always live under `$HOME/.config/ai_workstation/hooks`.
+
+### The main run
+
+
 `scripts/dev/e2e/run.sh` drives the release `aiw` binary through tmux against
 five fake agent CLIs (`claude`, `codex`, `gemini`, `cursor-agent`, `pi`) that
 behave like interactive REPLs and fire the hooks AIW installs into the checkout

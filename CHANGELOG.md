@@ -10,6 +10,28 @@ are tagged.
 
 ## [Unreleased]
 
+### Added
+
+- **Orchestration features** (DESIGN.md §19): richer row events from Claude's newer hooks (compaction, model
+  switch, failed turns, tasks, background work); stable Claude session names, conversation forks (`f`) and
+  Claude's own session roster (`E`); one prompt to several agents from the New Feature dialog and automation
+  (shared or one worktree each); feature groups (`G`, `C`), notes (`#`) and layout presets; messages to agent
+  sessions (`@`, `aiw automation message`) through Claude's inbox or the follow-up queue; Claude's own worktrees
+  routed into aiw's layout (`W`); background Claude sessions (`claude --bg`); the watchdog (`!`) for exited,
+  stuck, failed, queued-behind-idle and context-critical agents; scheduled and recurring prompts and commands
+  (`t`, `aiw automation schedule`); landing a feature (`P`, `aiw automation land`).
+- `scripts/dev/e2e/multi-project.sh`: every feature together across six repository shapes.
+
+### Fixed
+
+- Vibeless launches Claude with `--permission-mode default` (current Claude otherwise starts in auto mode).
+- Codex Vibe launches with `--sandbox workspace-write --ask-for-approval on-request` (Codex 0.162 exited in a new
+  worktree), and aiw's Codex hooks also go to the repository root, the only project layer Codex reads.
+- Agents and terminals no longer inherit the identity of a Claude Code session aiw was started from.
+- An input request lands on the row of the session that raised it; a deleted feature's requests are dropped.
+- A failed land is listed in `i` with its own reason.
+- The e2e harness tested the installed `aiw` instead of the build when given a relative path.
+
 ### Changed
 
 - **AI Workstation is its own product now.** One command, `aiw`; crate

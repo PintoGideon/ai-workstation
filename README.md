@@ -135,8 +135,8 @@ For a container, see the [Docker guide](docs/docker-no-tmux.md).
 
 | Mode | Claude Code | Codex | Gemini CLI | Cursor agent |
 | --- | --- | --- | --- | --- |
-| **Vibeless**: every file edit is held for your approval | default permissions plus AIW's edit-approval hook | refused | `--approval-mode default` | default |
-| **Vibe**: edits accepted, other prompts still ask | `--permission-mode acceptEdits` | default | `--approval-mode auto_edit` | default |
+| **Vibeless**: every file edit is held for your approval | `--permission-mode default` plus AIW's edit-approval hook | refused | `--approval-mode default` | default |
+| **Vibe**: edits accepted, other prompts still ask | `--permission-mode acceptEdits` | `--sandbox workspace-write --ask-for-approval on-request` | `--approval-mode auto_edit` | default |
 | **SuperVibe**: no prompts at all | `--dangerously-skip-permissions` | `--sandbox danger-full-access --ask-for-approval never` | `--approval-mode yolo` | `--force` |
 
 Pi receives no mode flags.

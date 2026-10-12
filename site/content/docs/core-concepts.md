@@ -35,8 +35,8 @@ and maps each level to the harness's own flags:
 
 | Mode | Behavior | Claude Code | Codex | Gemini CLI | Cursor agent |
 | --- | --- | --- | --- | --- | --- |
-| **Vibeless** | Every file edit is held until you approve it on the dashboard | default permissions plus AIW's edit-approval hook | refused | `--approval-mode default` | default |
-| **Vibe** | Edits are accepted; other permissions still ask | `--permission-mode acceptEdits` | default | `--approval-mode auto_edit` | default |
+| **Vibeless** | Every file edit is held until you approve it on the dashboard | `--permission-mode default` plus AIW's edit-approval hook | refused | `--approval-mode default` | default |
+| **Vibe** | Edits are accepted; other permissions still ask | `--permission-mode acceptEdits` | `--sandbox workspace-write --ask-for-approval on-request` | `--approval-mode auto_edit` | default |
 | **SuperVibe** | No permission prompts at all; AIW warns before enabling it | `--dangerously-skip-permissions` | `--sandbox danger-full-access --ask-for-approval never` | `--approval-mode yolo` | `--force` |
 
 Claude sessions can also get the `--chrome` flag for browser automation —

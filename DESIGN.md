@@ -825,6 +825,16 @@ conversation after a reboot as before.
 
 Built from docs/research/orchestration-landscape-2026-10.md, Part C. Each subsection is one proposal.
 
+**How the pieces fit.** All ten ride on three things aiw already had: the harnesses' own hooks (now a much wider
+event set, §19.1), tmux as the terminal (the agent's pane stays native), and the follow-up queue as the one safe
+way to put text in front of an agent. Identity (§19.2) gives every Claude session a stable name, which messaging
+(§19.5) addresses and the roster matches. Fan-out (§19.3) and layout presets (§19.4) shape what a new feature
+starts; groups and notes (§19.4) organise the sidebar around it. Claude's own worktrees (§19.6) and background
+sessions (§19.7) are pulled into aiw's layout and rows instead of living beside it. The watchdog (§19.8) and
+schedules (§19.9) act on idle and stuck agents through the same queue and paste paths, never typing into a busy
+or waiting agent. Landing (§19.10) closes a feature's loop. §19.11 is how the whole set was tested together and
+against the real CLIs.
+
 ### 19.1 Richer row events from the newer hooks (proposal 5)
 
 **What.** Claude Code 2.1 reports more than a turn starting and ending. AIW now wires `StopFailure`, `PostCompact`,
@@ -1543,4 +1553,64 @@ remote with a fake `gh`, then the existing-PR path.
 Found while building it: after `y` confirmed a land with agents working, the dialog stayed in its confirm state, so
 the first `Esc` only cleared it — the confirm now resets when the land starts. And the `C-c` above. And `status` by
 name failed once the cleanup had removed the feature — `LastLand` now keeps the name.
+
+### 19.11 Testing it together, and against the real harnesses (2026-10-12)
+
+**Multi-project e2e.** `scripts/dev/e2e/multi-project.sh` runs every feature above in one aiw across six
+repositories: a Rust crate (land check `cargo check --offline`), a Node package (`npm test`), a Python package
+(a check that fails on purpose), a two-package monorepo with a layout preset, a repository whose default branch is
+`trunk`, and one with a local bare remote and a fake `gh` for `finish: pr`. It checks the features against each
+other, not one at a time: landing one fan-out sibling while its twin keeps running, deleting a group that holds a
+fan-out pair, a schedule aimed at a forked session (dropped when that feature lands), a message to a background
+session, worktree hooks in two repositories at once, and the watchdog leaving a session that waits on you alone.
+108 checks, all passing.
+
+Two bugs it found: a failed land's needs-you row borrowed the feature's strongest badge, so a watchdog flag on the
+same feature labelled both rows; and a deleted (or landed) feature left its harness's "stop" / "waiting for
+input" requests in `i` for a feature that no longer exists. Both fixed, each with a regression test.
+
+**Real-harness smoke run.** Claude Code 2.1.296 (Haiku 5.5) and Codex 0.162.1, aiw on sandboxed `XDG_*` with the
+real `HOME` for harness auth and a sandboxed `CODEX_HOME`. Spend: about 640k cache-read, 79k cache-write and 4k
+output tokens on Haiku (≈ $0.02 at list price) and ≈ 50k input tokens (41k cached) on Codex. Verified against the
+real binaries: launch with `--name` and Claude's roster showing it; working / done / permission badges from the
+hooks; a permission prompt allowed from the dashboard (`a`); `--resume … --fork-session` (a new conversation that
+kept the context); a message into a real Claude inbox (Claude answered it; the §19.5 wire format holds); Claude's
+`EnterWorktree` / `ExitWorktree` going through aiw's `WorktreeCreate` / `WorktreeRemove` hooks into aiw's layout;
+`claude --bg` output parsing, the roster state, a held Vibeless edit approved from the dashboard, attach,
+`claude stop` and `claude rm`; `bgIsolation: none` (the edit landed in the feature checkout — which as a linked
+worktree is also skipped by Claude's own rule); Codex's live working badge; a `local_merge` land of a commit a
+real agent made.
+
+Bugs it found, all fixed with regression tests:
+
+- **Inherited session identity.** Started from inside a Claude Code session, aiw handed that session's
+  `CLAUDE_CODE_SESSION_ID`, inbox socket and token, `CLAUDE_CODE_CHILD_SESSION` and job directory to every agent it
+  launched: the agents showed the parent's name and counted as its children. `fork::launch::INHERITED_SESSION_VARS`
+  are now unset (`env -u`) in every launch environment.
+- **Vibeless did not ask.** With no flag, current Claude Code starts in auto mode, whose classifier ran a shell
+  command with no prompt. Vibeless now passes `--permission-mode default`.
+- **Codex died in every new worktree.** aiw passed `--add-dir` with no sandbox flag; in a checkout Codex has not
+  been told to trust, the sandbox is read-only and Codex 0.162 refuses the extra writable root and exits. Vibe now
+  passes `--sandbox workspace-write --ask-for-approval on-request`.
+- **Codex ignored aiw's hooks in worktrees.** Codex 0.162 reads project hooks only from the repository root, never
+  a linked worktree's `.codex/` (`/hooks` listed 0 installed). aiw now also merges them into the main checkout's
+  `.codex/hooks.json` (git-excluded, user entries kept); one trust per repository.
+- **Input requests on the wrong row.** A background session's held edit was drawn on its sibling Claude rows and
+  not on its own, because pending inputs were matched per feature. `PendingInput` now carries the raising
+  `aiw_feature_session_id`; an owned request lands on that session's row (feature-wide signals still light every
+  agent row).
+
+**Real vs fake differences** (the fakes were not changed to hide these): a real `claude attach` is left with `←`
+(Claude opens its own agent view) and then `Esc`, not a `/detach` command; a stopped background session drops out
+of `claude agents --json` (it is still listed with `--all`, as `done`), so the row reads "not running · c resumes"
+rather than "stopped"; Codex warns that `-c` overrides force its embedded mode (harmless); Claude's prompt bar
+shows the session's `--name`. Not exercised for real: `StopFailure` (no cheap way to provoke an API error) and
+Claude subagents with `isolation: worktree` (`EnterWorktree` covered the same hook contract).
+
+**Lessons for the next real run.** Create `$XDG_CONFIG_HOME/ai_workstation` before starting aiw: with only
+`XDG_CONFIG_HOME` set, aiw falls back to an existing `~/.config/ai_workstation` (the first attempt here opened the
+real config for about a minute and left 11 empty tables in the real `aiw.db`, a `hook-event.sh` and a bumped hook
+stamp; the last two were restored). aiw's Claude hook scripts always live under `$HOME/.config/ai_workstation/hooks`,
+so back that folder up and restore it afterwards. Accepting Claude's bypass-permissions warning writes
+`skipDangerousModePermissionPrompt` into `~/.claude/settings.json`; remove it after a SuperVibe test.
 

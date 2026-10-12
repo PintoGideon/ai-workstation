@@ -74,13 +74,21 @@ Vibeless, Vibe and SuperVibe, and maps each one to the harness's own flags.
 
 | Mode | Meaning | Claude Code | Codex | Gemini CLI | Cursor agent | Pi |
 | --- | --- | --- | --- | --- | --- | --- |
-| Vibeless | Every file edit is held until you approve it on the dashboard | default permissions plus aiw's edit-approval hook | not available; aiw refuses the combination | `--approval-mode default` | default | no flags |
-| Vibe | Edits are accepted; other permissions still ask | `--permission-mode acceptEdits` | default | `--approval-mode auto_edit` | default | no flags |
+| Vibeless | Every file edit is held until you approve it on the dashboard | `--permission-mode default` (Claude's Manual mode) plus aiw's edit-approval hook | not available; aiw refuses the combination | `--approval-mode default` | default | no flags |
+| Vibe | Edits are accepted; other permissions still ask | `--permission-mode acceptEdits` | `--sandbox workspace-write --ask-for-approval on-request` | `--approval-mode auto_edit` | default | no flags |
 | SuperVibe | No permission prompts at all; aiw warns before enabling it | `--dangerously-skip-permissions` | `--sandbox danger-full-access --ask-for-approval never` | `--approval-mode yolo` | `--force` | no flags |
 
 Claude sessions can also get the `--chrome` flag for browser automation. That
 is the Chrome row in the new-feature dialog. Pi receives no mode flags at all,
 so the mode you pick for a Pi feature does not change Pi's behaviour.
+
+aiw always states the mode. Current Claude Code starts in auto mode when no
+flag is given, and Codex treats a checkout it has not been told to trust
+(every new worktree) as read-only, so leaving the flag out would quietly
+change what a mode means. aiw also clears a Claude Code session's own
+identity variables (its session id, inbox socket, "child session" flag) from
+everything it launches, so starting aiw from inside a Claude session does not
+make your agents children of that session.
 
 **The cockpit.** `aiw` with no arguments builds a small tmux layout for
 itself: the sidebar on the left, and on the right the selected agent's real
@@ -477,8 +485,9 @@ The info block reads "Claude Code (background)" and its last row shows the
 short id, the state and the latest line of its output.
 
 - `Enter` attaches: aiw opens `claude attach <id>` in a window of the feature
-  and focuses it in the agent pane; typing goes to the session. Detach in
-  Claude and the window closes itself; the session keeps running.
+  and focuses it in the agent pane; typing goes to the session. To leave,
+  press `←` on Claude's empty prompt (Claude opens its own agent view) and
+  then `Esc`; the window closes itself and the session keeps running.
 - `x` stops it (`claude stop`); its conversation is kept, and attaching
   resumes it.
 - `c` restarts it (`claude respawn`), or, when Claude no longer lists it,
@@ -677,6 +686,7 @@ warns. Then:
 Every step and its output go to a log that a `land` terminal in the feature
 tails while the land runs, so you watch it happen. The row reads `⇡ landing ·
 checking` meanwhile. A failure leaves `⛔ land failed: <reason>` under the row
+and an entry in the `i` list (`Enter` opens the land dialog, `x` dismisses it)
 until the next successful land or `x` in the dialog. Closing the dialog does
 not stop a running land.
 
@@ -968,7 +978,7 @@ dialog; the feature is created stopped instead.
 | Subagent count | ✓ | ✓ | no | ✓ | no |
 | Launch context | system prompt | developer instructions | session-start hook | session-start hook | no |
 | Resume a saved session | `--resume <id>`, picker with `S` | `codex resume <id>`, picker with `S` | `--resume <id>` | `--resume <id>` | no |
-| Where aiw's hooks go | a per-session settings file under aiw's state directory, passed with `--settings` | `.codex/hooks.json` and the notify hook per launch | `.gemini/settings.json` | `.cursor/hooks.json` | nowhere |
+| Where aiw's hooks go | a per-session settings file under aiw's state directory, passed with `--settings` | `.codex/hooks.json` in the checkout and, for a worktree, in the repository root; the notify hook per launch | `.gemini/settings.json` | `.cursor/hooks.json` | nowhere |
 
 How the hooks work: each harness's hook points at a small shell script under
 aiw's hooks directory. The script calls an `aiw` subcommand with the hook's
@@ -976,8 +986,11 @@ JSON on standard input, and that subcommand writes one line to aiw's local
 Unix socket. The shell never parses JSON. A hook that needs an answer keeps
 its connection open until you decide or its timeout passes.
 
-One-time setup: Codex asks you to trust aiw's hooks once per worktree with its
-own hooks command, and again after an aiw update that changes them. Cursor runs project hooks only in a trusted workspace.
+One-time setup: Codex asks you to trust aiw's hooks once per repository with
+its own `/hooks` command (`t` trusts all), and again after an aiw update that
+changes them. Codex 0.162 reads project hooks only from the repository root,
+so for a worktree feature aiw merges its hooks into the main checkout's
+`.codex/hooks.json` too (kept out of git, your own entries preserved). Cursor runs project hooks only in a trusted workspace.
 Gemini cannot grant permissions from a hook, so add safe commands to its own
 allowed-tools setting to stop being asked.
 

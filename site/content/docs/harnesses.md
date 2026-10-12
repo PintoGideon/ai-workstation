@@ -25,7 +25,8 @@ place.
 
 A few notes worth expanding on:
 
-- **Vibeless** relies on AIW's per-edit approval hook. Claude Code supports
+- **Vibeless** launches Claude with `--permission-mode default` and relies on
+  AIW's per-edit approval hook. Claude Code supports
   it; Codex does not, so AIW refuses Vibeless for a Codex feature rather than
   silently downgrading it. Pi receives no mode flags at all, so any mode can
   be selected but none changes Pi's behaviour.
@@ -33,7 +34,8 @@ A few notes worth expanding on:
   single end-of-turn hook can't distinguish a question from a finished turn,
   so every stopped Codex session shows as waiting. Pi has no hook mechanism,
   so its sessions carry no state.
-- **One-time setup.** Codex asks you to trust AIW's hooks once per worktree
+- **One-time setup.** Codex asks you to trust AIW's hooks once per repository (AIW also writes them to
+  the repository root's `.codex/hooks.json`, the only project layer Codex reads)
   with its own hooks command. Cursor runs project hooks only in a trusted
   workspace. Gemini cannot grant permissions from a hook, so add safe
   commands to its own allowed-tools setting to stop being asked.

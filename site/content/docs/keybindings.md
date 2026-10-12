@@ -49,6 +49,15 @@ Dialogs zoom the sidebar over the whole window and un-zoom when they close.
 | `r` | Rename the selected feature or session |
 | `d` | Delete the selected project, feature or session |
 | `O` | Open AIW's own config directory as a project, so an agent can edit your settings |
+| `G` | Feature groups: move the feature into a group; new, rename, colour, reorder, delete |
+| `C` | Fold or unfold the selected feature's group |
+| `#` | A note on the selected session or feature (shown in the info block, found by `/`) |
+| `P` | Land the feature: rebase onto its base, run the check, then merge locally or open a PR |
+
+In the New Feature dialog, `Space` on the harness list ticks several agents
+(one prompt, several agents; a Layout step picks one worktree each or a shared
+one), `b` runs a single Claude in the background, and the Prompt step takes
+`Ctrl+L` (prompt library) and `Ctrl+T` (send when ready).
 
 ## Sessions
 
@@ -62,6 +71,13 @@ Dialogs zoom the sidebar over the whole window and un-zoom when they close.
 | `i` | List everything that needs you: questions first, then finished work |
 | `a` / `X` | Allow or deny the permission the selected agent is waiting on |
 | `e` | Queue a follow-up for the selected agent |
+| `f` | Fork the session's conversation into a new window or a new worktree |
+| `@` | Message an agent session (Claude: its inbox; others: at its next turn end) |
+| `!` | Recover an agent: restart resuming, interrupt, `/compact`, replay, deliver queued |
+| `t` | Schedules: recurring prompts to an agent or commands in a terminal |
+| `E` | Claude sessions started outside AIW in your projects |
+| `W` | Worktrees Claude made through AIW's hook: terminal there, remove a clean one |
+| `Enter` / `c` / `x` / `d` on a background row | Attach (`←` then `Esc` leaves) / restart / stop / `claude rm` |
 | `V` | Reopen a pending Vibeless edit approval |
 | `I` | On a TODOs row, start an agent on the next unstarted TODO |
 | `z` | List dormant features |
