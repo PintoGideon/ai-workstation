@@ -27,7 +27,7 @@ cargo fmt --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
-The live `gui_terminal` tests run concurrently in separate child test processes.
+The live tmux tests run concurrently in separate child test processes.
 Each child uses its own test-only tmux socket and a keeper session so fixture
 setup cannot race the server's last-session exit. Only server startup is retried;
 transport assertions run once. The parent enforces a 90-second timeout and kills
@@ -79,8 +79,8 @@ This is a personal fork, so the upstream pipelines are gone: no macOS matrix,
 no release workflow (binaries are built locally with `cargo install --path .`),
 no site deploy, no scheduled RustSec audit and no crates.io publish. Run
 `cargo audit` by hand when you update dependencies; the last local scan is in
-[advisories.md](advisories.md). The desktop GUI crate needs WebKitGTK and is
-checked locally with `cargo clippy --workspace` and `cd gui && npm test`.
+[advisories.md](advisories.md). The crate is a plain package again: the Tauri
+desktop GUI and its workspace member were removed on 2026-10-12.
 
 ## End-to-end run (fake agents, sandboxed)
 
@@ -142,8 +142,8 @@ tmux driver helpers (`aiw_start`, `keys`, `cap`, `wait_for`, `snap`, …).
 
 After the 2026-10-11 removal of the harness-native duplicates (DESIGN.md
 §18.1) the full suite is 1,697 tests (4 ignored), with formatting, strict
-locked all-target Clippy, `scripts/check-no-network.sh`, a release build and
-the GUI's `tsc` and vitest all passing.
+locked all-target Clippy, `scripts/check-no-network.sh` and a release build
+all passing.
 
 The earlier final local validation on 2026-09-08 passed all 2,512 tests (22.82s, no failures
 or ignored tests), formatting, strict locked all-target Clippy, Actionlint 1.7.7,

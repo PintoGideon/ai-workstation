@@ -10,6 +10,13 @@ are tagged.
 
 ## [Unreleased]
 
+### Removed
+
+- **The desktop GUI.** The Tauri app in `gui/`, the `gui_*` contract modules, the GUI-only tmux control
+  client, the agent-sidebar assembly, the Codex sidebar-metadata pipeline, the context-hint tracker and the GUI
+  screenshot tooling are gone; aiw is terminal-only. `Cargo.lock` lost the Tauri, WebKitGTK and GTK dependency
+  graph (about 330 crates).
+
 ### Added
 
 - **Orchestration features** (DESIGN.md §19): richer row events from Claude's newer hooks (compaction, model

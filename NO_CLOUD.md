@@ -16,14 +16,13 @@ What enforces it:
 - `aiw doctor` reports the `network` finding: "AI Workstation
   (AIW) makes no network connections itself".
 
-The check covers the root package (the `aiw` binary and the library).
-The Tauri desktop shell (`gui/src-tauri`) links Tauri/WebKit, which are not
-checked here; its own Rust code has no network calls after this change.
+The check covers the whole crate: the `aiw` binary and its library. The Tauri
+desktop shell that once sat beside it was removed on 2026-10-12 (DESIGN.md §19.13).
 
 ## Audit
 
-Inventory of every network-capable path found in `src/` and
-`gui/src-tauri/src` before this change, and what happened to it.
+Inventory of every network-capable path found in `src/` (and, at the time, the
+since-removed `gui/src-tauri/src`) before this change, and what happened to it.
 
 ### Removed
 

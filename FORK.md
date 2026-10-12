@@ -19,8 +19,8 @@ cargo +1.99.0 build --release --locked          # ~5–10 min the first time
 cargo +1.99.0 install --path . --locked         # daily use: puts `aiw` in ~/.cargo/bin
 ```
 
-Run it in a **real terminal window** (Ghostty, iTerm, GNOME Terminal) — it is an interactive TUI. The desktop GUI is
-the `aiw-gui` package in `gui/` (`cd gui && npm ci && npm run tauri build`).
+Run it in a **real terminal window** (Ghostty, iTerm, GNOME Terminal) — it is an interactive TUI, and the only
+front end: the desktop GUI was removed on 2026-10-12.
 
 **On the work Mac:** install `tmux` and Rust (`rustup`), `xcode-select --install`, clone *our* fork, then the same
 commands. A local source build avoids the unsigned-download Gatekeeper warning.

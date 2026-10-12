@@ -20,7 +20,7 @@ Contents
 10. [Supported harnesses](#10-supported-harnesses)
 11. [Command line and automation](#11-command-line-and-automation)
 12. [What aiw writes on disk, and the no-cloud guarantee](#12-what-aiw-writes-on-disk-and-the-no-cloud-guarantee)
-13. [The desktop GUI](#13-the-desktop-gui)
+13. [Terminal only](#13-terminal-only)
 14. [Removed features and their native replacements](#14-removed-features-and-their-native-replacements)
 
 ## 1. What aiw is, and is not
@@ -885,7 +885,7 @@ written back, so a config from an older version keeps loading.
 | `worktree_include` | `[".env*"]` | Ignored files to copy into a fresh worktree when the repo has no `.worktreeinclude` |
 | `diff_viewer_layout` | `unified` | `unified` or `split` for the diff viewer and the edit popup |
 | `diff_review_popup_hold_secs` | `1.5` | How long the edit popup ignores `Enter` after opening |
-| `tmux_control_mode` | `false` | Used by the desktop GUI's terminal only |
+| `tmux_control_mode` | `false` | Experimental persistent control-mode input transport for pastes; leave off |
 | `projects.default_preferred_agent` | unset | The harness new features default to |
 | `zai` | unset | A z.ai plan name and its token limits, for the usage bars |
 | `extension` | empty | The same block `aiw.json` holds, applied to every project |
@@ -1067,23 +1067,14 @@ after telling you so. There is no self-upgrade: pull the fork and rebuild.
 To remove everything: delete each feature with `d`, quit, kill the private
 tmux server, and delete the three directories above.
 
-## 13. The desktop GUI
+## 13. Terminal only
 
-`gui/` holds a Tauri desktop application, `aiw-gui`, built from this
-repository. It reads the same database and the same tmux sessions as the
-terminal dashboard, so both can run at once. It covers project and feature
-creation, every session kind the picker offers, terminal tabs with
-scrollback, the TODO lists, the prompt library, a prompt composer with
-per-session drafts, the diff viewer, Vibeless edit approvals, dormant
-features, a refresh button for pull-request badges, themes and the debug
-log. Agent tabs have a sidebar with status, usage, context, issue and pull
-request, prompt and TODO sections. It has no cockpit; prompts it prepares
-land in its composer instead of a pane. It does not show feature groups,
-notes, schedules, the watchdog, messages, fan-out groups, background
-sessions, Claude's own worktrees or landing; those live in the terminal
-dashboard, and `aiw automation` reaches most of them from scripts. Build it with `npm ci` and `npm run
-tauri build` inside `gui/`; the GUI README has platform notes for macOS and
-Windows under WSL2.
+aiw is a terminal program. There is no desktop or web front end: the
+cockpit, every dialog and every key in this guide live in the tmux session
+`aiw` opens, and scripts reach the same operations through `aiw automation`.
+The Tauri desktop app that used to ship in `gui/` was removed on 2026-10-12
+to keep the project lean; nothing it showed is missing from the terminal
+dashboard.
 
 ## 14. Removed features and their native replacements
 

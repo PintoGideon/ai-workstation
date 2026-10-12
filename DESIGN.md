@@ -1640,3 +1640,18 @@ project stays inside the list panel; the 98 dialogs that still drew square `â”Œâ
 border as the panels; the one help key label that overflowed its column is shorter.
 
 **Gate.** See the STEP NOTES for the counts of this pass.
+
+### 19.13 TUI only (2026-10-12)
+
+The desktop GUI is gone. `gui/` (the Tauri app, its TypeScript, tests and lockfile), the `gui/src-tauri`
+workspace member and the eleven `src/gui_*` modules were deleted, and with them everything that only existed
+for the GUI: the control-mode tmux view client (`spawn_control_mode_view_client`, `SpawnedTmuxControlClient`),
+the `set_cli_binary` override, the unsent-prompt handoff (`take_unsent_prompt`; without a cockpit a prompt is
+now only saved as `latest-prompt.txt`), `app/agent_sidebar.rs` and its text helpers, the Codex
+sidebar-metadata request/poll/cache pipeline, `app/context_hints.rs`, the `capture-gui-*` screenshot scripts,
+fixtures and scenarios, and the `base64ct`, `image` and `url` dependencies the screenshot evidence flow had
+left behind. A few accessors that only tests still call (`latest_prompt_for_session`,
+`recent_debug_log_entries`, `sidebar_work_text`, `session_context_label`) stay under `#[cfg(test)]`. The root
+`Cargo.toml` is a plain package again. `tmux_control_mode` stays as the experimental input-transport switch;
+it never fed the GUI alone.
+

@@ -2,8 +2,8 @@ name: CI
 
 # Personal fork: one Linux job that mirrors the local gate in AGENTS.md.
 # No macOS matrix, no release or site pipelines, no scheduled advisory
-# audit, no crates.io publish. The desktop GUI crate (gui/src-tauri) needs
-# WebKitGTK and is checked locally, so CI builds the aiw package only.
+# audit, no crates.io publish. aiw is terminal-only, so this is the whole
+# build.
 
 on:
   push:

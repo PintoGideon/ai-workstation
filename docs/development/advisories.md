@@ -33,6 +33,8 @@ validation is still pending publication of this branch.
 
 ## GUI workspace extension (2026-09-23)
 
+> The GUI and its dependency graph were removed on 2026-10-12 (DESIGN.md §19.13); this section is history.
+
 Adding the Tauri GUI expanded `Cargo.lock` to 567 crates. A fresh local
 `cargo-audit 0.22.2` scan initially found
 [RUSTSEC-2026-0285](https://rustsec.org/advisories/RUSTSEC-2026-0285) in

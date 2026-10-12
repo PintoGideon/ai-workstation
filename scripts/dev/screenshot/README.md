@@ -112,28 +112,6 @@ Each flag:
 Also respected: the `AIW_SHOT_DIR` env var overrides the scratch root
 parent (default `/tmp/aiw-shots`).
 
-## Native GUI diff proof
-
-The native diff scenario captures the actual Tauri application through its Rust
-commands, using an isolated Git checkout and SQLite database. It starts no agent
-sessions. The six frames cover the stopped-feature entry, current changes,
-unified and side-by-side layouts, whole-file context, one commit and a binary
-notice; assertions run before each frame is saved.
-
-```bash
-scripts/dev/screenshot/aiw-capture.sh \
-  --scenario scripts/dev/screenshot/scenarios/gui-standalone-diffs.txt \
-  --out-dir /tmp/aiw-gui-diff-proof
-```
-
-Local captures need the Linux GUI build dependencies, an X11 display (or Xvfb),
-and system Python's GTK introspection, `websocket` and `Xlib` modules. The helper
-installs these in the capture-only CI job, builds the frontend and GUI, then
-cleans up its own GUI and Vite process groups. `HOME` stays unchanged; both AIW
-configuration/state directories are private. Port 1420 must be free. The TUI
-setup frame remains internal, and only native PNG frames are the deliverable;
-no extra seed files are needed.
-
 ## Capture contract
 
 The driver and the two Python helpers have deliberately separate output
