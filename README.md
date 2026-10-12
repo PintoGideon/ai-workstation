@@ -48,6 +48,11 @@ on disk, and what was removed in favour of the harnesses' own features.
   cron rule, or once): a prompt goes to an idle agent at once, waits in the
   queue while it works, and is held while it waits on you; a command runs in
   a terminal only when it is at its prompt.
+- Lands a finished feature with `P`: a preflight, then a rebase onto its
+  base, the project's check command, and a fast-forward of the base or a
+  pushed branch and a `gh` PR. A conflict, a failing check or a base that
+  moved stops it with nothing merged; the feature's worktree and branch are
+  cleaned up after a local merge.
 - Shows context use, cost and usage windows per session, read from the
   harnesses' own files and status line, and what each session just did:
   compacted, switched model, failed a turn, open tasks, background work.
@@ -161,6 +166,7 @@ Pi receives no mode flags.
 | `@` | Message an agent session: straight into a Claude session's inbox, otherwise at its next turn end |
 | `!` | Recover an agent the watchdog flagged (exited, stuck, idle with something queued, context critical): restart resuming, interrupt, `/compact`, replay, deliver now |
 | `t` | Schedules: recurring prompts for an agent and commands for a terminal (`every 30m`, `daily 09:00`, cron, once) |
+| `P` | Land the feature: rebase onto its base, run `land.check_command`, then fast-forward the base or open a PR |
 | `Enter` / `c` / `x` / `d` | On a background Claude row: attach / restart / stop / `claude rm` |
 | `V` | Reopen a pending Vibeless edit approval |
 | `I` | On a TODOs row: start an agent on the next TODO |

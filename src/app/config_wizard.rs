@@ -451,6 +451,11 @@ fn build_extension_config(state: &ConfigWizardState) -> ExtensionConfig {
             .as_ref()
             .map(|config| config.schedules.clone())
             .unwrap_or_default(),
+        // FORK: §19.10 — the land block is not edited in the wizard either.
+        land: loaded
+            .as_ref()
+            .map(|config| config.land.clone())
+            .unwrap_or_default(),
     }
 }
 

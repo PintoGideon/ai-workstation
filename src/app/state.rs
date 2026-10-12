@@ -1242,6 +1242,8 @@ pub enum AppMode {
     Schedules(crate::app::fork_schedules::ScheduleListState),
     /// FORK: §19.9 — adding or editing a schedule.
     ScheduleEditor(Box<crate::app::fork_schedules::ScheduleEditorState>),
+    /// FORK: `P` — land a feature (§19.10).
+    Land(Box<crate::app::fork_land::LandDialogState>),
     ThemePicker(ThemePickerState),
     SyntaxLanguagePicker(SyntaxLanguagePickerState),
     DebugLog(DebugLogState),

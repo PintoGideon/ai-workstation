@@ -634,6 +634,27 @@ pub fn session_badge(
 /// own signals when no session carries them (an attention record on a
 /// feature whose agent window is gone, a feature marked ready).
 pub fn feature_badge(app: &App, pi: usize, fi: usize, now: DateTime<Utc>) -> SessionBadge {
+    let badge = feature_badge_inner(app, pi, fi, now);
+    // FORK: §19.10 — a land in progress, or one that failed.
+    let feature = &app.store.projects[pi].features[fi];
+    if let Some(stage) = app.land_stage(&feature.id) {
+        return badge.stronger(SessionBadge::new(
+            BadgeKind::Working,
+            now,
+            Some(format!("landing · {}", stage.label())),
+        ));
+    }
+    if let Some(failure) = app.land_failure(&feature.id) {
+        return badge.stronger(SessionBadge::new(
+            BadgeKind::NeedsYou,
+            now,
+            Some(format!("land failed: {}", failure.reason)),
+        ));
+    }
+    badge
+}
+
+fn feature_badge_inner(app: &App, pi: usize, fi: usize, now: DateTime<Utc>) -> SessionBadge {
     let feature = &app.store.projects[pi].features[fi];
     let stopped = SessionBadge::new(BadgeKind::Stopped, feature.last_accessed, None);
     if feature.status == ProjectStatus::Stopped {

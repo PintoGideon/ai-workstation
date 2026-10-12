@@ -254,7 +254,10 @@ impl App {
                     usize::from(slot == crate::fork::organize::FeatureSlot::GroupHead);
                 // FORK: §19.3 — the fan-out group header above its first
                 // sibling.
-                let header = group_header + usize::from(self.fan_out_heads_group(*pi, *fi));
+                let header = group_header
+                    + usize::from(self.fan_out_heads_group(*pi, *fi))
+                    // FORK: §19.10 — the land line under the row.
+                    + usize::from(self.land_line(&feature.id).is_some());
                 if feature.collapsed {
                     1 + header
                 } else {

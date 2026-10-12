@@ -659,6 +659,13 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("n", key_style()),
             Span::raw(" keep"),
         ]),
+        // FORK: §19.10 (the dialog draws its own hints)
+        AppMode::Land(_) => Line::from(vec![
+            Span::styled(" Enter", key_style()),
+            Span::raw(" land  "),
+            Span::styled("Esc", key_style()),
+            Span::raw(" close"),
+        ]),
         // FORK: §19.9
         AppMode::Schedules(state) if state.confirm_delete => Line::from(vec![
             Span::styled(" y", key_style()),

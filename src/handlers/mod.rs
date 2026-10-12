@@ -12,6 +12,7 @@ mod fork_background; // FORK: background Claude sessions (DESIGN.md §19.7)
 mod fork_claude_worktrees; // FORK: `W` worktrees Claude made (DESIGN.md §19.6)
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7)
 mod fork_identity; // FORK: `f` fork dialog and `E` external sessions (DESIGN.md §19.2)
+mod fork_land; // FORK: `P` land (DESIGN.md §19.10)
 mod fork_messaging; // FORK: `@` messages (DESIGN.md §19.5)
 mod fork_organize; // FORK: `G` groups and `#` notes (DESIGN.md §19.4)
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6)
@@ -158,6 +159,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<()> {
         AppMode::Watchdog(_) => fork_watchdog::handle_watchdog_key(app, key),
         AppMode::Schedules(_) => fork_schedules::handle_schedules_key(app, key),
         AppMode::ScheduleEditor(_) => fork_schedules::handle_schedule_editor_key(app, key),
+        AppMode::Land(_) => fork_land::handle_land_key(app, key),
         AppMode::ThemePicker(_) => handle_theme_picker_key(app, key.code),
         AppMode::SyntaxLanguagePicker(_) => handle_syntax_language_picker_key(app, key.code),
         AppMode::DebugLog(_) => handle_debug_log_key(app, key.code),

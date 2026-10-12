@@ -319,6 +319,18 @@ fn sidebar_item_lines(
                 ));
             }
             lines.push(fit_line(with_right(left, right, row_width), row_width));
+            // FORK: §19.10 — landing, or why the last land failed.
+            if !compact && let Some(text) = app.land_line(&feature.id) {
+                let style = if app.land_failure(&feature.id).is_some() {
+                    Style::default().fg(BadgeKind::NeedsYou.tone(theme))
+                } else {
+                    dim
+                };
+                lines.push(fit_line(
+                    Line::from(vec![Span::raw("   "), Span::styled(text, style)]),
+                    row_width,
+                ));
+            }
             if !feature.collapsed && !compact {
                 lines.extend(external_lines(
                     &app.external_sessions_for_feature(&feature.id),

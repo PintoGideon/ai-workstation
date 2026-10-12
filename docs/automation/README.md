@@ -271,3 +271,33 @@ while AIW was not running), `--end "2026-10-31 18:00"`, `--max-runs N`, `--pause
 queued`, `skipped: busy (<command>)`, `skipped: resource limits` or `failed: <why>`; `history` answers `{"runs": [{"at",
 "outcome", "detail"}]}`, newest first, where `detail` says what fired it (`timer`, `catch-up`, `run now`,
 `automation`, `after waiting on you`). Schedules defined in `aiw.json` can be paused and run but not deleted.
+
+### land
+
+Land a feature (DESIGN.md §19.10): update it onto its base, run `land.check_command`, then fast-forward the base
+locally or push and open a PR, as the `aiw.json` `land` block says.
+
+```bash
+aiw automation land --feature api-auth [--project api] [--dry-run] [--yes] [--no-wait]
+aiw automation land --feature api-auth --status
+aiw automation land --feature api-auth --abort
+```
+
+`--feature` takes a name, a branch, a nickname or an id. Without `--no-wait` the CLI waits (up to `--wait-secs`, an
+hour by default) and prints the final status with the start reply under `"start"`. The IPC action is `land` with an
+`op` of `dry_run`, `start`, `status` or `abort`.
+
+- `dry_run` answers `{"landable", "working", "waiting", "preflight"}`; the preflight holds `branch`, `base`,
+  `base_source`, `upstream`, `ahead`, `behind`, `modified`, `untracked`, the resolved `strategy`, `blockers`,
+  `warnings`, `plan` (the commands in order) and `in_progress`. Nothing changes.
+- `start` refuses (`"ok": false`) when the preflight has blockers, when agents in the feature are working and `yes`
+  is not set, or when a repository `pre_land` / `post_land` hook has not been approved from the dashboard yet.
+  Otherwise it answers `{"status": "started", "plan", "preflight"}`.
+- `status` answers `{"state": "idle" | "running" | "succeeded" | "failed", …}`: while running, `stage` and
+  `log_tail`; afterwards `result` (`ok`, `failure` with `kind` and `reason` and `in_progress`, `pr_url`,
+  `pr_existed`, `merged`, `log`), `finished`, `failure_shown` and `log_tail`. It still answers after a land
+  removed its feature.
+- `abort` runs `git rebase --abort` or `git merge --abort` in the worktree.
+
+Failure kinds: `locked` (another land in the repository), `pre_hook`, `fetch`, `conflict`, `check`,
+`dirty_after_check`, `base_moved`, `base_dirty`, `not_fast_forward`, `push`, `gh`, `other`.

@@ -247,6 +247,7 @@ inside the app.
 | `g` | On a project row, browse its open GitHub issues and start a feature from one |
 | `u` | Set the project's preferred harness |
 | `y` | Toggle the feature's ready mark, shown as a dim ✓ |
+| `P` | Land the feature: a preflight, then rebase (or merge) onto its base, run the check, and fast-forward the base locally or push and open a PR (see "Landing a feature") |
 | `r` | Rename the selected feature or session |
 | `d` | Delete the selected project, feature or session |
 | `O` | Open aiw's own config directory as a project, so an agent can edit your settings |
@@ -631,6 +632,88 @@ own agents; with one worktree per agent every sibling gets them. A session
 that cannot open (Neovim not installed, a failing `pre_check`) is reported and
 the rest still open.
 
+**Landing a feature.** `P` on a feature (or one of its sessions) ends its
+life in one guarded step. The dialog opens at once and fills in a moment later
+with the preflight, which only reads git:
+
+- the branch and its base. The base is `land.base` from `aiw.json` when set,
+  else the remote's default branch, else the first of `main`, `master`,
+  `trunk` and `develop` that exists, else the main checkout's branch;
+- how many commits the feature is ahead of the base and behind it;
+- the update (`rebase`, the default, or `merge`), the check command and the
+  finish, with why that finish was chosen;
+- what happens afterwards, and the exact commands that will run.
+
+The land is blocked, with the reason, when the feature uses the repository
+directory rather than its own worktree, when it is on the base branch, when
+the worktree has uncommitted or untracked files (`t` opens a terminal there),
+when a rebase or merge is already in progress (`a` aborts it), when there is
+nothing to land, when the base is checked out somewhere with uncommitted
+changes, or when another land is running in the same repository. One land
+runs per repository at a time; a second one is refused, not queued. Agents
+that are still working are a warning: `Enter` then asks for `y`.
+
+`Enter` lands. If the repository has the remote, aiw fetches the base first;
+a local base needs no network, and a failed fetch before a local merge only
+warns. Then:
+
+1. **Update.** `git rebase <base>`, or `git merge --no-edit <base>`, in the
+   feature's worktree. A conflict stops the land and leaves the rebase or
+   merge in progress for you to resolve and continue, or to abort with `a`.
+2. **Check.** `land.check_command`, if set, runs in the worktree with the
+   feature's `AIW_PORT` block. A non-zero exit stops the land, and so does a
+   check that leaves files modified.
+3. **Finish.**
+   - `local_merge` fast-forwards the base to the feature. Where the base is
+     checked out, that checkout follows with `git merge --ff-only`; elsewhere
+     the branch ref moves with an expected old value. Either way a base that
+     moved during the land is caught, and nothing merges.
+   - `pr` pushes the branch (never with force) and runs `gh pr create --base
+     <base> --head <branch> --fill`, or with `pr_title` and `pr_body`
+     templates. An open PR for the branch is reported, not duplicated. PRs
+     are never merged by aiw. The PR badges refresh afterwards.
+   - `none` stops after the update and the check.
+
+Every step and its output go to a log that a `land` terminal in the feature
+tails while the land runs, so you watch it happen. The row reads `⇡ landing ·
+checking` meanwhile. A failure leaves `⛔ land failed: <reason>` under the row
+until the next successful land or `x` in the dialog. Closing the dialog does
+not stop a running land.
+
+After a successful `local_merge` the feature's sessions stop and its worktree
+and branch are removed, through the same path as `d`. After a `pr` the
+feature stays and is marked ready. That cleanup waits until no dialog is
+open, so you see the result first. The defaults are set per project in
+`aiw.json`, or for every project in the global `extension` block:
+
+```json
+"land": {
+  "base": "main",
+  "update": "rebase",
+  "check_command": "cargo test",
+  "finish": "local_merge",
+  "delete_branch": true,
+  "remove_worktree": true,
+  "mark_done": true,
+  "remote": "origin",
+  "pr_title": "{feature}: {summary}",
+  "pr_body": "Lands {branch} into {base}.",
+  "pr_draft": false
+}
+```
+
+Every field is optional. `finish` defaults to `pr` when the remote is on
+GitHub and `gh` is signed in, else `local_merge`. `delete_branch` and
+`remove_worktree` default to true for `local_merge` and false otherwise.
+`{summary}` is the first line of the feature's task prompt. Two lifecycle
+hooks bracket a land: `pre_land` runs in the worktree before anything changes,
+and a non-zero exit stops the land; `post_land` runs in the repository when
+the land ends either way, with `AIW_LAND_RESULT` set to `success` or
+`failed`. Both see `AIW_LAND_FEATURE`, `AIW_LAND_BRANCH`, `AIW_LAND_BASE`,
+`AIW_LAND_STRATEGY`, `AIW_LAND_FINISH`, `AIW_LAND_REPO` and
+`AIW_LAND_WORKTREE`, and `post_land` also `AIW_LAND_REASON` and
+`AIW_LAND_PR_URL`. A repository's hooks need the usual one-time approval.
+
 **Cost.** Claude's status line carries the dollar figure. For harnesses that
 report tokens but not cost, aiw multiplies by the prices in the
 `token_pricing` setting, which defaults to Claude's published rates. Set
@@ -826,8 +909,11 @@ written back, so a config from an older version keeps loading.
     "on_worktree_created": {
       "script": "scripts/aiw-setup.sh",
       "prompt": { "title": "Seed the database?", "options": ["yes", "no"] }
-    }
+    },
+    "pre_land": "scripts/aiw-pre-land.sh",
+    "post_land": null
   },
+  "land": { "check_command": "npm test", "finish": "pr" },
   "schedules": [
     { "name": "nightly", "match": "*", "when": "daily 02:00", "command": "npm test", "terminal": "ci" }
   ],
@@ -842,7 +928,7 @@ written back, so a config from an older version keeps loading.
 Custom sessions appear in the `s` picker with their icon and description. A
 session with `pre_check` is skipped when that command fails, and `on_stop`
 runs when you stop it from aiw. Lifecycle hooks run when a feature starts,
-stops, or gets a new worktree; a hook with a prompt asks you to pick an option
+stops, gets a new worktree, or lands (`pre_land`, `post_land`); a hook with a prompt asks you to pick an option
 first and passes it to the script in the `AIW_HOOK_CHOICE` variable. A hook
 that comes from a repository runs only after you approve it once, pinned to
 the exact command and script contents, so cloning a repository cannot run
@@ -914,6 +1000,7 @@ to writing that file. Codex gets its notify hook per launch rather than in
 | `aiw automation create-batch-features` | Create one project with many parallel feature worktrees |
 | `aiw automation queue --session <id> "text"` | Queue a follow-up for a session; the id is in the doctor's JSON output |
 | `aiw automation message --to <session> --text "text" [--from <name>]` | Message a session: into a Claude session's inbox, otherwise queued for its next turn end. Prints `delivered`, `queued` or `failed` |
+| `aiw automation land --feature <feature> [--project <p>]` | Land a feature and wait for the outcome. `--dry-run` prints the preflight and the planned commands and changes nothing; `--yes` lands while agents work; `--no-wait` returns once it started; `--status` shows the last land (running, succeeded, failed, idle), also after the land removed the feature; `--abort` aborts a rebase or merge left in progress. A repository hook that is not approved yet is refused (approve it once from `P`) |
 | `aiw automation schedule add\|list\|pause\|resume\|delete\|run\|history` | Manage schedules. `add --session <session> --when "every 30m" --prompt "…"`, or `add --feature <feature> --when "daily 02:00" --command "make test" --target ci`; `--start-if-stopped`, `--catch-up none`, `--end`, `--max-runs`, `--paused`. The others take `--id` (a unique prefix is enough); `list` takes `--session`, `--feature` or `--project` |
 | `aiw --help` | Everything else |
 
@@ -938,7 +1025,7 @@ the lock.
 | Where | What | When |
 | --- | --- | --- |
 | `~/.config/ai_workstation/` | `config.json`, the database `aiw.db`, port reservations, the instance lock, the hook scripts under `hooks/` | first launch |
-| `~/.local/state/ai_workstation/` on Linux, `/tmp/ai_workstation/` on macOS | the private tmux socket, the cockpit socket, the IPC socket, `debug.log`, per-session Claude settings files, thinking markers, quarantined bad notifications | first launch |
+| `~/.local/state/ai_workstation/` on Linux, `/tmp/ai_workstation/` on macOS | the private tmux socket, the cockpit socket, the IPC socket, `debug.log`, per-session Claude settings files, thinking markers, quarantined bad notifications, land logs and per-repository land locks under `land/` | first launch |
 | `~/.local/share/ai_workstation/worktrees/` on Linux, Library/Application Support on macOS | feature worktrees, and the `claude-<name>` worktrees Claude makes through aiw's hook, unless `worktree_base_dir` says otherwise | when a feature starts, or when Claude makes a worktree |
 | inside each repository | `.aiw/`, `.claude/latest-prompt.txt`, `.claude/skills/aiw-*`, `.agents/skills/aiw-*`, `.codex/`, `.gemini/`, `.cursor/hooks.json` | when a feature starts |
 

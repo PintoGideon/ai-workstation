@@ -487,6 +487,9 @@ source "$HERE/watchdog.sh"
 # §19.9: scheduled prompts and commands.
 # shellcheck disable=SC1091
 source "$HERE/schedules.sh"
+# §19.10: landing a feature (real git in sandbox repos).
+# shellcheck disable=SC1091
+source "$HERE/land.sh"
 
 aiw_quit; check "q: quit at the end" $?
 ! cockpit_alive && [ "$(view_sessions)" = 0 ]; check "q: cockpit server gone, no view sessions, agents still running" $?

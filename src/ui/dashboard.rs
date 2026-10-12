@@ -541,6 +541,10 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     if let AppMode::ScheduleEditor(state) = &app.mode {
         super::dialogs::fork_schedules::draw_schedule_editor(frame, app, state);
     }
+    // FORK: §19.10
+    if let AppMode::Land(state) = &app.mode {
+        super::dialogs::fork_land::draw_land(frame, app, state);
+    }
 
     if let AppMode::ThemePicker(state) = &app.mode {
         super::dialogs::draw_theme_picker(

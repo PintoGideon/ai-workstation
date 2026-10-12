@@ -1458,3 +1458,89 @@ an open question (`/ask`, the Notification hook) makes the fire skip and the ret
 the pane, a terminal opened just now is not mistaken for busy (tmux reports itself until the shell starts), run now delivers at once, a shell
 schedule opens `sched-term` and its output appears, a terminal running `sleep` is skipped as busy, and automation
 list / history / delete.
+
+### 19.10 Landing a feature (proposal 2)
+
+**What.** `P` on a feature (or one of its sessions) runs the end of a feature's life as one guarded step:
+preflight → update onto the base → check → finish → cleanup. `src/fork/land.rs` is pure plus the worker (git and `gh`
+only through `std::process`, nothing linked); `src/app/fork_land.rs` owns the dialog, the threads, the row state and
+the cleanup; `src/handlers/fork_land.rs` and `src/ui/dialogs/fork_land.rs` are thin.
+
+**Preflight** (`compute_preflight`, on a helper thread; the dialog shows "Checking…" until it answers). Base:
+`land.base` → `<remote>/HEAD` → the first existing local `main` / `master` / `trunk` / `develop` → the main
+checkout's branch. The worktree's real branch (`symbolic-ref HEAD`) wins over the stored one, with a warning. Ahead /
+behind against the upstream ref (`<remote>/<base>` for a `pr` finish when the remote has it, else the local base) as of
+the last fetch. Blockers: repo-dir feature, detached HEAD, no base, base == branch, base missing locally, `pr` without
+the remote, a rebase or merge in progress (`a` aborts), uncommitted or untracked files (`t` opens a terminal),
+nothing to land, a dirty checkout of the base for `local_merge` (tracked files only; untracked ones are fine), another
+land in the same repository (in this process). Warnings: behind count, the remote's base ahead of the local one for a
+local merge, cleanup that will remove the worktree, working agents (`Enter` then needs `y`), agents waiting on you,
+and the configured hooks. `plan_commands` lists exactly what will run.
+
+**Worker** (`land::run`, its own thread; `Event::Stage` / `Event::Finished` on a channel, polled by `land_tick` in the
+main loop). Takes `RepoLock` (`flock` on `<state>/land/<sha256(repo)>.lock`, non-blocking: a second land in the
+repository is refused, not queued — one in another aiw instance is caught too). Then `pre_land` (in the worktree,
+non-zero stops), `git fetch --no-tags <remote> <base>` when the remote exists (fatal only for `pr`; a local merge goes on
+onto the local base), the update (`rebase <sha>` / `merge --no-edit <sha>` against the upstream's sha read once —
+`expected_base`; skipped when the branch already contains it), the check (`sh -c` in the worktree with the feature's
+port block and `AIW_LAND_*`; a non-zero exit or tracked files modified afterwards stop), the finish, and `post_land`
+(in the repository, either way, with `AIW_LAND_RESULT` / `_REASON` / `_PR_URL`; its failure is logged, the result
+stands). Git runs with `GIT_TERMINAL_PROMPT=0`, `LC_ALL=C` and, unless the user set one, `GIT_SSH_COMMAND="ssh -o
+BatchMode=yes"`; fetch, push and `gh` have a 180 s limit. The worker never panics; every failure is an `Outcome` with a
+`FailureKind`, and a conflicted rebase or merge is left exactly as git left it (`in_progress` says which).
+
+**Finish.** `local_merge`: require `expected_base` to be an ancestor of HEAD; where the base is checked out
+(`git worktree list --porcelain`), refuse a dirty checkout, require its HEAD to still be `expected_base`, then `merge
+--ff-only` there so the files follow; where it is checked out nowhere, `update-ref refs/heads/<base> <head>
+<expected_base>` so a moved base fails atomically. `pr`: `git push -u <remote> <branch>` (never forced; a rejected push
+says why), then `gh pr create --base --head` with `--fill` or the `pr_title` / `pr_body` templates (`{feature}`,
+`{branch}`, `{base}`, `{summary}` = first line of `.claude/latest-prompt.txt`), `--draft` optional; "already exists"
+plus a URL is `pr_existed`, never a second PR, never a merge. `none`: update and check only.
+
+**Strategy defaults** (`resolve_strategy`). `finish`: `pr` when the remote is on GitHub and `gh auth status` succeeds
+(probed only when `finish` is unset), else `local_merge`; `delete_branch` / `remove_worktree`: true for `local_merge`,
+false otherwise; `mark_done`: true; `update`: rebase; `remote`: origin. `land` lives in `ExtensionConfig`: a project's
+`aiw.json` over the global `extension` block in `config.json`, field by field (`LandConfig::merged_over`). Lifecycle
+hooks gained `pre_land` / `post_land`, merged like the others and gated by the existing one-time approval
+(`HookName::PreLand` / `PostLand`, `HookResume::Land` replays the confirm); automation refuses an unapproved repository
+hook (`approved_repo_hook_or_refuse`) rather than skipping a gate.
+
+**Seeing it.** The worker writes every step and command output to `<state>/land/<feature-id>.log`. When the feature
+runs, a `land` terminal session (created once, selection kept) runs `sh <state>/land/<id>.tail.sh`: `tail -n +1 -F` on
+the log plus a watcher that stops it once the end marker is written, so the output stays and the shell comes back by
+itself (a script, not a pipeline typed into the user's shell, which may be fish; `tail --pid` is not portable). An
+earlier version sent `C-c` when the land ended; a land that finished in 0.1 s (the full e2e run) interrupted the tail
+before the shell had started it. The feature row gets a line under it (counted in `workspace_item_height`):
+`⇡ landing · <stage>` while it runs, `⛔ land failed: <reason> (P)` after a failure until the next success or `x`;
+`feature_badge` rolls both up (Working / NeedsYou), so the header pills count a failed land. The dialog shows the
+preflight, the running stage and log tail, or the last failure (with `a aborts the rebase`) or success.
+
+**Cleanup** (app side, after success, only once `mode` is Normal so the user sees the result): `remove_worktree` →
+`AppMode::DeletingFeature` + `delete_feature()`, the normal delete flow (TODO disposition, sessions, worktree, ports);
+`delete_branch` → `git branch -d <branch>` once the feature is gone (up to 5 min, else kept and logged); a kept
+feature with `mark_done` gets `ready`; `delete_branch` with a kept worktree is reported as kept. A `pr` success refreshes
+PR badges (`sync_active_prs_background`).
+
+**Automation.** `aiw automation land --feature … [--project] [--dry-run] [--yes] [--no-wait] [--status] [--abort]`
+(IPC action `land`, ops `dry_run` / `start` / `status` / `abort`); the CLI polls `status` until the land ends.
+`LastLand` keeps the feature's name and project so `status` answers after the cleanup removed the feature.
+
+**Tests.** `fork::land` (25, real git in temp repos: the tail script returning at the end marker, config merge and JSON, strategy defaults, gh output parsing,
+worktree porcelain, templates and quoting, preflight base / ahead / behind / plan, the blockers, a dirty base checkout,
+local merge into a checked-out base and through update-ref, a base moved during the land both ways, a failing check,
+a check that dirties the tree, rebase and merge conflicts left in progress and aborted, the repo lock, hooks with their
+env and a failing `pre_land`, finish none, `pr` with a local bare remote and a fake `gh` including an existing PR, base
+resolution order, log and lock paths). `app::tests::fork_land` (12: the dialog and preflight, project rows, a local
+merge end to end with the land terminal, the base, the removal through the delete flow, the branch deletion and
+automation status afterwards; a failing check on the row and its dismissal; the working-agents confirm; aborting a
+conflicted rebase; a dirty worktree; one land per repository; automation dry run / start / status and the `--yes`
+rule; an unapproved repository hook gated in the dialog and refused in automation; the landing line). E2E
+(`scripts/dev/e2e/land.sh`, real git in sandbox repos, no network): a dashboard land with a moved base and a streamed
+check, then removal of the feature, worktree and branch; a failing check and its ⛔ row; a rebase conflict aborted with
+`a`; a dirty worktree refused; a base moved by the check itself; a `trunk` repository; a `pr` finish to a local bare
+remote with a fake `gh`, then the existing-PR path.
+
+Found while building it: after `y` confirmed a land with agents working, the dialog stayed in its confirm state, so
+the first `Esc` only cleared it — the confirm now resets when the land starts. And the `C-c` above. And `status` by
+name failed once the cleanup had removed the feature — `LastLand` now keeps the name.
+

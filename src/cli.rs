@@ -454,6 +454,39 @@ enum AutomationCommands {
         #[command(subcommand)]
         command: ScheduleCommands,
     },
+    // FORK: landing a feature (DESIGN.md §19.10).
+    /// Land a feature: update it onto its base, run land.check_command, then
+    /// fast-forward the base locally or push and open a PR (aiw.json `land`).
+    /// Waits for the land to end and prints the outcome as JSON.
+    Land {
+        /// The feature: its name, branch, nickname or id.
+        #[arg(long)]
+        feature: String,
+        /// The project, when the name is not unique.
+        #[arg(long)]
+        project: Option<String>,
+        /// Print the preflight and the planned commands; change nothing.
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
+        /// Land even while agents in the feature are working.
+        #[arg(long, default_value_t = false)]
+        yes: bool,
+        /// Return as soon as the land has started.
+        #[arg(long, default_value_t = false)]
+        no_wait: bool,
+        /// Print the feature's last land (running, succeeded, failed, idle).
+        #[arg(long, default_value_t = false)]
+        status: bool,
+        /// Abort a rebase or merge left in progress in the worktree.
+        #[arg(long, default_value_t = false)]
+        abort: bool,
+        /// Seconds to wait for the land to end.
+        #[arg(long, default_value_t = 3600)]
+        wait_secs: u64,
+        /// Timeout in milliseconds for each reply from AIW.
+        #[arg(long, default_value_t = 60000)]
+        timeout_ms: u64,
+    },
     // FORK: queued follow-ups (P7, DESIGN.md §16).
     /// Queue a follow-up for an agent session; it is delivered when the agent
     /// finishes its current turn (never typed into a busy agent).
@@ -1462,6 +1495,69 @@ fn run_automation_command(command: AutomationCommands) -> Result<()> {
             );
             Ok(())
         }
+        // FORK: §19.10
+        AutomationCommands::Land {
+            feature,
+            project,
+            dry_run,
+            yes,
+            no_wait,
+            status,
+            abort,
+            wait_secs,
+            timeout_ms,
+        } => {
+            let op = if status {
+                "status"
+            } else if abort {
+                "abort"
+            } else if dry_run {
+                "dry_run"
+            } else {
+                "start"
+            };
+            let mut request = serde_json::json!({
+                "type": automation::AUTOMATION_REQUEST_TYPE,
+                "action": crate::fork::land::LAND_ACTION,
+                "op": op,
+                "feature": feature,
+                "yes": yes,
+            });
+            if let Some(project) = &project {
+                request["project"] = serde_json::Value::String(project.clone());
+            }
+            let socket = ipc::socket_path();
+            let timeout = Duration::from_millis(timeout_ms);
+            let reply = ipc::send_wait(&socket, &serde_json::to_string(&request)?, timeout)?;
+            let started =
+                op == "start" && reply.get("ok").and_then(serde_json::Value::as_bool) == Some(true);
+            if !started || no_wait {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&reply).unwrap_or_else(|_| "{}".to_string())
+                );
+                return Ok(());
+            }
+            request["op"] = serde_json::Value::String("status".into());
+            let deadline = std::time::Instant::now() + Duration::from_secs(wait_secs);
+            let mut last = serde_json::Value::Null;
+            while std::time::Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(500));
+                last = ipc::send_wait(&socket, &serde_json::to_string(&request)?, timeout)?;
+                if last.get("state").and_then(serde_json::Value::as_str) != Some("running") {
+                    break;
+                }
+            }
+            let mut out = last;
+            if out.is_object() {
+                out["start"] = reply;
+            }
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&out).unwrap_or_else(|_| "{}".to_string())
+            );
+            Ok(())
+        }
         // FORK: §19.9
         AutomationCommands::Schedule { command } => {
             let (request, timeout_ms) = schedule_request(command);
@@ -2223,6 +2319,7 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         // FORK: §19.8 — the watchdog: exited, stuck, idle-with-queued agents.
         force_redraw |= app.watchdog_tick();
         force_redraw |= app.schedules_tick(); // FORK: §19.9
+        force_redraw |= app.land_tick(); // FORK: §19.10
 
         let current_redraw_signature = app.redraw_signature();
         let state_changed = current_redraw_signature != loop_state_signature;

@@ -91,6 +91,14 @@ pub struct LifecycleHooks {
     pub on_start: Option<HookConfig>,
     pub on_stop: Option<HookConfig>,
     pub on_worktree_created: Option<HookConfig>,
+    /// FORK: §19.10 — runs in the feature's worktree before a land; a
+    /// non-zero exit stops the land.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pre_land: Option<HookConfig>,
+    /// FORK: §19.10 — runs in the repository when a land ends (either way),
+    /// with `AIW_LAND_RESULT`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub post_land: Option<HookConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -172,6 +180,10 @@ pub struct ExtensionConfig {
     /// FORK: §19.9 — recurring prompts and commands for matching features.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub schedules: Vec<crate::fork::schedules::ScheduleConfig>,
+    /// FORK: §19.10 — how `P` lands a feature (project over global, field
+    /// by field).
+    #[serde(skip_serializing_if = "crate::fork::land::LandConfig::is_empty")]
+    pub land: crate::fork::land::LandConfig,
 }
 
 impl ExtensionConfig {
@@ -498,6 +510,17 @@ pub fn merge_project_extension_config_checked(
         .on_worktree_created
         .clone()
         .or_else(|| base.lifecycle_hooks.on_worktree_created.clone());
+    // FORK: §19.10
+    let pre_land = project
+        .lifecycle_hooks
+        .pre_land
+        .clone()
+        .or_else(|| base.lifecycle_hooks.pre_land.clone());
+    let post_land = project
+        .lifecycle_hooks
+        .post_land
+        .clone()
+        .or_else(|| base.lifecycle_hooks.post_land.clone());
 
     let mut keybindings = base.keybindings.clone();
     for (action, key) in &project.keybindings {
@@ -510,6 +533,8 @@ pub fn merge_project_extension_config_checked(
             on_start,
             on_stop,
             on_worktree_created,
+            pre_land,
+            post_land,
         },
         keybindings,
         feature_presets,
@@ -520,6 +545,7 @@ pub fn merge_project_extension_config_checked(
         prompt_templates,
         layout_presets,
         schedules,
+        land: project.land.merged_over(&base.land),
     };
     merged.normalize_legacy_review_modes();
     (merged, error)

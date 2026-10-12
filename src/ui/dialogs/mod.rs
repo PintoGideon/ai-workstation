@@ -12,6 +12,7 @@ pub(crate) mod fork_background; // FORK: background Claude sessions (DESIGN.md �
 pub(crate) mod fork_claude_worktrees; // FORK: `W` worktrees Claude made (DESIGN.md §19.6)
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7)
 pub(crate) mod fork_identity; // FORK: fork dialog, external sessions (DESIGN.md §19.2)
+pub(crate) mod fork_land; // FORK: the land dialog (DESIGN.md §19.10)
 pub(crate) mod fork_messaging; // FORK: `@` message dialog (DESIGN.md §19.5)
 pub(crate) mod fork_organize; // FORK: groups dialog, note editor (DESIGN.md §19.4)
 pub(crate) mod fork_schedules; // FORK: schedules list and editor (DESIGN.md §19.9)

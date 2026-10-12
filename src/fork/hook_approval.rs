@@ -42,6 +42,9 @@ pub(crate) enum HookName {
     Start,
     Stop,
     WorktreeCreated,
+    /// FORK: §19.10
+    PreLand,
+    PostLand,
 }
 
 impl HookName {
@@ -50,6 +53,8 @@ impl HookName {
             HookName::Start => "on_start",
             HookName::Stop => "on_stop",
             HookName::WorktreeCreated => "on_worktree_created",
+            HookName::PreLand => "pre_land",
+            HookName::PostLand => "post_land",
         }
     }
 
@@ -59,6 +64,8 @@ impl HookName {
             HookName::Start => hooks.on_start.as_ref(),
             HookName::Stop => hooks.on_stop.as_ref(),
             HookName::WorktreeCreated => hooks.on_worktree_created.as_ref(),
+            HookName::PreLand => hooks.pre_land.as_ref(),
+            HookName::PostLand => hooks.post_land.as_ref(),
         }
     }
 }
@@ -91,6 +98,8 @@ pub(crate) enum HookResume {
     Start { pi: usize, fi: usize },
     /// Re-run `stop_feature` on the (unchanged) selection.
     Stop,
+    /// FORK: §19.10 — re-run the land from the restored land dialog.
+    Land,
 }
 
 pub struct HookApprovalState {
@@ -355,6 +364,32 @@ impl App {
         self.gate_repo_hook(&repo, hook, config, &run_dir, resume)
     }
 
+    /// FORK: §19.10 — a repository hook for a flow that can't show a dialog
+    /// and must not skip it (automation lands): `Err` names the hook to
+    /// approve from the dashboard.
+    pub(crate) fn approved_repo_hook_or_refuse(
+        &self,
+        repo: &Path,
+        hook: HookName,
+        config: Option<HookConfig>,
+        run_dir: &Path,
+    ) -> Result<Option<HookConfig>, String> {
+        let Some(config) = config else {
+            return Ok(None);
+        };
+        if !is_repo_supplied(repo, hook, config.script(), &self.config.extension) {
+            return Ok(Some(config));
+        }
+        let subject = subject(repo, hook, config.script(), run_dir);
+        if self.repo_hook_is_approved(&subject) {
+            return Ok(Some(config));
+        }
+        Err(format!(
+            "the repository's {} hook is not approved yet; approve it once from the dashboard (P)",
+            hook.as_str()
+        ))
+    }
+
     /// Gate a lifecycle hook in a flow that can't show a dialog: an
     /// unapproved repository hook is skipped with a warning.
     pub(crate) fn approved_repo_hook_or_skip(
@@ -415,6 +450,10 @@ impl App {
             HookResume::Fork => self.create_forked_feature(),
             HookResume::Start { pi, fi } => self.begin_start_feature(pi, fi),
             HookResume::Stop => self.stop_feature(),
+            HookResume::Land => {
+                self.confirm_land();
+                Ok(())
+            }
         };
         // A skip that the replay didn't consume (the action bailed early)
         // must not leak into a later run.

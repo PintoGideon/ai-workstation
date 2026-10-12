@@ -9,6 +9,7 @@ mod fork_background; // FORK: background Claude sessions (§19.7)
 mod fork_claude_worktrees; // FORK: worktrees Claude made through AIW's hook (§19.6)
 mod fork_fan_out; // FORK: one prompt, several agents (§19.3)
 mod fork_identity; // FORK: names, forks, Claude roster (§19.2)
+mod fork_land;
 mod fork_messaging; // FORK: `@` messages, automation message (§19.5)
 mod fork_organize; // FORK: groups, notes, layout presets (§19.4)
 mod fork_schedules; // FORK: scheduled prompts and commands (§19.9)

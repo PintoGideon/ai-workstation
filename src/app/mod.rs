@@ -24,6 +24,7 @@ pub(crate) mod fork_fan_out; // FORK: one prompt, several agents (DESIGN.md §17
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7, DESIGN.md §16)
 pub(crate) mod fork_hook_events; // FORK: richer row events from hooks (DESIGN.md §19.1)
 pub(crate) mod fork_identity; // FORK: harness names, forks, Claude's roster (DESIGN.md §19.2)
+pub(crate) mod fork_land; // FORK: `P` lands a feature (DESIGN.md §19.10)
 pub(crate) mod fork_launch; // FORK: launch-time arguments from the store (DESIGN.md §16)
 pub(crate) mod fork_messaging; // FORK: `@` messages and `aiw automation message` (DESIGN.md §19.5)
 pub(crate) mod fork_organize; // FORK: groups, notes, layout presets (DESIGN.md §19.4)
@@ -717,6 +718,8 @@ pub struct App {
     pub(crate) watchdog: fork_watchdog::WatchdogRuntime,
     /// FORK: §19.9 — scheduled prompts and commands.
     pub(crate) schedules: fork_schedules::ScheduleRuntime,
+    /// FORK: §19.10 — landing features.
+    pub(crate) land: fork_land::LandRuntime,
     /// FORK: ids for queued items when no database is open (negative).
     pub(crate) followup_memory_id: i64,
     pub ipc_tool_sessions: std::collections::HashSet<String>,
@@ -1161,6 +1164,7 @@ impl App {
             background: Default::default(),       // FORK: §19.7
             watchdog: fork_watchdog::WatchdogRuntime::production(), // FORK: §19.8
             schedules: Default::default(),        // FORK: §19.9
+            land: Default::default(),             // FORK: §19.10
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
@@ -1391,6 +1395,7 @@ impl App {
             background: Default::default(),       // FORK: §19.7
             watchdog: Default::default(),         // FORK: §19.8
             schedules: Default::default(),        // FORK: §19.9
+            land: Default::default(),             // FORK: §19.10
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),

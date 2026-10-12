@@ -914,6 +914,8 @@ impl App {
                 crate::fork::messaging::MESSAGE_ACTION => self.automation_message(&raw),
                 // FORK: `aiw automation schedule …` (DESIGN.md §19.9).
                 crate::fork::schedules::SCHEDULE_ACTION => self.automation_schedule(&raw),
+                // FORK: `aiw automation land` (DESIGN.md §19.10).
+                crate::fork::land::LAND_ACTION => self.automation_land(&raw),
                 _ => automation_error_response(
                     if action.is_empty() {
                         "unknown"
