@@ -283,9 +283,7 @@ pub fn strip_ansi(text: &str) -> String {
     out
 }
 
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
-}
+use crate::fork::shell::quote as shell_quote;
 
 /// What the attach window runs: clear the pane, `claude attach <id>`, then —
 /// once you detach — close the window, so the cockpit's agent pane falls

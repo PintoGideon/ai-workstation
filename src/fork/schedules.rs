@@ -694,10 +694,6 @@ impl Outcome {
             Self::Delivered | Self::DeliveredInbox | Self::Queued | Self::Ran | Self::Started
         )
     }
-
-    pub fn is_success(&self) -> bool {
-        self.counts_as_run()
-    }
 }
 
 /// One line of a schedule's history.

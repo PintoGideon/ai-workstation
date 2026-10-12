@@ -172,12 +172,6 @@ fn app_config_missing_leader_timeout_uses_default() {
 }
 
 #[test]
-fn app_config_missing_input_request_wait_uses_default() {
-    let config: AppConfig = serde_json::from_str(r#"{"nerd_font":false}"#).unwrap();
-    assert_eq!(config.input_request_wait_seconds, 1.5);
-}
-
-#[test]
 fn app_config_missing_tmux_control_mode_uses_default() {
     let config: AppConfig = serde_json::from_str(r#"{"nerd_font":false}"#).unwrap();
     assert!(!config.tmux_control_mode);

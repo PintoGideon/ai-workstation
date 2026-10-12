@@ -353,17 +353,7 @@ pub fn parse_live_windows(output: &str) -> Vec<LiveWindow> {
         .collect()
 }
 
-/// POSIX shell single-quoting.
-pub fn shell_quote(value: &str) -> String {
-    if !value.is_empty()
-        && value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "-_./=:@%+,".contains(c))
-    {
-        return value.to_string();
-    }
-    format!("'{}'", value.replace('\'', "'\\''"))
-}
+pub use crate::fork::shell::quote_min as shell_quote;
 
 /// The tmux argv (without the binary) a grid pane runs to show one agent
 /// window through a grouped view session on AI Workstation's socket.

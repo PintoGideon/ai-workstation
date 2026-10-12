@@ -107,7 +107,6 @@ the fork and run the install command again. Running agents are not affected.
 
 For a contributor setup see [docs/development/checks.md](docs/development/checks.md)
 and [docs/development/architecture.md](docs/development/architecture.md).
-For a container, see the [Docker guide](docs/docker-no-tmux.md).
 
 ## Quick start
 

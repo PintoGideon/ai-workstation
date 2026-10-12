@@ -1,5 +1,7 @@
 # Public launch polish
 
+> **Removed on 2026-10-12.** The release pipeline, release bundles and the no-tmux Docker image are gone from this personal fork; this plan is history.
+
 - **Status:** Done — all six phases shipped
 - **Owner:** unassigned
 - **Relates to:** repo metadata (`Cargo.toml`, `LICENSE`), docs

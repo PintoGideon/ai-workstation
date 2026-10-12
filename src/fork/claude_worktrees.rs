@@ -627,12 +627,7 @@ pub fn remove(path: &Path, paths: &HookPaths) -> Result<RemoveOutcome> {
 
 // ── the CLI entry ───────────────────────────────────────────────
 
-fn stdin_json() -> Value {
-    use std::io::Read;
-    let mut input = String::new();
-    let _ = std::io::stdin().read_to_string(&mut input);
-    serde_json::from_str(input.trim()).unwrap_or_else(|_| json!({}))
-}
+use crate::fork::hook_cli::stdin_json;
 
 /// `aiw worktree-hook create|remove`: the process exit status.
 pub fn run_hook(action: &str) -> i32 {

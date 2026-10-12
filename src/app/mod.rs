@@ -274,7 +274,6 @@ pub struct AppConfig {
     pub config_version: u32,
     pub nerd_font: bool,
     pub leader_timeout_seconds: u64,
-    pub input_request_wait_seconds: f64,
     pub tmux_control_mode: bool,
     pub diff_review_viewer: DiffReviewViewer,
     pub diff_viewer_layout: DiffViewerLayout,
@@ -438,7 +437,6 @@ impl Default for AppConfig {
             config_version: APP_CONFIG_VERSION,
             nerd_font: true,
             leader_timeout_seconds: 5,
-            input_request_wait_seconds: 1.5,
             // Direct tmux transport by default: the persistent control-mode
             // (-CC PTY) clients desync Claude Code's incremental renderer and
             // cause the long-standing mangled-pane corruption on Linux/macOS.

@@ -189,9 +189,7 @@ fn claude_managed_commands() -> Vec<String> {
 }
 
 #[cfg(test)]
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
-}
+use crate::fork::shell::quote as shell_quote;
 
 fn shell_unquote_single(value: &str) -> String {
     value

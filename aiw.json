@@ -1,29 +1,5 @@
 {
-  "custom_sessions": [
-    {
-      "autolaunch": null,
-      "command": "bash .aiw/test-ticker.sh",
-      "description": "Long-running test session — updates status every 2s via file and IPC",
-      "icon": "~",
-      "icon_nerd": "󰁫",
-      "name": "Status Ticker",
-      "on_stop": null,
-      "pre_check": null,
-      "window_name": "ticker"
-    },
-    {
-      "autolaunch": null,
-      "command": "CURRENT=$(sed -n 's/^version = \"\\([^\"]*\\)\".*/\\1/p' Cargo.toml | head -1) && echo \"Current version: $CURRENT\" && read -p \"Release version (major|minor|patch|<ver>): \" version && bash scripts/release.sh \"$version\"",
-      "description": "Run release script to bump version and tag",
-      "icon": "v",
-      "icon_nerd": "⚡",
-      "name": "Release",
-      "on_stop": null,
-      "pre_check": null,
-      "window_name": "release",
-      "working_dir": null
-    }
-  ],
+  "custom_sessions": [],
   "feature_presets": [],
   "keybindings": {},
   "lifecycle_hooks": {
@@ -41,16 +17,6 @@
       "placeholders": [],
       "tags": [],
       "updated_at": "2026-06-20T18:24:02.704863091Z"
-    },
-    {
-      "body": "Perform a {{ semver type:patch|minor|major }} version release using the release skill",
-      "created_at": "2026-06-22T14:22:34.837445373Z",
-      "description": null,
-      "id": "2d06fef4-64cf-47e1-91d6-d335abc7de1e",
-      "name": "Release",
-      "placeholders": [],
-      "tags": [],
-      "updated_at": "2026-06-24T12:19:24.431594288Z"
     },
     {
       "body": "Look at the {{ plan_name }} plan and start implementing the next actionable item. Make sure the code and plan doc are updated from main before starting",

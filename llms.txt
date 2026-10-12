@@ -24,7 +24,6 @@ Key features:
 
 ## Guides
 
-- [Docker without system tmux](docs/docker-no-tmux.md): Run AIW in a container where the tmux package is not preinstalled
 
 ## Automation
 

@@ -675,7 +675,7 @@ impl TmuxManager {
     }
 
     fn shell_quote(value: &str) -> String {
-        format!("'{}'", value.replace('\'', "'\\''"))
+        crate::fork::shell::quote(value)
     }
 
     fn shell_env_parts(include_path: bool) -> Vec<String> {

@@ -20,7 +20,7 @@ use super::permissions::{self, Behavior, Harness};
 use crate::hook_payload::HookEnv;
 
 /// The hook's stdin as JSON, or an empty object.
-fn stdin_json() -> Value {
+pub(crate) fn stdin_json() -> Value {
     use std::io::Read;
     let mut input = String::new();
     let _ = std::io::stdin().read_to_string(&mut input);

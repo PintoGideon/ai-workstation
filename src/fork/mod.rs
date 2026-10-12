@@ -7,6 +7,7 @@
 
 // G1 — split view inside the TUI and `aiw grid` (DESIGN.md §4).
 pub mod grid;
+pub mod shell; // POSIX shell quoting shared by every command builder
 
 // Workspace layout and the badge model (DESIGN.md §15); native attach (§15.4).
 pub(crate) mod badges;

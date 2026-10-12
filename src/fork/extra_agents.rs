@@ -204,10 +204,7 @@ pub fn cleanup_hooks(workdir: &Path, agent: &AgentKind) {
 
 // ---- shared helpers for the two hook writers ---------------------------------
 
-/// Single-quote `value` for a POSIX shell.
-pub(crate) fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
-}
+pub(crate) use crate::fork::shell::quote as shell_quote;
 
 /// The shell command running AIW hook script `script` with `args`.
 pub(crate) fn script_command(hooks_dir: &Path, script: &str, args: &[&str]) -> String {

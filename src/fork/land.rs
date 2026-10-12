@@ -753,17 +753,7 @@ pub fn plan_commands(
     plan
 }
 
-pub fn shell_quote(text: &str) -> String {
-    if !text.is_empty()
-        && text
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "-_./=:@+%,".contains(c))
-    {
-        text.to_string()
-    } else {
-        format!("'{}'", text.replace('\'', "'\\''"))
-    }
-}
+pub use crate::fork::shell::quote_min as shell_quote;
 
 /// `{feature}`, `{branch}`, `{base}` and `{summary}` in a PR template.
 pub fn render_template(

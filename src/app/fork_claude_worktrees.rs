@@ -55,7 +55,7 @@ fn canonical(path: &Path) -> PathBuf {
 
 /// A shell-quoted path for the `cd` typed into a fresh terminal.
 fn shell_quote(path: &Path) -> String {
-    format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
+    crate::fork::shell::quote(&path.to_string_lossy())
 }
 
 impl App {

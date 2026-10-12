@@ -37,12 +37,6 @@ PLAN.md
 site/public/
 site/sass/.sass-cache/
 
-# Docker screenshot tooling
-docker/*
-!docker/no-tmux/
-!docker/no-tmux/**
-.dockerignore
-docs/docker-screenshots.md
 AIW_PLAN.md
 AMF_PLAN.md
 
