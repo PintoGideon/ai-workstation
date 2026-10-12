@@ -9,8 +9,8 @@ compiler version is not separately tested; CI uses stable.
 The full suite runs on Unix and uses temporary Git repositories, shell/process
 fixtures, Unix sockets and FIFOs. Install `git`, `tmux`, `sh`, `bash`, `ps`, `sleep`,
 `mkfifo` and a C toolchain. On Ubuntu, CI installs `build-essential pkg-config git
-tmux bash coreutils procps`; on macOS it uses the runner's Xcode/Unix tools and
-installs tmux with Homebrew. No authenticated GitHub account or paid agent harness
+tmux bash coreutils procps`; on macOS install tmux with Homebrew and use the
+Xcode command-line tools. No authenticated GitHub account or paid agent harness
 is required for tests. Running AIW itself requires whichever of Claude Code,
 Codex, Pi, Gemini CLI and Cursor agent you select.
 
@@ -69,42 +69,18 @@ Dashboard `D` opens the log; the file is `~/.local/state/ai_workstation/debug.lo
 
 ## CI jobs
 
-[main.yml](../../.github/workflows/main.yml) runs on PRs targeting main/master and
-pushes to main/master/testing. Linux retains the required-check name `Test`;
-macOS adds `Test (macOS)`. Both execute the full locked parallel suite with
-explicit prerequisite installation/checks. `Lint` runs once on Linux. Existing
-check names and triggers remain; the workflow does not change branch protection.
-Maintainers can require the new macOS/audit checks after verifying their runs.
+[main.yml](../../.github/workflows/main.yml) is the only workflow. It runs one
+Linux job, `Test`, on pushes to `main` and `ai-workstation`, on pull requests,
+and on demand. The job mirrors the local gate: `cargo fmt --check`,
+`cargo clippy --all-targets --locked -- -D warnings`, `cargo test --locked` and
+`scripts/check-no-network.sh`. Workflow permissions are `contents: read`.
 
-`Dependency audit` runs on those PRs/pushes and Mondays at 07:17 UTC. Only the audit
-job runs on the schedule. Workflow permissions are `contents: read`; the audit
-job does not create issues, submit check annotations through a write token, or
-modify the lockfile.
-
-The tool is pinned to
-[cargo-audit 0.22.2](https://github.com/rustsec/rustsec/releases/tag/cargo-audit%2Fv0.22.2),
-using the [RustSec CLI installation](https://github.com/rustsec/rustsec/tree/main/cargo-audit)
-with locked tool dependencies. A plain CLI job keeps permissions read-only and
-makes the local command identical to CI:
-
-```sh
-cargo install cargo-audit --version 0.22.2 --locked
-cargo audit --file Cargo.lock
-```
-
-Audit reads the existing lockfile and fetches the current RustSec database; it
-has no `--locked` option. Known vulnerabilities fail the job. Advisory warnings
-(including unmaintained, unsound and yanked dependencies) remain visible in the log even when
-they are not fatal. The audit build uses a C toolchain, pkg-config and OpenSSL
-headers. No advisory exceptions are configured by this change. The local scan and
-remaining warning follow-ups are recorded in [advisories.md](advisories.md).
-
-The repository maintainer owns advisory triage: identify the affected dependency
-path and exposure, open a focused fix, and re-run the audit. Keep dependency
-upgrades separate from refactors. If an exception is necessary, record its exact
-advisory ID, rationale, owner, tracking issue and expiry in `.cargo/audit.toml`
-and these notes; review it on every scheduled finding and remove it when fixed
-or expired. Do not silence all warnings or use a blanket ignore.
+This is a personal fork, so the upstream pipelines are gone: no macOS matrix,
+no release workflow (binaries are built locally with `cargo install --path .`),
+no site deploy, no scheduled RustSec audit and no crates.io publish. Run
+`cargo audit` by hand when you update dependencies; the last local scan is in
+[advisories.md](advisories.md). The desktop GUI crate needs WebKitGTK and is
+checked locally with `cargo clippy --workspace` and `cd gui && npm test`.
 
 ## End-to-end run (fake agents, sandboxed)
 

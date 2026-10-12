@@ -67,13 +67,9 @@ from a live AIW instance rather than a mockup.
 
 ## Deployment
 
-`.github/workflows/site.yml` builds the site with Zola on every push to
-`main` that touches `site/**`, as a check that the pages still render. It
-does not publish anywhere: this is a private fork without a Cloudflare Pages
-project, and a private repository cannot even resolve the upstream
-`cloudflare/pages-action` step. To publish, build locally with `zola build`
-and upload `site/public/` yourself, or add a separate workflow with its own
-secrets, and update `base_url` in `config.toml` to the real domain.
+There is no site workflow in this personal fork. To check that the pages
+still render, run `zola build` in `site/`. To publish, upload `site/public/`
+yourself and set `base_url` in `config.toml` to the real domain.
 
 Update the `title` favicon and `og`/social copy in `templates/base.html` if
 the domain or branding changes.
