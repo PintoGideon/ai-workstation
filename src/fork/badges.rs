@@ -397,13 +397,47 @@ pub(crate) fn signal_applies(
 /// stop the feature's attention record describes (the needs-you list folds
 /// the two into one row), so it adds nothing while a record exists.
 fn feature_pending_detail(app: &App, feature: &Feature) -> Option<String> {
-    if !app.is_feature_waiting_for_input(&feature.name) {
+    pending_detail_for(app, feature, None)
+}
+
+/// FORK: §19.11 — which of `feature`'s sessions raised `input`: the AIW
+/// session id the hook carried, when it names one of the feature's sessions.
+/// `None` for a feature-wide signal (an inferred wait, an old notification).
+fn input_owner<'a>(feature: &'a Feature, input: &crate::app::PendingInput) -> Option<&'a str> {
+    let id = input.aiw_feature_session_id.as_deref()?;
+    feature
+        .sessions
+        .iter()
+        .find(|s| s.id == id)
+        .map(|s| s.id.as_str())
+}
+
+/// The pending-input detail for `session` (or for the whole feature with
+/// `None`). An input a session raised shows only on that session's row; a
+/// feature-wide one shows on every agent row as before. Found by the
+/// real-harness smoke run: a background session's edit review was drawn on
+/// its sibling Claude rows and not on its own (DESIGN.md §19.11).
+fn pending_detail_for(
+    app: &App,
+    feature: &Feature,
+    session: Option<&FeatureSession>,
+) -> Option<String> {
+    let owned_only = session.is_some_and(FeatureSession::is_background);
+    if !owned_only && !app.is_feature_waiting_for_input(&feature.name) {
         return None;
     }
     let explained = app.attention_for(&feature.tmux_session).is_some();
     let input = app.pending_inputs.iter().find(|input| {
-        input.feature_name.as_deref() == Some(feature.name.as_str())
-            && !(explained && input.is_session_wait())
+        if input.feature_name.as_deref() != Some(feature.name.as_str())
+            || (explained && input.is_session_wait())
+        {
+            return false;
+        }
+        match (session, input_owner(feature, input)) {
+            (None, _) => true,
+            (Some(s), Some(owner)) => owner == s.id,
+            (Some(_), None) => !owned_only,
+        }
     })?;
     let message = input.message.trim();
     let kind = match input.notification_type.as_str() {
@@ -459,7 +493,10 @@ fn background_badge(
                 AttentionState::Question | AttentionState::Waiting
             )
     });
+    // FORK: §19.11 — an edit review or question this session raised.
+    let own_input = pending_detail_for(app, feature, Some(session));
     let mut out = match state {
+        _ if own_input.is_some() => badge(BadgeKind::NeedsYou, own_input.clone()),
         _ if hook_question.is_some() => {
             let record = hook_question.expect("checked");
             SessionBadge::new(BadgeKind::NeedsYou, record.since, attention_detail(record))
@@ -611,7 +648,7 @@ pub fn session_badge(
     if session_working(app, feature, session) {
         return decorate(badge(BadgeKind::Working, session.status_text.clone()));
     }
-    if let Some(detail) = feature_pending_detail(app, feature)
+    if let Some(detail) = pending_detail_for(app, feature, Some(session))
         && signal_applies(feature, None, session)
     {
         return decorate(badge(BadgeKind::NeedsYou, Some(detail)));
@@ -1078,6 +1115,29 @@ mod tests {
         let codex = session_badge(&app, 0, 0, 1, now);
         assert_eq!(codex.kind, BadgeKind::NeedsYou);
         assert_eq!(codex.label(now), "diff review");
+    }
+
+    /// §19.11: a review raised by one session lands on that session's row,
+    /// not on every agent of the feature (found by the real-harness smoke run).
+    #[test]
+    fn an_input_a_session_raised_lights_only_that_session() {
+        let mut app = app_with(&[SessionKind::Claude, SessionKind::Codex]);
+        let now = Utc::now();
+        let codex_id = id(&app, 1);
+        app.pending_inputs.push(crate::app::PendingInput {
+            feature_name: Some("hx-12".into()),
+            project_name: Some("RS".into()),
+            notification_type: "diff-review".into(),
+            message: "Review: src/main.rs".into(),
+            aiw_feature_session_id: Some(codex_id),
+            ..Default::default()
+        });
+        assert_eq!(session_badge(&app, 0, 0, 0, now).kind, BadgeKind::Idle);
+        let codex = session_badge(&app, 0, 0, 1, now);
+        assert_eq!(codex.kind, BadgeKind::NeedsYou);
+        assert_eq!(codex.label(now), "diff review: Review: src/main.rs");
+        // The feature still says it needs you.
+        assert_eq!(feature_badge(&app, 0, 0, now).kind, BadgeKind::NeedsYou);
     }
 
     #[test]

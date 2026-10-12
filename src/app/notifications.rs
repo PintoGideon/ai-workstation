@@ -77,6 +77,7 @@ const NOTIFICATION_MAX_AGE: std::time::Duration = std::time::Duration::from_secs
 #[derive(Deserialize)]
 struct NotificationJson {
     session_id: Option<String>,
+    aiw_feature_session_id: Option<String>, // FORK: §19.11
     cwd: Option<String>,
     message: Option<String>,
     #[serde(alias = "type")]
@@ -155,6 +156,7 @@ impl NotificationJson {
             proceed_signal: self.proceed_signal,
             request_id: self.request_id,
             reply_socket: self.reply_socket,
+            aiw_feature_session_id: self.aiw_feature_session_id, // FORK: §19.11
         }
     }
 }
@@ -1365,6 +1367,7 @@ impl App {
             proceed_signal: msg.proceed_signal,
             request_id: msg.request_id,
             reply_socket: msg.reply_socket,
+            aiw_feature_session_id: msg.aiw_feature_session_id.clone(), // FORK: §19.11
         };
         // Toast queued reviews too, except for Codex features whose
         // reviews surface via the sidebar live state instead.

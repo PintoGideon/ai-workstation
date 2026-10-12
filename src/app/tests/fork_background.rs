@@ -548,3 +548,35 @@ fn removing_the_row_stops_the_session_in_claude() {
     }
     assert!(!t.f.app.background.records.contains_key(&id));
 }
+
+/// §19.11 (real-harness smoke run): an edit review a background session
+/// raised shows on its own row, while the roster only says "working".
+#[test]
+fn an_edit_review_the_background_session_raised_shows_on_its_row() {
+    let mut t = bg();
+    let id = add_bg(&mut t, "");
+    launched(&mut t, &id);
+    let (pi, fi, si) = indices(&t.f.app, &id);
+    let roster = crate::fork::claude_roster::parse(
+        r#"[{"cwd":"/w","kind":"background","id":"abc12345","state":"working","status":"busy","sessionId":"conv-1"}]"#,
+    );
+    t.f.app.apply_claude_roster(roster);
+    let feature = t.f.app.store.projects[pi].features[fi].name.clone();
+    t.f.app.pending_inputs.push(crate::app::PendingInput {
+        feature_name: Some(feature),
+        project_name: Some(t.f.app.store.projects[pi].name.clone()),
+        notification_type: "diff-review".into(),
+        message: "Review: bg-iso.txt".into(),
+        aiw_feature_session_id: Some(id.clone()),
+        ..Default::default()
+    });
+    let badge = session_badge(&t.f.app, pi, fi, si, chrono::Utc::now());
+    assert_eq!(badge.kind, BadgeKind::NeedsYou);
+    assert!(
+        badge
+            .label_compact()
+            .contains("diff review: Review: bg-iso.txt"),
+        "{}",
+        badge.label_compact()
+    );
+}

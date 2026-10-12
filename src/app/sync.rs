@@ -1348,6 +1348,7 @@ impl App {
                         proceed_signal: None,
                         request_id: None,
                         reply_socket: None,
+                        aiw_feature_session_id: None, // FORK: §19.11 (a feature-wide inference)
                     });
                     self.log_info(
                         "sync",

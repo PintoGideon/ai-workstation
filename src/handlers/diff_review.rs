@@ -495,6 +495,7 @@ mod tests {
             proceed_signal: Some(tmp.path().join("proceed").display().to_string()),
             request_id: None,
             reply_socket: None,
+            aiw_feature_session_id: None,
         });
         if let AppMode::DiffReviewPrompt(state) = &mut app.mode {
             state.editing_feedback = true;
@@ -560,6 +561,7 @@ mod tests {
             proceed_signal: Some(tmp.path().join("proceed").display().to_string()),
             request_id: None,
             reply_socket: None,
+            aiw_feature_session_id: None,
         });
 
         handle_diff_review_key(&mut app, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))

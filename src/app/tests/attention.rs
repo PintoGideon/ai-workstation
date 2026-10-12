@@ -358,6 +358,7 @@ fn input_request_for(feature_name: &str) -> PendingInput {
         proceed_signal: None,
         request_id: None,
         reply_socket: None,
+        aiw_feature_session_id: None,
     }
 }
 

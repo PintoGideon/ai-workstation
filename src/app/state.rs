@@ -100,6 +100,10 @@ pub struct PendingInput {
     pub proceed_signal: Option<String>,
     pub request_id: Option<String>,
     pub reply_socket: Option<String>,
+    /// FORK: §19.11 — the AIW session that raised it (hooks carry
+    /// `AIW_FEATURE_SESSION_ID`), so the badge lands on that session's row
+    /// rather than on every agent of the feature.
+    pub aiw_feature_session_id: Option<String>,
 }
 
 impl PendingInput {

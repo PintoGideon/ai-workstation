@@ -1520,6 +1520,7 @@ fn note_codex_prompt_submit_marks_repo_root_feature_thinking() {
         proceed_signal: None,
         request_id: None,
         reply_socket: None,
+        aiw_feature_session_id: None,
     });
 
     app.note_codex_prompt_submit("aiw-my-feat", "codex");
@@ -1623,6 +1624,7 @@ fn file_session_wait(file_path: &std::path::Path, message: &str) -> PendingInput
         proceed_signal: None,
         request_id: None,
         reply_socket: None,
+        aiw_feature_session_id: None,
     }
 }
 

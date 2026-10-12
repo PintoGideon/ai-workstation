@@ -1595,6 +1595,7 @@ mod tests {
             proceed_signal: None,
             request_id: None,
             reply_socket: None,
+            aiw_feature_session_id: None,
         }
     }
 
