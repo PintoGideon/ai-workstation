@@ -30,6 +30,9 @@ pub struct ForkFeatureState {
     pub mode: VibeMode,
     pub enable_chrome: bool,
     pub include_context: bool,
+    /// FORK: §19.2 — the new feature's agent continues this conversation
+    /// (`f` → "new worktree") instead of starting fresh.
+    pub fork_conversation: Option<crate::fork::session_identity::ForkSource>,
 }
 
 #[derive(Debug, Clone)]
@@ -1215,6 +1218,10 @@ pub enum AppMode {
     PlaceholderFill(PlaceholderFillState),
     SkillPicker(SkillPickerState),
     ForkingFeature(ForkFeatureState),
+    /// FORK: `f` — where a fork of a session's conversation goes (§19.2).
+    ForkSession(crate::app::fork_identity::ForkSessionState),
+    /// FORK: `E` — Claude sessions outside AIW in the projects (§19.2).
+    ExternalSessions(crate::app::fork_identity::ExternalSessionsState),
     ThemePicker(ThemePickerState),
     SyntaxLanguagePicker(SyntaxLanguagePickerState),
     DebugLog(DebugLogState),

@@ -452,6 +452,10 @@ PY
 check "settings: every per-session --settings file carries the hooks and the status line" $?
 AIW_TMUX_SOCKET=$AIW_SOCK aiw doctor 2>/dev/null | grep -q 'passed at launch with --settings'; check "doctor: reports the --settings mode and the Codex /hooks trust note" $?
 
+# §19.2: names, forks, Claude's roster
+# shellcheck disable=SC1091
+source "$HERE/identity.sh"
+
 aiw_quit; check "q: quit at the end" $?
 ! cockpit_alive && [ "$(view_sessions)" = 0 ]; check "q: cockpit server gone, no view sessions, agents still running" $?
 doctor_clean; check "doctor clean after the adversarial run" $?

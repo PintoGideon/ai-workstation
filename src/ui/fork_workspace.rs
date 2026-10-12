@@ -209,6 +209,14 @@ fn sidebar_item_lines(
                     row_width,
                 ));
             }
+            if !project.collapsed && !compact {
+                lines.extend(external_lines(
+                    &app.external_sessions_for_project(&project.name),
+                    "  ",
+                    row_width,
+                    dim,
+                ));
+            }
             lines
         }
         VisibleItem::Feature(pi, fi) => {
@@ -244,7 +252,16 @@ fn sidebar_item_lines(
             } else {
                 vec![Span::styled(badge.age(now), dim)]
             };
-            vec![fit_line(with_right(left, right, row_width), row_width)]
+            let mut lines = vec![fit_line(with_right(left, right, row_width), row_width)];
+            if !feature.collapsed && !compact {
+                lines.extend(external_lines(
+                    &app.external_sessions_for_feature(&feature.id),
+                    "   ",
+                    row_width,
+                    dim,
+                ));
+            }
+            lines
         }
         VisibleItem::Session(pi, fi, si) => {
             let session = &app.store.projects[*pi].features[*fi].sessions[*si];
@@ -311,6 +328,51 @@ fn context_style(band: ContextBand, theme: &Theme, dim: Style) -> Style {
             .fg(theme.danger.to_color())
             .add_modifier(Modifier::BOLD),
     }
+}
+
+/// FORK: §19.2 — dimmed, read-only lines for Claude sessions outside AIW:
+/// up to `MAX_EXTERNAL_LINES`, then `+N more (E)`.
+fn external_lines(
+    externals: &[&crate::app::fork_identity::ExternalSession],
+    indent: &str,
+    row_width: usize,
+    dim: Style,
+) -> Vec<Line<'static>> {
+    use crate::app::fork_identity::MAX_EXTERNAL_LINES;
+    let mut lines: Vec<Line<'static>> = externals
+        .iter()
+        .take(if externals.len() > MAX_EXTERNAL_LINES {
+            MAX_EXTERNAL_LINES
+        } else {
+            externals.len()
+        })
+        .map(|external| {
+            let entry = &external.entry;
+            fit_line(
+                Line::from(vec![
+                    Span::raw(indent.to_string()),
+                    Span::styled(
+                        format!("↗ {} · {}", entry.display_name(), entry.state_word()),
+                        dim.add_modifier(Modifier::ITALIC),
+                    ),
+                ]),
+                row_width,
+            )
+        })
+        .collect();
+    if externals.len() > MAX_EXTERNAL_LINES {
+        lines.push(fit_line(
+            Line::from(vec![
+                Span::raw(indent.to_string()),
+                Span::styled(
+                    format!("↗ +{} more (E)", externals.len() - MAX_EXTERNAL_LINES),
+                    dim.add_modifier(Modifier::ITALIC),
+                ),
+            ]),
+            row_width,
+        ));
+    }
+    lines
 }
 
 /// The footer's key hints: a narrow pane, a short line.

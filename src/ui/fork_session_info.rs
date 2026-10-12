@@ -62,6 +62,10 @@ pub fn lines(info: &SessionInfo, theme: &Theme, width: usize) -> Vec<Line<'stati
         harness.push(Span::styled(" · ", dim));
         harness.push(Span::styled(model.clone(), dim));
     }
+    // FORK: §19.2 — last, so a narrow pane cuts the name, not the model.
+    if let Some(name) = &info.harness_name {
+        harness.push(Span::styled(format!(" · @{name}"), dim));
+    }
     out.push(fit_line(Line::from(harness), width));
     let mut numbers: Vec<Span<'static>> = Vec::new();
     if let Some((pct, band)) = info.context {
@@ -159,6 +163,7 @@ mod tests {
             label: "Claude 1".into(),
             title: "Fix the login redirect loop in the SSO flow for every tenant".into(),
             harness: "Claude Code".into(),
+            harness_name: None,
             model: Some("Opus 4".into()),
             context: Some((42, ContextBand::Normal)),
             cost: Some("$0.84".into()),

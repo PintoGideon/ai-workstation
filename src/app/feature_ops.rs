@@ -949,6 +949,12 @@ impl App {
         );
 
         Self::initialize_feature_sessions(feature, false, None);
+        // FORK: §19.2 — a new-worktree fork waits for this first start.
+        super::fork_identity::claim_feature_fork(
+            &mut self.session_identity,
+            &launch_project_name,
+            feature,
+        );
 
         if already_running {
             return Ok(Started::Yes);
@@ -1070,8 +1076,23 @@ impl App {
             match session.kind {
                 SessionKind::Claude => {
                     launched_agent_sessions += 1;
-                    let resume_id =
-                        resume_override.unwrap_or_else(|| session.claude_session_id.clone());
+                    // FORK: §19.2 — a pending fork resumes the source
+                    // conversation with `--fork-session`.
+                    let mut claude_args = extra_args.clone();
+                    let fork = self
+                        .session_identity
+                        .pending_forks
+                        .remove(&session.id)
+                        .filter(|f| f.applies_to(&AgentKind::Claude));
+                    let resume_id = match &fork {
+                        Some(source) => Some(crate::fork::session_identity::claude_fork(
+                            source,
+                            &mut claude_args,
+                        )),
+                        None => {
+                            resume_override.unwrap_or_else(|| session.claude_session_id.clone())
+                        }
+                    };
                     // FORK: --settings and the launch context (DESIGN.md §16).
                     let launch_ctx = crate::fork::launch::LaunchContext {
                         project_name: launch_project_name.clone(),
@@ -1082,6 +1103,11 @@ impl App {
                         feature_session_id: session.id.clone(),
                         mode: feature.mode.clone(),
                         is_worktree: feature.is_worktree,
+                        session_name: Some(self.session_identity.names.assign(
+                            &session.id,
+                            &feature.name,
+                            &session.label,
+                        )),
                     };
                     self.tmux.launch_claude(
                         &feature.tmux_session,
@@ -1091,7 +1117,7 @@ impl App {
                         crate::fork::launch::claude_launch_args(
                             &launch_ctx,
                             &self.config.aiw,
-                            extra_args.clone(),
+                            claude_args,
                         ),
                     )?;
                 }
@@ -1132,18 +1158,35 @@ impl App {
                         feature_session_id: session.id.clone(),
                         mode: feature.mode.clone(),
                         is_worktree: feature.is_worktree,
+                        session_name: None,
                     };
-                    self.tmux.launch_codex(
-                        &feature.tmux_session,
-                        &session.tmux_window,
-                        &session.id,
-                        resume_override.flatten(),
-                        crate::fork::launch::codex_launch_args(
-                            &launch_ctx,
-                            &self.config.aiw,
+                    let codex_args = crate::fork::launch::codex_launch_args(
+                        &launch_ctx,
+                        &self.config.aiw,
+                        codex_args,
+                    );
+                    // FORK: §19.2 — a pending fork runs `codex … fork <id>`.
+                    match self
+                        .session_identity
+                        .pending_forks
+                        .remove(&session.id)
+                        .filter(|f| f.applies_to(&AgentKind::Codex))
+                    {
+                        Some(source) => self.tmux.launch_program(
+                            &feature.tmux_session,
+                            &session.tmux_window,
+                            &session.id,
+                            "codex",
+                            crate::fork::session_identity::codex_fork_args(&source, codex_args),
+                        )?,
+                        None => self.tmux.launch_codex(
+                            &feature.tmux_session,
+                            &session.tmux_window,
+                            &session.id,
+                            resume_override.flatten(),
                             codex_args,
-                        ),
-                    )?;
+                        )?,
+                    }
                 }
                 SessionKind::Pi => {
                     launched_agent_sessions += 1;
@@ -1756,6 +1799,7 @@ impl App {
         self.clear_todo_links_to_deleted_feature(feature_id.as_deref());
         if let Some(removed) = self.store.remove_feature(&project_name, &feature_name) {
             self.forget_deleted_feature_sessions(&removed); // FORK: queues, settings files
+            self.forget_feature_identities(&removed); // FORK: §19.2
         }
         self.save()?;
 
@@ -1919,6 +1963,7 @@ impl App {
                         .remove_feature(&deletion.project_name, &deletion.feature_name)
                     {
                         self.forget_deleted_feature_sessions(&removed); // FORK
+                        self.forget_feature_identities(&removed); // FORK: §19.2
                     }
                     let _ = self.save();
                     self.message = Some(format!("Deleted feature '{}'", deletion.feature_name));
@@ -1987,6 +2032,7 @@ impl App {
             mode: feature.mode.clone(),
             enable_chrome: feature.enable_chrome,
             include_context: true,
+            fork_conversation: None,
         };
 
         self.mode = AppMode::ForkingFeature(state);
@@ -2007,6 +2053,7 @@ impl App {
         let agent = state.agent.clone();
         let enable_chrome = state.enable_chrome;
         let include_context = state.include_context;
+        let fork_conversation = state.fork_conversation.clone(); // FORK: §19.2
         let source_workdir = self
             .store
             .projects
@@ -2040,6 +2087,22 @@ impl App {
         } else {
             self.message = Some(format!("Error: Project '{}' not found", project_name));
             return Ok(());
+        }
+
+        // FORK: §19.2 — `f` → "new worktree": the new feature's first agent
+        // continues the source conversation. A changed harness cannot.
+        if let Some(source) = fork_conversation {
+            if source.applies_to(&agent) {
+                self.session_identity
+                    .pending_feature_forks
+                    .insert((project_name.clone(), new_branch.clone()), source);
+            } else {
+                self.push_toast_warning(format!(
+                    "The new feature runs {}, so it starts fresh instead of continuing '{}'",
+                    agent.display_name(),
+                    source.source_label
+                ));
+            }
         }
 
         // FORK: a repo-supplied hook needs one-time approval, asked before

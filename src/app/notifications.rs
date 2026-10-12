@@ -938,6 +938,11 @@ impl App {
         self.bind_exact_token_usage_source_from_ipc(&msg);
 
         let msg_type = msg.msg_type.as_deref().unwrap_or("stop").to_string();
+        // FORK: §19.2 — a hook that shows the agent moving again outdates
+        // what the last Claude roster read said it waited for.
+        if let Some(feature_session_id) = msg.aiw_feature_session_id.as_deref() {
+            self.roster_saw_hook_activity(feature_session_id, &msg_type);
+        }
 
         // "clear" removes any pending notification for this
         // session, sent by clear-notify.sh on PreToolUse.

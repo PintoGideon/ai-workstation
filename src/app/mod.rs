@@ -20,6 +20,7 @@ pub(crate) mod feature_setup;
 pub mod fork_cockpit; // FORK: the cockpit sidebar (DESIGN.md §18)
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7, DESIGN.md §16)
 pub(crate) mod fork_hook_events; // FORK: richer row events from hooks (DESIGN.md §19.1)
+pub(crate) mod fork_identity; // FORK: harness names, forks, Claude's roster (DESIGN.md §19.2)
 pub(crate) mod fork_launch; // FORK: launch-time arguments from the store (DESIGN.md §16)
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6, DESIGN.md §16)
 pub(crate) mod fork_prompt_paste; // FORK: prompts pasted unsent into the agent pane (DESIGN.md §18)
@@ -692,6 +693,9 @@ pub struct App {
     /// FORK: row events from the newer harness hooks, per feature session
     /// (DESIGN.md §19.1).
     pub hook_events: HashMap<String, crate::fork::hook_events::HookEventState>,
+    /// FORK: harness names, pending conversation forks and Claude's own
+    /// session roster (DESIGN.md §19.2).
+    pub(crate) session_identity: fork_identity::IdentityRuntime,
     /// FORK: ids for queued items when no database is open (negative).
     pub(crate) followup_memory_id: i64,
     pub ipc_tool_sessions: std::collections::HashSet<String>,
@@ -1121,9 +1125,10 @@ impl App {
             pending_permissions: Vec::new(), // FORK: P6
             telemetry: HashMap::new(),       // FORK: P4
             fork_telemetry: Default::default(),
-            followups: HashMap::new(),       // FORK: P7
-            subagent_counts: HashMap::new(), // FORK: P5
-            hook_events: HashMap::new(),     // FORK: §19.1
+            followups: HashMap::new(),            // FORK: P7
+            subagent_counts: HashMap::new(),      // FORK: P5
+            hook_events: HashMap::new(),          // FORK: §19.1
+            session_identity: Default::default(), // FORK: §19.2
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
@@ -1207,6 +1212,7 @@ impl App {
         // FORK(no-cloud): no `gh` at startup. A pending/failed issue comment
         // is retried on the explicit refresh (`R`) instead.
         app.load_followups(); // FORK: P7
+        app.load_session_names(); // FORK: §19.2
 
         Ok(app)
     }
@@ -1336,9 +1342,10 @@ impl App {
             pending_permissions: Vec::new(), // FORK: P6
             telemetry: HashMap::new(),       // FORK: P4
             fork_telemetry: Default::default(),
-            followups: HashMap::new(),       // FORK: P7
-            subagent_counts: HashMap::new(), // FORK: P5
-            hook_events: HashMap::new(),     // FORK: §19.1
+            followups: HashMap::new(),            // FORK: P7
+            subagent_counts: HashMap::new(),      // FORK: P5
+            hook_events: HashMap::new(),          // FORK: §19.1
+            session_identity: Default::default(), // FORK: §19.2
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),

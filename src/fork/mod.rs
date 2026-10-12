@@ -18,6 +18,9 @@ pub mod session_info; // the session info block under the sidebar (DESIGN.md §1
 // G9 — sessions whose tmux window closed on its own.
 pub mod session_reconcile;
 
+// §19.2 — harness names and conversation forks.
+pub(crate) mod session_identity;
+
 // G6 — theming and fonts (DESIGN.md §8).
 pub mod agent_context; // the launch context in the agent's system prompt (DESIGN.md §16)
 pub(crate) mod appearance;
@@ -31,6 +34,7 @@ pub(crate) mod theme_picker;
 pub(crate) mod themes;
 
 // G2 — Gemini CLI and Cursor agent (DESIGN.md §5).
+pub(crate) mod claude_roster; // `claude agents --json`: external sessions and waitingFor (DESIGN.md §19.2)
 pub(crate) mod claude_settings; // Claude hooks + status line via --settings (DESIGN.md §16.6)
 pub mod codex_hooks; // Codex `.codex/hooks.json` (DESIGN.md §16)
 pub mod cursor;

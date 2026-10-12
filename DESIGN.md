@@ -867,3 +867,55 @@ context already travels in `developer_instructions`).
 state. `setup-sandbox.sh` now resolves the binary to an absolute path (a relative one silently ran the
 installed `aiw`).
 
+### 19.2 Session identity: names, forks, Claude's roster (proposal 3)
+
+**Names.** Every Claude launch carries `--name <name>` (`fork::launch::claude_launch_args` via
+`LaunchContext::session_name`). The name is `fork::session_identity::base_name(feature, label)`, slugged and cut to
+60 characters, assigned once per feature session (`SessionNames::assign`) and stored in a new FORK_SCHEMA table
+`aiw_session_names(session_id, name)`; a collision with another AIW session appends the session id's first six
+alphanumerics. It is kept across AIW renames, so `claude --resume <name>`, `/list-agents`, agent view and step 5's
+messages see one stable handle. Assignment happens at every launch site: the feature start loop and the saved-
+conversation pickers fill the context inline (they hold the feature mutably, so the names live on a separate
+`App::session_identity` field), and the `&self` launch helpers read a name assigned just before
+(`App::assign_session_name`). Names are flushed to SQLite on the status sweep and forgotten with their session or
+feature. `fork::launch::only_settings_flag` accepts AIW's own `--name` pair. Codex 0.162 has no launch-time name
+flag (`codex resume <name>` only resolves names set inside Codex), so Codex sessions stay unnamed. Resume stays
+id-first: an ambiguous `claude --resume <name>` opens a picker, so the name is used for matching the roster, not
+passed to `--resume`.
+
+**Forks.** `f` on a Claude or Codex row with a saved conversation (`session_ops::persisted_resume_id`) opens
+`AppMode::ForkSession`: (1) a new window in the same feature — `create_agent_session_with_fork` adds a
+`<label> fork` session whose launch resumes the source with `--fork-session` (Claude) or runs
+`codex <opts> fork <thread>` through `launch_program` (Codex); (2) a new worktree — `F`'s `ForkingFeature` flow with
+the harness preset to the source's, `include_context` off and `fork_conversation` set; `create_forked_feature`
+records `pending_feature_forks[(project, branch)]`, and the feature's first start
+(`fork_identity::claim_feature_fork`) hands it to the first matching session, consumed once by the start loop.
+A changed harness drops the fork with a toast. Claude's `--resume <id>` finds the source across the repo's
+worktrees and other projects, and `--fork-session` starts in the launch directory, so the new checkout is right.
+
+**Roster.** `fork::claude_roster` runs `claude agents --json` (verified: it does not start Claude's supervisor,
+answers in ~0.1 s; `~/.claude/jobs/*/state.json` is documented as unstable, so it is not read) every 10 s from the
+5 s sweep on a background thread with a 4 s timeout; the resolved binary is cached between reads.
+`App::apply_claude_roster` matches entries to AIW sessions by conversation id, then by name. Matched entries with
+`waitingFor` / `state: blocked` become `roster_waiting`, a needs-you badge that outranks a finished-turn attention
+record but not a hook-reported question (`fork::badges::session_badge`). A hook message for the session that shows
+the agent moving again (`clear`, tool or thinking start/stop, `stop`) drops its `roster_waiting` entry at once
+(`App::roster_saw_hook_activity`), so an answered prompt does not stay ⛔ until the next read. The read drains
+stdout on a thread while the command runs (a roster over the pipe buffer would otherwise block `claude` until the
+timeout) and retries a spawn that fails with ETXTBSY, as when `claude` is being updated. Unmatched entries inside a project's
+repo or a feature's checkout (most specific root wins, canonical paths compared) become `ExternalSession`s, drawn
+as dimmed `↗ name · state` lines (at most two per row, then `+N more (E)`; `workspace_item_height` counts them) and
+listed by `E` (`AppMode::ExternalSessions`), where `Enter` copies `claude attach <id>` for background sessions.
+Making them selectable rows would have touched every `Selection`/`VisibleItem` match (over 200 sites); a list
+dialog gives the same information. Config: `claude_agents_roster` (default on).
+
+**Tests.** `fork::session_identity` (names, collisions, fork args, labels), `fork::claude_roster` (parse,
+state words, attach commands, path matching, fetch with fake and slow binaries), `db::session_names`,
+`app::fork_identity` (persistence, roster split, fork dialog, feature-fork claim), `handlers::fork_identity`,
+`app::tests::fork_identity` (same-feature Claude fork, Codex fork, unique launch names, new-worktree fork through
+the start loop, restart after a fork, roster needs-you precedence). E2E (`scripts/dev/e2e/identity.sh`): the fake
+claude registers itself in a fake roster, answers `agents --json` from it plus `$HOME/.e2e-roster.json`, honours
+`--name` / `--fork-session` and `codex fork`, and has `/rosterwait` / `/rosteridle`; the run checks names,
+resume keeping the name, both fork targets, a Codex fork, external lines appearing and clearing, the `E` list,
+and a roster-only wait turning an AIW row ⛔ and back.
+

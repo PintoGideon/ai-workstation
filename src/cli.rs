@@ -1459,6 +1459,7 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
         }
         // FORK: P4 telemetry sweep results.
         force_redraw |= app.poll_telemetry_bg();
+        force_redraw |= app.poll_claude_roster_bg(); // FORK: §19.2
         // FORK: the session info block's sweep results (DESIGN.md §18).
         force_redraw |= app.poll_session_info_bg();
 
@@ -1726,6 +1727,8 @@ fn run_loop<B: Backend<Error = io::Error> + io::Write>(
             crate::fork::ipc_rebind::rebind_if_vanished(app);
             // FORK: Codex / Gemini context and cost, read in the background (P4).
             app.telemetry_tick();
+            // FORK: §19.2 — Claude's own roster, and session names to disk.
+            app.claude_roster_tick();
             // FORK: the session info block reads the harness transcripts (DESIGN.md §18).
             app.session_info_tick();
             // Kick off a background refresh only when the previous one has

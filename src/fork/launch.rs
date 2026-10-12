@@ -36,6 +36,9 @@ pub struct LaunchContext {
     pub feature_session_id: String,
     pub mode: VibeMode,
     pub is_worktree: bool,
+    /// The `--name` Claude is launched with (DESIGN.md §19.2); `None` for
+    /// harnesses without a launch-time name and for callers that have none.
+    pub session_name: Option<String>,
 }
 
 impl LaunchContext {
@@ -54,7 +57,14 @@ impl LaunchContext {
             feature_session_id: session_id.to_string(),
             mode: feature.mode.clone(),
             is_worktree: feature.is_worktree,
+            session_name: None,
         }
+    }
+
+    /// The same context with the session's harness name.
+    pub fn with_session_name(mut self, name: Option<String>) -> Self {
+        self.session_name = name;
+        self
     }
 }
 
@@ -142,6 +152,11 @@ pub fn claude_launch_args(
         args.push("--settings".to_string());
         args.push(path.to_string_lossy().into_owned());
     }
+    // FORK: §19.2 — the session's stable name, so `claude --resume <name>`,
+    // agent view and other sessions see AIW's handle.
+    if let Some(name) = ctx.session_name.as_deref() {
+        args = super::session_identity::with_claude_name(args, name);
+    }
     // Unless `agent_context_prompt` is off, the context paragraph goes into
     // `--append-system-prompt` (after any earlier appended text).
     if config.agent_context_prompt {
@@ -165,15 +180,21 @@ pub fn codex_launch_args(
 }
 
 /// Whether `args` is exactly what AIW adds to a launch with no other flags:
-/// `--settings <file>` and the context paragraph.
+/// `--settings <file>`, optionally `--name <name>` (§19.2), and the context
+/// paragraph.
 pub fn only_settings_flag(args: &[String]) -> bool {
     let settings = args.len() >= 2 && args[0] == "--settings" && args[1].ends_with(".json");
-    let rest = &args[2.min(args.len())..];
-    let context = rest.is_empty()
+    if !settings {
+        return false;
+    }
+    let mut rest = &args[2..];
+    if rest.len() >= 2 && rest[0] == "--name" && !rest[1].is_empty() {
+        rest = &rest[2..];
+    }
+    rest.is_empty()
         || (rest.len() == 2
             && rest[0] == "--append-system-prompt"
-            && rest[1].starts_with(super::agent_context::MARKER));
-    settings && context
+            && rest[1].starts_with(super::agent_context::MARKER))
 }
 
 /// Remove the settings file of a session that is gone.
@@ -245,6 +266,34 @@ mod tests {
         assert!(path.exists());
         remove_claude_settings("fs-1");
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn a_named_session_gets_one_name_flag_and_still_counts_as_aiws_own_args() {
+        let quiet = AiwConfig {
+            agent_context_prompt: false,
+            ..AiwConfig::default()
+        };
+        let mut ctx = ctx().with_session_name(Some("hx-12-claude-1".into()));
+        // Its own settings file: the other test removes `fs-1`'s.
+        ctx.feature_session_id = "fs-named".into();
+        let args = claude_launch_args(&ctx, &quiet, Vec::new());
+        assert_eq!(&args[2..], ["--name", "hx-12-claude-1"]);
+        assert!(only_settings_flag(&args));
+        let full = claude_launch_args(&ctx, &AiwConfig::default(), Vec::new());
+        assert!(only_settings_flag(&full));
+        assert_eq!(full.iter().filter(|a| *a == "--name").count(), 1);
+        // A user's own flag is not AIW's.
+        let mut extra = args.clone();
+        extra.push("--chrome".into());
+        assert!(!only_settings_flag(&extra));
+        // An explicit name in the args wins.
+        let mine = claude_launch_args(&ctx, &quiet, vec!["-n".into(), "mine".into()]);
+        assert_eq!(
+            mine.iter().filter(|a| *a == "--name" || *a == "-n").count(),
+            1
+        );
+        remove_claude_settings("fs-named");
     }
 
     #[test]

@@ -216,10 +216,30 @@ impl App {
         match item {
             VisibleItem::Project(pi) => {
                 let project = &self.store.projects[*pi];
-                if project.features.is_empty() && !project.collapsed {
+                let base = if project.features.is_empty() && !project.collapsed {
                     2
                 } else {
                     1
+                };
+                // FORK: §19.2 — external Claude sessions in the repo.
+                let external = if project.collapsed {
+                    0
+                } else {
+                    super::fork_identity::external_line_count(
+                        self.external_sessions_for_project(&project.name).len(),
+                    )
+                };
+                base + external
+            }
+            VisibleItem::Feature(pi, fi) => {
+                // FORK: §19.2 — external Claude sessions in the checkout.
+                let feature = &self.store.projects[*pi].features[*fi];
+                if feature.collapsed {
+                    1
+                } else {
+                    1 + super::fork_identity::external_line_count(
+                        self.external_sessions_for_feature(&feature.id).len(),
+                    )
                 }
             }
             VisibleItem::Session(pi, fi, si) => {
@@ -235,7 +255,6 @@ impl App {
                     _ => 1,
                 }
             }
-            _ => 1,
         }
     }
 

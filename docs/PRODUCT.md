@@ -234,6 +234,8 @@ inside the app.
 | --- | --- |
 | `s` | Add a session: an agent, terminal, Neovim, VS Code, TODOs or a custom session |
 | `S` | Pick a saved Claude or Codex transcript to resume in the selected feature or session |
+| `f` | Fork the selected Claude or Codex conversation. Choose a new window in the same feature, or a new feature worktree from this branch; the fork continues the conversation under a new id and the original keeps its own |
+| `E` | List Claude sessions started outside aiw in your projects' checkouts. `Enter` copies the `claude attach` command for a background one |
 | `c` | Start the selected feature or stopped session; relaunch an exited agent in its window |
 | `x` | Stop the selected session or feature. The row stays |
 | `v` | Tile the feature's agents in the right pane; `Alt+q` there comes back |
@@ -316,6 +318,38 @@ tasks, background work, latest event, and `cd api` when the session moved to
 another directory. Codex rows show working as soon as a prompt is submitted and
 while a shell command runs, through Codex's own hooks; the turn still ends on
 Codex's notify call.
+
+**Names.** Every Claude session is launched with `--name`, a stable handle
+made from its feature and label, such as `auth-fix-claude-1`. It is chosen on
+the session's first launch, kept when you rename the row in aiw, and made
+unique by adding the first characters of the session id when two would
+collide. The info block shows it after the model as `@auth-fix-claude-1`.
+Claude shows the same name in its prompt bar, in `/resume`, in `claude agents`
+and to its other sessions. `claude --resume auth-fix-claude-1` reopens it from
+any terminal. Codex has no launch-time name, so Codex sessions are unnamed.
+
+**Forks.** `f` on a Claude or Codex row with a saved conversation opens a small
+dialog. "Same feature, new window" adds a session labelled `Claude 1 fork` in
+the same checkout. "New feature worktree from this branch" runs the `F` flow
+with the harness fixed to the source's and the transcript checkbox replaced by
+"continues 'Claude 1'". Either way the new session's first launch runs
+`claude --resume <id> --fork-session` or `codex … fork <id>`: a new conversation
+that starts from the old one, while the original keeps going. Later restarts
+resume the fork's own conversation.
+
+**Sessions outside aiw.** Claude Code keeps its own roster of sessions, which
+`claude agents --json` prints. aiw reads it every ten seconds in the
+background. A Claude session that runs in one of a project's checkouts but was
+not started by aiw shows as a dimmed `↗ name · state` line under its feature,
+or under the project when it runs in the repo but no feature's checkout. At
+most two lines show per row, then `↗ +N more (E)`. `E` lists them all with
+their state and folder; `Enter` copies `claude attach <id>` for a background
+session. An interactive one runs in another terminal and can only be used
+there. The same roster is a second needs-you signal for aiw's own sessions: if
+Claude says one of them waits on a permission, a dialog or input that its hooks
+did not report, the row turns ⛔ with the reason. The mark goes as soon as a
+hook shows the agent running again. Set `claude_agents_roster` to
+false to turn all of this off.
 
 **Cost.** Claude's status line carries the dollar figure. For harnesses that
 report tokens but not cost, aiw multiplies by the prices in the
@@ -452,6 +486,7 @@ written back, so a config from an older version keeps loading.
 | `permission_wait_seconds` | `300` | How long a permission hook waits for your answer |
 | `agent_context_prompt` | `true` | Tell each agent its project, feature, branch and worktree at launch |
 | `claude_hooks_via_settings_flag` | `true` | Pass Claude's hooks with `--settings` instead of writing the repo's settings file |
+| `claude_agents_roster` | `true` | Read `claude agents --json` every ten seconds to show Claude sessions outside aiw and catch a session waiting on input that its hooks missed |
 | `max_concurrent_agents` | `4` | Warn before starting an agent past this many running harnesses; 0 disables |
 | `low_memory_warn_mb` | `1536` | Warn before starting an agent with less free memory than this; 0 disables |
 | `max_agent_autostart_sessions` | `1` | How many saved agent sessions a feature start relaunches; the rest open at a shell |

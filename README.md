@@ -130,6 +130,8 @@ Pi receives no mode flags.
 | `B` / `F` | Create several features at once / fork a feature onto a new branch |
 | `g` | On a project row: browse GitHub issues and start a feature from one |
 | `s` / `S` | Add a session / resume a saved Claude or Codex transcript |
+| `f` | Fork the selected Claude or Codex conversation: a new window in the same feature, or a new worktree |
+| `E` | Claude sessions started outside AIW in your projects, with the command to attach |
 | `c` / `x` | Start a feature or stopped session / stop a session or feature |
 | `v` | Tile the feature's agents in the right pane; `Alt+q` there comes back |
 | `i` | List everything that needs you: questions first, then finished work |

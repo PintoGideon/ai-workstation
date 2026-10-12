@@ -496,6 +496,19 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         );
     }
 
+    // FORK: §19.2
+    if let AppMode::ForkSession(state) = &app.mode {
+        super::dialogs::fork_identity::draw_fork_session_dialog(frame, state, &app.theme);
+    }
+    if let AppMode::ExternalSessions(state) = &app.mode {
+        super::dialogs::fork_identity::draw_external_sessions(
+            frame,
+            &app.session_identity.externals,
+            state,
+            &app.theme,
+        );
+    }
+
     if let AppMode::ThemePicker(state) = &app.mode {
         super::dialogs::draw_theme_picker(
             frame,

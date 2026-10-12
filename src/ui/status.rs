@@ -629,6 +629,23 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("Esc", key_style()),
             Span::raw(" cancel"),
         ]),
+        // FORK: §19.2
+        AppMode::ForkSession(_) => Line::from(vec![
+            Span::styled(" j/k", key_style()),
+            Span::raw(" choose  "),
+            Span::styled("Enter", key_style()),
+            Span::raw(" fork  "),
+            Span::styled("Esc", key_style()),
+            Span::raw(" cancel"),
+        ]),
+        AppMode::ExternalSessions(_) => Line::from(vec![
+            Span::styled(" j/k", key_style()),
+            Span::raw(" move  "),
+            Span::styled("Enter", key_style()),
+            Span::raw(" copy attach command  "),
+            Span::styled("Esc", key_style()),
+            Span::raw(" close"),
+        ]),
         AppMode::ThemePicker(_) => Line::from(vec![
             Span::styled(" j/k", key_style()),
             Span::raw(" navigate  "),

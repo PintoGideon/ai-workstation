@@ -480,8 +480,15 @@ pub fn session_badge(
             Some(format!("turn failed: {reason}")),
         ));
     }
+    // FORK: §19.2 — Claude's roster says the session waits on input that
+    // its hooks did not report (an older hook set, a dialog hooks miss). A
+    // hook-reported question keeps its own detail; a finished-turn record is
+    // older news than a session that waits now.
+    let roster_waiting = app.roster_waiting_for(&session.id);
     if let Some(record) = app.attention_for(&feature.tmux_session)
         && signal_applies(feature, Some(&record.agent), session)
+        && !(roster_waiting.is_some()
+            && matches!(record.state, AttentionState::CompletedAwaitingReview))
     {
         return decorate(match record.state {
             AttentionState::Question | AttentionState::Waiting => {
@@ -497,6 +504,9 @@ pub fn session_badge(
                 None,
             ),
         });
+    }
+    if let Some(waiting) = roster_waiting {
+        return decorate(badge(BadgeKind::NeedsYou, Some(waiting.to_string())));
     }
     if session_working(app, feature, session) {
         return decorate(badge(BadgeKind::Working, session.status_text.clone()));

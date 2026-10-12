@@ -8,6 +8,7 @@ mod dormant;
 mod editor_view;
 mod feature;
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7)
+pub(crate) mod fork_identity; // FORK: fork dialog, external sessions (DESIGN.md §19.2)
 mod harness;
 mod help;
 mod hooks;

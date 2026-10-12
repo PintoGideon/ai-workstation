@@ -1345,6 +1345,12 @@ impl App {
 
         feature.collapsed = false;
         let si = feature.sessions.len() - 1;
+        // FORK: §19.2 — the Claude name this launch carries.
+        if agent == AgentKind::Claude {
+            self.session_identity
+                .names
+                .assign(&session_id, &feature_name, &label);
+        }
         // FORK: --settings (status line, hooks) and the launch context (DESIGN.md §16).
         let extra_args = self.fork_launch_args(&agent, &tmux_session, &session_id, extra_args);
         self.tmux.create_window(&tmux_session, &window, &workdir)?;
@@ -1408,6 +1414,20 @@ impl App {
         harness: Option<AgentKind>,
         intent: StartIntent,
     ) -> Result<(usize, String, String)> {
+        self.create_agent_session_with_fork(pi, fi, label, harness, intent, None)
+    }
+
+    /// [`Self::create_agent_session_labeled_identified`], optionally starting
+    /// the new session from another session's conversation (FORK: §19.2).
+    pub(crate) fn create_agent_session_with_fork(
+        &mut self,
+        pi: usize,
+        fi: usize,
+        label: &str,
+        harness: Option<AgentKind>,
+        intent: StartIntent,
+        fork: Option<crate::fork::session_identity::ForkSource>,
+    ) -> Result<(usize, String, String)> {
         // This always launches a harness, so the gate runs unconditionally --
         // once, here, covering both the new session and any of the feature's
         // own agents that come up with it.
@@ -1450,6 +1470,13 @@ impl App {
         let window = session.tmux_window.clone();
         feature.collapsed = false;
         let si = feature.sessions.len() - 1;
+        // FORK: §19.2 — the Claude name this launch carries.
+        let feature_name = feature.name.clone();
+        if kind == SessionKind::Claude {
+            self.session_identity
+                .names
+                .assign(&session_id, &feature_name, label);
+        }
 
         // The record above exists before the window and the harness do, so a
         // failure below has to take it back out again. Callers are told the
@@ -1466,6 +1493,7 @@ impl App {
             extra_args,
             // Brand-new session: nothing to resume yet.
             None,
+            fork.as_ref(),
         );
         if let Err(e) = launched {
             // Best-effort: whether the window exists depends on which step
@@ -1544,6 +1572,7 @@ impl App {
         session_id: &str,
         extra_args: Vec<String>,
         resume_id: Option<String>,
+        fork: Option<&crate::fork::session_identity::ForkSource>,
     ) -> Result<()> {
         self.launch_agent_session_window_in(
             agent,
@@ -1555,6 +1584,7 @@ impl App {
             extra_args,
             resume_id,
             false,
+            fork,
         )
     }
 
@@ -1573,12 +1603,24 @@ impl App {
         extra_args: Vec<String>,
         resume_id: Option<String>,
         reuse_window: bool,
+        fork: Option<&crate::fork::session_identity::ForkSource>,
     ) -> Result<()> {
         if !reuse_window {
             self.tmux.create_window(tmux_session, window, workdir)?;
         }
+        let fork = fork.filter(|f| f.applies_to(agent));
         match agent {
             AgentKind::Claude => {
+                // FORK: §19.2 — a fork resumes the source with
+                // `--fork-session` instead of `resume_id`.
+                let mut extra_args = extra_args;
+                let resume_id = match fork {
+                    Some(source) => Some(crate::fork::session_identity::claude_fork(
+                        source,
+                        &mut extra_args,
+                    )),
+                    None => resume_id,
+                };
                 // FORK: --settings and the launch context (DESIGN.md §16).
                 let args = self.fork_launch_args(agent, tmux_session, session_id, extra_args);
                 self.tmux
@@ -1587,8 +1629,23 @@ impl App {
             AgentKind::Codex => {
                 let codex_args = crate::codex_config::launch_override_args(workdir, mode);
                 let codex_args = self.fork_launch_args(agent, tmux_session, session_id, codex_args); // FORK
-                self.tmux
-                    .launch_codex(tmux_session, window, session_id, resume_id, codex_args)?;
+                match fork {
+                    // FORK: §19.2 — `codex … fork <id>`.
+                    Some(source) => self.tmux.launch_program(
+                        tmux_session,
+                        window,
+                        session_id,
+                        "codex",
+                        crate::fork::session_identity::codex_fork_args(source, codex_args),
+                    )?,
+                    None => self.tmux.launch_codex(
+                        tmux_session,
+                        window,
+                        session_id,
+                        resume_id,
+                        codex_args,
+                    )?,
+                }
             }
             AgentKind::Pi => {
                 self.tmux.launch_pi(tmux_session, window, session_id)?;
@@ -1678,6 +1735,7 @@ impl App {
         // settings file goes too (DESIGN.md §16).
         self.clear_followups(&session_id);
         crate::fork::launch::remove_claude_settings(&session_id);
+        self.forget_session_identity(&session_id); // FORK: §19.2
 
         // Run the custom session cleanup after a successful removal.
         if is_custom {
@@ -2046,6 +2104,7 @@ impl App {
         let reuse_window = exited_pane.is_some();
 
         if let Some(agent) = agent_for_session_kind(&session.kind) {
+            self.assign_session_name(&session.id); // FORK: §19.2
             let extra_args: Vec<String> = mode.cli_flags(LaunchOpts { enable_chrome });
             // FORK: see `recent_launches` — the sweep must not read the
             // launch script's shell as another exit.
@@ -2065,6 +2124,7 @@ impl App {
                 // records one here; an override can resume any harness.
                 resume_override.unwrap_or_else(|| session.claude_session_id.clone()),
                 reuse_window,
+                None,
             )?;
         } else {
             self.tmux

@@ -38,6 +38,11 @@ pub struct AiwConfig {
     /// Width of the cockpit's sidebar pane in columns (DESIGN.md §18);
     /// at least 28.
     pub sidebar_width: u16,
+    /// Read Claude Code's own roster (`claude agents --json`) to show Claude
+    /// sessions started outside AIW in a project's checkouts and to catch an
+    /// AIW session waiting on input that its hooks missed (§19.2). On by
+    /// default.
+    pub claude_agents_roster: bool,
 }
 
 impl Default for AiwConfig {
@@ -50,6 +55,7 @@ impl Default for AiwConfig {
             agent_context_prompt: true,
             claude_hooks_via_settings_flag: true,
             sidebar_width: crate::fork::cockpit::DEFAULT_SIDEBAR_WIDTH,
+            claude_agents_roster: true,
         }
     }
 }

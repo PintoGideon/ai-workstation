@@ -1090,13 +1090,27 @@ pub fn draw_fork_feature_dialog(
     } else {
         Style::default().fg(theme.text_muted.to_color())
     };
-    let ctx_line = Paragraph::new(Line::from(vec![
-        Span::styled(" Context: ", ctx_label_style),
-        Span::styled(
-            format!("{} Include session transcript", ctx_check),
-            ctx_style,
-        ),
-    ]));
+    // FORK: §19.2 — a conversation fork carries the transcript itself.
+    let ctx_line = match state.fork_conversation.as_ref() {
+        Some(source) => Paragraph::new(Line::from(vec![
+            Span::styled(" Conversation: ", ctx_label_style),
+            Span::styled(
+                format!(
+                    "continues '{}' ({} only)",
+                    source.source_label,
+                    source.agent.display_name()
+                ),
+                ctx_style,
+            ),
+        ])),
+        None => Paragraph::new(Line::from(vec![
+            Span::styled(" Context: ", ctx_label_style),
+            Span::styled(
+                format!("{} Include session transcript", ctx_check),
+                ctx_style,
+            ),
+        ])),
+    };
     frame.render_widget(ctx_line, chunks[4]);
 
     // Hints

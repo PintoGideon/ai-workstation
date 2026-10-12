@@ -32,6 +32,8 @@ Commands typed into the REPL (deterministic, scriptable):
   /bg           a turn whose Stop reports a background task and a /loop (claude)
   /idle         Notification idle_prompt; /needs: Notification agent_needs_input
   /denied T     PermissionDenied for tool T (claude)
+  /rosterwait W  mark this session waiting for W in the fake roster only, no
+                hook (claude) [§19.2]; /rosteridle: back to idle
   /crash   exit 1
   /spam    print 2000 lines as fast as possible
   /wide    print long unicode / emoji / RTL / control-sequence lines
@@ -42,6 +44,13 @@ Commands typed into the REPL (deterministic, scriptable):
 
 Every launch appends its argv to `$AIW_E2E_LOG/<name>.args` and every hook run
 to `$AIW_E2E_LOG/<name>.hooks` so a driver can assert on them.
+
+§19.2: `claude agents --json` prints the fake roster: every live fake claude
+(each registers `$AIW_E2E_LOG/roster/<pid>.json` with its cwd, session id,
+`--name` and status) plus the entries of `$HOME/.e2e-roster.json`, a fixture
+the driver writes for sessions "outside AIW". `claude --resume <id>
+--fork-session` and `codex fork <id>` start a new conversation id and log
+`forked_from` in `<name>.forks`.
 """
 
 import json
@@ -83,12 +92,48 @@ if "--help" in ARGS or "-h" in ARGS:
     out(f"usage: {NAME} [options]\n  --version\n  --resume <id>\n(fake e2e agent)")
     sys.exit(0)
 
+ROSTER_DIR = os.path.join(LOG_DIR, "roster")
+
+
+def pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+if NAME == "claude" and ARGS[:2] == ["agents", "--json"]:
+    entries = []
+    try:
+        for fname in sorted(os.listdir(ROSTER_DIR)):
+            try:
+                with open(os.path.join(ROSTER_DIR, fname), encoding="utf-8") as fh:
+                    rec = json.load(fh)
+            except (OSError, ValueError):
+                continue
+            if pid_alive(rec.get("pid", -1)):
+                entries.append(rec)
+    except OSError:
+        pass
+    try:
+        with open(os.path.join(HOME, ".e2e-roster.json"), encoding="utf-8") as fh:
+            entries.extend(json.load(fh))
+    except (OSError, ValueError):
+        pass
+    log("agents", {"ts": time.time(), "count": len(entries)})
+    out(json.dumps(entries))
+    sys.exit(0)
+
 log("args", {"ts": time.time(), "cwd": CWD, "args": ARGS, "env": {
     k: v for k, v in os.environ.items() if k.startswith("AIW_")}})
 
 resume_id = None
 notify_argv = []
 settings_file = None
+session_name = None
+fork_session = False
+codex_fork_id = None
 it = iter(range(len(ARGS)))
 i = 0
 while i < len(ARGS):
@@ -100,6 +145,18 @@ while i < len(ARGS):
     if NAME == "codex" and a == "resume" and i + 1 < len(ARGS):
         resume_id = ARGS[i + 1]
         i += 2
+        continue
+    if NAME == "codex" and a == "fork" and i + 1 < len(ARGS):
+        codex_fork_id = ARGS[i + 1]
+        i += 2
+        continue
+    if a in ("--name", "-n") and i + 1 < len(ARGS):
+        session_name = ARGS[i + 1]
+        i += 2
+        continue
+    if a == "--fork-session":
+        fork_session = True
+        i += 1
         continue
     if a == "--settings" and i + 1 < len(ARGS):
         settings_file = ARGS[i + 1]
@@ -115,6 +172,47 @@ while i < len(ARGS):
     i += 1
 
 SESSION_ID = resume_id or str(uuid.uuid4())
+# §19.2: a fork is a new conversation that started from another one.
+FORKED_FROM = None
+if fork_session and resume_id:
+    FORKED_FROM = resume_id
+    SESSION_ID = str(uuid.uuid4())
+elif codex_fork_id:
+    FORKED_FROM = codex_fork_id
+    SESSION_ID = str(uuid.uuid4())
+if FORKED_FROM:
+    log("forks", {"ts": time.time(), "cwd": CWD, "from": FORKED_FROM, "to": SESSION_ID,
+                  "name": session_name})
+
+ROSTER_STATE = {"status": "idle", "waitingFor": None}
+
+
+def roster_write():
+    """Register this live claude in the fake roster (`claude agents --json`)."""
+    if NAME != "claude":
+        return
+    rec = {"pid": os.getpid(), "cwd": CWD, "kind": "interactive",
+           "startedAt": int(time.time() * 1000), "sessionId": SESSION_ID,
+           "status": ROSTER_STATE["status"]}
+    if session_name:
+        rec["name"] = session_name
+    if ROSTER_STATE["waitingFor"]:
+        rec["waitingFor"] = ROSTER_STATE["waitingFor"]
+    try:
+        os.makedirs(ROSTER_DIR, exist_ok=True)
+        tmp = os.path.join(ROSTER_DIR, f".{os.getpid()}.tmp")
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(rec, fh)
+        os.replace(tmp, os.path.join(ROSTER_DIR, f"{os.getpid()}.json"))
+    except OSError:
+        pass
+
+
+def roster_remove():
+    try:
+        os.remove(os.path.join(ROSTER_DIR, f"{os.getpid()}.json"))
+    except OSError:
+        pass
 
 
 # ---------------------------------------------------------------- transcripts
@@ -447,8 +545,12 @@ def banner():
     out(f"│ session {SESSION_ID}")
     out(f"│ cwd     {CWD}")
     out(f"│ args    {' '.join(shlex.quote(a) for a in ARGS) or '(none)'}")
-    if resume_id:
+    if FORKED_FROM:
+        out(f"│ forked from conversation {FORKED_FROM}")
+    elif resume_id:
         out(f"│ resumed conversation {resume_id}")
+    if session_name:
+        out(f"│ name    {session_name}")
     out("│ commands: /ask /perm /done /work /tool /compact /model /fail /task /bg /idle /needs /crash /spam /wide /slow /exit")
     out("╰──────────────────────────────────────────────────────────────╯")
 
@@ -487,6 +589,9 @@ def wide_lines():
 
 
 def main():
+    import atexit
+    roster_write()
+    atexit.register(roster_remove)
     banner()
     ev("start", {"source": "startup"})
     while True:
@@ -599,6 +704,16 @@ def main():
             fire_collect("Notification", {"notification_type": "agent_needs_input",
                                           "message": "Claude needs your input on the migration"})
             out("? Which database should the migration target?")
+        elif cmd == "/rosterwait":
+            ROSTER_STATE["status"] = "waiting"
+            ROSTER_STATE["waitingFor"] = rest or "dialog open"
+            roster_write()
+            out(f"(roster) waiting: {ROSTER_STATE['waitingFor']}")
+        elif cmd == "/rosteridle":
+            ROSTER_STATE["status"] = "idle"
+            ROSTER_STATE["waitingFor"] = None
+            roster_write()
+            out("(roster) idle")
         elif cmd == "/denied":
             fire_collect("PermissionDenied", {"tool_name": rest or "Bash", "reason": "auto mode"})
             out(f"⎿ denied {rest or 'Bash'}")

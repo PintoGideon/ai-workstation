@@ -162,6 +162,12 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("V", "Check pending diff review"),
         ("u", "Preferred harness / worktree config"),
         ("F", "Fork feature (new branch)"),
+        // FORK: §19.2
+        (
+            "f",
+            "Fork the session's conversation (same feature or new worktree)",
+        ),
+        ("E", "Claude sessions outside AIW in your projects"),
         ("y", "Toggle mark feature as ready"),
         // FORK: hook-driven productivity (DESIGN.md §16).
         (

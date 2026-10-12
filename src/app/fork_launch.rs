@@ -21,12 +21,16 @@ impl App {
                 .iter()
                 .find(|f| f.tmux_session == tmux_session)
             {
-                return Some(LaunchContext::for_feature(
-                    &project.name,
-                    &project.repo,
-                    feature,
-                    session_id,
-                ));
+                // FORK: §19.2 — the name assigned before this launch.
+                let name = self
+                    .session_identity
+                    .names
+                    .get(session_id)
+                    .map(str::to_string);
+                return Some(
+                    LaunchContext::for_feature(&project.name, &project.repo, feature, session_id)
+                        .with_session_name(name),
+                );
             }
         }
         None

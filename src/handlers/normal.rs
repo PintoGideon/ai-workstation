@@ -323,6 +323,14 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> Result<()> {
             app.session_filter = app.session_filter.next();
             app.push_toast_info(format!("Filter: {}", app.session_filter.display_name()));
         }
+        // FORK: §19.2 — fork the selected session's conversation.
+        KeyCode::Char('f') => {
+            app.start_fork_session();
+        }
+        // FORK: §19.2 — Claude sessions outside AIW in the projects.
+        KeyCode::Char('E') => {
+            app.open_external_sessions();
+        }
         // `z` for zzz: features nobody is watching.
         KeyCode::Char('z') => {
             app.open_dormant_view();

@@ -100,6 +100,8 @@ pub struct SessionInfo {
     /// The session title, or the fallback (task prompt / feature name).
     pub title: String,
     pub harness: String,
+    /// FORK: §19.2 — the session's `--name`, shown after the model.
+    pub harness_name: Option<String>,
     pub model: Option<String>,
     pub context: Option<(u8, ContextBand)>,
     pub cost: Option<String>,
@@ -337,6 +339,8 @@ impl App {
             label: session.label.clone(),
             title,
             harness: harness_name(&session.kind).to_string(),
+            // FORK: §19.2 — the `--name` the harness knows this session by.
+            harness_name: self.session_harness_name(&session.id).map(str::to_string),
             model,
             context: self.session_context_percent(&session.id),
             cost,

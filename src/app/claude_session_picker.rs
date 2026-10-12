@@ -369,6 +369,12 @@ impl App {
                         feature_session_id: session.id.clone(),
                         mode: feature.mode.clone(),
                         is_worktree: feature.is_worktree,
+                        // FORK: §19.2
+                        session_name: Some(self.session_identity.names.assign(
+                            &session.id,
+                            &feature.name,
+                            &session.label,
+                        )),
                     };
                     let extra_args = crate::fork::launch::claude_launch_args(
                         &launch_ctx,
@@ -396,6 +402,7 @@ impl App {
                         feature_session_id: session.id.clone(),
                         mode: feature.mode.clone(),
                         is_worktree: feature.is_worktree,
+                        session_name: None,
                     };
                     let codex_args = crate::fork::launch::codex_launch_args(
                         &launch_ctx,

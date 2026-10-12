@@ -9,6 +9,7 @@ mod dormant;
 mod feature_creation;
 mod fork;
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7)
+mod fork_identity; // FORK: `f` fork dialog and `E` external sessions (DESIGN.md §19.2)
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6)
 pub(crate) mod fork_workspace; // FORK: workspace layout
 mod harness;
@@ -134,6 +135,8 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<()> {
         AppMode::PlaceholderFill(_) => handle_placeholder_fill_key(app, key),
         AppMode::SkillPicker(_) => handle_skill_picker_key(app, key),
         AppMode::ForkingFeature(_) => handle_fork_feature_key(app, key.code),
+        AppMode::ForkSession(_) => fork_identity::handle_fork_session_key(app, key.code),
+        AppMode::ExternalSessions(_) => fork_identity::handle_external_sessions_key(app, key.code),
         AppMode::ThemePicker(_) => handle_theme_picker_key(app, key.code),
         AppMode::SyntaxLanguagePicker(_) => handle_syntax_language_picker_key(app, key.code),
         AppMode::DebugLog(_) => handle_debug_log_key(app, key.code),
