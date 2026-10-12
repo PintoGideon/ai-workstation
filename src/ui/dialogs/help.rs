@@ -115,17 +115,10 @@ fn section_header<'a>(title: &'a str, columns: HelpColumns, theme: &Theme) -> Ve
     lines
 }
 
-pub fn draw_help(frame: &mut Frame, scroll_offset: usize, theme: &Theme) -> usize {
-    let area = centered_rect(90, 85, frame.area());
-    draw_help_at(frame, area, scroll_offset, theme)
-}
-
-fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &Theme) -> usize {
-    crate::ui::draw_modal_overlay(frame, area, theme);
-    // FORK: G11 two-column layout sized once for this panel.
-    let columns = HelpColumns::for_width(usize::from(area.width.saturating_sub(2)));
-
-    let normal_keybinds: Vec<(&str, &str)> = vec![
+/// The dashboard, Ctrl+Space and TODOs key tables the help overlay draws
+/// (also checked for duplicate keys by the tests below).
+pub(crate) fn normal_keybinds() -> Vec<(&'static str, &'static str)> {
+    vec![
         ("j/k / \u{2191}/\u{2193}", "Navigate up/down"),
         ("h / \u{2190}", "Collapse project/feature"),
         ("l / \u{2192}", "Expand project/feature"),
@@ -192,7 +185,7 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         (
             "@",
             "Message an agent session (Claude: its inbox; others: next turn end)",
-        ), // FORK: §19.7
+        ), // FORK: §19.5
         (
             "!",
             "Recover an agent: restart resuming, interrupt, /compact, replay, deliver queued",
@@ -226,7 +219,59 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         ("/", "Search and jump to item (names, notes, group names)"),
         ("?", "Toggle this help"),
         ("q", "Quit the dashboard (the agents keep running)"),
-    ];
+    ]
+}
+
+pub(crate) fn leader_keybinds() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("d", "Diff viewer (all changes / commit)"),
+        ("m", "Markdown file picker/viewer"),
+        ("l", "Past and unsent prompts: paste one again (unsent)"),
+        ("N", "Quick-capture a TODO for this worktree"),
+        ("z", "Complete the TODO this session came from"),
+        ("h / H / M / 1-9", "Bookmarks: picker / add / remove / jump"),
+        ("/", "Command picker (slash + AIW actions)"),
+        ("a", "AIW local actions picker"),
+        ("c", "Config wizard"),
+        ("r", "Refresh statuses + PR badges (runs gh)"),
+    ]
+}
+
+pub(crate) fn todos_keybinds() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("j/k / \u{2191}/\u{2193}", "Navigate TODOs"),
+        ("a / n", "Add a TODO"),
+        ("e", "Edit title"),
+        ("o", "Edit notes"),
+        ("b", "Edit scratchpad banner"),
+        ("Space / x", "Cycle state: todo → in progress → done"),
+        ("P", "Cycle priority (High/Med/Low)"),
+        ("J / K", "Reorder up/down"),
+        ("d", "Delete TODO (y/n confirm)"),
+        ("I", "Start the next TODO in the visible lists"),
+        ("Enter", "Start work on this TODO"),
+        ("", "  (jumps straight to a linked session or feature)"),
+        ("", "  (an in-progress TODO cannot launch another agent)"),
+        ("p", "Show/hide the project TODO list"),
+        ("g", "Show/hide the global TODO list"),
+        ("", "  (visibility is shared until AIW exits)"),
+        ("Tab / Shift+Tab", "Move between visible TODO lists"),
+        ("M / C", "Move / copy the TODO to another list"),
+        ("q / Esc / Ctrl+Q", "Exit TODOs view"),
+    ]
+}
+
+pub fn draw_help(frame: &mut Frame, scroll_offset: usize, theme: &Theme) -> usize {
+    let area = centered_rect(90, 85, frame.area());
+    draw_help_at(frame, area, scroll_offset, theme)
+}
+
+fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &Theme) -> usize {
+    crate::ui::draw_modal_overlay(frame, area, theme);
+    // FORK: G11 two-column layout sized once for this panel.
+    let columns = HelpColumns::for_width(usize::from(area.width.saturating_sub(2)));
+
+    let normal_keybinds = normal_keybinds();
 
     // FORK: G11 — section titles instead of a banner line; the close/scroll
     // keys moved into the bottom border.
@@ -279,18 +324,7 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         columns,
         theme,
     ));
-    let leader_keybinds: Vec<(&str, &str)> = vec![
-        ("d", "Diff viewer (all changes / commit)"),
-        ("m", "Markdown file picker/viewer"),
-        ("l", "Past and unsent prompts: paste one again (unsent)"),
-        ("N", "Quick-capture a TODO for this worktree"),
-        ("z", "Complete the TODO this session came from"),
-        ("h / H / M / 1-9", "Bookmarks: picker / add / remove / jump"),
-        ("/", "Command picker (slash + AIW actions)"),
-        ("a", "AIW local actions picker"),
-        ("c", "Config wizard"),
-        ("r", "Refresh statuses + PR badges (runs gh)"),
-    ];
+    let leader_keybinds = leader_keybinds();
 
     lines.extend(
         leader_keybinds
@@ -300,27 +334,7 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
 
     lines.extend(section_header("  In the TODOs view:", columns, theme)); // FORK: G11
 
-    let todos_keybinds: Vec<(&str, &str)> = vec![
-        ("j/k / \u{2191}/\u{2193}", "Navigate TODOs"),
-        ("a / n", "Add a TODO"),
-        ("e", "Edit title"),
-        ("o", "Edit notes"),
-        ("b", "Edit scratchpad banner"),
-        ("Space / x", "Cycle state: todo → in progress → done"),
-        ("P", "Cycle priority (High/Med/Low)"),
-        ("J / K", "Reorder up/down"),
-        ("d", "Delete TODO (y/n confirm)"),
-        ("I", "Start the next TODO in the visible lists"),
-        ("Enter", "Start work on this TODO"),
-        ("", "  (jumps straight to a linked session or feature)"),
-        ("", "  (an in-progress TODO cannot launch another agent)"),
-        ("p", "Show/hide the project TODO list"),
-        ("g", "Show/hide the global TODO list"),
-        ("", "  (visibility is shared until AIW exits)"),
-        ("Tab / Shift+Tab", "Move between visible TODO lists"),
-        ("M / C", "Move / copy the TODO to another list"),
-        ("q / Esc / Ctrl+Q", "Exit TODOs view"),
-    ];
+    let todos_keybinds = todos_keybinds();
 
     lines.extend(
         todos_keybinds
@@ -375,4 +389,63 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
         frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
     }
     scroll as usize
+}
+
+#[cfg(test)]
+mod key_table_tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    /// The keys an entry names: `"h / H / M / 1-9"` → h, H, M, 1-9.
+    fn keys_of(entry: &str) -> Vec<String> {
+        entry
+            .split(" / ")
+            .map(str::trim)
+            .filter(|k| !k.is_empty())
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// No key is listed twice for different actions in the same context.
+    /// Rows that start with "On a …" describe another context (a background
+    /// Claude row, a TODOs row) and may reuse dashboard keys.
+    fn assert_unique(table: &str, entries: Vec<(&'static str, &'static str)>) {
+        let mut seen: HashMap<String, &str> = HashMap::new();
+        for (keys, desc) in entries {
+            if keys.is_empty() || desc.starts_with("On a ") {
+                continue;
+            }
+            for key in keys_of(keys) {
+                if let Some(other) = seen.insert(key.clone(), desc) {
+                    panic!("{table}: `{key}` is listed for both {other:?} and {desc:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn dashboard_keys_are_unique() {
+        assert_unique("dashboard", normal_keybinds());
+    }
+
+    #[test]
+    fn leader_keys_are_unique() {
+        assert_unique("Ctrl+Space", leader_keybinds());
+    }
+
+    #[test]
+    fn todos_keys_are_unique() {
+        assert_unique("TODOs", todos_keybinds());
+    }
+
+    #[test]
+    fn the_orchestration_keys_are_listed() {
+        let listed: Vec<String> = normal_keybinds()
+            .into_iter()
+            .flat_map(|(k, _)| keys_of(k))
+            .collect();
+        for key in ["f", "E", "W", "G", "C", "#", "@", "!", "t", "P"] {
+            assert!(listed.iter().any(|k| k == key), "`{key}` missing from help");
+        }
+    }
 }

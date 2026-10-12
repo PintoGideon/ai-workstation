@@ -621,7 +621,7 @@ fn a_failed_land_is_a_needs_you_row_that_opens_the_dialog_and_x_dismisses() {
     fx.app.mode = AppMode::Normal;
 
     let rows = fx.app.attention_rows();
-    let index = rows
+    let _listed = rows
         .iter()
         .position(|r| {
             matches!(
