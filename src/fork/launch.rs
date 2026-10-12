@@ -379,15 +379,21 @@ mod tests {
         }
         super::super::claude_settings::force_for_test(None);
         super::super::claude_worktrees::force_for_test(None);
-        // A launch installs the script next to AIW's other hook scripts.
-        claude_launch_args(&ctx(), &AiwConfig::default(), Vec::new());
+        // A launch installs the script next to AIW's other hook scripts. Its
+        // own session id: `claude_gets_a_settings_file_with_the_status_line`
+        // creates and removes `fs-1`'s settings file in parallel.
+        let wt_ctx = LaunchContext {
+            feature_session_id: "fs-wt-hooks".into(),
+            ..ctx()
+        };
+        claude_launch_args(&wt_ctx, &AiwConfig::default(), Vec::new());
         let script = crate::project::aiw_claude_hooks_dir()
             .join(super::super::claude_worktrees::SCRIPT_NAME);
         assert_eq!(
             std::fs::read_to_string(&script).unwrap(),
             super::super::claude_worktrees::SCRIPT
         );
-        remove_claude_settings("fs-1");
+        remove_claude_settings("fs-wt-hooks");
     }
 
     #[test]
