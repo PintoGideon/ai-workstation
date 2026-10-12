@@ -236,6 +236,19 @@ fn a_local_merge_lands_then_removes_the_feature_and_its_branch() {
     });
     let last = fx.app.land_last("feat-1").unwrap().outcome.clone();
     assert!(last.ok, "{:?}", last.failure);
+    // §19.11: a "stop" input request the agent left for this feature must
+    // not outlive the feature (found by the multi-project e2e).
+    let session_id = fx.app.store.projects[0].features[0].sessions[0].id.clone();
+    let stale = fx.wt.join("stale-input.json");
+    std::fs::write(&stale, "{}").unwrap();
+    fx.app.pending_inputs.push(crate::app::PendingInput {
+        session_id,
+        notification_type: "stop".into(),
+        file_path: stale.clone(),
+        project_name: Some(fx.app.store.projects[0].name.clone()),
+        feature_name: Some(fx.app.store.projects[0].features[0].name.clone()),
+        ..Default::default()
+    });
     let head = git(&fx.wt, &["rev-parse", "HEAD"]);
     assert_eq!(git(&fx.repo, &["rev-parse", "main"]), head);
     assert!(dialog_text(&fx.app).contains("✓ landed"));
@@ -256,6 +269,16 @@ fn a_local_merge_lands_then_removes_the_feature_and_its_branch() {
         fx.app.message
     );
     assert!(!fx.wt.exists());
+    assert!(
+        fx.app.pending_inputs.is_empty(),
+        "the deleted feature's input request is dropped"
+    );
+    assert!(
+        !fx.app
+            .attention_rows()
+            .iter()
+            .any(|r| matches!(r, crate::app::attention::AttentionRow::Pending(_)))
+    );
     fx.app.land_tick();
     let branches = git(&fx.repo, &["branch", "--list", "my-feat"]);
     assert_eq!(branches, "", "the landed branch is deleted");
@@ -654,3 +677,20 @@ fn a_failed_land_is_a_needs_you_row_that_opens_the_dialog_and_x_dismisses() {
     );
 }
 
+#[test]
+fn an_input_request_for_a_feature_that_no_longer_exists_is_not_listed() {
+    let mut fx = fixture();
+    fx.app.pending_inputs.push(crate::app::PendingInput {
+        session_id: "gone".into(),
+        notification_type: "stop".into(),
+        project_name: Some(fx.app.store.projects[0].name.clone()),
+        feature_name: Some("long-gone".into()),
+        ..Default::default()
+    });
+    assert!(
+        !fx.app
+            .attention_rows()
+            .iter()
+            .any(|r| matches!(r, crate::app::attention::AttentionRow::Pending(_)))
+    );
+}

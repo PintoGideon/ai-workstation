@@ -541,6 +541,8 @@ impl App {
                 .iter()
                 .enumerate()
                 .filter(|(_, claimed)| !**claimed)
+                // FORK: §19.11 — not for a feature that no longer exists.
+                .filter(|(index, _)| self.pending_input_feature_exists(*index))
                 .map(|(index, _)| AttentionRow::Pending(index)),
         );
         // FORK: §19.8 — what the watchdog flagged, most urgent kind first.
@@ -564,6 +566,21 @@ impl App {
             })
         }));
         rows
+    }
+
+    /// FORK: §19.11 — whether the feature a pending input was filed under
+    /// still exists (an input with no feature name is kept).
+    fn pending_input_feature_exists(&self, index: usize) -> bool {
+        let Some(input) = self.pending_inputs.get(index) else {
+            return false;
+        };
+        let Some(feature) = input.feature_name.as_deref() else {
+            return true;
+        };
+        self.store.projects.iter().any(|p| {
+            input.project_name.as_deref().is_none_or(|n| n == p.name)
+                && p.features.iter().any(|f| f.name == feature)
+        })
     }
 
     /// What the header's needs-attention badge counts: the badge model's

@@ -134,6 +134,7 @@ impl App {
     /// A feature was deleted: drop its notes and its group seat.
     pub(crate) fn forget_organize_feature(&mut self, feature: &Feature) {
         self.forget_schedules_for_feature(&feature.id); // FORK: §19.9
+        self.forget_feature_inputs(feature); // FORK: §19.11
         for session in &feature.sessions {
             self.forget_organize_session(&session.id);
         }

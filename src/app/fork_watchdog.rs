@@ -128,6 +128,33 @@ pub struct WatchdogDialogState {
 }
 
 impl App {
+    /// FORK: §19.11 — drop the input requests a deleted feature left behind
+    /// (a harness's "stop" / "finished and is waiting" notification is
+    /// otherwise listed in `i` for a feature that no longer exists, found by
+    /// the multi-project e2e after a land removed one). Matched by the
+    /// feature's session ids or its checkout.
+    pub(crate) fn forget_feature_inputs(&mut self, feature: &crate::project::Feature) {
+        let ids: std::collections::HashSet<&str> =
+            feature.sessions.iter().map(|s| s.id.as_str()).collect();
+        let workdir = feature.workdir.to_string_lossy().to_string();
+        let belongs = |input: &crate::app::PendingInput| {
+            ids.contains(input.session_id.as_str())
+                || (!workdir.is_empty()
+                    && (input.cwd == workdir || input.cwd.starts_with(&format!("{workdir}/"))))
+        };
+        let mut kept = Vec::with_capacity(self.pending_inputs.len());
+        for input in std::mem::take(&mut self.pending_inputs) {
+            if belongs(&input) {
+                let _ = std::fs::remove_file(&input.file_path);
+            } else {
+                kept.push(input);
+            }
+        }
+        self.pending_inputs = kept;
+    }
+}
+
+impl App {
     fn watchdog_thresholds(&self) -> Thresholds {
         Thresholds::from_config(
             self.config.aiw.watchdog_stuck_minutes,
