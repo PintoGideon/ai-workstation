@@ -199,6 +199,32 @@ impl App {
         }
     }
 
+    /// A session was deleted: drop everything the watchdog kept for it, so
+    /// long-running dashboards do not accumulate state for gone sessions.
+    pub(crate) fn forget_watchdog_session(&mut self, session_id: &str) {
+        let w = &mut self.watchdog;
+        w.last_activity.remove(session_id);
+        w.panes.remove(session_id);
+        w.idle_since.remove(session_id);
+        w.flags.remove(session_id);
+        w.snoozed.retain(|(id, _), _| id != session_id);
+        w.auto_restarts.remove(session_id);
+        w.pending_restarts.remove(session_id);
+    }
+
+    /// Test hook: whether any watchdog map still names `session_id`.
+    #[cfg(test)]
+    pub(crate) fn watchdog_tracks(&self, session_id: &str) -> bool {
+        let w = &self.watchdog;
+        w.last_activity.contains_key(session_id)
+            || w.panes.contains_key(session_id)
+            || w.idle_since.contains_key(session_id)
+            || w.flags.contains_key(session_id)
+            || w.snoozed.keys().any(|(id, _)| id == session_id)
+            || w.auto_restarts.contains_key(session_id)
+            || w.pending_restarts.contains_key(session_id)
+    }
+
     /// Test hook: pretend the last hook event came at `at`.
     #[cfg(test)]
     pub(crate) fn watchdog_set_activity(&mut self, session_id: &str, at: DateTime<Utc>) {

@@ -564,7 +564,10 @@ mod tests {
         // A socket file nobody listens on.
         let stale = dir.path().join("stale.sock");
         drop(UnixListener::bind(&stale).unwrap());
-        assert_eq!(post(&address(stale), "x", "aiw"), Err(PostError::Refused));
+        assert_eq!(
+            post_raw(&stale, &["x".into()], Duration::from_secs(10)),
+            Err(PostError::Refused)
+        );
     }
 
     #[test]

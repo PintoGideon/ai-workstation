@@ -75,6 +75,9 @@ struct BranchDelete {
     since: Instant,
 }
 
+/// How many last-land outcomes are kept (the newest win).
+const LAST_LAND_CAP: usize = 50;
+
 /// The land state on [`App`].
 #[derive(Default)]
 pub struct LandRuntime {
@@ -144,6 +147,15 @@ impl App {
 
     pub(crate) fn land_last(&self, feature_id: &str) -> Option<&LastLand> {
         self.land.last.get(feature_id)
+    }
+
+    /// A feature was deleted: drop its preflight and failure. Its last
+    /// outcome stays (`--status` reads it after a land's own cleanup removed
+    /// the feature); [`LAST_LAND_CAP`] bounds that map. A land still running
+    /// finishes on its own.
+    pub(crate) fn forget_land_feature(&mut self, feature_id: &str) {
+        self.land.preflights.remove(feature_id);
+        self.land.failures.remove(feature_id);
     }
 
     /// The line under a feature row while it lands or after a failure.
@@ -648,6 +660,20 @@ impl App {
                 project,
             },
         );
+        // Landed-and-removed features would otherwise pile up here for the
+        // life of the dashboard.
+        while self.land.last.len() > LAST_LAND_CAP {
+            let Some(oldest) = self
+                .land
+                .last
+                .iter()
+                .min_by_key(|(_, last)| last.finished)
+                .map(|(id, _)| id.clone())
+            else {
+                break;
+            };
+            self.land.last.remove(&oldest);
+        }
         if outcome.ok {
             self.land.failures.remove(&id);
             let what = match (&outcome.pr_url, &outcome.merged) {

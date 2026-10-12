@@ -846,7 +846,7 @@ written back, so a config from an older version keeps loading.
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `theme` | `default` | The colour theme; `T` changes it |
+| `theme` | `ember` | The colour theme; `T` changes it |
 | `theme_follow_terminal` | `false` | Pick `theme_dark` or `theme_light` from the terminal's background at startup |
 | `theme_dark` / `theme_light` | `ember` / `paper` | The themes used when following the terminal |
 | `transparent_background` | `false` | Let the terminal's background show through |
@@ -1004,7 +1004,7 @@ to writing that file. Codex gets its notify hook per launch rather than in
 | --- | --- |
 | `aiw` | Open the cockpit, or attach to the one already running |
 | `aiw grid <feature>` | Tile a feature's agents as live tmux panes in this terminal. Use `project/feature` when the name is ambiguous, `-p` to treat the name as a project, `--with <feature>` (repeatable) to tile the first agent of several features side by side, `--all` to include terminals, `--list` to print what would be shown. `Alt+q` closes it |
-| `aiw doctor [--json]` | Read-only health report: agents against the limit, editor windows, memory and swap, orphaned `aiw-` tmux sessions and worktrees, editors left running for stopped features, projects still configured by an old `amf.json`, the hook mode, and a line confirming no network use. Changes nothing, exits 0 |
+| `aiw doctor [--json]` | Read-only health report: agents against the limit, editor windows, memory and swap, orphaned `aiw-` tmux sessions and worktrees, editors left running for stopped features, the hook mode, and a line confirming no network use. Changes nothing, exits 0 |
 | `aiw fonts [--all] [--font …] [--terminal …]` | Print the detected terminal, colour depth and icon settings and a font config snippet |
 | `aiw automation create-project` | Register a directory as a project from a JSON request |
 | `aiw automation create-feature` | Create a feature in an existing project from JSON: project name, branch, agent, mode, worktree yes or no, an optional hook choice, and a dry-run flag. `agents` with `fan_out` (`shared` or `worktree_each`) starts several agents; `prompt` or `prompt_file` gives each one a task prompt once it is ready, and `send` sends it instead of pasting it unsent. `layout` opens a layout preset's sessions in each created feature. The answer lists every feature created |

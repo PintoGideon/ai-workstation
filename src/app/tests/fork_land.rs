@@ -334,6 +334,33 @@ fn a_failing_check_marks_the_row_until_dismissed() {
     assert!(fx.app.feature_indices_by_id("feat-1").is_some());
 }
 
+/// Deleting the feature takes its land failure with it; the last outcome
+/// stays readable, as `--status` needs after a land removed the feature.
+#[test]
+fn a_deleted_feature_leaves_no_land_failure_behind() {
+    let mut fx = fixture();
+    set_land(
+        &mut fx.app,
+        LandConfig {
+            check_command: Some("echo boom; exit 2".into()),
+            ..Default::default()
+        },
+    );
+    open_with_preflight(&mut fx.app);
+    press(&mut fx.app, KeyCode::Enter);
+    tick_until(&mut fx.app, "the land to end", |a| {
+        a.land_failure("feat-1").is_some()
+    });
+    press(&mut fx.app, KeyCode::Esc);
+    assert!(fx.app.land_last("feat-1").is_some());
+
+    let feature = fx.app.store.projects[0].features[0].clone();
+    fx.app.forget_organize_feature(&feature);
+
+    assert!(fx.app.land_failure("feat-1").is_none());
+    assert!(fx.app.land_last("feat-1").is_some());
+}
+
 #[test]
 fn landing_while_an_agent_works_needs_a_second_confirm() {
     let mut fx = fixture();

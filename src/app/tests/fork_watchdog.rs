@@ -584,3 +584,18 @@ fn turning_the_watchdog_off_clears_every_flag() {
     assert!(app.watchdog_flag(&codex).is_none());
     assert!(window_of(&app, &codex) == "codex");
 }
+
+/// Deleting a session drops every map the watchdog kept for it, so a
+/// dashboard that outlives many sessions does not grow without bound.
+#[test]
+fn a_deleted_session_leaves_no_watchdog_state_behind() {
+    let (mut app, claude, _codex) = app();
+    app.watchdog_set_activity(&claude, Utc::now());
+    app.watchdog_record_pane(&claude, 7, Utc::now());
+    assert!(app.watchdog_tracks(&claude));
+
+    app.forget_session_identity(&claude);
+
+    assert!(!app.watchdog_tracks(&claude));
+    assert!(app.watchdog_flag(&claude).is_none());
+}

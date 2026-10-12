@@ -155,6 +155,7 @@ impl App {
     pub(crate) fn forget_session_identity(&mut self, session_id: &str) {
         self.forget_inbox(session_id); // §19.5
         self.forget_background(session_id); // §19.7
+        self.forget_watchdog_session(session_id); // §19.8
         self.session_identity.pending_forks.remove(session_id);
         self.session_identity.roster_waiting.remove(session_id);
         if self.session_identity.names.forget(session_id)
