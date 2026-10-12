@@ -1038,3 +1038,63 @@ E2E (`scripts/dev/e2e/organize.sh`): groups in alpha with the fan-out pair insid
 `C` fold saved and a search jump reopening it; notes on a feature and a session, the `✎` marks, the info-block line
 and `/` by note text; a project whose `aiw.json` has a layout preset — a broken preset refused before anything
 starts, then a feature opening claude, a terminal that ran its command and a custom session.
+
+### 19.5 Messages to agent sessions (proposal 9)
+
+**Ask.** Tell an agent something without typing into its pane, and let agents address each other. `@` on the
+dashboard opens a small dialog (target, text, how it will travel); `aiw automation message --to <session> --text
+<text> [--from <name>]` does the same from a script and prints `"status": "delivered" | "queued" | "failed"`.
+
+**Claude's inbox.** Claude Code 2.1.224+ binds a per-session inbox (a Unix socket, user-only) and exports its path
+to every hook as `CLAUDE_CODE_MESSAGING_SOCKET`, with a per-session token in `CLAUDE_CODE_MESSAGING_TOKEN`. The
+`SessionStart` hook already runs `aiw hook-event --kind session-start` (§19.3); for Claude it now forwards both
+variables (`hook_cli::inbox_fields`, a well-formed absolute path and a 32-hex token only) over AIW's own user-only
+IPC socket. `App::messaging_session_started` keeps the address per feature session; `SessionEnd`, deleting the
+session, or a post that finds the socket gone forgets it.
+
+**The wire format** was read from the installed Claude Code 2.1.296 bundle (the native binary embeds its JS; the
+inbox handler and its own debug hint, `Inject messages (auth line …): { echo '{"type":"auth","token":…}'; echo
+'{"type":"user","message":{"role":"user","content":"hello"}}'; } | socat - UNIX-CONNECT:…`). One JSON object per
+line; an optional `{"type":"auth","token":…}` first (required only on Windows); then `{"type":"user","message":
+{"role":"user","content":<string>},"from":<sender>,"uuid":<id>,"session_id":<conversation>}`. Claude queues a
+`user` line as the next prompt (`priority` defaults to `next`, so a running turn is not interrupted), shows `from`
+as the sender, and drops a line whose `session_id` is not the receiving conversation — AIW always sends the
+conversation id it learned from the same hook, so a stale socket path (or a pid reused by another Claude) never
+gets the message. Claude closes a connection that sends no complete line within 30 s, so AIW connects only with
+the message ready. `fork::messaging::post` runs connect + write on a helper thread with a 2 s timeout, after
+checking the path is a socket owned by the current user.
+
+**Fallback.** Codex, a Claude whose hook never reported an inbox, `messaging_inbox: false`, and an inbox that turns
+out to be gone all go through the follow-up queue (§16): delivered when the agent next finishes a turn, never typed
+into a busy pane. A queued message from a named sender is prefixed `Message from <name>:` since the queue pastes it
+as a plain prompt. The route is shown in the dialog and returned by automation (`via: inbox | followup-queue`).
+
+**Addressing.** `--to` takes a session id, a Claude session's `--name` (§19.2 — the same name `/list-agents` and
+Claude's own `SendMessage` use, so agents can address siblings by it), the derived `<feature>-<label>` name (which
+Codex sessions also answer to), `<feature>/<label>`, or a label unique across AIW. Ambiguity is an error listing
+the matches.
+
+**Inbound policy and trust.** Messages AIW posts are not from a child of the receiving Claude, so Claude applies
+its inbound rule. AIW sets `crossSessionInbound` in each launch's `--settings` from `claude_cross_session_inbound`
+(default `accept`). `accept` means messages from your other local sessions are delivered without an approval
+dialog; the socket is restricted to your user, and permission prompts still apply to whatever a message asks for.
+It is deliberately *not* applied to SuperVibe sessions: a bypass-permissions session accepting peer messages would
+let one agent run commands in another without any prompt, which is the case Claude's default holds for approval.
+`hold` and `refuse` apply to every mode; `default` sets nothing.
+
+**The token** stays in memory only. `aiw_inbox_addresses` stores the socket path and conversation id (no token
+column): `aiw.db` is not a secrets file, and on Linux Claude accepts a line without the auth line, so a reloaded
+address still delivers after a restart. The token is never logged.
+
+**Tests.** `fork::messaging` (line shape, auth line only for a valid token, the hook-event address, a real
+socket round trip, gone / not-a-socket / refused told apart, a listener that never reads times out without
+blocking, routing, delivery reports, queue prefix, target resolution and ambiguity, the inbound value per mode),
+`db::messaging` (round trip, no token in the file), `hook_cli` (only well-formed inbox fields), `fork::launch` (the
+settings value per policy and mode), `handlers::fork_messaging` (keys), `app::tests::fork_messaging` (11: inbox
+delivery with auth and conversation id and nothing queued; Codex and inbox-less Claude queued with the sender named;
+a stale inbox forgotten and queued; inbox delivery off; session end and deletion forget; bad input; restart keeps
+the address without the token; the dialog end to end; automation by name, by pair, unknown; the IPC dispatcher).
+E2E (`scripts/dev/e2e/messaging.sh`): the fake claude binds a real inbox socket and exports it to its hooks; AIW
+stores the socket; `@` delivers into it once, authenticated and naming the conversation, with nothing queued;
+automation by name from `ci` delivers; an unknown target fails; a Codex target is shown as via the queue, the
+message is not typed into its idle pane, and its next turn end delivers it exactly once.

@@ -106,6 +106,13 @@ pub fn claude_settings_json(hooks_dir: &Path, ctx: &LaunchContext) -> Value {
         });
         settings["hooks"] = super::claude_settings::hooks_object(entries);
     }
+    // §19.5: whether messages from your other sessions (and AIW's `@`) are
+    // delivered, held for approval, or refused.
+    if let Some(value) =
+        super::messaging::settings_value(super::messaging::inbound_policy(), &ctx.mode)
+    {
+        settings["crossSessionInbound"] = Value::String(value.into());
+    }
     settings
 }
 
@@ -266,6 +273,36 @@ mod tests {
         assert!(path.exists());
         remove_claude_settings("fs-1");
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn the_inbound_message_rule_follows_the_policy_and_the_mode() {
+        use crate::fork::messaging::{InboundPolicy, force_policy_for_test};
+        force_policy_for_test(Some(InboundPolicy::Accept));
+        assert_eq!(
+            claude_settings_json(Path::new("/h"), &ctx())["crossSessionInbound"],
+            "accept"
+        );
+        let mut bypass = ctx();
+        bypass.mode = VibeMode::SuperVibe;
+        assert!(
+            claude_settings_json(Path::new("/h"), &bypass)
+                .get("crossSessionInbound")
+                .is_none(),
+            "a bypass session keeps Claude's own rule"
+        );
+        force_policy_for_test(Some(InboundPolicy::Refuse));
+        assert_eq!(
+            claude_settings_json(Path::new("/h"), &bypass)["crossSessionInbound"],
+            "refuse"
+        );
+        force_policy_for_test(Some(InboundPolicy::Default));
+        assert!(
+            claude_settings_json(Path::new("/h"), &ctx())
+                .get("crossSessionInbound")
+                .is_none()
+        );
+        force_policy_for_test(None);
     }
 
     #[test]

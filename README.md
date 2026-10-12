@@ -144,6 +144,7 @@ Pi receives no mode flags.
 | `i` | List everything that needs you: questions first, then finished work |
 | `a` / `X` | Allow / deny the permission the selected agent is waiting on |
 | `e` | Queue a follow-up, delivered when the agent's turn ends |
+| `@` | Message an agent session: straight into a Claude session's inbox, otherwise at its next turn end |
 | `V` | Reopen a pending Vibeless edit approval |
 | `I` | On a TODOs row: start an agent on the next TODO |
 | `z` | Dormant features: idle and unattended |

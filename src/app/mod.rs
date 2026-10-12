@@ -23,6 +23,7 @@ pub(crate) mod fork_followups; // FORK: queued follow-ups (P7, DESIGN.md §16)
 pub(crate) mod fork_hook_events; // FORK: richer row events from hooks (DESIGN.md §19.1)
 pub(crate) mod fork_identity; // FORK: harness names, forks, Claude's roster (DESIGN.md §19.2)
 pub(crate) mod fork_launch; // FORK: launch-time arguments from the store (DESIGN.md §16)
+pub(crate) mod fork_messaging; // FORK: `@` messages and `aiw automation message` (DESIGN.md §19.5)
 pub(crate) mod fork_organize; // FORK: groups, notes, layout presets (DESIGN.md §19.4)
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6, DESIGN.md §16)
 pub(crate) mod fork_prompt_paste; // FORK: prompts pasted unsent into the agent pane (DESIGN.md §18)
@@ -702,6 +703,8 @@ pub struct App {
     pub(crate) fan_out: fork_fan_out::FanOutRuntime,
     /// FORK: §19.4 — feature groups, notes and a pending layout preset.
     pub(crate) organize: fork_organize::OrganizeRuntime,
+    /// FORK: Claude inbox sockets (DESIGN.md §19.5).
+    pub(crate) messaging: fork_messaging::MessagingRuntime,
     /// FORK: ids for queued items when no database is open (negative).
     pub(crate) followup_memory_id: i64,
     pub ipc_tool_sessions: std::collections::HashSet<String>,
@@ -1029,6 +1032,8 @@ impl App {
         crate::fork::claude_settings::set_via_settings_flag(
             config.aiw.claude_hooks_via_settings_flag,
         );
+        // FORK: §19.5 — what Claude does with messages from other sessions.
+        crate::fork::messaging::set_inbound_policy(config.aiw.claude_cross_session_inbound);
         let zai_enabled = config.zai.is_some();
         let zai_monthly = config.zai.as_ref().and_then(|z| z.get_monthly_limit());
         let zai_weekly = config.zai.as_ref().and_then(|z| z.get_weekly_limit());
@@ -1137,6 +1142,7 @@ impl App {
             session_identity: Default::default(), // FORK: §19.2
             fan_out: Default::default(),          // FORK: §19.3
             organize: Default::default(),         // FORK: §19.4
+            messaging: Default::default(),        // FORK: §19.5
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),
@@ -1223,6 +1229,7 @@ impl App {
         app.load_session_names(); // FORK: §19.2
         app.load_fan_out_state(); // FORK: §19.3
         app.load_organize_state(); // FORK: §19.4
+        app.load_inbox_addresses(); // FORK: §19.5
 
         Ok(app)
     }
@@ -1358,6 +1365,7 @@ impl App {
             session_identity: Default::default(), // FORK: §19.2
             fan_out: Default::default(),          // FORK: §19.3
             organize: Default::default(),         // FORK: §19.4
+            messaging: Default::default(),        // FORK: §19.5
             followup_memory_id: 0,
             ipc_tool_sessions: std::collections::HashSet::new(),
             ipc_thinking_feature_sessions: std::collections::HashSet::new(),

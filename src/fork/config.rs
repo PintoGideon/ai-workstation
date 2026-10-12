@@ -47,6 +47,14 @@ pub struct AiwConfig {
     /// hook before it is pasted anyway, once the pane runs the agent rather
     /// than a shell (§19.3). Covers an untrusted Codex hook file.
     pub fan_out_ready_fallback_secs: u64,
+    /// Deliver `@` messages and `aiw automation message` to a Claude
+    /// session's own inbox socket when its `SessionStart` hook reported one
+    /// (§19.5). Off: every message goes through the follow-up queue.
+    pub messaging_inbox: bool,
+    /// Claude's `crossSessionInbound` for the sessions AIW launches:
+    /// `accept` (default; not applied to SuperVibe sessions), `hold`,
+    /// `refuse`, or `default` to leave Claude's own rule (§19.5).
+    pub claude_cross_session_inbound: crate::fork::messaging::InboundPolicy,
 }
 
 impl Default for AiwConfig {
@@ -61,6 +69,8 @@ impl Default for AiwConfig {
             sidebar_width: crate::fork::cockpit::DEFAULT_SIDEBAR_WIDTH,
             claude_agents_roster: true,
             fan_out_ready_fallback_secs: crate::fork::fan_out::DEFAULT_FALLBACK_SECS,
+            messaging_inbox: true,
+            claude_cross_session_inbound: crate::fork::messaging::InboundPolicy::Accept,
         }
     }
 }

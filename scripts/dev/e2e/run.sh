@@ -461,6 +461,9 @@ source "$HERE/fan_out.sh"
 # §19.4: groups, notes, layout presets
 # shellcheck disable=SC1091
 source "$HERE/organize.sh"
+# §19.5: messages to agent sessions
+# shellcheck disable=SC1091
+source "$HERE/messaging.sh"
 
 aiw_quit; check "q: quit at the end" $?
 ! cockpit_alive && [ "$(view_sessions)" = 0 ]; check "q: cockpit server gone, no view sessions, agents still running" $?

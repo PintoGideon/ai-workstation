@@ -419,6 +419,25 @@ enum AutomationCommands {
         #[arg(long, default_value_t = 120000)]
         timeout_ms: u64,
     },
+    // FORK: messages to agent sessions (DESIGN.md §19.5).
+    /// Send a message to an agent session: into a Claude session's inbox
+    /// when it reported one, otherwise queued for the agent's next turn end.
+    /// Prints JSON with "status": "delivered" | "queued" | "failed".
+    Message {
+        /// The target: an AIW session id, a Claude session's name
+        /// (`<feature>-<label>`), `<feature>/<label>`, or a unique label.
+        #[arg(long)]
+        to: String,
+        /// The message. Omit it to read the text from stdin.
+        #[arg(long)]
+        text: Option<String>,
+        /// Who the message is from, shown to the agent (default "aiw").
+        #[arg(long)]
+        from: Option<String>,
+        /// Timeout in milliseconds while waiting for AIW to reply.
+        #[arg(long, default_value_t = 10000)]
+        timeout_ms: u64,
+    },
     // FORK: queued follow-ups (P7, DESIGN.md §16).
     /// Queue a follow-up for an agent session; it is delivered when the agent
     /// finishes its current turn (never typed into a busy agent).
@@ -1190,6 +1209,40 @@ fn run_automation_command(command: AutomationCommands) -> Result<()> {
             let socket = ipc::socket_path();
             let outbound = serde_json::to_string(&request.ipc_payload())?;
             let reply = ipc::send_wait(&socket, &outbound, Duration::from_millis(timeout_ms))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&reply).unwrap_or_else(|_| "{}".to_string())
+            );
+            Ok(())
+        }
+        // FORK: §19.5
+        AutomationCommands::Message {
+            to,
+            text,
+            from,
+            timeout_ms,
+        } => {
+            let text = match text {
+                Some(text) => text,
+                None => read_json_input(None)?,
+            };
+            if text.trim().is_empty() {
+                anyhow::bail!("the message text is empty");
+            }
+            let mut request = serde_json::json!({
+                "type": automation::AUTOMATION_REQUEST_TYPE,
+                "action": crate::fork::messaging::MESSAGE_ACTION,
+                "to": to,
+                "text": text,
+            });
+            if let Some(from) = from {
+                request["from"] = serde_json::Value::String(from);
+            }
+            let reply = ipc::send_wait(
+                &ipc::socket_path(),
+                &serde_json::to_string(&request)?,
+                Duration::from_millis(timeout_ms),
+            )?;
             println!(
                 "{}",
                 serde_json::to_string_pretty(&reply).unwrap_or_else(|_| "{}".to_string())

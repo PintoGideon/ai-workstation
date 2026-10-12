@@ -248,9 +248,33 @@ pub fn run_hook_event(kind: &str, harness: &str) {
             message.insert(format!("{key}_count"), Value::from(items.len()));
         }
     }
+    if kind == "session-start" && harness.trim() == "claude" {
+        inbox_fields(
+            std::env::var("CLAUDE_CODE_MESSAGING_SOCKET").ok(),
+            std::env::var("CLAUDE_CODE_MESSAGING_TOKEN").ok(),
+            &mut message,
+        );
+    }
     identity_fields(&env, &mut message);
     if let Ok(line) = serde_json::to_string(&Value::Object(message)) {
         let _ = crate::ipc::send(&crate::ipc::socket_path(), &line);
+    }
+}
+
+/// §19.5: Claude exports its inbox socket and token to every hook; the
+/// `SessionStart` event carries them to the dashboard (over AIW's own
+/// user-only IPC socket) so `@` can post into the session's inbox.
+fn inbox_fields(
+    socket: Option<String>,
+    token: Option<String>,
+    message: &mut serde_json::Map<String, Value>,
+) {
+    let Some(socket) = socket.filter(|s| s.starts_with('/')) else {
+        return;
+    };
+    message.insert("messaging_socket".into(), Value::String(socket));
+    if let Some(token) = token.filter(|t| super::messaging::valid_token(t)) {
+        message.insert("messaging_token".into(), Value::String(token));
     }
 }
 
@@ -307,6 +331,37 @@ mod tests {
             aiw_tmux_session: Some("aiw-hx-12".into()),
             aiw_tmux_window: Some("claude".into()),
         }
+    }
+
+    #[test]
+    fn the_session_start_event_carries_a_well_formed_inbox_only() {
+        let mut message = serde_json::Map::new();
+        inbox_fields(
+            Some("/run/user/1000/cc-socks/42.sock".into()),
+            Some("0123456789abcdef0123456789abcdef".into()),
+            &mut message,
+        );
+        assert_eq!(
+            message["messaging_socket"],
+            "/run/user/1000/cc-socks/42.sock"
+        );
+        assert_eq!(
+            message["messaging_token"],
+            "0123456789abcdef0123456789abcdef"
+        );
+        let mut message = serde_json::Map::new();
+        inbox_fields(Some("rel.sock".into()), Some("x".into()), &mut message);
+        assert!(message.is_empty());
+        let mut message = serde_json::Map::new();
+        inbox_fields(
+            Some("/s.sock".into()),
+            Some("not-a-token".into()),
+            &mut message,
+        );
+        assert!(message.get("messaging_token").is_none());
+        let mut message = serde_json::Map::new();
+        inbox_fields(None, None, &mut message);
+        assert!(message.is_empty());
     }
 
     #[test]

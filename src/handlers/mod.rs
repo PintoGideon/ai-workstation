@@ -10,6 +10,7 @@ mod feature_creation;
 mod fork;
 pub(crate) mod fork_followups; // FORK: queued follow-ups (P7)
 mod fork_identity; // FORK: `f` fork dialog and `E` external sessions (DESIGN.md §19.2)
+mod fork_messaging; // FORK: `@` messages (DESIGN.md §19.5)
 mod fork_organize; // FORK: `G` groups and `#` notes (DESIGN.md §19.4)
 pub(crate) mod fork_permissions; // FORK: permission approvals (P6)
 pub(crate) mod fork_workspace; // FORK: workspace layout
@@ -143,6 +144,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<()> {
         // FORK: §19.4
         AppMode::FeatureGroups(_) => fork_organize::handle_feature_groups_key(app, key),
         AppMode::NoteEditor(_) => fork_organize::handle_note_editor_key(app, key),
+        AppMode::MessageSession(_) => fork_messaging::handle_message_dialog_key(app, key),
         AppMode::ThemePicker(_) => handle_theme_picker_key(app, key.code),
         AppMode::SyntaxLanguagePicker(_) => handle_syntax_language_picker_key(app, key.code),
         AppMode::DebugLog(_) => handle_debug_log_key(app, key.code),

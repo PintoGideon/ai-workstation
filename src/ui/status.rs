@@ -667,6 +667,14 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("Esc", key_style()),
             Span::raw(" close"),
         ]),
+        AppMode::MessageSession(_) => Line::from(vec![
+            Span::styled(" Enter", key_style()),
+            Span::raw(" send  "),
+            Span::styled("↑/↓", key_style()),
+            Span::raw(" target  "),
+            Span::styled("Esc", key_style()),
+            Span::raw(" cancel"),
+        ]),
         AppMode::NoteEditor(_) => Line::from(vec![
             Span::styled(" Enter", key_style()),
             Span::raw(" save  "),

@@ -184,6 +184,95 @@ if FORKED_FROM:
     log("forks", {"ts": time.time(), "cwd": CWD, "from": FORKED_FROM, "to": SESSION_ID,
                   "name": session_name})
 
+# §19.5: Claude's per-session inbox. Real Claude binds a Unix socket and
+# exports its path and a token to every hook; a peer writes JSON lines
+# ({"type":"auth","token":…} then {"type":"user","message":{"content":…},
+# "from":…,"session_id":…}). The fake does the same, logs what arrives to
+# inbox.jsonl and prints it the way Claude shows a peer message. A line whose
+# session_id is not this conversation is dropped, as Claude does.
+INBOX = {"path": None, "token": None}
+
+
+def inbox_handle(conn):
+    buf = b""
+    try:
+        conn.settimeout(10)
+        while True:
+            chunk = conn.recv(65536)
+            if not chunk:
+                break
+            buf += chunk
+    except OSError:
+        pass
+    finally:
+        conn.close()
+    authed = None
+    for raw in buf.decode("utf-8", "replace").splitlines():
+        if not raw.strip():
+            continue
+        try:
+            msg = json.loads(raw)
+        except ValueError:
+            log("inbox", {"ts": time.time(), "bad": raw[:200]})
+            continue
+        if msg.get("type") == "auth":
+            authed = msg.get("token") == INBOX["token"]
+            continue
+        if msg.get("type") != "user":
+            log("inbox", {"ts": time.time(), "ignored": msg.get("type")})
+            continue
+        sid = msg.get("session_id")
+        if sid is not None and sid != SESSION_ID:
+            log("inbox", {"ts": time.time(), "dropped": "session_id mismatch", "session_id": sid})
+            continue
+        content = (msg.get("message") or {}).get("content")
+        sender = msg.get("from", "unknown")
+        log("inbox", {"ts": time.time(), "session": SESSION_ID, "from": sender, "content": content,
+                      "session_id": sid, "authed": authed})
+        out(f"› Message from @{sender}: {content}")
+
+
+def start_inbox():
+    if NAME != "claude" or os.environ.get("AIW_E2E_NO_INBOX"):
+        return
+    import secrets
+    import socket
+    import threading
+    d = os.path.join(HOME, ".cc-socks")
+    os.makedirs(d, mode=0o700, exist_ok=True)
+    path = os.path.join(d, f"{os.getpid()}.sock")
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(path)
+    os.chmod(path, 0o600)
+    srv.listen(8)
+    INBOX["path"] = path
+    INBOX["token"] = secrets.token_hex(16)
+    os.environ["CLAUDE_CODE_MESSAGING_SOCKET"] = path
+    os.environ["CLAUDE_CODE_MESSAGING_TOKEN"] = INBOX["token"]
+
+    def serve():
+        while True:
+            try:
+                conn, _ = srv.accept()
+            except OSError:
+                return
+            threading.Thread(target=inbox_handle, args=(conn,), daemon=True).start()
+
+    threading.Thread(target=serve, daemon=True).start()
+
+    def cleanup():
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    import atexit
+    atexit.register(cleanup)
+
+
 ROSTER_STATE = {"status": "idle", "waitingFor": None}
 
 
@@ -593,6 +682,7 @@ def main():
     import atexit
     roster_write()
     atexit.register(roster_remove)
+    start_inbox()
     banner()
     ev("start", {"source": "startup"})
     while True:

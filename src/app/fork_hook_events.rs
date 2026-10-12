@@ -62,6 +62,8 @@ impl App {
         // §19.3: the agent is up — a prompt waiting for it can go.
         if matches!(event, HookEvent::SessionStart) {
             self.fan_out_session_ready(&session_id);
+            // §19.5: Claude reports its inbox socket here.
+            self.messaging_session_started(&session_id, raw);
         }
         let session_end = matches!(event, HookEvent::SessionEnd);
         self.log_debug("hook-event", format!("{session_id}: {event:?}"));
@@ -81,6 +83,7 @@ impl App {
         }
         if session_end {
             self.hook_events.remove(&session_id);
+            self.forget_inbox(&session_id); // §19.5
         }
         true
     }

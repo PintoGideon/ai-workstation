@@ -182,6 +182,10 @@ fn draw_help_at(frame: &mut Frame, area: Rect, scroll_offset: usize, theme: &The
             "Fold / unfold the selected feature's group (h on a folded feature too)",
         ),
         ("#", "Note on the selected session or feature (found by /)"),
+        (
+            "@",
+            "Message an agent session (Claude: its inbox; others: next turn end)",
+        ),
         ("y", "Toggle mark feature as ready"),
         // FORK: hook-driven productivity (DESIGN.md §16).
         (

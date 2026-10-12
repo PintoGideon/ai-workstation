@@ -259,6 +259,7 @@ inside the app.
 | `i` | List everything that needs you: questions first, then finished work |
 | `a` / `X` | Allow or deny the permission the selected agent is waiting on |
 | `e` | Queue a follow-up for the selected agent |
+| `@` | Send a message to an agent session. A Claude session gets it straight in its inbox as its next prompt; any other agent gets it when its current turn ends. The dialog shows which; `↑`/`↓` pick the target |
 | `V` | Reopen a pending Vibeless edit approval |
 | `I` | On a TODOs row, start an agent on the next unstarted TODO |
 | `z` | List dormant features |
@@ -388,6 +389,34 @@ feature when a feature row is selected. `Enter` saves, `Alt+Enter` adds a line,
 feature's when the session has none, on one extra row. `/` matches note text
 and shows the matching line. Notes are saved in `aiw.db` and removed with
 their session or feature.
+
+**Messages.** `@` opens a message dialog addressed to the selected agent
+session (or the selected feature's first agent); `↑`/`↓` or `Tab` pick another
+target, `Enter` sends, `Alt+Enter` adds a line. How the message travels depends
+on the target, and the dialog says which before you send:
+
+- **A Claude session** reports its inbox when it starts. The message goes
+  straight into that inbox and Claude takes it as its next prompt, marked as a
+  message from `aiw`. Nothing is typed into the pane, and a turn in progress is
+  not interrupted.
+- **Codex and other agents**, or a Claude session that has not reported an
+  inbox, get the message through the follow-up queue: it is delivered when the
+  agent next finishes a turn, never typed into a busy pane.
+
+Scripts use `aiw automation message --to <session> --text "…" [--from <name>]`.
+`--to` takes a session id, a Claude session's name (`<feature>-<label>`, the
+same name Claude's own session list shows), `<feature>/<label>`, or a label that
+is unique across aiw. The JSON reply says `delivered`, `queued` or `failed` and
+why. Because every Claude session aiw starts carries its aiw name, agents can
+also message each other by name with Claude's own messaging.
+
+aiw sets Claude's rule for incoming messages on each launch from
+`claude_cross_session_inbound` (default `accept`). `accept` delivers messages
+from aiw and your other local sessions without an approval dialog; the inbox is
+only reachable by your own user, and permission prompts still apply to whatever
+a message asks for. SuperVibe sessions keep Claude's own rule, which holds such
+messages for your approval, because a session that skips every permission
+prompt should not take instructions from another agent unasked.
 
 **Layout presets.** A project's `aiw.json` (or the global `extension` block)
 can name sets of extra sessions to open with a feature:
@@ -553,6 +582,8 @@ written back, so a config from an older version keeps loading.
 | `claude_hooks_via_settings_flag` | `true` | Pass Claude's hooks with `--settings` instead of writing the repo's settings file |
 | `claude_agents_roster` | `true` | Read `claude agents --json` every ten seconds to show Claude sessions outside aiw and catch a session waiting on input that its hooks missed |
 | `fan_out_ready_fallback_secs` | `15` | How long a task prompt waits for its agent's session-start hook before it is pasted anyway, once the pane runs the agent |
+| `messaging_inbox` | `true` | Deliver `@` messages and `aiw automation message` straight into a Claude session's inbox. Off: every message goes through the follow-up queue |
+| `claude_cross_session_inbound` | `"accept"` | Claude's rule for messages from your other sessions and aiw: `accept`, `hold` (approve each in the pane), `refuse`, or `default` to leave Claude's own rule. `accept` is not applied to SuperVibe sessions |
 | `max_concurrent_agents` | `4` | Warn before starting an agent past this many running harnesses; 0 disables |
 | `low_memory_warn_mb` | `1536` | Warn before starting an agent with less free memory than this; 0 disables |
 | `max_agent_autostart_sessions` | `1` | How many saved agent sessions a feature start relaunches; the rest open at a shell |
@@ -685,6 +716,7 @@ to writing that file. Codex gets its notify hook per launch rather than in
 | `aiw automation create-feature` | Create a feature in an existing project from JSON: project name, branch, agent, mode, worktree yes or no, an optional hook choice, and a dry-run flag. `agents` with `fan_out` (`shared` or `worktree_each`) starts several agents; `prompt` or `prompt_file` gives each one a task prompt once it is ready, and `send` sends it instead of pasting it unsent. `layout` opens a layout preset's sessions in each created feature. The answer lists every feature created |
 | `aiw automation create-batch-features` | Create one project with many parallel feature worktrees |
 | `aiw automation queue --session <id> "text"` | Queue a follow-up for a session; the id is in the doctor's JSON output |
+| `aiw automation message --to <session> --text "text" [--from <name>]` | Message a session: into a Claude session's inbox, otherwise queued for its next turn end. Prints `delivered`, `queued` or `failed` |
 | `aiw --help` | Everything else |
 
 Automation talks to the running dashboard over its socket and prints a JSON

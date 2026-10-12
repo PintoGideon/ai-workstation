@@ -1226,6 +1226,8 @@ pub enum AppMode {
     FeatureGroups(crate::app::fork_organize::FeatureGroupsState),
     /// FORK: §19.4 — `#`, the note on a session or feature.
     NoteEditor(crate::app::fork_organize::NoteEditorState),
+    /// FORK: `@` — a message to an agent session (DESIGN.md §19.5).
+    MessageSession(crate::app::fork_messaging::MessageDialogState),
     ThemePicker(ThemePickerState),
     SyntaxLanguagePicker(SyntaxLanguagePickerState),
     DebugLog(DebugLogState),

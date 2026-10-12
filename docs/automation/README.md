@@ -187,6 +187,39 @@ Typical error response:
 }
 ```
 
+## Message a session
+
+```bash
+aiw automation message --to auth-fix-claude-1 --text "the API schema changed; rebase on main"
+aiw automation message --to "auth-fix/Codex 1" --from ci --text "CI is red on main"
+echo "long message" | aiw automation message --to <aiw-session-id>
+```
+
+Sends a message to an agent session without typing into its pane. A Claude
+session that reported its inbox (Claude Code 2.1.224 or later) receives it
+straight away as its next prompt, attributed to `--from` (default `aiw`). Any
+other target is queued exactly like `aiw automation queue` below and delivered
+at the agent's next turn end. `--to` takes a session id, a Claude session's
+name (`<feature>-<label>`), `<feature>/<label>`, or a label unique across AIW.
+
+```json
+{
+  "type": "automation-result",
+  "action": "message_session",
+  "ok": true,
+  "status": "delivered",
+  "via": "inbox",
+  "session_id": "…",
+  "target": "auth-fix-claude-1",
+  "from": "aiw",
+  "detail": "Sent to auth-fix-claude-1's inbox"
+}
+```
+
+A queued message has `"status": "queued"`, `"via": "followup-queue"`, the
+queue position in `"queued"` and the reason in `"reason"`. A bad target or
+empty text gives `"ok": false`, `"status": "failed"` and an `"error"`.
+
 ## Queue a follow-up
 
 ```bash

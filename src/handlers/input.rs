@@ -49,6 +49,14 @@ pub fn handle_paste(app: &mut App, text: &str) -> Result<()> {
                     .push_str(&text.replace("\r\n", "\n").replace('\r', "\n"));
             }
         }
+        // FORK: §19.5 — a pasted message keeps its newlines.
+        AppMode::MessageSession(_) => {
+            if let AppMode::MessageSession(state) = &mut app.mode {
+                state
+                    .text
+                    .push_str(&text.replace("\r\n", "\n").replace('\r', "\n"));
+            }
+        }
         AppMode::FeatureGroups(_) => {
             if let AppMode::FeatureGroups(state) = &mut app.mode
                 && let Some((_, value)) = state.edit.as_mut()
